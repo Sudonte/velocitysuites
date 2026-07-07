@@ -4,8 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <title>@yield('title', 'Hotel Booking System')</title>
-    
+    <title>@yield('title', config('app.name'))</title>
+
     <!-- Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <!-- Font Awesome -->
@@ -18,13 +18,14 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            background: linear-gradient(135deg, #C1121F 0%, #780000 100%);
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--accent-color) 100%);
+            padding: 1.5rem;
         }
         .auth-card {
-            background: white;
-            border-radius: 10px;
+            background: var(--secondary-color);
+            border-radius: var(--radius-card);
             padding: 2rem;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            box-shadow: var(--shadow-md);
             width: 100%;
             max-width: 450px;
         }
@@ -33,12 +34,15 @@
             margin-bottom: 2rem;
         }
         .auth-card .logo h1 {
-            color: #C1121F;
+            color: var(--primary-color);
             font-size: 2rem;
         }
         .auth-card .form-control:focus {
-            border-color: #C1121F;
+            border-color: var(--primary-color);
             box-shadow: 0 0 0 0.2rem rgba(193, 18, 31, 0.25);
+        }
+        .auth-card .btn-primary {
+            border-radius: var(--radius-btn);
         }
     </style>
     @stack('styles')

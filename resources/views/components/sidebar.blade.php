@@ -1,48 +1,66 @@
 <style>
-    .sidebar {
+    /* Fixed positioning applies only to the desktop rail (the outer <nav
+       class="sidebar"> in layouts/app.blade.php). When this component is
+       reused inside the mobile offcanvas, that wrapper is a plain
+       .offcanvas-body instead, so this rule doesn't apply there - avoids
+       colliding with the offcanvas's own transform-based slide animation. */
+    nav.sidebar {
         position: fixed;
         top: 0;
         bottom: 0;
         left: 0;
         z-index: 100;
-        padding: 0;
+        padding: 0 0.75rem;
         background-color: #f8f9fa;
         border-right: 1px solid #dee2e6;
         height: 100vh;
         overflow-y: auto;
     }
 
+    .sidebar-inner {
+        padding: 0 0.75rem;
+    }
+
     .sidebar-sticky {
         position: relative;
         top: 0;
-        height: calc(100vh - 48px);
         padding-top: 0.5rem;
-        overflow-y: auto;
     }
 
-    .sidebar a {
-        color: #333;
-        padding: 0.75rem 1rem;
+    .sidebar-inner .nav-link {
+        color: #444;
+        padding: 0.65rem 1rem;
         display: block;
-        border-left: 3px solid transparent;
-        transition: all 0.3s ease;
+        border-radius: var(--radius-pill, 999px);
+        margin-bottom: 0.15rem;
+        transition: background-color 0.2s ease, color 0.2s ease, transform 0.15s ease;
     }
 
-    .sidebar a:hover {
-        background-color: #e9ecef;
-        border-left-color: #C1121F;
-        color: #C1121F;
+    .sidebar-inner .nav-link i {
+        width: 1.25rem;
+        text-align: center;
+        margin-right: 0.25rem;
+        transition: transform 0.2s ease;
     }
 
-    .sidebar a.active {
-        background-color: #e9ecef;
-        border-left-color: #C1121F;
-        color: #C1121F;
+    .sidebar-inner .nav-link:hover {
+        background-color: #f1e0e2;
+        color: var(--primary-color, #C1121F);
+    }
+
+    .sidebar-inner .nav-link:hover i {
+        transform: translateX(2px);
+    }
+
+    .sidebar-inner .nav-link.active {
+        background-color: var(--primary-color, #C1121F);
+        color: #fff;
         font-weight: 600;
+        box-shadow: 0 2px 6px rgba(193, 18, 31, 0.3);
     }
 </style>
 
-<div class="sidebar">
+<div class="sidebar-inner">
     <div class="sidebar-sticky">
         <h6 class="px-3 py-2 mt-4 mb-3 text-muted text-uppercase fw-bold" style="font-size: 0.75rem;">
             <i class="fas fa-bars"></i> Menu

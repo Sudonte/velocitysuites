@@ -1,16 +1,23 @@
-<nav class="navbar navbar-expand-lg" style="background-color: #C1121F; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+<nav class="navbar navbar-expand-lg" style="background-color: var(--primary-color); box-shadow: var(--shadow-sm);">
     <div class="container-fluid">
+        @if(auth()->check())
+            <button class="btn btn-link text-white d-md-none p-0 me-3" type="button" data-bs-toggle="offcanvas" data-bs-target="#mobileSidebar" aria-controls="mobileSidebar" aria-label="Open menu">
+                <i class="fas fa-bars fs-4"></i>
+            </button>
+        @endif
         <a class="navbar-brand text-white fw-bold" href="/">
-            <i class="fas fa-hotel"></i> Hotel Booking System
+            <i class="fas fa-hotel"></i> {{ config('app.name') }}
         </a>
         <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
             <span class="navbar-toggler-icon"></span>
         </button>
         <div class="collapse navbar-collapse" id="navbarNav">
-            <ul class="navbar-nav ms-auto">
+            <ul class="navbar-nav ms-auto align-items-lg-center">
                 @if(auth()->check())
                     <li class="nav-item">
-                        <span class="nav-link text-white">{{ auth()->user()->name }}</span>
+                        <span class="nav-link text-white d-flex align-items-center gap-2">
+                            <i class="fas fa-user-circle"></i> {{ auth()->user()->full_name }}
+                        </span>
                     </li>
                     <li class="nav-item">
                         <a class="nav-link text-white" href="#" onclick="event.preventDefault(); document.getElementById('logout-form').submit();">
