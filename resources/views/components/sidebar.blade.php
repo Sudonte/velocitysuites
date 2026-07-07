@@ -107,16 +107,16 @@
                 <li><a href="/guest/dashboard" class="nav-link {{ request()->is('guest/dashboard') ? 'active' : '' }}">
                     <i class="fas fa-home"></i> Dashboard
                 </a></li>
-                <li><a href="/guest/bookings" class="nav-link {{ request()->is('guest/bookings*') ? 'active' : '' }}">
+                <li><a href="{{ route('guest.reservations.index') }}" class="nav-link {{ request()->routeIs('guest.reservations.*') ? 'active' : '' }}">
                     <i class="fas fa-calendar-check"></i> My Bookings
                 </a></li>
-                <li><a href="/guest/rooms" class="nav-link {{ request()->is('guest/rooms*') ? 'active' : '' }}">
+                <li><a href="{{ route('public.rooms.index') }}" class="nav-link {{ request()->routeIs('public.rooms.*') ? 'active' : '' }}">
                     <i class="fas fa-door-open"></i> Book Room
                 </a></li>
-                <li><a href="/guest/payments" class="nav-link {{ request()->is('guest/payments*') ? 'active' : '' }}">
+                <li><a href="{{ route('guest.payments.index') }}" class="nav-link {{ request()->routeIs('guest.payments.*') ? 'active' : '' }}">
                     <i class="fas fa-money-bill"></i> Payments
                 </a></li>
-                <li><a href="/guest/profile" class="nav-link {{ request()->is('guest/profile*') ? 'active' : '' }}">
+                <li><a href="{{ route('guest.profile.show') }}" class="nav-link {{ request()->routeIs('guest.profile.*') ? 'active' : '' }}">
                     <i class="fas fa-user-circle"></i> Profile
                 </a></li>
             </ul>
