@@ -218,7 +218,7 @@
                             <p class="mb-2 text-muted">
                                 <i class="fas fa-user me-1 text-brand"></i> Up to {{ $room->room_capacity }} guests
                             </p>
-                            <p class="room-price">${{ number_format($room->room_rate, 2) }} <small class="text-muted">/night</small></p>
+                            <p class="room-price">₱{{ number_format($room->room_rate, 2) }} <small class="text-muted">/night</small></p>
                             <a href="{{ route('public.rooms.show', $room) }}" class="btn btn-outline-danger w-100">View Details</a>
                         </div>
                     </div>

@@ -89,7 +89,7 @@
                         </div>
                         <div class="col-md-6">
                             <h6><i class="fas fa-info-circle text-brand me-2"></i>Status</h6>
-                            <span class="badge bg-success">{{ ucfirst($room->status) }}</span>
+                            <x-status-badge :status="$room->status" domain="room" />
                         </div>
                     </div>
                 </div>
@@ -133,32 +133,31 @@
                 </div>
                 <div class="card-body">
                     <div class="text-center mb-4">
-                        <span class="h2 text-brand">${{ number_format($room->room_rate, 2) }}</span>
+                        <span class="h2 text-brand">₱{{ number_format($room->room_rate, 2) }}</span>
                         <span class="text-muted">/night</span>
                     </div>
 
                     @auth
-                        <form action="{{ route('guest.reservations.store') }}" method="POST">
-                            @csrf
+                        <form action="{{ route('guest.reservations.create') }}" method="GET">
                             <input type="hidden" name="room_id" value="{{ $room->id }}">
 
                             <div class="mb-3">
                                 <label class="form-label">Check-in Date</label>
-                                <input type="date" name="check_in_date" class="form-control"
+                                <input type="date" name="check_in" class="form-control"
                                        min="{{ date('Y-m-d') }}" required
                                        value="{{ request('check_in') }}">
                             </div>
 
                             <div class="mb-3">
                                 <label class="form-label">Check-out Date</label>
-                                <input type="date" name="check_out_date" class="form-control"
+                                <input type="date" name="check_out" class="form-control"
                                        min="{{ date('Y-m-d', strtotime('+1 day')) }}" required
                                        value="{{ request('check_out') }}">
                             </div>
 
                             <div class="mb-3">
                                 <label class="form-label">Number of Guests</label>
-                                <select name="number_of_guests" class="form-select" required>
+                                <select name="guests" class="form-select">
                                     @for($i = 1; $i <= $room->room_capacity; $i++)
                                         <option value="{{ $i }}" {{ request('guests') == $i ? 'selected' : '' }}>
                                             {{ $i }} {{ $i == 1 ? 'Guest' : 'Guests' }}
@@ -167,14 +166,8 @@
                                 </select>
                             </div>
 
-                            <div class="mb-3">
-                                <label class="form-label">Special Requests</label>
-                                <textarea name="special_requests" class="form-control" rows="3"
-                                          placeholder="Any special requests..."></textarea>
-                            </div>
-
                             <button type="submit" class="btn btn-danger w-100">
-                                <i class="fas fa-calendar-check me-2"></i> Confirm Booking
+                                <i class="fas fa-calendar-check me-2"></i> Continue to Book
                             </button>
                         </form>
                     @else
@@ -237,7 +230,7 @@
                                     <i class="fas fa-user me-1 text-brand"></i> Up to {{ $relatedRoom->room_capacity }} guests
                                 </p>
                                 <div class="d-flex justify-content-between align-items-center">
-                                    <span class="h5 text-brand mb-0">${{ number_format($relatedRoom->room_rate, 2) }}</span>
+                                    <span class="h5 text-brand mb-0">₱{{ number_format($relatedRoom->room_rate, 2) }}</span>
                                     <a href="{{ route('public.rooms.show', $relatedRoom) }}" class="btn btn-outline-danger btn-sm">View</a>
                                 </div>
                             </div>

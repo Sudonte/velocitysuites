@@ -73,7 +73,7 @@
                                         {{ Str::limit($room->description, 100) }}
                                     </p>
                                     <div class="d-flex justify-content-between align-items-center">
-                                        <span class="h5 text-brand mb-0">${{ number_format($room->room_rate, 2) }}<small class="text-muted">/night</small></span>
+                                        <span class="h5 text-brand mb-0">₱{{ number_format($room->room_rate, 2) }}<small class="text-muted">/night</small></span>
                                         <a href="{{ route('public.rooms.show', $room) }}" class="btn btn-outline-danger btn-sm">View Details</a>
                                     </div>
                                 </div>

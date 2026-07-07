@@ -69,7 +69,8 @@
                     <div class="form-group mb-3">
                         <label for="number_of_guests"><strong>Number of Guests *</strong></label>
                         <input type="number" class="form-control @error('number_of_guests') is-invalid @enderror"
-                               id="number_of_guests" name="number_of_guests" min="1" max="{{ $room->room_capacity }}" required>
+                               id="number_of_guests" name="number_of_guests" min="1" max="{{ $room->room_capacity }}"
+                               value="{{ old('number_of_guests', request('guests', 1)) }}" required>
                         <small class="text-muted">Maximum: {{ $room->room_capacity }} guests</small>
                         @error('number_of_guests')
                             <div class="invalid-feedback">{{ $message }}</div>
