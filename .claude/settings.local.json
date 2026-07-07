@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(php artisan *)",
+      "Bash(php *)",
+      "Bash(php -l app/Http/Controllers/Auth/LoginController.php)",
+      "Bash(php -l app/Http/Controllers/LandingPageController.php)",
+      "Bash(php -l app/Http/Controllers/Guest/GuestDashboardController.php)",
+      "Bash(php -l app/Http/Controllers/Receptionist/ReceptionistController.php)",
+      "Bash(php -l app/Models/AdditionalCharge.php)",
+      "Bash(php -l app/Models/Billing.php)",
+      "Bash(php -l app/Http/Controllers/Guest/ReservationController.php)",
+      "Bash(php -l app/Services/NotificationService.php)"
+    ]
+  }
+}
