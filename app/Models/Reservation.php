@@ -48,10 +48,18 @@ class Reservation extends Model
     }
 
     /**
+     * Get the amenity requests made during this reservation's stay.
+     */
+    public function amenityRequests()
+    {
+        return $this->hasMany(AmenityRequest::class);
+    }
+
+    /**
      * Calculate the number of nights.
      */
     public function getNumberOfNightsAttribute()
     {
-        return $this->check_out->diffInDays($this->check_in);
+        return abs($this->check_out->diffInDays($this->check_in));
     }
 }

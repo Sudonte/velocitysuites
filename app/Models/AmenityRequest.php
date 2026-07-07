@@ -11,6 +11,7 @@ class AmenityRequest extends Model
 
     protected $fillable = [
         'guest_id',
+        'reservation_id',
         'amenity_id',
         'quantity',
         'charge',
@@ -27,6 +28,14 @@ class AmenityRequest extends Model
     public function guest()
     {
         return $this->belongsTo(Guest::class);
+    }
+
+    /**
+     * Get the reservation this amenity request was made during.
+     */
+    public function reservation()
+    {
+        return $this->belongsTo(Reservation::class);
     }
 
     /**

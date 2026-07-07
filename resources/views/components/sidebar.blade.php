@@ -98,14 +98,8 @@
                 <li><a href="/receptionist/check-out" class="nav-link {{ request()->is('receptionist/check-out*') ? 'active' : '' }}">
                     <i class="fas fa-sign-out-alt"></i> Check-Out
                 </a></li>
-                <li><a href="/receptionist/billing" class="nav-link {{ request()->is('receptionist/billing*') ? 'active' : '' }}">
-                    <i class="fas fa-receipt"></i> Billing
-                </a></li>
                 <li><a href="/receptionist/amenities" class="nav-link {{ request()->is('receptionist/amenities*') ? 'active' : '' }}">
                     <i class="fas fa-spa"></i> Amenity Requests
-                </a></li>
-                <li><a href="/receptionist/payments" class="nav-link {{ request()->is('receptionist/payments*') ? 'active' : '' }}">
-                    <i class="fas fa-money-bill"></i> Payments
                 </a></li>
             </ul>
         @elseif(auth()->user()->role === 'guest')

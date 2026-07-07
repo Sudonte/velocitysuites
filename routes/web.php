@@ -130,7 +130,9 @@ Route::middleware(['auth', 'account.status', 'log.activity'])->group(function ()
 
         // Check-out
         Route::get('/check-out', [ReceptionistController::class, 'checkOutIndex'])->name('check-out.index');
-        Route::post('/check-out/{reservation}', [ReceptionistController::class, 'checkOut'])->name('check-out.store');
+        Route::get('/check-out/{reservation}/billing', [ReceptionistController::class, 'checkOutBilling'])->name('check-out.billing');
+        Route::delete('/check-out/billing/{billing}', [ReceptionistController::class, 'checkOutCancelBilling'])->name('check-out.billing.cancel');
+        Route::get('/check-out/billing/{billing}/payment', [ReceptionistController::class, 'checkOutPaymentPanel'])->name('check-out.payment');
 
         // Amenity Requests
         Route::get('/amenities', [ReceptionistController::class, 'amenitiesIndex'])->name('amenities.index');
@@ -138,17 +140,12 @@ Route::middleware(['auth', 'account.status', 'log.activity'])->group(function ()
         Route::post('/amenities/{reservation}', [ReceptionistController::class, 'amenitiesStore'])->name('amenities.store');
         Route::put('/amenities/{amenityRequest}', [ReceptionistController::class, 'amenitiesUpdate'])->name('amenities.update');
 
-        // Billing
-        Route::get('/billing', [ReceptionistController::class, 'billingIndex'])->name('billing.index');
-        Route::get('/billing/{billing}', [ReceptionistController::class, 'billingShow'])->name('billing.show');
+        // Billing (used from the Check-Out workflow's Billing Panel, plus a read-only receipt)
+        Route::get('/billing/{billing}/receipt', [ReceptionistController::class, 'receiptShow'])->name('billing.receipt');
         Route::post('/billing/{billing}/payment', [ReceptionistController::class, 'recordPayment'])->name('billing.payment.store');
         Route::post('/billing/{billing}/additional-charge', [ReceptionistController::class, 'storeAdditionalCharge'])->name('billing.additional-charge.store');
         Route::put('/billing/additional-charge/{additionalCharge}', [ReceptionistController::class, 'updateAdditionalCharge'])->name('billing.additional-charge.update');
         Route::delete('/billing/additional-charge/{additionalCharge}', [ReceptionistController::class, 'destroyAdditionalCharge'])->name('billing.additional-charge.destroy');
-        Route::post('/billing/{billing}/confirm', [ReceptionistController::class, 'confirmBill'])->name('billing.confirm');
-
-        // Payments
-        Route::get('/payments', [ReceptionistController::class, 'paymentsIndex'])->name('payments.index');
     });
 
     // Guest Routes

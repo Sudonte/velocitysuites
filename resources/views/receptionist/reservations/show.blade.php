@@ -101,14 +101,14 @@
                             <tr>
                                 <td>Status:</td>
                                 <td class="text-end">
-                                    <span class="badge bg-{{ $billing->billing_status === 'paid' ? 'success' : 'warning' }}">
+                                    <span class="badge bg-{{ $billing->billing_status === 'paid' ? 'success' : ($billing->billing_status === 'partial' ? 'warning' : 'secondary') }}">
                                         {{ ucfirst($billing->billing_status) }}
                                     </span>
                                 </td>
                             </tr>
                         </table>
-                        <a href="{{ route('receptionist.billing.show', $billing) }}" class="btn btn-sm btn-primary">
-                            <i class="fas fa-external-link-alt"></i> Open Bill
+                        <a href="{{ route('receptionist.billing.receipt', $billing) }}" class="btn btn-sm btn-primary">
+                            <i class="fas fa-external-link-alt"></i> View Receipt
                         </a>
                     </div>
                 </div>

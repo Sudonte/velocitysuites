@@ -243,38 +243,64 @@ class ReceptionistController extends Controller
     }
 
     /**
-     * Mark reservation as checked out, generating billing if needed.
+     * Open (or resume) the Billing Panel for a check-out in progress.
+     * Creates a draft billing if one doesn't exist yet; does not change
+     * reservation or room status.
      */
-    public function checkOut(Reservation $reservation): RedirectResponse
+    public function checkOutBilling(Reservation $reservation)
     {
         if ($reservation->status !== 'checked_in') {
-            return back()->with('error', 'Only checked-in reservations can be checked out.');
+            return response()->json(['message' => 'Only checked-in reservations can be billed.'], 422);
         }
 
-        DB::transaction(function () use ($reservation) {
-            $reservation->update(['status' => 'checked_out']);
-
-            // Mark the room as available
-            $reservation->room->update(['status' => 'available']);
-
-            // Generate billing if it doesn't exist yet
-            if ($reservation->booking && !$reservation->booking->billing) {
-                $this->generateBilling($reservation);
-            }
-
-            // Notify guest and managers
-            $this->notificationService->notifyCheckOut(
-                $reservation->guest->user,
-                $reservation->room->room_name
-            );
-        });
-
-        if ($reservation->booking && $reservation->booking->fresh()->billing) {
-            return redirect()->route('receptionist.billing.show', $reservation->booking->billing)
-                ->with('success', 'Guest checked out. Bill generated.');
+        if (!$reservation->booking) {
+            return response()->json(['message' => 'This reservation has no booking record.'], 422);
         }
 
-        return redirect()->route('receptionist.check-out.index')->with('success', 'Guest checked out successfully!');
+        $billing = $reservation->booking->billing ?? $this->generateBilling($reservation);
+
+        $reservation->load(['guest.user', 'room']);
+        $billing->load('additionalCharges');
+
+        $amenityRequests = AmenityRequest::with('amenity')
+            ->where('reservation_id', $reservation->id)
+            ->where('status', 'approved')
+            ->get();
+
+        return view('receptionist.check-out.partials.billing-panel', compact('reservation', 'billing', 'amenityRequests'));
+    }
+
+    /**
+     * Discard a draft billing (no payments recorded yet) started from Check-Out.
+     */
+    public function checkOutCancelBilling(Billing $billing)
+    {
+        if ($billing->billing_status === 'paid') {
+            return response()->json(['message' => 'Cannot cancel a paid bill.'], 422);
+        }
+
+        if ($billing->payments()->where('payment_status', 'completed')->exists()) {
+            return response()->json(['message' => 'This bill already has recorded payments and cannot be discarded.'], 422);
+        }
+
+        $billing->delete();
+
+        return response()->json(['ok' => true]);
+    }
+
+    /**
+     * Open the Payment Panel for a locked billing.
+     */
+    public function checkOutPaymentPanel(Billing $billing)
+    {
+        $billing->load(['booking.reservation.guest.user', 'booking.reservation.room', 'payments', 'additionalCharges']);
+
+        $balance = $billing->balance;
+        $amountPaidSoFar = (float) $billing->payments()
+            ->where('payment_status', 'completed')
+            ->sum('amount_paid');
+
+        return view('receptionist.check-out.partials.payment-panel', compact('billing', 'balance', 'amountPaidSoFar'));
     }
 
     /**
@@ -320,6 +346,7 @@ class ReceptionistController extends Controller
 
         AmenityRequest::create([
             'guest_id' => $reservation->guest_id,
+            'reservation_id' => $reservation->id,
             'amenity_id' => $amenity->id,
             'quantity' => $validated['quantity'],
             // Snapshot the current charge per unit at the time of the request
@@ -345,25 +372,10 @@ class ReceptionistController extends Controller
     }
 
     /**
-     * List all bills.
+     * Show a read-only receipt for a bill (reachable from the reservation page,
+     * not from a standalone Billing list).
      */
-    public function billingIndex(Request $request): View
-    {
-        $query = Billing::with(['booking.reservation.guest.user', 'booking.reservation.room']);
-
-        if ($request->filled('status')) {
-            $query->where('billing_status', $request->status);
-        }
-
-        $billings = $query->latest()->paginate(15);
-
-        return view('receptionist.billing.index', compact('billings'));
-    }
-
-    /**
-     * Show a single bill with payment history.
-     */
-    public function billingShow(Billing $billing): View
+    public function receiptShow(Billing $billing): View
     {
         $billing->load(['booking.reservation.guest.user', 'booking.reservation.room', 'payments', 'additionalCharges']);
 
@@ -372,22 +384,31 @@ class ReceptionistController extends Controller
             ->sum('amount_paid');
         $balance = $billing->balance;
 
-        return view('receptionist.billing.show', compact('billing', 'amountPaid', 'balance'));
+        return view('receptionist.billing.receipt', compact('billing', 'amountPaid', 'balance'));
     }
 
     /**
-     * Record a payment against a billing.
+     * Record a payment against a billing from the Payment Panel. Completes the
+     * check-out (reservation + room status, notifications) only once the
+     * balance reaches zero; a partial payment leaves the guest checked in.
      */
-    public function recordPayment(Request $request, Billing $billing): RedirectResponse
+    public function recordPayment(Request $request, Billing $billing)
     {
         $validated = $request->validate([
             'payment_method' => 'required|in:cash,gcash',
             'reference_number' => 'required_if:payment_method,gcash|nullable|string|max:255',
             'amount_paid' => 'required|numeric|min:0.01',
-            'payment_status' => 'required|in:completed,pending,failed',
         ]);
 
-        DB::transaction(function () use ($validated, $billing) {
+        $reservation = $billing->booking?->reservation;
+
+        if (!$reservation || $reservation->status !== 'checked_in') {
+            return response()->json(['message' => 'This reservation is not awaiting checkout.'], 422);
+        }
+
+        $completed = false;
+
+        DB::transaction(function () use ($validated, $billing, $reservation, &$completed) {
             // Auto-generate reference for cash if blank
             if (empty($validated['reference_number'])) {
                 $validated['reference_number'] = 'PAY-' . strtoupper(Str::random(10));
@@ -398,69 +419,50 @@ class ReceptionistController extends Controller
                 'payment_method' => $validated['payment_method'],
                 'reference_number' => $validated['reference_number'],
                 'amount_paid' => $validated['amount_paid'],
-                'payment_status' => $validated['payment_status'],
+                'payment_status' => 'completed',
                 'payment_date' => now(),
             ]);
 
-            // Recompute billing status
             $paid = (float) $billing->payments()
                 ->where('payment_status', 'completed')
                 ->sum('amount_paid');
 
-            if ($paid >= (float) $billing->total_amount) {
-                $billing->update(['billing_status' => 'paid']);
-            } elseif ($paid > 0) {
-                $billing->update(['billing_status' => 'partial']);
-            }
+            $completed = $paid >= (float) $billing->total_amount;
+            $billing->update(['billing_status' => $completed ? 'paid' : 'partial']);
 
-            // Notify guest and managers
-            if ($billing->booking && $billing->booking->reservation && $billing->booking->reservation->guest) {
-                $guest = $billing->booking->reservation->guest->user;
-                $roomName = $billing->booking->reservation->room->room_name;
+            $guest = $reservation->guest->user;
+            $roomName = $reservation->room->room_name;
 
-                // Notify guest about payment
-                $this->notificationService->notifyPaymentReceived(
+            $this->notificationService->notifyPaymentReceived(
+                $guest,
+                (float) $validated['amount_paid'],
+                $roomName
+            );
+
+            if ($completed) {
+                $reservation->update(['status' => 'checked_out']);
+                $reservation->room->update(['status' => 'available']);
+
+                $this->notificationService->notifyCheckOut($guest, $roomName);
+                $this->notificationService->notifyPaymentComplete($guest);
+            } else {
+                $this->notificationService->notifyManagerPayment(
                     $guest,
                     (float) $validated['amount_paid'],
+                    $billing->billing_status,
                     $roomName
                 );
-
-                // If bill is fully paid, notify guest and managers
-                if ($billing->billing_status === 'paid') {
-                    $this->notificationService->notifyPaymentComplete($guest);
-                } else {
-                    // Notify managers about partial payment
-                    $this->notificationService->notifyManagerPayment(
-                        $guest,
-                        (float) $validated['amount_paid'],
-                        $billing->billing_status,
-                        $roomName
-                    );
-                }
             }
         });
 
-        return redirect()->route('receptionist.billing.show', $billing)->with('success', 'Payment recorded.');
-    }
+        $billing->refresh();
 
-    /**
-     * List all payments.
-     */
-    public function paymentsIndex(Request $request): View
-    {
-        $query = Payment::with(['billing.booking.reservation.guest.user', 'billing.booking.reservation.room']);
-
-        if ($request->filled('method')) {
-            $query->where('payment_method', $request->method);
-        }
-
-        if ($request->filled('status')) {
-            $query->where('payment_status', $request->status);
-        }
-
-        $payments = $query->latest('payment_date')->paginate(15);
-
-        return view('receptionist.payments.index', compact('payments'));
+        return response()->json([
+            'completed' => $completed,
+            'balance' => $billing->balance,
+            'message' => $completed ? 'Payment complete. Guest checked out.' : 'Partial payment recorded.',
+            'receipt_url' => $completed ? route('receptionist.billing.receipt', $billing) : null,
+        ]);
     }
 
     /**
@@ -468,14 +470,14 @@ class ReceptionistController extends Controller
      */
     private function generateBilling(Reservation $reservation): Billing
     {
-        $nights = max(1, $reservation->check_out->diffInDays($reservation->check_in));
+        $nights = max(1, abs($reservation->check_out->diffInDays($reservation->check_in)));
 
         $roomCharge = (float) $reservation->room->room_rate * $nights;
 
         $extraGuests = max(0, $reservation->number_of_guests - $reservation->room->room_capacity);
         $extraGuestFee = $extraGuests * (float) config('hotel.extra_guest_fee_rate', 0);
 
-        $amenityCharge = (float) AmenityRequest::where('guest_id', $reservation->guest_id)
+        $amenityCharge = (float) AmenityRequest::where('reservation_id', $reservation->id)
             ->where('status', 'approved')
             ->sum(DB::raw('charge * quantity'));
 
@@ -513,9 +515,9 @@ class ReceptionistController extends Controller
     }
 
     /**
-     * Store a new additional charge for a billing.
+     * Store a new additional charge for a billing (Billing Panel, AJAX).
      */
-    public function storeAdditionalCharge(Request $request, Billing $billing): RedirectResponse
+    public function storeAdditionalCharge(Request $request, Billing $billing)
     {
         $validated = $request->validate([
             'description' => 'required|string|max:255',
@@ -524,9 +526,8 @@ class ReceptionistController extends Controller
             'notes' => 'nullable|string|max:1000',
         ]);
 
-        // Only allow adding charges to pending bills
         if ($billing->billing_status === 'paid') {
-            return back()->with('error', 'Cannot add charges to a paid bill.');
+            return response()->json(['message' => 'Cannot add charges to a paid bill.'], 422);
         }
 
         DB::transaction(function () use ($billing, $validated) {
@@ -538,17 +539,16 @@ class ReceptionistController extends Controller
                 'notes' => $validated['notes'] ?? null,
             ]);
 
-            // Recalculate billing total
             $billing->recalculateTotal();
         });
 
-        return back()->with('success', 'Additional charge added successfully.');
+        return $this->chargesTableResponse($billing);
     }
 
     /**
-     * Update an existing additional charge.
+     * Update an existing additional charge (Billing Panel, AJAX).
      */
-    public function updateAdditionalCharge(Request $request, AdditionalCharge $additionalCharge): RedirectResponse
+    public function updateAdditionalCharge(Request $request, AdditionalCharge $additionalCharge)
     {
         $validated = $request->validate([
             'description' => 'required|string|max:255',
@@ -559,9 +559,8 @@ class ReceptionistController extends Controller
 
         $billing = $additionalCharge->billing;
 
-        // Only allow editing charges on pending bills
         if ($billing->billing_status === 'paid') {
-            return back()->with('error', 'Cannot edit charges on a paid bill.');
+            return response()->json(['message' => 'Cannot edit charges on a paid bill.'], 422);
         }
 
         DB::transaction(function () use ($additionalCharge, $validated, $billing) {
@@ -572,58 +571,44 @@ class ReceptionistController extends Controller
                 'notes' => $validated['notes'] ?? null,
             ]);
 
-            // Recalculate billing total
             $billing->recalculateTotal();
         });
 
-        return back()->with('success', 'Additional charge updated successfully.');
+        return $this->chargesTableResponse($billing);
     }
 
     /**
-     * Remove an additional charge.
+     * Remove an additional charge (Billing Panel, AJAX).
      */
-    public function destroyAdditionalCharge(AdditionalCharge $additionalCharge): RedirectResponse
+    public function destroyAdditionalCharge(AdditionalCharge $additionalCharge)
     {
         $billing = $additionalCharge->billing;
 
-        // Only allow removing charges from pending bills
         if ($billing->billing_status === 'paid') {
-            return back()->with('error', 'Cannot remove charges from a paid bill.');
+            return response()->json(['message' => 'Cannot remove charges from a paid bill.'], 422);
         }
 
         DB::transaction(function () use ($additionalCharge, $billing) {
             $additionalCharge->delete();
 
-            // Recalculate billing total
             $billing->recalculateTotal();
         });
 
-        return back()->with('success', 'Additional charge removed successfully.');
+        return $this->chargesTableResponse($billing);
     }
 
     /**
-     * Confirm the final bill amount before proceeding to payment.
+     * Re-render the additional charges table fragment with updated totals,
+     * used to refresh the Billing Panel after an AJAX charge mutation.
      */
-    public function confirmBill(Billing $billing): RedirectResponse
+    private function chargesTableResponse(Billing $billing)
     {
-        // Only pending or partial bills can be confirmed
-        if (!in_array($billing->billing_status, ['pending', 'partial'])) {
-            return back()->with('error', 'This bill cannot be confirmed.');
-        }
+        $billing->refresh()->load('additionalCharges');
 
-        // Mark the billing as confirmed
-        $billing->update(['billing_status' => 'confirmed']);
-
-        // Notify guest
-        if ($billing->booking && $billing->booking->reservation && $billing->booking->reservation->guest) {
-            Notification::create([
-                'user_id' => $billing->booking->reservation->guest->user_id,
-                'title' => 'Bill Confirmed',
-                'message' => 'Your bill has been reviewed and confirmed. Total amount: ₱' . number_format($billing->total_amount, 2),
-                'category' => 'billing',
-            ]);
-        }
-
-        return back()->with('success', 'Bill confirmed. Proceed to payment.');
+        return response()->json([
+            'html' => view('receptionist.check-out.partials.charges-table', compact('billing'))->render(),
+            'running_total' => $billing->running_total,
+            'additional_charges_total' => $billing->additional_charges_total,
+        ]);
     }
 }
