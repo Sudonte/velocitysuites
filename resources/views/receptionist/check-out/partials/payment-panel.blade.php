@@ -1,4 +1,4 @@
-<div class="modal-header" style="background: linear-gradient(135deg, #C1121F 0%, #780000 100%); color: white;">
+<div class="modal-header modal-header-brand">
     <h5 class="modal-title"><i class="fas fa-credit-card"></i> Payment</h5>
     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
 </div>
@@ -45,7 +45,7 @@
         @endif
         <tr class="fw-bold fs-5">
             <td>Balance Due</td>
-            <td class="text-end" id="balanceDueDisplay" style="color: #C1121F;">₱{{ number_format($balance, 2) }}</td>
+            <td class="text-end text-brand" id="balanceDueDisplay">₱{{ number_format($balance, 2) }}</td>
         </tr>
     </table>
 

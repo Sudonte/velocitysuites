@@ -4,14 +4,7 @@
 
 @section('content')
 <div class="container-fluid py-4">
-    <div class="row mb-4">
-        <div class="col-12">
-            <h1 class="mb-0">
-                <i class="fas fa-sign-out-alt"></i> Pending Check-Outs
-            </h1>
-            <p class="text-muted">Checked-in reservations whose check-out date is today or earlier.</p>
-        </div>
-    </div>
+    <x-page-header icon="fas fa-sign-out-alt" title="Pending Check-Outs" subtitle="Checked-in reservations whose check-out date is today or earlier." />
 
     @if (session('success'))
         <div class="alert alert-success alert-dismissible fade show" role="alert">
@@ -28,7 +21,7 @@
     @endif
 
     <div class="card border-0 shadow-sm">
-        <div class="card-header" style="background-color: #C1121F; color: white;">
+        <div class="card-header">
             <h5 class="mb-0"><i class="fas fa-list"></i> Awaiting Check-Out</h5>
         </div>
         <div class="table-responsive">
@@ -45,7 +38,7 @@
                 <tbody id="checkOutTableBody">
                     @forelse($reservations as $reservation)
                         <tr data-reservation-id="{{ $reservation->id }}">
-                            <td>{{ $reservation->guest->user->name ?? 'N/A' }}</td>
+                            <td>{{ $reservation->guest->user->full_name ?? 'N/A' }}</td>
                             <td>{{ $reservation->room->room_number ?? 'N/A' }} ({{ $reservation->room->room_type ?? '' }})</td>
                             <td>{{ $reservation->check_out->format('M d, Y') }}</td>
                             <td class="bill-status-cell">
@@ -58,7 +51,7 @@
                             <td>
                                 <button type="button" class="btn btn-sm btn-primary btn-start-checkout"
                                     data-reservation-id="{{ $reservation->id }}"
-                                    data-guest-name="{{ $reservation->guest->user->name ?? 'N/A' }}"
+                                    data-guest-name="{{ $reservation->guest->user->full_name ?? 'N/A' }}"
                                     data-room-number="{{ $reservation->room->room_number ?? 'N/A' }}">
                                     <i class="fas fa-sign-out-alt"></i> Check Out
                                 </button>
@@ -66,7 +59,7 @@
                         </tr>
                     @empty
                         <tr id="noCheckOutsRow">
-                            <td colspan="5" class="text-center text-muted py-4">No pending check-outs.</td>
+                            <td colspan="5"><x-empty-state icon="fas fa-sign-out-alt" message="No pending check-outs." /></td>
                         </tr>
                     @endforelse
                 </tbody>
@@ -82,7 +75,7 @@
 <div class="modal fade" id="confirmCheckoutModal" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
-            <div class="modal-header" style="background-color: #C1121F; color: white;">
+            <div class="modal-header modal-header-brand">
                 <h5 class="modal-title"><i class="fas fa-sign-out-alt"></i> Check Out Guest</h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>

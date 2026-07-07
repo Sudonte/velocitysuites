@@ -14,7 +14,7 @@
             </h1>
             <p class="text-muted">
                 Reservation #{{ $reservation->id }} —
-                Guest: {{ $reservation->guest->user->name ?? 'N/A' }} —
+                Guest: {{ $reservation->guest->user->full_name ?? 'N/A' }} —
                 Room: {{ $reservation->room->room_number ?? 'N/A' }}
             </p>
         </div>
@@ -28,43 +28,41 @@
         </div>
     @endif
 
-    <div class="card border-0 shadow-sm">
-        <div class="card-body">
-            <form action="{{ route('receptionist.amenities.store', $reservation) }}" method="POST">
-                @csrf
+    <x-card bodyClass="card-body">
+        <form action="{{ route('receptionist.amenities.store', $reservation) }}" method="POST">
+            @csrf
 
-                <div class="mb-3">
-                    <label class="form-label">Amenity <span class="text-danger">*</span></label>
-                    <select name="amenity_id" class="form-control" required>
-                        <option value="">-- Select Amenity --</option>
-                        @foreach($amenities as $amenity)
-                            <option value="{{ $amenity->id }}">
-                                {{ $amenity->amenity_name }} — ₱{{ number_format($amenity->charge, 2) }} ({{ $amenity->quantity }} available)
-                            </option>
-                        @endforeach
-                    </select>
-                </div>
+            <div class="mb-3">
+                <label class="form-label">Amenity <span class="text-danger">*</span></label>
+                <select name="amenity_id" class="form-control" required>
+                    <option value="">-- Select Amenity --</option>
+                    @foreach($amenities as $amenity)
+                        <option value="{{ $amenity->id }}">
+                            {{ $amenity->amenity_name }} — ₱{{ number_format($amenity->charge, 2) }} ({{ $amenity->quantity }} available)
+                        </option>
+                    @endforeach
+                </select>
+            </div>
 
-                <div class="mb-3">
-                    <label class="form-label">Quantity <span class="text-danger">*</span></label>
-                    <input type="number" name="quantity" class="form-control" min="1" value="1" required>
-                </div>
+            <div class="mb-3">
+                <label class="form-label">Quantity <span class="text-danger">*</span></label>
+                <input type="number" name="quantity" class="form-control" min="1" value="1" required>
+            </div>
 
-                <div class="mb-3">
-                    <label class="form-label">Status <span class="text-danger">*</span></label>
-                    <select name="status" class="form-control" required>
-                        <option value="pending">Pending</option>
-                        <option value="approved">Approved</option>
-                        <option value="rejected">Rejected</option>
-                    </select>
-                </div>
+            <div class="mb-3">
+                <label class="form-label">Status <span class="text-danger">*</span></label>
+                <select name="status" class="form-control" required>
+                    <option value="pending">Pending</option>
+                    <option value="approved">Approved</option>
+                    <option value="rejected">Rejected</option>
+                </select>
+            </div>
 
-                <button type="submit" class="btn btn-primary">
-                    <i class="fas fa-save"></i> Save Request
-                </button>
-                <a href="{{ route('receptionist.reservations.show', $reservation) }}" class="btn btn-secondary">Cancel</a>
-            </form>
-        </div>
-    </div>
+            <button type="submit" class="btn btn-primary">
+                <i class="fas fa-save"></i> Save Request
+            </button>
+            <a href="{{ route('receptionist.reservations.show', $reservation) }}" class="btn btn-secondary">Cancel</a>
+        </form>
+    </x-card>
 </div>
 @endsection

@@ -1,4 +1,4 @@
-<div class="modal-header" style="background: linear-gradient(135deg, #C1121F 0%, #780000 100%); color: white;">
+<div class="modal-header modal-header-brand">
     <h5 class="modal-title"><i class="fas fa-cash-register"></i> Billing</h5>
     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
 </div>
@@ -7,7 +7,7 @@
 
     <div class="row mb-3">
         <div class="col-md-6">
-            <strong>Guest:</strong> {{ $reservation->guest->user->full_name ?? $reservation->guest->user->name ?? 'N/A' }}<br>
+            <strong>Guest:</strong> {{ $reservation->guest->user->full_name ?? 'N/A' }}<br>
             <strong>Reservation:</strong> #{{ $reservation->id }}<br>
             <strong>Room:</strong> {{ $reservation->room->room_number ?? 'N/A' }} ({{ $reservation->room->room_name ?? '' }})
         </div>
@@ -67,7 +67,7 @@
         @endif
         <tr class="fw-bold fs-5">
             <td>Running Total</td>
-            <td class="text-end" id="runningTotalDisplay" style="color: #C1121F;">₱{{ number_format($billing->running_total, 2) }}</td>
+            <td class="text-end text-brand" id="runningTotalDisplay">₱{{ number_format($billing->running_total, 2) }}</td>
         </tr>
     </table>
 </div>
