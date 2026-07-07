@@ -1,8 +1,8 @@
-@extends('layouts.guest')
+@extends('layouts.public')
 
 @section('title', $room->room_type . ' - Velocity Suites')
 
-@section('content')
+@push('styles')
 <style>
     /* Page-specific breadcrumb styling - brand-colored links, not a
        pattern reused elsewhere in the app. */
@@ -27,7 +27,10 @@
         color: var(--text-light);
     }
 </style>
-<div class="container py-5">
+@endpush
+
+@section('content')
+<div class="container py-5" style="margin-top: 76px;">
     <!-- Room Header -->
     <div class="row mb-4">
         <div class="col-12">
@@ -166,7 +169,7 @@
                                 </select>
                             </div>
 
-                            <button type="submit" class="btn btn-danger w-100">
+                            <button type="submit" class="btn btn-velocity w-100">
                                 <i class="fas fa-calendar-check me-2"></i> Continue to Book
                             </button>
                         </form>
@@ -200,7 +203,7 @@
                                 </select>
                             </div>
 
-                            <button type="submit" class="btn btn-danger w-100">
+                            <button type="submit" class="btn btn-velocity w-100">
                                 <i class="fas fa-lock me-2"></i> Book Now (Login Required)
                             </button>
 
@@ -217,20 +220,20 @@
     <!-- Related Rooms -->
     @if($relatedRooms->isNotEmpty())
         <div class="mt-5">
-            <h3 class="mb-4">Similar <span class="text-brand">Rooms</span></h3>
+            <h3 class="mb-4">Similar <span class="gold-text">Rooms</span></h3>
             <div class="row g-4">
                 @foreach($relatedRooms as $relatedRoom)
                     <div class="col-md-4">
-                        <div class="card h-100 room-card">
+                        <div class="room-card">
                             <img src="{{ $relatedRoom->image ? asset('storage/' . $relatedRoom->image) : 'https://via.placeholder.com/400x300?text=No+Image' }}"
-                                 alt="{{ $relatedRoom->room_type }}" class="card-img-top" style="height: 180px; object-fit: cover;">
-                            <div class="card-body">
-                                <h5 class="card-title">{{ $relatedRoom->room_type }}</h5>
+                                 alt="{{ $relatedRoom->room_type }}" class="img-fluid" style="height: 180px; width: 100%; object-fit: cover;">
+                            <div class="p-4">
+                                <h5 class="fw-bold">{{ $relatedRoom->room_type }}</h5>
                                 <p class="mb-2 text-muted">
                                     <i class="fas fa-user me-1 text-brand"></i> Up to {{ $relatedRoom->room_capacity }} guests
                                 </p>
                                 <div class="d-flex justify-content-between align-items-center">
-                                    <span class="h5 text-brand mb-0">₱{{ number_format($relatedRoom->room_rate, 2) }}</span>
+                                    <span class="room-price mb-0">₱{{ number_format($relatedRoom->room_rate, 2) }}</span>
                                     <a href="{{ route('public.rooms.show', $relatedRoom) }}" class="btn btn-outline-danger btn-sm">View</a>
                                 </div>
                             </div>
@@ -241,16 +244,4 @@
         </div>
     @endif
 </div>
-
-<style>
-    /* Page-specific lift effect on room cards - distinct from the
-       generic .card:hover shadow-only treatment in app.css. */
-    .room-card {
-        transition: transform 0.3s, box-shadow 0.3s;
-    }
-    .room-card:hover {
-        transform: translateY(-5px);
-        box-shadow: var(--shadow-md);
-    }
-</style>
 @endsection
