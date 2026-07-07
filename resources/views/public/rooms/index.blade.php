@@ -74,9 +74,9 @@
                             <div class="col-md-6 col-lg-4">
                                 <div class="room-card">
                                     <img src="{{ $room->image ? asset('storage/' . $room->image) : 'https://via.placeholder.com/400x300?text=No+Image' }}"
-                                         alt="{{ $room->room_type }}" class="img-fluid" style="height: 200px; width: 100%; object-fit: cover;">
+                                         alt="{{ $room->roomType->name }}" class="img-fluid" style="height: 200px; width: 100%; object-fit: cover;">
                                     <div class="p-4">
-                                        <h5 class="fw-bold">{{ $room->room_type }}</h5>
+                                        <h5 class="fw-bold">{{ $room->roomType->name }}</h5>
                                         <p class="mb-2 text-muted">
                                             <i class="fas fa-user me-1 text-brand"></i> Up to {{ $room->room_capacity }} guests
                                         </p>

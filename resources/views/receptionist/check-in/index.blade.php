@@ -36,7 +36,7 @@
                 @forelse($reservations as $reservation)
                     <tr>
                         <td>{{ $reservation->guest->user->full_name ?? 'N/A' }}</td>
-                        <td>{{ $reservation->room->room_number ?? 'N/A' }} ({{ $reservation->room->room_type ?? '' }})</td>
+                        <td>{{ $reservation->room->room_number ?? 'N/A' }} ({{ $reservation->room->roomType->name ?? '' }})</td>
                         <td>{{ $reservation->check_in->format('M d, Y') }}</td>
                         <td>{{ $reservation->check_out->format('M d, Y') }}</td>
                         <td>{{ $reservation->number_of_guests }}</td>

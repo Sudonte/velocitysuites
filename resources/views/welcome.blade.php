@@ -54,9 +54,9 @@
                 <div class="col-md-4">
                     <div class="room-card">
                         <img src="{{ $room->image ? asset('storage/' . $room->image) : 'https://images.unsplash.com/photo-1631049307264-da0ec9d70304?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80' }}"
-                             alt="{{ $room->room_type }}" class="img-fluid" style="height: 200px; width: 100%; object-fit: cover;">
+                             alt="{{ $room->roomType->name }}" class="img-fluid" style="height: 200px; width: 100%; object-fit: cover;">
                         <div class="p-4">
-                            <h5 class="fw-bold">{{ $room->room_type }}</h5>
+                            <h5 class="fw-bold">{{ $room->roomType->name }}</h5>
                             <p class="mb-2 text-muted">
                                 <i class="fas fa-user me-1 text-brand"></i> Up to {{ $room->room_capacity }} guests
                             </p>

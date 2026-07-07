@@ -39,7 +39,7 @@
                     @forelse($reservations as $reservation)
                         <tr data-reservation-id="{{ $reservation->id }}">
                             <td>{{ $reservation->guest->user->full_name ?? 'N/A' }}</td>
-                            <td>{{ $reservation->room->room_number ?? 'N/A' }} ({{ $reservation->room->room_type ?? '' }})</td>
+                            <td>{{ $reservation->room->room_number ?? 'N/A' }} ({{ $reservation->room->roomType->name ?? '' }})</td>
                             <td>{{ $reservation->check_out->format('M d, Y') }}</td>
                             <td class="bill-status-cell">
                                 @if($reservation->booking && $reservation->booking->billing && $reservation->booking->billing->billing_status === 'partial')

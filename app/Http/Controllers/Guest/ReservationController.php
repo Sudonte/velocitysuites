@@ -48,16 +48,17 @@ class ReservationController extends Controller
         ]);
 
         $room = Room::findOrFail($request->room_id);
+        $roomType = $room->roomType;
         $checkIn = new \DateTime($request->check_in);
         $checkOut = new \DateTime($request->check_out);
         $nights = $checkOut->diff($checkIn)->days;
-        $totalRate = $room->room_rate * $nights;
+        $totalRate = $roomType->rate * $nights;
 
         // Check for active promotions
         $applicablePromos = Promotion::where('status', 'active')
-            ->where(function ($q) use ($room) {
-                $q->whereNull('room_type')
-                  ->orWhere('room_type', $room->room_type);
+            ->where(function ($q) use ($roomType) {
+                $q->whereNull('room_type_id')
+                  ->orWhere('room_type_id', $roomType->id);
             })
             ->whereDate('start_date', '<=', now())
             ->whereDate('end_date', '>=', now())
@@ -102,29 +103,26 @@ class ReservationController extends Controller
         $user = auth()->user();
         $guest = $user->guest;
 
-        // Check if room is available
+        // The guest booked from a specific example room's page, but the
+        // reservation only records the requested TYPE - a receptionist
+        // assigns the actual room when confirming. Availability against
+        // real inventory is checked at that assignment step.
         $room = Room::findOrFail($validated['room_id']);
-        if ($room->status !== 'available') {
-            return back()->with('error', 'This room is no longer available.');
+        $roomType = $room->roomType;
+
+        if ($roomType->status !== 'active') {
+            return back()->with('error', 'This room type is not currently offered.');
         }
 
-        // Check for conflicting reservations
-        $conflicts = Reservation::where('room_id', $room->id)
-            ->whereIn('status', ['confirmed', 'checked_in'])
-            ->where(function ($q) use ($validated) {
-                $q->whereBetween('check_in', [$validated['check_in'], $validated['check_out']])
-                  ->orWhereBetween('check_out', [$validated['check_in'], $validated['check_out']]);
-            })
-            ->count();
-
-        if ($conflicts > 0) {
-            return back()->with('error', 'Selected dates are not available.');
+        if (!$roomType->rooms()->where('status', '!=', 'maintenance')->exists()) {
+            return back()->with('error', 'No rooms of this type are currently in service.');
         }
 
-        // Create reservation
+        // Create reservation - room_id stays null until a receptionist
+        // assigns a specific room at confirmation.
         $reservation = Reservation::create([
             'guest_id' => $guest->id,
-            'room_id' => $room->id,
+            'room_type_id' => $roomType->id,
             'check_in' => $validated['check_in'],
             'check_out' => $validated['check_out'],
             'number_of_guests' => $validated['number_of_guests'],
@@ -138,10 +136,10 @@ class ReservationController extends Controller
             'booking_status' => 'pending',
         ]);
 
-        // Notify guest and staff about new booking
-        $this->notificationService->notifyNewBooking($user, $room->room_name);
+        // Notify guest and staff about new booking request
+        $this->notificationService->notifyNewBooking($user, $roomType->name);
 
-        return redirect()->route('guest.reservations.show', $reservation)->with('success', 'Reservation created! Waiting for confirmation.');
+        return redirect()->route('guest.reservations.show', $reservation)->with('success', 'Booking request sent! Our staff will assign your room and confirm shortly.');
     }
 
     /**
@@ -186,14 +184,15 @@ class ReservationController extends Controller
         }
 
         $user = auth()->user();
-        $roomName = $reservation->room->room_name;
+        $roomName = $reservation->room->room_name ?? $reservation->roomType->name;
 
         DB::transaction(function () use ($reservation) {
             $reservation->update(['status' => 'cancelled']);
             $reservation->booking->update(['booking_status' => 'cancelled']);
 
-            // Make room available again if it was reserved
-            if ($reservation->room->status === 'reserved') {
+            // Release the assigned room if there is one (pending
+            // reservations have no room assigned yet).
+            if ($reservation->room && $reservation->room->status === 'reserved') {
                 $reservation->room->update(['status' => 'available']);
             }
         });

@@ -85,7 +85,7 @@
                     <div class="d-flex justify-content-between align-items-center mb-3 pb-2" style="border-bottom: 1px solid #f0f0f0;">
                         <div>
                             <strong>{{ $room->room_name }}</strong><br>
-                            <small class="text-muted">{{ $room->room_type }}</small>
+                            <small class="text-muted">{{ $room->roomType->name }}</small>
                         </div>
                         <span class="badge badge-brand">{{ $room->reservations_count }} bookings</span>
                     </div>

@@ -11,6 +11,7 @@ class Reservation extends Model
 
     protected $fillable = [
         'guest_id',
+        'room_type_id',
         'room_id',
         'check_in',
         'check_out',
@@ -32,7 +33,18 @@ class Reservation extends Model
     }
 
     /**
-     * Get the room associated with the reservation.
+     * Get the room type the guest requested. Always set; the specific
+     * room (room_id) stays null until a receptionist assigns one at
+     * confirmation time.
+     */
+    public function roomType()
+    {
+        return $this->belongsTo(RoomType::class);
+    }
+
+    /**
+     * Get the room associated with the reservation. Null while the
+     * reservation is pending (no room assigned yet).
      */
     public function room()
     {

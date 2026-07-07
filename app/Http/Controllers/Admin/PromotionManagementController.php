@@ -4,7 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Promotion;
-use App\Models\Room;
+use App\Models\RoomType;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -35,7 +35,7 @@ class PromotionManagementController extends Controller
         }
 
         $promotions = $query->latest()->paginate(15);
-        $roomTypes = Room::distinct()->pluck('room_type');
+        $roomTypes = RoomType::orderBy('name')->get();
 
         return view('admin.promotions.index', compact('promotions', 'roomTypes'));
     }
@@ -45,7 +45,7 @@ class PromotionManagementController extends Controller
      */
     public function create(): View
     {
-        $roomTypes = Room::distinct()->pluck('room_type');
+        $roomTypes = RoomType::orderBy('name')->get();
 
         return view('admin.promotions.create', compact('roomTypes'));
     }
@@ -60,7 +60,7 @@ class PromotionManagementController extends Controller
             'discount_type' => 'required|in:percentage,fixed',
             'discount_value' => 'required|numeric|min:0',
             'description' => 'nullable|string',
-            'room_type' => 'nullable|string',
+            'room_type_id' => 'nullable|exists:room_types,id',
             'start_date' => 'required|date',
             'end_date' => 'required|date|after_or_equal:start_date',
             'status' => 'required|in:active,inactive',
@@ -76,7 +76,7 @@ class PromotionManagementController extends Controller
      */
     public function edit(Promotion $promotion): View
     {
-        $roomTypes = Room::distinct()->pluck('room_type');
+        $roomTypes = RoomType::orderBy('name')->get();
 
         return view('admin.promotions.edit', compact('promotion', 'roomTypes'));
     }
@@ -91,7 +91,7 @@ class PromotionManagementController extends Controller
             'discount_type' => 'required|in:percentage,fixed',
             'discount_value' => 'required|numeric|min:0',
             'description' => 'nullable|string',
-            'room_type' => 'nullable|string',
+            'room_type_id' => 'nullable|exists:room_types,id',
             'start_date' => 'required|date',
             'end_date' => 'required|date|after_or_equal:start_date',
             'status' => 'required|in:active,inactive',

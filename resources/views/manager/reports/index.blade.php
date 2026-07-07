@@ -74,7 +74,7 @@
                 @forelse($topRoomTypes as $room)
                     <tr>
                         <td>{{ $room->room_name }}</td>
-                        <td>{{ $room->room_type }}</td>
+                        <td>{{ $room->roomType->name }}</td>
                         <td class="text-end">{{ $room->reservations_count }}</td>
                     </tr>
                 @empty

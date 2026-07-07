@@ -61,16 +61,16 @@
                     </div>
 
                     <div class="form-group mb-3">
-                        <label for="room_type">Applicable Room Type</label>
-                        <select class="form-control @error('room_type') is-invalid @enderror"
-                                id="room_type" name="room_type">
+                        <label for="room_type_id">Applicable Room Type</label>
+                        <select class="form-control @error('room_type_id') is-invalid @enderror"
+                                id="room_type_id" name="room_type_id">
                             <option value="">All Room Types</option>
                             @foreach($roomTypes as $type)
-                                <option value="{{ $type }}" {{ old('room_type') === $type ? 'selected' : '' }}>{{ $type }}</option>
+                                <option value="{{ $type->id }}" {{ old('room_type_id') == $type->id ? 'selected' : '' }}>{{ $type->name }}</option>
                             @endforeach
                         </select>
                         <small class="text-muted">Leave blank to apply to all room types.</small>
-                        @error('room_type')
+                        @error('room_type_id')
                             <div class="invalid-feedback">{{ $message }}</div>
                         @enderror
                     </div>

@@ -39,8 +39,8 @@
                 <div class="row mb-2">
                     <div class="col-md-4"><strong>Room:</strong></div>
                     <div class="col-md-8">
-                        {{ $reservation->room->room_number ?? 'N/A' }} - {{ $reservation->room->room_name ?? '' }}
-                        ({{ $reservation->room->room_type ?? '' }})
+                        {{ $reservation->room->room_number ?? 'Unassigned' }} - {{ $reservation->room->room_name ?? '' }}
+                        ({{ $reservation->roomType->name ?? '' }})
                     </div>
                 </div>
                 <div class="row mb-2">

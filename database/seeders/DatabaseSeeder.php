@@ -6,6 +6,7 @@ use App\Models\Amenity;
 use App\Models\Guest;
 use App\Models\Promotion;
 use App\Models\Room;
+use App\Models\RoomType;
 use App\Models\User;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
@@ -22,7 +23,8 @@ class DatabaseSeeder extends Seeder
     {
         // Create Admin User
         User::create([
-            'name' => 'Admin User',
+            'first_name' => 'Admin',
+            'last_name' => 'User',
             'email' => 'admin@hotel.com',
             'password' => Hash::make('password123'),
             'role' => 'admin',
@@ -32,7 +34,8 @@ class DatabaseSeeder extends Seeder
 
         // Create Manager User
         User::create([
-            'name' => 'Manager User',
+            'first_name' => 'Manager',
+            'last_name' => 'User',
             'email' => 'manager@hotel.com',
             'password' => Hash::make('password123'),
             'role' => 'manager',
@@ -42,7 +45,8 @@ class DatabaseSeeder extends Seeder
 
         // Create Receptionist User
         User::create([
-            'name' => 'Receptionist User',
+            'first_name' => 'Receptionist',
+            'last_name' => 'User',
             'email' => 'receptionist@hotel.com',
             'password' => Hash::make('password123'),
             'role' => 'receptionist',
@@ -52,7 +56,8 @@ class DatabaseSeeder extends Seeder
 
         // Create Guest User with Profile
         $guest_user = User::create([
-            'name' => 'John Doe',
+            'first_name' => 'John',
+            'last_name' => 'Doe',
             'email' => 'guest@hotel.com',
             'password' => Hash::make('password123'),
             'role' => 'guest',
@@ -69,13 +74,17 @@ class DatabaseSeeder extends Seeder
             'address' => '123 Main Street, Manila, Philippines',
         ]);
 
+        // Create Room Types (rate/capacity live here, not on rooms)
+        $deluxe = RoomType::create(['name' => 'Deluxe', 'rate' => 3500, 'capacity' => 2, 'status' => 'active']);
+        $suite = RoomType::create(['name' => 'Suite', 'rate' => 5500, 'capacity' => 4, 'status' => 'active']);
+        $standard = RoomType::create(['name' => 'Standard', 'rate' => 2000, 'capacity' => 2, 'status' => 'active']);
+        $honeymoon = RoomType::create(['name' => 'Honeymoon', 'rate' => 8000, 'capacity' => 2, 'status' => 'active']);
+
         // Create Sample Rooms
         Room::create([
             'room_number' => '101',
             'room_name' => 'Deluxe Room',
-            'room_type' => 'Deluxe',
-            'room_rate' => 3500,
-            'room_capacity' => 2,
+            'room_type_id' => $deluxe->id,
             'description' => 'A luxurious room with a king-size bed and modern amenities.',
             'status' => 'available',
         ]);
@@ -83,9 +92,7 @@ class DatabaseSeeder extends Seeder
         Room::create([
             'room_number' => '102',
             'room_name' => 'Suite Room',
-            'room_type' => 'Suite',
-            'room_rate' => 5500,
-            'room_capacity' => 4,
+            'room_type_id' => $suite->id,
             'description' => 'A spacious suite with separate living and sleeping areas.',
             'status' => 'available',
         ]);
@@ -93,9 +100,7 @@ class DatabaseSeeder extends Seeder
         Room::create([
             'room_number' => '201',
             'room_name' => 'Standard Room',
-            'room_type' => 'Standard',
-            'room_rate' => 2000,
-            'room_capacity' => 2,
+            'room_type_id' => $standard->id,
             'description' => 'A comfortable room perfect for single travelers or couples.',
             'status' => 'available',
         ]);
@@ -103,9 +108,7 @@ class DatabaseSeeder extends Seeder
         Room::create([
             'room_number' => '301',
             'room_name' => 'Honeymoon Suite',
-            'room_type' => 'Honeymoon',
-            'room_rate' => 8000,
-            'room_capacity' => 2,
+            'room_type_id' => $honeymoon->id,
             'description' => 'A romantic suite with special honeymoon amenities.',
             'status' => 'available',
         ]);
@@ -116,7 +119,7 @@ class DatabaseSeeder extends Seeder
             'discount_type' => 'percentage',
             'discount_value' => 15,
             'description' => 'Get 15% discount when booking 30 days in advance.',
-            'room_type' => null,
+            'room_type_id' => null,
             'start_date' => now(),
             'end_date' => now()->addMonths(3),
             'status' => 'active',
@@ -127,7 +130,7 @@ class DatabaseSeeder extends Seeder
             'discount_type' => 'fixed',
             'discount_value' => 500,
             'description' => 'Get ₱500 off on weekend stays.',
-            'room_type' => 'Deluxe',
+            'room_type_id' => $deluxe->id,
             'start_date' => now(),
             'end_date' => now()->addMonths(2),
             'status' => 'active',

@@ -50,36 +50,18 @@
                     <div class="row">
                         <div class="col-md-6">
                             <div class="form-group mb-3">
-                                <label for="room_type">Room Type *</label>
-                                <input type="text" class="form-control @error('room_type') is-invalid @enderror"
-                                       id="room_type" name="room_type" placeholder="e.g. Deluxe, Suite, Standard" value="{{ old('room_type') }}" required>
-                                @error('room_type')
-                                    <div class="invalid-feedback">{{ $message }}</div>
-                                @enderror
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="form-group mb-3">
-                                <label for="room_rate">Room Rate (per night) *</label>
-                                <div class="input-group">
-                                    <span class="input-group-text">₱</span>
-                                    <input type="number" step="0.01" class="form-control @error('room_rate') is-invalid @enderror"
-                                           id="room_rate" name="room_rate" value="{{ old('room_rate') }}" required>
-                                </div>
-                                @error('room_rate')
-                                    <div class="invalid-feedback">{{ $message }}</div>
-                                @enderror
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="row">
-                        <div class="col-md-6">
-                            <div class="form-group mb-3">
-                                <label for="room_capacity">Room Capacity *</label>
-                                <input type="number" class="form-control @error('room_capacity') is-invalid @enderror"
-                                       id="room_capacity" name="room_capacity" min="1" value="{{ old('room_capacity') }}" required>
-                                @error('room_capacity')
+                                <label for="room_type_id">Room Type *</label>
+                                <select class="form-select @error('room_type_id') is-invalid @enderror"
+                                        id="room_type_id" name="room_type_id" required>
+                                    <option value="">-- Select type --</option>
+                                    @foreach($roomTypes as $type)
+                                        <option value="{{ $type->id }}" {{ old('room_type_id') == $type->id ? 'selected' : '' }}>
+                                            {{ $type->name }} — ₱{{ number_format($type->rate, 2) }}/night, up to {{ $type->capacity }} guests
+                                        </option>
+                                    @endforeach
+                                </select>
+                                <small class="text-muted">Rate and capacity come from the type. <a href="{{ route('admin.room-types.create') }}">Add a new type</a></small>
+                                @error('room_type_id')
                                     <div class="invalid-feedback">{{ $message }}</div>
                                 @enderror
                             </div>

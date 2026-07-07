@@ -58,7 +58,7 @@
                         @forelse($recentReservations as $reservation)
                             <tr>
                                 <td>{{ $reservation->guest->user->full_name }}</td>
-                                <td>{{ $reservation->room->room_number }}</td>
+                                <td>{{ $reservation->room->room_number ?? 'Unassigned' }}</td>
                                 <td>{{ $reservation->check_in->format('M d, Y') }}</td>
                                 <td>{{ $reservation->check_out->format('M d, Y') }}</td>
                                 <td><x-status-badge :status="$reservation->status" domain="reservation" /></td>

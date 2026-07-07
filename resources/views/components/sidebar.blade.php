@@ -74,6 +74,9 @@
                 <li><a href="/admin/users" class="nav-link {{ request()->is('admin/users*') ? 'active' : '' }}">
                     <i class="fas fa-users"></i> Users
                 </a></li>
+                <li><a href="/admin/room-types" class="nav-link {{ request()->is('admin/room-types*') ? 'active' : '' }}">
+                    <i class="fas fa-layer-group"></i> Room Types
+                </a></li>
                 <li><a href="/admin/rooms" class="nav-link {{ request()->is('admin/rooms*') ? 'active' : '' }}">
                     <i class="fas fa-door-open"></i> Rooms
                 </a></li>
@@ -107,7 +110,10 @@
                 <li><a href="/receptionist/dashboard" class="nav-link {{ request()->is('receptionist/dashboard') ? 'active' : '' }}">
                     <i class="fas fa-home"></i> Dashboard
                 </a></li>
-                <li><a href="/receptionist/reservations" class="nav-link {{ request()->is('receptionist/reservations*') ? 'active' : '' }}">
+                <li><a href="{{ route('receptionist.reservations.confirm-index') }}" class="nav-link {{ request()->routeIs('receptionist.reservations.confirm-index') ? 'active' : '' }}">
+                    <i class="fas fa-inbox"></i> Booking Requests
+                </a></li>
+                <li><a href="/receptionist/reservations" class="nav-link {{ request()->is('receptionist/reservations*') && !request()->routeIs('receptionist.reservations.confirm-index') ? 'active' : '' }}">
                     <i class="fas fa-calendar-alt"></i> Reservations
                 </a></li>
                 <li><a href="/receptionist/check-in" class="nav-link {{ request()->is('receptionist/check-in*') ? 'active' : '' }}">

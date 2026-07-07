@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Room;
 use App\Models\RoomImage;
+use App\Models\RoomType;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -30,12 +31,12 @@ class RoomManagementController extends Controller
         }
 
         // Filter by type
-        if ($request->has('room_type') && $request->room_type) {
-            $query->where('room_type', $request->room_type);
+        if ($request->has('room_type_id') && $request->room_type_id) {
+            $query->where('room_type_id', $request->room_type_id);
         }
 
         $rooms = $query->paginate(15);
-        $roomTypes = Room::distinct()->pluck('room_type');
+        $roomTypes = RoomType::orderBy('name')->get();
 
         return view('admin.rooms.index', compact('rooms', 'roomTypes'));
     }
@@ -45,7 +46,9 @@ class RoomManagementController extends Controller
      */
     public function create(): View
     {
-        return view('admin.rooms.create');
+        $roomTypes = RoomType::where('status', 'active')->orderBy('name')->get();
+
+        return view('admin.rooms.create', compact('roomTypes'));
     }
 
     /**
@@ -56,9 +59,7 @@ class RoomManagementController extends Controller
         $validated = $request->validate([
             'room_number' => 'required|string|unique:rooms',
             'room_name' => 'required|string|max:255',
-            'room_type' => 'required|string',
-            'room_rate' => 'required|numeric|min:0',
-            'room_capacity' => 'required|integer|min:1',
+            'room_type_id' => 'required|exists:room_types,id',
             'description' => 'nullable|string',
             'status' => 'required|in:available,occupied,reserved,maintenance',
             'image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
@@ -80,7 +81,9 @@ class RoomManagementController extends Controller
      */
     public function edit(Room $room): View
     {
-        return view('admin.rooms.edit', compact('room'));
+        $roomTypes = RoomType::where('status', 'active')->orderBy('name')->get();
+
+        return view('admin.rooms.edit', compact('room', 'roomTypes'));
     }
 
     /**
@@ -91,9 +94,7 @@ class RoomManagementController extends Controller
         $validated = $request->validate([
             'room_number' => 'required|string|unique:rooms,room_number,' . $room->id,
             'room_name' => 'required|string|max:255',
-            'room_type' => 'required|string',
-            'room_rate' => 'required|numeric|min:0',
-            'room_capacity' => 'required|integer|min:1',
+            'room_type_id' => 'required|exists:room_types,id',
             'description' => 'nullable|string',
             'status' => 'required|in:available,occupied,reserved,maintenance',
             'image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',

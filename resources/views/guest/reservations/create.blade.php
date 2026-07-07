@@ -21,12 +21,9 @@
                         @endif
                     </div>
                     <div class="col-md-8">
-                        <h3 class="mb-3">{{ $room->room_name }}</h3>
+                        <h3 class="mb-3">{{ $room->roomType->name }} Room</h3>
                         <p class="mb-2">
-                            <strong>Room Number:</strong> {{ $room->room_number }}
-                        </p>
-                        <p class="mb-2">
-                            <strong>Type:</strong> {{ $room->room_type }}
+                            <strong>Type:</strong> {{ $room->roomType->name }}
                         </p>
                         <p class="mb-2">
                             <strong>Capacity:</strong> Up to {{ $room->room_capacity }} guests
@@ -44,6 +41,11 @@
 
             <!-- Booking Details -->
             <x-card title="Booking Details" bodyClass="card-body" class="mt-4">
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle"></i>
+                    You are requesting a <strong>{{ $room->roomType->name }}</strong> room.
+                    A specific room number will be assigned by our staff when your booking is confirmed.
+                </div>
                 <form action="{{ route('guest.reservations.store') }}" method="POST">
                     @csrf
 

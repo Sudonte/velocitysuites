@@ -25,7 +25,7 @@
             <x-card title="Room Information" bodyClass="card-body" class="mb-4">
                 <div class="row">
                     <div class="col-md-4">
-                        @if($reservation->room->image)
+                        @if($reservation->room && $reservation->room->image)
                             <img src="{{ asset('storage/' . $reservation->room->image) }}" alt="{{ $reservation->room->room_name }}" class="img-fluid rounded">
                         @else
                             <div class="bg-secondary rounded d-flex align-items-center justify-content-center" style="height: 200px;">
@@ -34,18 +34,27 @@
                         @endif
                     </div>
                     <div class="col-md-8">
-                        <h4 class="mb-2">{{ $reservation->room->room_name }}</h4>
+                        @if($reservation->room)
+                            <h4 class="mb-2">{{ $reservation->room->room_name }}</h4>
+                            <p class="mb-2">
+                                <strong>Room Number:</strong> {{ $reservation->room->room_number }}
+                            </p>
+                        @else
+                            <h4 class="mb-2">{{ $reservation->roomType->name }} Room</h4>
+                            <p class="mb-2">
+                                <strong>Room Number:</strong>
+                                <span class="badge bg-warning text-dark">To be assigned</span>
+                                <small class="text-muted d-block mt-1">Our staff will assign your specific room when your booking is confirmed.</small>
+                            </p>
+                        @endif
                         <p class="mb-2">
-                            <strong>Room Number:</strong> {{ $reservation->room->room_number }}
+                            <strong>Type:</strong> {{ $reservation->roomType->name }}
                         </p>
                         <p class="mb-2">
-                            <strong>Type:</strong> {{ $reservation->room->room_type }}
-                        </p>
-                        <p class="mb-2">
-                            <strong>Rate:</strong> ₱{{ number_format($reservation->room->room_rate, 2) }} per night
+                            <strong>Rate:</strong> ₱{{ number_format($reservation->roomType->rate, 2) }} per night
                         </p>
                         <p class="mb-0">
-                            <strong>Capacity:</strong> Up to {{ $reservation->room->room_capacity }} guests
+                            <strong>Capacity:</strong> Up to {{ $reservation->roomType->capacity }} guests
                         </p>
                     </div>
                 </div>
@@ -101,12 +110,12 @@
             <!-- Price Summary -->
             <x-card title="Payment Information" bodyClass="card-body" class="mb-4">
                 <?php
-                    $nights = $reservation->check_out->diffInDays($reservation->check_in);
-                    $baseAmount = $reservation->room->room_rate * $nights;
+                    $nights = abs($reservation->check_out->diffInDays($reservation->check_in));
+                    $baseAmount = $reservation->roomType->rate * $nights;
                 ?>
                 <div class="d-flex justify-content-between mb-2">
                     <span>Room Rate:</span>
-                    <strong>₱{{ number_format($reservation->room->room_rate, 2) }}/night</strong>
+                    <strong>₱{{ number_format($reservation->roomType->rate, 2) }}/night</strong>
                 </div>
                 <div class="d-flex justify-content-between mb-2">
                     <span>Number of Nights:</span>

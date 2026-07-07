@@ -14,7 +14,7 @@ class Promotion extends Model
         'discount_type',
         'discount_value',
         'description',
-        'room_type',
+        'room_type_id',
         'start_date',
         'end_date',
         'status',
@@ -25,6 +25,14 @@ class Promotion extends Model
         'end_date' => 'date',
         'discount_value' => 'decimal:2',
     ];
+
+    /**
+     * Get the room type this promotion targets (null = all types).
+     */
+    public function roomType()
+    {
+        return $this->belongsTo(RoomType::class);
+    }
 
     /**
      * Check if promotion is currently active.

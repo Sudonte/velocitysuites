@@ -17,25 +17,33 @@ class PublicRoomController extends Controller
 
         // Filter by room type
         if ($request->filled('room_type')) {
-            $query->where('room_type', $request->room_type);
+            $query->whereHas('roomType', function ($q) use ($request) {
+                $q->where('name', $request->room_type);
+            });
         }
 
-        // Filter by price range
+        // Filter by price range (rate lives on the room type now)
         if ($request->filled('min_price')) {
-            $query->where('room_rate', '>=', $request->min_price);
+            $query->whereHas('roomType', function ($q) use ($request) {
+                $q->where('rate', '>=', $request->min_price);
+            });
         }
 
         if ($request->filled('max_price')) {
-            $query->where('room_rate', '<=', $request->max_price);
+            $query->whereHas('roomType', function ($q) use ($request) {
+                $q->where('rate', '<=', $request->max_price);
+            });
         }
 
         // Filter by capacity
         if ($request->filled('capacity')) {
-            $query->where('room_capacity', '>=', $request->capacity);
+            $query->whereHas('roomType', function ($q) use ($request) {
+                $q->where('capacity', '>=', $request->capacity);
+            });
         }
 
         $rooms = $query->latest()->paginate(12);
-        $roomTypes = Room::distinct()->pluck('room_type');
+        $roomTypes = \App\Models\RoomType::where('status', 'active')->orderBy('name')->pluck('name');
 
         return view('public.rooms.index', compact('rooms', 'roomTypes'));
     }
@@ -49,7 +57,7 @@ class PublicRoomController extends Controller
         $room->load(['images']);
 
         // Get related rooms (same type, excluding current)
-        $relatedRooms = Room::where('room_type', $room->room_type)
+        $relatedRooms = Room::where('room_type_id', $room->room_type_id)
             ->where('id', '!=', $room->id)
             ->where('status', 'available')
             ->take(3)

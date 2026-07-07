@@ -78,6 +78,7 @@ Route::middleware(['auth', 'account.status', 'log.activity'])->group(function ()
         Route::put('/users/{user}/reset-password', [\App\Http\Controllers\Admin\UserManagementController::class, 'resetPassword'])->name('users.resetPassword');
 
         // Room Management
+        Route::resource('room-types', \App\Http\Controllers\Admin\RoomTypeManagementController::class)->except(['show']);
         Route::resource('rooms', \App\Http\Controllers\Admin\RoomManagementController::class);
         Route::post('/room-images/{room}/upload', [\App\Http\Controllers\Admin\RoomManagementController::class, 'uploadImages'])->name('room-images.upload');
         Route::delete('/room-images/{roomImage}', [\App\Http\Controllers\Admin\RoomManagementController::class, 'deleteImage'])->name('room-images.destroy');
@@ -116,11 +117,14 @@ Route::middleware(['auth', 'account.status', 'log.activity'])->group(function ()
         Route::get('/dashboard', [ReceptionistController::class, 'dashboard'])->name('dashboard');
 
         // Reservations (read-only browse)
+        // NOTE: /reservations/pending must be registered BEFORE the
+        // /reservations/{reservation} wildcard or "pending" gets treated
+        // as a reservation ID and 404s.
         Route::get('/reservations', [ReceptionistController::class, 'reservationsIndex'])->name('reservations.index');
+        Route::get('/reservations/pending', [ReceptionistController::class, 'confirmReservationsIndex'])->name('reservations.confirm-index');
         Route::get('/reservations/{reservation}', [ReceptionistController::class, 'reservationShow'])->name('reservations.show');
 
-        // Reservation Confirmation
-        Route::get('/reservations/pending', [ReceptionistController::class, 'confirmReservationsIndex'])->name('reservations.confirm-index');
+        // Room assignment + confirmation of pending booking requests
         Route::post('/reservations/{reservation}/confirm', [ReceptionistController::class, 'confirmReservation'])->name('reservations.confirm');
         Route::post('/reservations/{reservation}/reject', [ReceptionistController::class, 'rejectReservation'])->name('reservations.reject');
 

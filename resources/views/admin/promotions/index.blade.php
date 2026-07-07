@@ -79,8 +79,8 @@
                             @endif
                         </td>
                         <td>
-                            @if($promotion->room_type)
-                                <span class="badge bg-secondary">{{ $promotion->room_type }}</span>
+                            @if($promotion->roomType)
+                                <span class="badge bg-secondary">{{ $promotion->roomType->name }}</span>
                             @else
                                 <span class="text-muted">All</span>
                             @endif

@@ -59,7 +59,7 @@
                 <div class="row">
                     <div class="col-md-4">
                         <p class="mb-1"><strong>Room:</strong> {{ $currentReservation->room->room_name }}</p>
-                        <p class="mb-1"><strong>Type:</strong> {{ $currentReservation->room->room_type }}</p>
+                        <p class="mb-1"><strong>Type:</strong> {{ $currentReservation->room->roomType->name }}</p>
                     </div>
                     <div class="col-md-4">
                         <p class="mb-1"><strong>Check-In:</strong> {{ $currentReservation->check_in->format('M d, Y H:i') }}</p>
@@ -120,7 +120,7 @@
                                 $balance = max(0, (float) $billing->total_amount - (float) $paid);
                             @endphp
                             <tr>
-                                <td>{{ $reservation->room->room_name }}</td>
+                                <td>{{ $reservation->room->room_name ?? $reservation->roomType->name . ' (room to be assigned)' }}</td>
                                 <td>{{ $reservation->check_in->format('M d, Y') }}</td>
                                 <td>{{ $reservation->check_out->format('M d, Y') }}</td>
                                 <td>₱{{ number_format($billing->total_amount, 2) }}</td>
@@ -162,7 +162,7 @@
                     <tbody>
                         @foreach($upcomingReservations as $reservation)
                             <tr>
-                                <td>{{ $reservation->room->room_name }}</td>
+                                <td>{{ $reservation->room->room_name ?? $reservation->roomType->name . ' (room to be assigned)' }}</td>
                                 <td>{{ $reservation->check_in->format('M d, Y') }}</td>
                                 <td>{{ $reservation->check_out->format('M d, Y') }}</td>
                                 <td>{{ $reservation->number_of_guests }}</td>
@@ -273,7 +273,7 @@
                     <tbody>
                         @foreach($pastReservations as $reservation)
                             <tr>
-                                <td>{{ $reservation->room->room_name }}</td>
+                                <td>{{ $reservation->room->room_name ?? $reservation->roomType->name . ' (room to be assigned)' }}</td>
                                 <td>{{ $reservation->check_in->format('M d, Y') }}</td>
                                 <td>{{ $reservation->check_out->format('M d, Y') }}</td>
                                 <td><x-status-badge :status="$reservation->status" domain="reservation" /></td>

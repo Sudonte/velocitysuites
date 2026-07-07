@@ -1,6 +1,6 @@
 @extends(auth()->check() ? 'layouts.app' : 'layouts.public')
 
-@section('title', $room->room_type . ' - Velocity Suites')
+@section('title', $room->roomType->name . ' - Velocity Suites')
 
 @push('styles')
 <style>
@@ -32,7 +32,7 @@
 @section('content')
 <div class="{{ auth()->check() ? 'container-fluid py-4' : 'container py-5' }}" @unless(auth()->check()) style="margin-top: 76px;" @endunless>
     @auth
-        <x-page-header icon="fas fa-door-open" :title="$room->room_type" subtitle="Room details and booking" />
+        <x-page-header icon="fas fa-door-open" :title="$room->roomType->name" subtitle="Room details and booking" />
     @endauth
     <!-- Room Header -->
     <div class="row mb-4">
@@ -41,7 +41,7 @@
                 <ol class="breadcrumb">
                     <li class="breadcrumb-item"><a href="{{ route('home') }}">Home</a></li>
                     <li class="breadcrumb-item"><a href="{{ route('public.rooms.index') }}">Rooms</a></li>
-                    <li class="breadcrumb-item active" aria-current="page">{{ $room->room_type }}</li>
+                    <li class="breadcrumb-item active" aria-current="page">{{ $room->roomType->name }}</li>
                 </ol>
             </nav>
         </div>
@@ -53,7 +53,7 @@
             <!-- Main Image -->
             <div class="card mb-4">
                 <img src="{{ $room->image ? asset('storage/' . $room->image) : 'https://via.placeholder.com/800x500?text=No+Image' }}"
-                     alt="{{ $room->room_type }}" class="card-img-top" style="height: 400px; object-fit: cover;">
+                     alt="{{ $room->roomType->name }}" class="card-img-top" style="height: 400px; object-fit: cover;">
             </div>
 
             <!-- Image Gallery -->
@@ -74,7 +74,7 @@
                     <h4 class="mb-0">Room Details</h4>
                 </div>
                 <div class="card-body">
-                    <h5>{{ $room->room_type }}</h5>
+                    <h5>{{ $room->roomType->name }}</h5>
                     <p class="text-muted">{{ $room->description }}</p>
 
                     <div class="row mt-4">
@@ -91,7 +91,7 @@
                     <div class="row">
                         <div class="col-md-6">
                             <h6><i class="fas fa-tag text-brand me-2"></i>Room Type</h6>
-                            <p>{{ $room->room_type }}</p>
+                            <p>{{ $room->roomType->name }}</p>
                         </div>
                         <div class="col-md-6">
                             <h6><i class="fas fa-info-circle text-brand me-2"></i>Status</h6>
@@ -229,9 +229,9 @@
                     <div class="col-md-4">
                         <div class="room-card">
                             <img src="{{ $relatedRoom->image ? asset('storage/' . $relatedRoom->image) : 'https://via.placeholder.com/400x300?text=No+Image' }}"
-                                 alt="{{ $relatedRoom->room_type }}" class="img-fluid" style="height: 180px; width: 100%; object-fit: cover;">
+                                 alt="{{ $relatedRoom->roomType->name }}" class="img-fluid" style="height: 180px; width: 100%; object-fit: cover;">
                             <div class="p-4">
-                                <h5 class="fw-bold">{{ $relatedRoom->room_type }}</h5>
+                                <h5 class="fw-bold">{{ $relatedRoom->roomType->name }}</h5>
                                 <p class="mb-2 text-muted">
                                     <i class="fas fa-user me-1 text-brand"></i> Up to {{ $relatedRoom->room_capacity }} guests
                                 </p>

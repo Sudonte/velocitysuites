@@ -28,10 +28,10 @@
                        placeholder="Search by room name or number" value="{{ request('search') }}">
             </div>
             <div class="col-md-3">
-                <select name="room_type" class="form-control">
+                <select name="room_type_id" class="form-control">
                     <option value="">All Room Types</option>
                     @foreach($roomTypes as $type)
-                        <option value="{{ $type }}" {{ request('room_type') === $type ? 'selected' : '' }}>{{ $type }}</option>
+                        <option value="{{ $type->id }}" {{ request('room_type_id') == $type->id ? 'selected' : '' }}>{{ $type->name }}</option>
                     @endforeach
                 </select>
             </div>
@@ -68,7 +68,7 @@
                         <h5 class="card-title">{{ $room->room_name }}</h5>
                         <p class="card-text mb-2">
                             <strong>Room #:</strong> {{ $room->room_number }}<br>
-                            <strong>Type:</strong> {{ $room->room_type }}<br>
+                            <strong>Type:</strong> {{ $room->roomType->name }}<br>
                             <strong>Capacity:</strong> {{ $room->room_capacity }} guests<br>
                             <strong>Rate:</strong> ₱{{ number_format($room->room_rate, 2) }}/night
                         </p>

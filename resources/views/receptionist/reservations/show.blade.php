@@ -44,7 +44,7 @@
                 </div>
                 <div class="row mb-2">
                     <div class="col-md-4"><strong>Room:</strong></div>
-                    <div class="col-md-8">{{ $reservation->room->room_number ?? 'N/A' }} - {{ $reservation->room->room_name ?? '' }}</div>
+                    <div class="col-md-8">{{ $reservation->room ? $reservation->room->room_number . ' - ' . $reservation->room->room_name : 'Unassigned (' . $reservation->roomType->name . ' requested)' }}</div>
                 </div>
                 <div class="row mb-2">
                     <div class="col-md-4"><strong>Check-In:</strong></div>

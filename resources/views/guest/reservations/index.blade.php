@@ -29,7 +29,7 @@
                 @forelse(auth()->user()->guest->reservations()->with('room')->latest('check_in')->get() as $reservation)
                     <tr>
                         <td>#{{ $reservation->id }}</td>
-                        <td>{{ $reservation->room->room_number ?? 'N/A' }}</td>
+                        <td>{{ $reservation->room->room_number ?? 'To be assigned' }}</td>
                         <td>{{ $reservation->check_in->format('M d, Y') }}</td>
                         <td>{{ $reservation->check_out->format('M d, Y') }}</td>
                         <td><x-status-badge :status="$reservation->status" domain="reservation" /></td>

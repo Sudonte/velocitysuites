@@ -106,29 +106,77 @@ class ReceptionistController extends Controller
     }
 
     /**
-     * List reservations pending confirmation.
+     * List booking requests awaiting room assignment and confirmation.
+     * Each pending reservation gets a dropdown of rooms of the requested
+     * type that are actually free for the requested dates.
      */
     public function confirmReservationsIndex(): View
     {
-        $reservations = Reservation::with(['guest.user', 'room'])
+        $reservations = Reservation::with(['guest.user', 'roomType'])
             ->where('status', 'pending')
             ->orderBy('created_at')
             ->paginate(15);
 
-        return view('receptionist.reservations.confirm-index', compact('reservations'));
+        $assignableRooms = $reservations->getCollection()->mapWithKeys(function ($reservation) {
+            return [$reservation->id => $this->assignableRoomsFor($reservation)];
+        });
+
+        return view('receptionist.reservations.confirm-index', compact('reservations', 'assignableRooms'));
     }
 
     /**
-     * Confirm a pending reservation.
+     * Rooms of the reservation's requested type that can be assigned to it:
+     * in service, currently available, and with no confirmed/checked-in
+     * reservation overlapping the requested dates.
      */
-    public function confirmReservation(Reservation $reservation): RedirectResponse
+    private function assignableRoomsFor(Reservation $reservation)
+    {
+        return Room::where('room_type_id', $reservation->room_type_id)
+            ->where('status', 'available')
+            ->whereDoesntHave('reservations', function ($q) use ($reservation) {
+                $q->whereIn('status', ['confirmed', 'checked_in'])
+                  ->where('id', '!=', $reservation->id)
+                  ->where(function ($dates) use ($reservation) {
+                      $dates->whereBetween('check_in', [$reservation->check_in, $reservation->check_out])
+                            ->orWhereBetween('check_out', [$reservation->check_in, $reservation->check_out])
+                            ->orWhere(function ($spanning) use ($reservation) {
+                                $spanning->where('check_in', '<=', $reservation->check_in)
+                                         ->where('check_out', '>=', $reservation->check_out);
+                            });
+                  });
+            })
+            ->orderBy('room_number')
+            ->get();
+    }
+
+    /**
+     * Assign a room to a pending booking request and confirm it.
+     * The guest never picks a room number - the receptionist chooses the
+     * physical room here, and confirmation only happens with a room set.
+     */
+    public function confirmReservation(Request $request, Reservation $reservation): RedirectResponse
     {
         if ($reservation->status !== 'pending') {
             return back()->with('error', 'Only pending reservations can be confirmed.');
         }
 
-        DB::transaction(function () use ($reservation) {
-            $reservation->update(['status' => 'confirmed']);
+        $validated = $request->validate([
+            'room_id' => 'required|exists:rooms,id',
+        ]);
+
+        // The chosen room must be one of the actually-assignable rooms
+        // (right type, available, no date conflict) - not just any room.
+        $room = $this->assignableRoomsFor($reservation)->firstWhere('id', (int) $validated['room_id']);
+
+        if (!$room) {
+            return back()->with('error', 'That room cannot be assigned: it is not an available ' . $reservation->roomType->name . ' room for these dates.');
+        }
+
+        DB::transaction(function () use ($reservation, $room) {
+            $reservation->update([
+                'room_id' => $room->id,
+                'status' => 'confirmed',
+            ]);
 
             // Update booking status
             if ($reservation->booking) {
@@ -136,16 +184,17 @@ class ReceptionistController extends Controller
             }
 
             // Mark the room as reserved to prevent double bookings
-            $reservation->room->update(['status' => 'reserved']);
+            $room->update(['status' => 'reserved']);
 
-            // Notify the guest and managers
+            // Notify the guest with their assigned room
             $this->notificationService->notifyReservationConfirmed(
                 $reservation->guest->user,
-                $reservation->room->room_name
+                $room->room_name . ' (Room ' . $room->room_number . ')'
             );
         });
 
-        return redirect()->route('receptionist.reservations.confirm-index')->with('success', 'Reservation confirmed!');
+        return redirect()->route('receptionist.reservations.confirm-index')
+            ->with('success', 'Room ' . $room->room_number . ' assigned and reservation confirmed!');
     }
 
     /**
@@ -169,14 +218,17 @@ class ReceptionistController extends Controller
                 $reservation->booking->update(['booking_status' => 'cancelled']);
             }
 
-            // Make room available again
-            $reservation->room->update(['status' => 'available']);
+            // Release the room if one was already assigned (pending
+            // requests usually have none yet).
+            if ($reservation->room) {
+                $reservation->room->update(['status' => 'available']);
+            }
 
             // Notify the guest about rejection
             Notification::create([
                 'user_id' => $reservation->guest->user_id,
                 'title' => 'Reservation Rejected',
-                'message' => 'Your reservation for ' . $reservation->room->room_name . ' has been rejected. Reason: ' . $request->reason,
+                'message' => 'Your booking request for a ' . $reservation->roomType->name . ' room has been rejected. Reason: ' . $request->reason,
                 'category' => 'booking',
             ]);
         });
@@ -486,8 +538,8 @@ class ReceptionistController extends Controller
             ->whereDate('start_date', '<=', today())
             ->whereDate('end_date', '>=', today())
             ->where(function ($q) use ($reservation) {
-                $q->whereNull('room_type')
-                  ->orWhere('room_type', $reservation->room->room_type);
+                $q->whereNull('room_type_id')
+                  ->orWhere('room_type_id', $reservation->room_type_id);
             })
             ->orderByDesc('discount_value')
             ->first();
