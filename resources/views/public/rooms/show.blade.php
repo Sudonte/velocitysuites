@@ -1,4 +1,4 @@
-@extends('layouts.public')
+@extends(auth()->check() ? 'layouts.app' : 'layouts.public')
 
 @section('title', $room->room_type . ' - Velocity Suites')
 
@@ -30,7 +30,10 @@
 @endpush
 
 @section('content')
-<div class="container py-5" style="margin-top: 76px;">
+<div class="{{ auth()->check() ? 'container-fluid py-4' : 'container py-5' }}" @unless(auth()->check()) style="margin-top: 76px;" @endunless>
+    @auth
+        <x-page-header icon="fas fa-door-open" :title="$room->room_type" subtitle="Room details and booking" />
+    @endauth
     <!-- Room Header -->
     <div class="row mb-4">
         <div class="col-12">

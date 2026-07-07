@@ -28,22 +28,6 @@
             font-size: 1.5rem;
         }
 
-        .btn-velocity {
-            background-color: var(--primary-color);
-            color: white;
-            border: none;
-            padding: 10px 30px;
-            border-radius: var(--radius-btn);
-            font-weight: 600;
-            transition: all 0.3s;
-        }
-
-        .btn-velocity:hover {
-            background-color: var(--accent-color);
-            color: white;
-            box-shadow: 0 4px 8px rgba(193, 18, 31, 0.3);
-        }
-
         .btn-outline-light:hover {
             background-color: white;
             color: var(--text-dark);
@@ -69,26 +53,6 @@
             margin-bottom: 20px;
         }
 
-        .room-card {
-            background: white;
-            border-radius: var(--radius-card);
-            overflow: hidden;
-            box-shadow: var(--shadow-sm);
-            transition: transform 0.3s, box-shadow 0.3s;
-            height: 100%;
-        }
-
-        .room-card:hover {
-            transform: translateY(-5px);
-            box-shadow: var(--shadow-md);
-        }
-
-        .room-price {
-            color: var(--primary-color);
-            font-weight: 700;
-            font-size: 1.25rem;
-        }
-
         footer {
             background-color: var(--text-dark);
             color: white;
@@ -110,25 +74,9 @@
             color: var(--primary-color) !important;
         }
 
-        .gold-text {
-            color: var(--gold-color) !important;
-            font-weight: 700;
-        }
-
         .section-title {
             color: var(--text-dark);
             font-weight: 700;
-        }
-
-        /* Page header banner - used by non-hero pages (room browsing,
-           room details) instead of the landing page's full hero. */
-        .page-banner {
-            background: linear-gradient(rgba(0, 0, 0, 0.55), rgba(0, 0, 0, 0.55)),
-                        url('https://images.unsplash.com/photo-1566073771259-6a8506099945?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&q=80');
-            background-size: cover;
-            background-position: center;
-            padding: 140px 0 60px;
-            color: white;
         }
     </style>
     @stack('styles')

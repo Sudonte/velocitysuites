@@ -1,17 +1,22 @@
-@extends('layouts.public')
+@extends(auth()->check() ? 'layouts.app' : 'layouts.public')
 
 @section('title', 'Our Rooms - Velocity Suites')
 
 @section('content')
-    <!-- Page Banner -->
-    <section class="page-banner text-center">
-        <div class="container">
-            <h1 class="display-4 fw-bold mb-2" style="text-shadow: 2px 2px 4px rgba(0,0,0,0.7);">Our <span class="gold-text">Rooms</span></h1>
-            <p class="lead mb-0" style="text-shadow: 1px 1px 3px rgba(0,0,0,0.7);">Find the perfect room for your stay</p>
-        </div>
-    </section>
+    @auth
+        <div class="container-fluid py-4">
+            <x-page-header icon="fas fa-door-open" title="Book a Room" subtitle="Find the perfect room for your stay" />
+    @else
+        <!-- Page Banner -->
+        <section class="page-banner text-center">
+            <div class="container">
+                <h1 class="display-4 fw-bold mb-2" style="text-shadow: 2px 2px 4px rgba(0,0,0,0.7);">Our <span class="gold-text">Rooms</span></h1>
+                <p class="lead mb-0" style="text-shadow: 1px 1px 3px rgba(0,0,0,0.7);">Find the perfect room for your stay</p>
+            </div>
+        </section>
 
-    <div class="container py-5">
+        <div class="container py-5">
+    @endauth
         <div class="row">
             <!-- Filters Sidebar -->
             <div class="col-lg-3 mb-4">

@@ -330,6 +330,63 @@ textarea {
    status colors (success/warning/danger/info) apply. */
 .badge-brand { background-color: var(--primary-color); color: #fff; }
 
+/* Room browsing/details card treatment - shared between the public
+   marketing layout and the authenticated app layout (a logged-in guest
+   browsing rooms keeps their sidebar, but the room cards themselves
+   should look identical either way). */
+.room-card {
+    background: white;
+    border-radius: var(--radius-card);
+    overflow: hidden;
+    box-shadow: var(--shadow-sm);
+    transition: transform 0.3s, box-shadow 0.3s;
+    height: 100%;
+}
+
+.room-card:hover {
+    transform: translateY(-5px);
+    box-shadow: var(--shadow-md);
+}
+
+.room-price {
+    color: var(--primary-color);
+    font-weight: 700;
+    font-size: 1.25rem;
+}
+
+.gold-text {
+    color: var(--gold-color) !important;
+    font-weight: 700;
+}
+
+.btn-velocity {
+    background-color: var(--primary-color);
+    color: white;
+    border: none;
+    padding: 10px 30px;
+    border-radius: var(--radius-btn);
+    font-weight: 600;
+    transition: all 0.3s;
+}
+
+.btn-velocity:hover {
+    background-color: var(--accent-color);
+    color: white;
+    box-shadow: 0 4px 8px rgba(193, 18, 31, 0.3);
+}
+
+/* Page header banner - the public rooms pages' hero-style header,
+   shown only to logged-out visitors (logged-in users get the standard
+   x-page-header instead, to match every other authenticated page). */
+.page-banner {
+    background: linear-gradient(rgba(0, 0, 0, 0.55), rgba(0, 0, 0, 0.55)),
+                url('https://images.unsplash.com/photo-1566073771259-6a8506099945?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&q=80');
+    background-size: cover;
+    background-position: center;
+    padding: 140px 0 60px;
+    color: white;
+}
+
 /* Empty state - the "No X yet." row/block repeated across every table. */
 .empty-state {
     text-align: center;
