@@ -4,97 +4,52 @@
 
 @section('content')
 <div class="container-fluid py-4">
-    <!-- Welcome Header -->
-    <div class="row mb-4">
-        <div class="col-12">
-            <div class="d-flex justify-content-between align-items-center">
-                <h1 class="mb-0">
-                    <i class="fas fa-home"></i> Welcome, {{ auth()->user()->first_name }}!
-                </h1>
-                <div>
-                    <a href="{{ route('public.rooms.index') }}" class="btn btn-primary me-2">
-                        <i class="fas fa-search"></i> Search Rooms
-                    </a>
-                    <a href="{{ route('guest.profile.show') }}" class="btn btn-outline-secondary">
-                        <i class="fas fa-user"></i> Profile
-                    </a>
-                </div>
-            </div>
-        </div>
-    </div>
+    <x-page-header icon="fas fa-home" title="Welcome, {{ auth()->user()->first_name }}!">
+        <x-slot:actions>
+            <a href="{{ route('public.rooms.index') }}" class="btn btn-primary">
+                <i class="fas fa-search"></i> Search Rooms
+            </a>
+            <a href="{{ route('guest.profile.show') }}" class="btn btn-outline-secondary">
+                <i class="fas fa-user"></i> Profile
+            </a>
+        </x-slot:actions>
+    </x-page-header>
 
     <!-- Quick Stats -->
     <div class="row mb-4">
         <div class="col-md-3 mb-3">
-            <div class="card border-0 shadow-sm">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div>
-                            <p class="text-muted mb-2">Current Stay</p>
-                            <h5 class="mb-0" style="color: #C1121F;">
-                                {{ $currentReservation ? $currentReservation->room->room_name : 'None' }}
-                            </h5>
-                        </div>
-                        <div style="font-size: 2rem; color: #C1121F; opacity: 0.3;">
-                            <i class="fas fa-bed"></i>
-                        </div>
-                    </div>
-                </div>
-            </div>
+            <x-stat-card
+                icon="fas fa-bed"
+                label="Current Stay"
+                :value="$currentReservation ? $currentReservation->room->room_name : 'None'"
+                color="primary" />
         </div>
-
         <div class="col-md-3 mb-3">
-            <div class="card border-0 shadow-sm">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div>
-                            <p class="text-muted mb-2">Upcoming Trips</p>
-                            <h3 class="mb-0" style="color: #ffc107;">{{ $upcomingReservations->count() }}</h3>
-                        </div>
-                        <div style="font-size: 2rem; color: #ffc107; opacity: 0.3;">
-                            <i class="fas fa-calendar-alt"></i>
-                        </div>
-                    </div>
-                </div>
-            </div>
+            <x-stat-card
+                icon="fas fa-calendar-alt"
+                label="Upcoming Trips"
+                :value="$upcomingReservations->count()"
+                color="warning" />
         </div>
-
         <div class="col-md-3 mb-3">
-            <div class="card border-0 shadow-sm">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div>
-                            <p class="text-muted mb-2">Pending Payments</p>
-                            <h3 class="mb-0" style="color: #dc3545;">₱{{ number_format($totalPendingAmount, 2) }}</h3>
-                        </div>
-                        <div style="font-size: 2rem; color: #dc3545; opacity: 0.3;">
-                            <i class="fas fa-credit-card"></i>
-                        </div>
-                    </div>
-                </div>
-            </div>
+            <x-stat-card
+                icon="fas fa-credit-card"
+                label="Pending Payments"
+                value="₱{{ number_format($totalPendingAmount, 2) }}"
+                color="danger" />
         </div>
-
         <div class="col-md-3 mb-3">
-            <div class="card border-0 shadow-sm">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div>
-                            <p class="text-muted mb-2">Notifications</p>
-                            <h3 class="mb-0" style="color: #17a2b8;">{{ $unreadNotifications }}</h3>
-                        </div>
-                        <div style="font-size: 2rem; color: #17a2b8; opacity: 0.3;">
-                            <i class="fas fa-bell"></i>
-                        </div>
-                    </div>
-                </div>
-            </div>
+            <x-stat-card
+                icon="fas fa-bell"
+                label="Notifications"
+                :value="$unreadNotifications"
+                color="info" />
         </div>
     </div>
 
     <!-- Current Reservation (Checked In) -->
     @if($currentReservation)
-        <div class="card border-0 shadow-sm mb-4" style="border-left: 4px solid #28a745;">
+        <div class="card border-0 shadow-sm mb-4" style="border-left: 4px solid var(--success-color);">
             <div class="card-header bg-success text-white">
                 <h5 class="mb-0">
                     <i class="fas fa-concierge-bell"></i> Your Current Stay
@@ -112,7 +67,7 @@
                     </div>
                     <div class="col-md-4">
                         <p class="mb-1"><strong>Guests:</strong> {{ $currentReservation->number_of_guests }}</p>
-                        <p class="mb-1"><strong>Status:</strong> <span class="badge bg-success">Checked In</span></p>
+                        <p class="mb-1"><strong>Status:</strong> <x-status-badge status="checked_in" domain="reservation" /></p>
                     </div>
                 </div>
                 <div class="mt-3">
@@ -138,7 +93,7 @@
 
     <!-- Pending Payments Alert -->
     @if($pendingPayments->count() > 0)
-        <div class="card border-0 shadow-sm mb-4" style="border-left: 4px solid #dc3545;">
+        <div class="card border-0 shadow-sm mb-4" style="border-left: 4px solid var(--danger-color);">
             <div class="card-header bg-danger text-white">
                 <h5 class="mb-0">
                     <i class="fas fa-exclamation-triangle"></i> Pending Payments
@@ -187,7 +142,7 @@
     <!-- Upcoming Reservations -->
     @if($upcomingReservations->count() > 0)
         <div class="card border-0 shadow-sm mb-4">
-            <div class="card-header" style="background-color: #ffc107; color: #333;">
+            <div class="card-header card-header-warning">
                 <h5 class="mb-0">
                     <i class="fas fa-calendar-check"></i> Upcoming Reservations
                 </h5>
@@ -211,11 +166,7 @@
                                 <td>{{ $reservation->check_in->format('M d, Y') }}</td>
                                 <td>{{ $reservation->check_out->format('M d, Y') }}</td>
                                 <td>{{ $reservation->number_of_guests }}</td>
-                                <td>
-                                    <span class="badge bg-{{ $reservation->status === 'confirmed' ? 'success' : 'warning' }}">
-                                        {{ ucfirst($reservation->status) }}
-                                    </span>
-                                </td>
+                                <td><x-status-badge :status="$reservation->status" domain="reservation" /></td>
                                 <td>
                                     <a href="{{ route('guest.reservations.show', $reservation) }}" class="btn btn-sm btn-primary">
                                         <i class="fas fa-eye"></i>
@@ -232,7 +183,7 @@
     <!-- Recent Payments -->
     @if($recentPayments->count() > 0)
         <div class="card border-0 shadow-sm mb-4">
-            <div class="card-header" style="background-color: #17a2b8; color: white;">
+            <div class="card-header card-header-info">
                 <h5 class="mb-0">
                     <i class="fas fa-receipt"></i> Recent Payments
                 </h5>
@@ -257,11 +208,7 @@
                                 <td>₱{{ number_format($payment->amount_paid, 2) }}</td>
                                 <td>{{ ucfirst($payment->payment_method) }}</td>
                                 <td><small>{{ $payment->reference_number }}</small></td>
-                                <td>
-                                    <span class="badge bg-{{ $payment->payment_status === 'completed' ? 'success' : ($payment->payment_status === 'pending' ? 'warning' : 'danger') }}">
-                                        {{ ucfirst($payment->payment_status) }}
-                                    </span>
-                                </td>
+                                <td><x-status-badge :status="$payment->payment_status" domain="payment" /></td>
                             </tr>
                         @endforeach
                     </tbody>
@@ -282,7 +229,7 @@
                 <div class="col-lg-4 col-md-6 mb-3">
                     <div class="card border-0 shadow-sm">
                         <div class="card-body">
-                            <h5 class="card-title" style="color: #C1121F;">{{ $promo->promo_name }}</h5>
+                            <h5 class="card-title text-brand">{{ $promo->promo_name }}</h5>
                             <p class="card-text mb-2">
                                 <strong>Discount:</strong>
                                 @if($promo->discount_type === 'percentage')
@@ -307,7 +254,7 @@
     <!-- Past Reservations -->
     @if($pastReservations->count() > 0)
         <div class="card border-0 shadow-sm">
-            <div class="card-header" style="background-color: #6c757d; color: white;">
+            <div class="card-header card-header-secondary">
                 <h5 class="mb-0">
                     <i class="fas fa-history"></i> Reservation History
                 </h5>
@@ -329,11 +276,7 @@
                                 <td>{{ $reservation->room->room_name }}</td>
                                 <td>{{ $reservation->check_in->format('M d, Y') }}</td>
                                 <td>{{ $reservation->check_out->format('M d, Y') }}</td>
-                                <td>
-                                    <span class="badge bg-{{ $reservation->status === 'checked_out' ? 'success' : 'secondary' }}">
-                                        {{ ucfirst($reservation->status) }}
-                                    </span>
-                                </td>
+                                <td><x-status-badge :status="$reservation->status" domain="reservation" /></td>
                                 <td>
                                     <a href="{{ route('guest.reservations.show', $reservation) }}" class="btn btn-sm btn-outline-secondary">
                                         <i class="fas fa-eye"></i>

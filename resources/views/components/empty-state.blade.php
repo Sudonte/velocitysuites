@@ -2,5 +2,5 @@
 
 <div class="empty-state">
     <i class="{{ $icon }}"></i>
-    {{ $message }}
+    {{ $slot->isEmpty() ? $message : $slot }}
 </div>

@@ -321,6 +321,15 @@ textarea {
     flex-shrink: 0;
 }
 
+/* Brand-color text utilities - Bootstrap's own .text-primary is Bootstrap
+   blue, not our brand red, hence these instead of inline color styles. */
+.text-brand { color: var(--primary-color) !important; }
+.text-gold { color: var(--gold-color) !important; }
+
+/* Brand-color badge, e.g. a role badge, where none of Bootstrap's bg-*
+   status colors (success/warning/danger/info) apply. */
+.badge-brand { background-color: var(--primary-color); color: #fff; }
+
 /* Empty state - the "No X yet." row/block repeated across every table. */
 .empty-state {
     text-align: center;
@@ -416,6 +425,16 @@ tbody tr:hover {
 
 .modal-close:hover {
     color: var(--text-dark);
+}
+
+/* Brand-colored modal header, used for the many Bootstrap
+   .modal-header elements across the app that mirror .card-header's
+   look (they're distinct Bootstrap components, so this doesn't
+   apply automatically). */
+.modal-header-brand {
+    background-color: var(--primary-color);
+    color: #fff;
+    border-bottom: none;
 }
 
 /* Notifications */
