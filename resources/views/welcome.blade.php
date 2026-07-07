@@ -8,33 +8,22 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="{{ asset('css/app.css') }}">
     <style>
-        :root {
-            --velocity-red: #E31837;
-            --velocity-white: #FFFFFF;
-            --velocity-silver: #B8B8B8;
-            --velocity-dark: #1a1a1a;
-            --velocity-gold: #FFD700;
-        }
-
+        /* Page-specific styling for the landing page - hero background,
+           card hover treatments, and footer, none of which belong as
+           global utilities since they're only used here. */
         body {
-            color: #333333;
+            color: var(--text-dark);
         }
 
         .text-muted {
-            color: #666666 !important;
-        }
-
-        h1, h2, h3, h4, h5, h6 {
-            color: #1a1a1a;
+            color: var(--text-light) !important;
         }
 
         .display-1, .display-2, .display-3, .display-4 {
             color: white;
-        }
-
-        h1, h2, h3, h4, h5, h6 {
-            color: #1a1a1a;
         }
 
         .hero-section {
@@ -53,71 +42,74 @@
         }
 
         .btn-velocity {
-            background-color: var(--velocity-red);
+            background-color: var(--primary-color);
             color: white;
             border: none;
             padding: 10px 30px;
-            border-radius: 5px;
+            border-radius: var(--radius-btn);
             font-weight: 600;
             transition: all 0.3s;
         }
 
         .btn-velocity:hover {
-            background-color: #c41430;
+            background-color: var(--accent-color);
             color: white;
+            box-shadow: 0 4px 8px rgba(193, 18, 31, 0.3);
         }
 
         .btn-outline-light {
             border: 2px solid white;
             padding: 8px 25px;
-            border-radius: 5px;
+            border-radius: var(--radius-btn);
             font-weight: 600;
         }
 
         .btn-outline-light:hover {
             background-color: white;
-            color: var(--velocity-dark);
+            color: var(--text-dark);
         }
 
         .feature-card {
             background: white;
             padding: 30px;
-            border-radius: 10px;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            border-radius: var(--radius-card);
+            box-shadow: var(--shadow-sm);
             text-align: center;
-            transition: transform 0.3s;
+            transition: transform 0.3s, box-shadow 0.3s;
         }
 
         .feature-card:hover {
             transform: translateY(-10px);
+            box-shadow: var(--shadow-md);
         }
 
         .feature-icon {
             font-size: 3rem;
-            color: var(--velocity-red);
+            color: var(--primary-color);
             margin-bottom: 20px;
         }
 
         .room-card {
             background: white;
-            border-radius: 10px;
+            border-radius: var(--radius-card);
             overflow: hidden;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
-            transition: transform 0.3s;
+            box-shadow: var(--shadow-sm);
+            transition: transform 0.3s, box-shadow 0.3s;
         }
 
         .room-card:hover {
             transform: translateY(-5px);
+            box-shadow: var(--shadow-md);
         }
 
         .room-price {
-            color: var(--velocity-red);
+            color: var(--primary-color);
             font-weight: 700;
             font-size: 1.25rem;
         }
 
         footer {
-            background-color: var(--velocity-dark);
+            background-color: var(--text-dark);
             color: white;
             padding: 50px 0 20px;
         }
@@ -134,17 +126,17 @@
         }
 
         .footer-links a:hover {
-            color: var(--velocity-red) !important;
+            color: var(--primary-color) !important;
         }
 
         .gold-text {
-            color: var(--velocity-gold) !important;
+            color: var(--gold-color) !important;
             font-weight: 700;
             text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
         }
 
         .section-title {
-            color: #1a1a1a;
+            color: var(--text-dark);
             font-weight: 700;
         }
     </style>
@@ -154,7 +146,7 @@
     <nav class="navbar navbar-expand-lg navbar-dark bg-dark position-absolute w-100" style="z-index: 1000;">
         <div class="container">
             <a class="navbar-brand" href="{{ route('home') }}">
-                <i class="fas fa-hotel text-danger me-2"></i>
+                <i class="fas fa-hotel text-brand me-2"></i>
                 <span class="gold-text">Velocity</span> Suites
             </a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
@@ -223,17 +215,17 @@
                              alt="{{ $room->room_type }}" class="img-fluid" style="height: 200px; object-fit: cover;">
                         <div class="p-4">
                             <h5 class="fw-bold">{{ $room->room_type }}</h5>
-                            <p class="mb-2" style="color: #555555;">
-                                <i class="fas fa-user me-1 text-danger"></i> Up to {{ $room->room_capacity }} guests
+                            <p class="mb-2 text-muted">
+                                <i class="fas fa-user me-1 text-brand"></i> Up to {{ $room->room_capacity }} guests
                             </p>
-                            <p class="room-price">${{ number_format($room->room_rate, 2) }} <small style="color: #666666;">/night</small></p>
-                            <a href="#" class="btn btn-outline-danger w-100">View Details</a>
+                            <p class="room-price">${{ number_format($room->room_rate, 2) }} <small class="text-muted">/night</small></p>
+                            <a href="{{ route('public.rooms.show', $room) }}" class="btn btn-outline-danger w-100">View Details</a>
                         </div>
                     </div>
                 </div>
                 @empty
                 <div class="col-12 text-center">
-                    <p style="color: #555555;">No rooms available at the moment. Please check back later.</p>
+                    <p class="text-muted">No rooms available at the moment. Please check back later.</p>
                 </div>
                 @endforelse
             </div>
@@ -252,42 +244,42 @@
                     <div class="feature-card">
                         <i class="fas fa-swimming-pool feature-icon"></i>
                         <h4>Swimming Pool</h4>
-                        <p style="color: #555555;">Enjoy our luxury outdoor pool</p>
+                        <p class="text-muted">Enjoy our luxury outdoor pool</p>
                     </div>
                 </div>
                 <div class="col-md-4">
                     <div class="feature-card">
                         <i class="fas fa-spa feature-icon"></i>
                         <h4>Spa & Wellness</h4>
-                        <p style="color: #555555;">Relax and rejuvenate at our spa</p>
+                        <p class="text-muted">Relax and rejuvenate at our spa</p>
                     </div>
                 </div>
                 <div class="col-md-4">
                     <div class="feature-card">
                         <i class="fas fa-utensils feature-icon"></i>
                         <h4>Fine Dining</h4>
-                        <p style="color: #555555;">Exquisite culinary experiences</p>
+                        <p class="text-muted">Exquisite culinary experiences</p>
                     </div>
                 </div>
                 <div class="col-md-4">
                     <div class="feature-card">
                         <i class="fas fa-dumbbell feature-icon"></i>
                         <h4>Fitness Center</h4>
-                        <p style="color: #555555;">State-of-the-art gym equipment</p>
+                        <p class="text-muted">State-of-the-art gym equipment</p>
                     </div>
                 </div>
                 <div class="col-md-4">
                     <div class="feature-card">
                         <i class="fas fa-concierge-bell feature-icon"></i>
                         <h4>24/7 Concierge</h4>
-                        <p style="color: #555555;">We are here to assist you anytime</p>
+                        <p class="text-muted">We are here to assist you anytime</p>
                     </div>
                 </div>
                 <div class="col-md-4">
                     <div class="feature-card">
                         <i class="fas fa-parking feature-icon"></i>
                         <h4>Free Parking</h4>
-                        <p style="color: #555555;">Complimentary parking for guests</p>
+                        <p class="text-muted">Complimentary parking for guests</p>
                     </div>
                 </div>
             </div>
@@ -304,12 +296,12 @@
                 </div>
                 <div class="col-md-6">
                     <h2 class="mb-4">Welcome to <span class="gold-text">Velocity</span> Suites</h2>
-                    <p class="mb-4" style="color: #555555;">
+                    <p class="mb-4 text-muted">
                         At Velocity Suites, we believe in providing an exceptional experience that combines
                         luxury, comfort, and impeccable service. Our hotel offers elegantly appointed
                         rooms and suites designed to meet the needs of discerning travelers.
                     </p>
-                    <p class="mb-4" style="color: #555555;">
+                    <p class="mb-4 text-muted">
                         Whether you're here for business or leisure, our dedicated staff ensures that
                         every moment of your stay is memorable.
                     </p>
@@ -329,19 +321,19 @@
                         <div class="card-body p-5">
                             <div class="row text-center">
                                 <div class="col-md-4 mb-4">
-                                    <i class="fas fa-map-marker-alt text-danger fs-3 mb-3"></i>
+                                    <i class="fas fa-map-marker-alt text-brand fs-3 mb-3"></i>
                                     <h5>Location</h5>
-                                    <p style="color: #555555;">123 Hotel Avenue<br>City Center, 12345</p>
+                                    <p class="text-muted">123 Hotel Avenue<br>City Center, 12345</p>
                                 </div>
                                 <div class="col-md-4 mb-4">
-                                    <i class="fas fa-phone text-danger fs-3 mb-3"></i>
+                                    <i class="fas fa-phone text-brand fs-3 mb-3"></i>
                                     <h5>Phone</h5>
-                                    <p style="color: #555555;">+1 (555) 123-4567</p>
+                                    <p class="text-muted">+1 (555) 123-4567</p>
                                 </div>
                                 <div class="col-md-4 mb-4">
-                                    <i class="fas fa-envelope text-danger fs-3 mb-3"></i>
+                                    <i class="fas fa-envelope text-brand fs-3 mb-3"></i>
                                     <h5>Email</h5>
-                                    <p style="color: #555555;">info@velocitysuites.com</p>
+                                    <p class="text-muted">info@velocitysuites.com</p>
                                 </div>
                             </div>
                         </div>

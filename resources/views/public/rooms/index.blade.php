@@ -4,13 +4,13 @@
 
 @section('content')
 <div class="container py-5">
-    <h1 class="text-center mb-5">Our <span class="text-danger">Rooms</span></h1>
+    <h1 class="text-center mb-5">Our <span class="text-brand">Rooms</span></h1>
 
     <div class="row">
         <!-- Filters Sidebar -->
         <div class="col-lg-3 mb-4">
             <div class="card">
-                <div class="card-header bg-danger text-white">
+                <div class="card-header">
                     <h5 class="mb-0">Filter Rooms</h5>
                 </div>
                 <div class="card-body">
@@ -66,14 +66,14 @@
                                      alt="{{ $room->room_type }}" class="card-img-top" style="height: 200px; object-fit: cover;">
                                 <div class="card-body">
                                     <h5 class="card-title fw-bold">{{ $room->room_type }}</h5>
-                                    <p class="mb-2" style="color: #555555;">
-                                        <i class="fas fa-user me-1 text-danger"></i> Up to {{ $room->room_capacity }} guests
+                                    <p class="mb-2 text-muted">
+                                        <i class="fas fa-user me-1 text-brand"></i> Up to {{ $room->room_capacity }} guests
                                     </p>
-                                    <p class="card-text small" style="color: #555555;">
+                                    <p class="card-text small text-muted">
                                         {{ Str::limit($room->description, 100) }}
                                     </p>
                                     <div class="d-flex justify-content-between align-items-center">
-                                        <span class="h5 text-danger mb-0">${{ number_format($room->room_rate, 2) }}<small style="color: #666666;">/night</small></span>
+                                        <span class="h5 text-brand mb-0">${{ number_format($room->room_rate, 2) }}<small class="text-muted">/night</small></span>
                                         <a href="{{ route('public.rooms.show', $room) }}" class="btn btn-outline-danger btn-sm">View Details</a>
                                     </div>
                                 </div>
@@ -92,12 +92,14 @@
 </div>
 
 <style>
+    /* Page-specific lift effect on room cards - distinct from the
+       generic .card:hover shadow-only treatment in app.css. */
     .room-card {
         transition: transform 0.3s, box-shadow 0.3s;
     }
     .room-card:hover {
         transform: translateY(-5px);
-        box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+        box-shadow: var(--shadow-md);
     }
 </style>
 @endsection

@@ -4,13 +4,15 @@
 
 @section('content')
 <style>
+    /* Page-specific breadcrumb styling - brand-colored links, not a
+       pattern reused elsewhere in the app. */
     .breadcrumb {
-        background-color: #f8f9fa;
+        background-color: var(--bg-color);
         padding: 12px 20px;
-        border-radius: 8px;
+        border-radius: var(--radius-btn);
     }
     .breadcrumb-item a {
-        color: #E31837;
+        color: var(--primary-color);
         font-weight: 600;
         text-decoration: none;
     }
@@ -18,11 +20,11 @@
         text-decoration: underline;
     }
     .breadcrumb-item.active {
-        color: #1a1a1a;
+        color: var(--text-dark);
         font-weight: 600;
     }
     .breadcrumb-item + .breadcrumb-item::before {
-        color: #666666;
+        color: var(--text-light);
     }
 </style>
 <div class="container py-5">
@@ -62,31 +64,31 @@
 
             <!-- Room Description -->
             <div class="card mb-4">
-                <div class="card-header bg-danger text-white">
+                <div class="card-header">
                     <h4 class="mb-0">Room Details</h4>
                 </div>
                 <div class="card-body">
                     <h5>{{ $room->room_type }}</h5>
-                    <p style="color: #555555;">{{ $room->description }}</p>
+                    <p class="text-muted">{{ $room->description }}</p>
 
                     <div class="row mt-4">
                         <div class="col-md-6">
-                            <h6><i class="fas fa-user text-danger me-2"></i>Capacity</h6>
+                            <h6><i class="fas fa-user text-brand me-2"></i>Capacity</h6>
                             <p>Up to {{ $room->room_capacity }} guests</p>
                         </div>
                         <div class="col-md-6">
-                            <h6><i class="fas fa-bed text-danger me-2"></i>Room Number</h6>
+                            <h6><i class="fas fa-bed text-brand me-2"></i>Room Number</h6>
                             <p>{{ $room->room_number }}</p>
                         </div>
                     </div>
 
                     <div class="row">
                         <div class="col-md-6">
-                            <h6><i class="fas fa-tag text-danger me-2"></i>Room Type</h6>
+                            <h6><i class="fas fa-tag text-brand me-2"></i>Room Type</h6>
                             <p>{{ $room->room_type }}</p>
                         </div>
                         <div class="col-md-6">
-                            <h6><i class="fas fa-info-circle text-danger me-2"></i>Status</h6>
+                            <h6><i class="fas fa-info-circle text-brand me-2"></i>Status</h6>
                             <span class="badge bg-success">{{ ucfirst($room->status) }}</span>
                         </div>
                     </div>
@@ -95,28 +97,28 @@
 
             <!-- Amenities -->
             <div class="card">
-                <div class="card-header bg-danger text-white">
+                <div class="card-header">
                     <h4 class="mb-0">Amenities</h4>
                 </div>
                 <div class="card-body">
                     <div class="row">
                         <div class="col-6 col-md-4 mb-2">
-                            <i class="fas fa-wifi text-danger me-2"></i> Free WiFi
+                            <i class="fas fa-wifi text-brand me-2"></i> Free WiFi
                         </div>
                         <div class="col-6 col-md-4 mb-2">
-                            <i class="fas fa-tv text-danger me-2"></i> Smart TV
+                            <i class="fas fa-tv text-brand me-2"></i> Smart TV
                         </div>
                         <div class="col-6 col-md-4 mb-2">
-                            <i class="fas fa-snowflake text-danger me-2"></i> Air Conditioning
+                            <i class="fas fa-snowflake text-brand me-2"></i> Air Conditioning
                         </div>
                         <div class="col-6 col-md-4 mb-2">
-                            <i class="fas fa-coffee text-danger me-2"></i> Coffee Maker
+                            <i class="fas fa-coffee text-brand me-2"></i> Coffee Maker
                         </div>
                         <div class="col-6 col-md-4 mb-2">
-                            <i class="fas fa-bath text-danger me-2"></i> Private Bathroom
+                            <i class="fas fa-bath text-brand me-2"></i> Private Bathroom
                         </div>
                         <div class="col-6 col-md-4 mb-2">
-                            <i class="fas fa-phone text-danger me-2"></i> Direct Phone
+                            <i class="fas fa-phone text-brand me-2"></i> Direct Phone
                         </div>
                     </div>
                 </div>
@@ -126,13 +128,13 @@
         <!-- Booking Sidebar -->
         <div class="col-lg-4">
             <div class="card sticky-top" style="top: 100px; z-index: 1;">
-                <div class="card-header bg-danger text-white">
+                <div class="card-header">
                     <h4 class="mb-0">Book This Room</h4>
                 </div>
                 <div class="card-body">
                     <div class="text-center mb-4">
-                        <span class="h2 text-danger">${{ number_format($room->room_rate, 2) }}</span>
-                        <span style="color: #666666;">/night</span>
+                        <span class="h2 text-brand">${{ number_format($room->room_rate, 2) }}</span>
+                        <span class="text-muted">/night</span>
                     </div>
 
                     @auth
@@ -209,7 +211,7 @@
                                 <i class="fas fa-lock me-2"></i> Book Now (Login Required)
                             </button>
 
-                            <p class="text-center mt-3 small" style="color: #666666;">
+                            <p class="text-center mt-3 small text-muted">
                                 You'll be redirected to login, then returned to this page to complete your booking.
                             </p>
                         </form>
@@ -222,7 +224,7 @@
     <!-- Related Rooms -->
     @if($relatedRooms->isNotEmpty())
         <div class="mt-5">
-            <h3 class="mb-4">Similar <span class="text-danger">Rooms</span></h3>
+            <h3 class="mb-4">Similar <span class="text-brand">Rooms</span></h3>
             <div class="row g-4">
                 @foreach($relatedRooms as $relatedRoom)
                     <div class="col-md-4">
@@ -231,11 +233,11 @@
                                  alt="{{ $relatedRoom->room_type }}" class="card-img-top" style="height: 180px; object-fit: cover;">
                             <div class="card-body">
                                 <h5 class="card-title">{{ $relatedRoom->room_type }}</h5>
-                                <p class="mb-2" style="color: #555555;">
-                                    <i class="fas fa-user me-1 text-danger"></i> Up to {{ $relatedRoom->room_capacity }} guests
+                                <p class="mb-2 text-muted">
+                                    <i class="fas fa-user me-1 text-brand"></i> Up to {{ $relatedRoom->room_capacity }} guests
                                 </p>
                                 <div class="d-flex justify-content-between align-items-center">
-                                    <span class="h5 text-danger mb-0">${{ number_format($relatedRoom->room_rate, 2) }}</span>
+                                    <span class="h5 text-brand mb-0">${{ number_format($relatedRoom->room_rate, 2) }}</span>
                                     <a href="{{ route('public.rooms.show', $relatedRoom) }}" class="btn btn-outline-danger btn-sm">View</a>
                                 </div>
                             </div>
@@ -248,12 +250,14 @@
 </div>
 
 <style>
+    /* Page-specific lift effect on room cards - distinct from the
+       generic .card:hover shadow-only treatment in app.css. */
     .room-card {
         transition: transform 0.3s, box-shadow 0.3s;
     }
     .room-card:hover {
         transform: translateY(-5px);
-        box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+        box-shadow: var(--shadow-md);
     }
 </style>
 @endsection
