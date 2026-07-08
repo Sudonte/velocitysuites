@@ -4,7 +4,7 @@
 
 @section('content')
 <div class="container-fluid py-4">
-    <x-page-header icon="fas fa-sign-in-alt" title="Pending Check-Ins" subtitle="Confirmed reservations whose check-in date is today or earlier." />
+    <x-page-header icon="fas fa-sign-in-alt" title="Pending Check-Ins" subtitle="All confirmed reservations - guests can check in early as long as their room is ready." />
 
     @if (session('success'))
         <div class="alert alert-success alert-dismissible fade show" role="alert">
@@ -36,14 +36,24 @@
                 @forelse($reservations as $reservation)
                     <tr>
                         <td>{{ $reservation->guest->user->full_name ?? 'N/A' }}</td>
-                        <td>{{ $reservation->room->room_number ?? 'N/A' }} ({{ $reservation->room->roomType->name ?? '' }})</td>
-                        <td>{{ $reservation->check_in->format('M d, Y') }}</td>
+                        <td>
+                            {{ $reservation->room->room_number ?? 'N/A' }} ({{ $reservation->room->roomType->name ?? '' }})
+                            <x-status-badge :status="$reservation->room->status" domain="room" />
+                        </td>
+                        <td>
+                            {{ $reservation->check_in->format('M d, Y') }}
+                            @if($reservation->check_in->isAfter(today()))
+                                <span class="badge bg-info" title="Scheduled for a future date">Early</span>
+                            @endif
+                        </td>
                         <td>{{ $reservation->check_out->format('M d, Y') }}</td>
                         <td>{{ $reservation->number_of_guests }}</td>
                         <td>
                             <form action="{{ route('receptionist.check-in.store', $reservation) }}" method="POST" class="d-inline">
                                 @csrf
-                                <button type="submit" class="btn btn-sm btn-success" onclick="return confirm('Check in this guest?')">
+                                <button type="submit" class="btn btn-sm btn-success"
+                                        {{ in_array($reservation->room->status ?? '', ['occupied', 'maintenance']) ? 'disabled' : '' }}
+                                        onclick="return confirm('Check in this guest{{ $reservation->check_in->isAfter(today()) ? ' ahead of their scheduled date' : '' }}?')">
                                     <i class="fas fa-check"></i> Check In
                                 </button>
                             </form>

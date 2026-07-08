@@ -4,7 +4,7 @@
 
 @section('content')
 <div class="container-fluid py-4">
-    <x-page-header icon="fas fa-sign-out-alt" title="Pending Check-Outs" subtitle="Checked-in reservations whose check-out date is today or earlier." />
+    <x-page-header icon="fas fa-sign-out-alt" title="Pending Check-Outs" subtitle="All checked-in guests - checkout can happen before or after the scheduled date; the bill is settled either way." />
 
     @if (session('success'))
         <div class="alert alert-success alert-dismissible fade show" role="alert">
@@ -40,7 +40,12 @@
                         <tr data-reservation-id="{{ $reservation->id }}">
                             <td>{{ $reservation->guest->user->full_name ?? 'N/A' }}</td>
                             <td>{{ $reservation->room->room_number ?? 'N/A' }} ({{ $reservation->room->roomType->name ?? '' }})</td>
-                            <td>{{ $reservation->check_out->format('M d, Y') }}</td>
+                            <td>
+                                {{ $reservation->check_out->format('M d, Y') }}
+                                @if($reservation->check_out->isAfter(today()))
+                                    <span class="badge bg-info" title="Departing before the scheduled date">Early</span>
+                                @endif
+                            </td>
                             <td class="bill-status-cell">
                                 @if($reservation->booking && $reservation->booking->billing && $reservation->booking->billing->billing_status === 'partial')
                                     <span class="badge bg-warning text-dark">Partially Paid</span>

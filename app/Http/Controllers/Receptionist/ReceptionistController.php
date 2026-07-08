@@ -284,13 +284,14 @@ class ReceptionistController extends Controller
     }
 
     /**
-     * List reservations pending check-in (confirmed with check_in <= today).
+     * List reservations awaiting check-in: every confirmed reservation,
+     * regardless of its scheduled date - early arrivals can be checked in
+     * whenever their room is actually ready (room status is the real gate).
      */
     public function checkInIndex(): View
     {
         $reservations = Reservation::with(['guest.user', 'room'])
             ->where('status', 'confirmed')
-            ->whereDate('check_in', '<=', today())
             ->orderBy('check_in')
             ->paginate(15);
 
@@ -298,12 +299,20 @@ class ReceptionistController extends Controller
     }
 
     /**
-     * Mark reservation as checked in.
+     * Mark reservation as checked in. Date is not a gate - the room's
+     * actual status is: a room still occupied by the previous guest or
+     * under maintenance can't receive a new check-in.
      */
     public function checkIn(Reservation $reservation): RedirectResponse
     {
         if ($reservation->status !== 'confirmed') {
             return back()->with('error', 'Only confirmed reservations can be checked in.');
+        }
+
+        if (in_array($reservation->room->status, ['occupied', 'maintenance'])) {
+            return back()->with('error',
+                'Room ' . $reservation->room->room_number . ' is not ready (' . $reservation->room->status . '). ' .
+                'Free it up first or assign a different room.');
         }
 
         DB::transaction(function () use ($reservation) {
@@ -328,13 +337,14 @@ class ReceptionistController extends Controller
     }
 
     /**
-     * List reservations pending check-out (checked_in with check_out <= today).
+     * List reservations available for check-out: every checked-in guest,
+     * regardless of scheduled departure date - a guest can leave early
+     * (or late) whenever they settle their bill.
      */
     public function checkOutIndex(): View
     {
         $reservations = Reservation::with(['guest.user', 'room', 'booking.billing'])
             ->where('status', 'checked_in')
-            ->whereDate('check_out', '<=', today())
             ->orderBy('check_out')
             ->paginate(15);
 
