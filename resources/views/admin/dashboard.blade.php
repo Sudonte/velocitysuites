@@ -107,4 +107,6 @@
         </div>
     </div>
 </div>
+
+@include('components.auto-refresh')
 @endsection

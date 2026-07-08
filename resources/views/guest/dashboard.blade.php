@@ -297,4 +297,6 @@
         </div>
     @endif
 </div>
+
+@include('components.auto-refresh')
 @endsection

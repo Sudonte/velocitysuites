@@ -35,19 +35,16 @@ class ReceptionistController extends Controller
      */
     public function dashboard(): View
     {
+        // Status-driven counts that mirror the actual work queues, so any
+        // action (confirm, check-in, check-out) moves these immediately -
+        // check-in/check-out are no longer date-gated.
         $availableRooms = Room::where('status', 'available')->count();
-        $todayCheckIns = Reservation::whereDate('check_in', today())
-            ->where('status', 'confirmed')
-            ->count();
-        $todayCheckOuts = Reservation::whereDate('check_out', today())
-            ->where('status', 'checked_in')
-            ->count();
-        $currentReservations = Reservation::whereIn('status', ['confirmed', 'checked_in'])->count();
-        $pendingArrivals = Reservation::where('status', 'confirmed')
-            ->whereDate('check_in', '>=', today())
-            ->count();
+        $bookingRequests = Reservation::where('status', 'pending')->count();
+        $awaitingCheckIn = Reservation::where('status', 'confirmed')->count();
+        $inHouseGuests = Reservation::where('status', 'checked_in')->count();
 
-        // Today's schedule: confirmations arriving and in-house guests leaving today
+        // Today's schedule stays date-based - it's a schedule. Arrivals due
+        // today (not yet checked in) and departures due today (still in house).
         $todayArrivals = Reservation::with(['guest.user', 'room'])
             ->whereDate('check_in', today())
             ->where('status', 'confirmed')
@@ -60,10 +57,9 @@ class ReceptionistController extends Controller
 
         return view('receptionist.dashboard', compact(
             'availableRooms',
-            'todayCheckIns',
-            'todayCheckOuts',
-            'currentReservations',
-            'pendingArrivals',
+            'bookingRequests',
+            'awaitingCheckIn',
+            'inHouseGuests',
             'todayArrivals',
             'todayDepartures'
         ));

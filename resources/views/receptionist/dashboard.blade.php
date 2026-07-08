@@ -6,28 +6,22 @@
 <div class="container-fluid py-4">
     <x-page-header icon="fas fa-home" title="Receptionist Dashboard" subtitle="Welcome, {{ auth()->user()->full_name }}!" />
 
-    <!-- KPI Cards -->
+    <!-- KPI Cards: live work-queue counts (click through to each module) -->
     <div class="row mb-4">
         <div class="col-md-3 mb-3">
-            <x-stat-card icon="fas fa-door-open" label="Available Rooms" :value="$availableRooms" color="success" />
+            <x-stat-card icon="fas fa-inbox" label="Booking Requests" :value="$bookingRequests" color="warning" :href="route('receptionist.reservations.confirm-index')" />
         </div>
 
         <div class="col-md-3 mb-3">
-            <x-stat-card icon="fas fa-sign-in-alt" label="Check-Ins Today" :value="$todayCheckIns" color="primary" />
+            <x-stat-card icon="fas fa-sign-in-alt" label="Awaiting Check-In" :value="$awaitingCheckIn" color="primary" :href="route('receptionist.check-in.index')" />
         </div>
 
         <div class="col-md-3 mb-3">
-            <x-stat-card icon="fas fa-sign-out-alt" label="Check-Outs Today" :value="$todayCheckOuts" color="info" />
+            <x-stat-card icon="fas fa-concierge-bell" label="In-House Guests" :value="$inHouseGuests" color="info" :href="route('receptionist.check-out.index')" />
         </div>
 
         <div class="col-md-3 mb-3">
-            <x-stat-card icon="fas fa-calendar-alt" label="Current Reservations" :value="$currentReservations" color="warning" />
-        </div>
-    </div>
-
-    <div class="row mb-4">
-        <div class="col-md-4 mb-3">
-            <x-stat-card icon="fas fa-hourglass-half" label="Pending Arrivals" :value="$pendingArrivals" color="secondary" />
+            <x-stat-card icon="fas fa-door-open" label="Available Rooms" :value="$availableRooms" color="success" :href="route('receptionist.rooms.index')" />
         </div>
     </div>
 
@@ -85,4 +79,6 @@
         </div>
     </div>
 </div>
+
+@include('components.auto-refresh')
 @endsection
