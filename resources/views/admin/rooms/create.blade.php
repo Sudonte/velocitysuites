@@ -60,8 +60,34 @@
                                         </option>
                                     @endforeach
                                 </select>
-                                <small class="text-muted">Rate and capacity come from the type. <a href="{{ route('admin.room-types.create') }}">Add a new type</a></small>
+                                <small class="text-muted">The type sets the base rate. <a href="{{ route('admin.room-types.create') }}">Add a new type</a></small>
                                 @error('room_type_id')
+                                    <div class="invalid-feedback">{{ $message }}</div>
+                                @enderror
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group mb-3">
+                                <label for="room_capacity">Capacity (guests) *</label>
+                                <input type="number" min="1" class="form-control @error('room_capacity') is-invalid @enderror"
+                                       id="room_capacity" name="room_capacity" value="{{ old('room_capacity') }}" required>
+                                <small class="text-muted">This room's own capacity (the type's capacity is only a baseline).</small>
+                                @error('room_capacity')
+                                    <div class="invalid-feedback">{{ $message }}</div>
+                                @enderror
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group mb-3">
+                                <label for="rate_override">Rate Override (₱ per night)</label>
+                                <input type="number" step="0.01" min="0" class="form-control @error('rate_override') is-invalid @enderror"
+                                       id="rate_override" name="rate_override" value="{{ old('rate_override') }}"
+                                       placeholder="Leave blank to use the type's base rate">
+                                <small class="text-muted">Set only for rooms worth more than the base (better view, balcony, quieter floor).</small>
+                                @error('rate_override')
                                     <div class="invalid-feedback">{{ $message }}</div>
                                 @enderror
                             </div>

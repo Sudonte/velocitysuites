@@ -126,12 +126,14 @@ class ReceptionistController extends Controller
 
     /**
      * Rooms of the reservation's requested type that can be assigned to it:
-     * in service, currently available, and with no confirmed/checked-in
+     * in service, currently available, big enough for the party (capacity
+     * varies per room within a type), and with no confirmed/checked-in
      * reservation overlapping the requested dates.
      */
     private function assignableRoomsFor(Reservation $reservation)
     {
         return Room::where('room_type_id', $reservation->room_type_id)
+            ->where('room_capacity', '>=', $reservation->number_of_guests)
             ->where('status', 'available')
             ->whereDoesntHave('reservations', function ($q) use ($reservation) {
                 $q->whereIn('status', ['confirmed', 'checked_in'])

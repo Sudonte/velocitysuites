@@ -11,7 +11,7 @@
     </div>
 
     <x-page-header icon="fas fa-layer-group" title="{{ $roomType->name }} Rooms"
-        subtitle="₱{{ number_format($roomType->rate, 2) }}/night · up to {{ $roomType->capacity }} guests" />
+        subtitle="₱{{ number_format($roomType->rate, 2) }}/night base · baseline {{ $roomType->capacity }} guests" />
 
     <x-card title="Individual Rooms" icon="fas fa-door-open" bodyClass="table-responsive">
         <table class="table table-hover mb-0 align-middle">
@@ -19,6 +19,8 @@
                 <tr>
                     <th>Room #</th>
                     <th>Name</th>
+                    <th>Capacity</th>
+                    <th class="text-end">Rate / Night</th>
                     <th>Status</th>
                 </tr>
             </thead>
@@ -27,11 +29,18 @@
                     <tr>
                         <td class="fw-bold">{{ $room->room_number }}</td>
                         <td>{{ $room->room_name }}</td>
+                        <td>{{ $room->room_capacity }} guests</td>
+                        <td class="text-end">
+                            ₱{{ number_format($room->room_rate, 2) }}
+                            @if($room->has_rate_override)
+                                <span class="badge bg-warning text-dark">override</span>
+                            @endif
+                        </td>
                         <td><x-status-badge :status="$room->status" domain="room" /></td>
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="3">
+                        <td colspan="5">
                             <x-empty-state icon="fas fa-door-open" message="No rooms of this type." />
                         </td>
                     </tr>

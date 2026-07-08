@@ -45,6 +45,8 @@
                     <i class="fas fa-info-circle"></i>
                     You are requesting a <strong>{{ $room->roomType->name }}</strong> room.
                     A specific room number will be assigned by our staff when your booking is confirmed.
+                    The total below uses the {{ $room->roomType->name }} base rate; premium rooms in this
+                    category may be priced slightly differently on your final bill.
                 </div>
                 <form action="{{ route('guest.reservations.store') }}" method="POST">
                     @csrf

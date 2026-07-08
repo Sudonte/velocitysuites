@@ -22,24 +22,21 @@ class PublicRoomController extends Controller
             });
         }
 
-        // Filter by price range (rate lives on the room type now)
+        // Filter by price range on the EFFECTIVE rate: the room's own
+        // override when set, otherwise its type's base rate.
+        $effectiveRate = 'COALESCE(rooms.rate_override, (SELECT rate FROM room_types WHERE room_types.id = rooms.room_type_id))';
+
         if ($request->filled('min_price')) {
-            $query->whereHas('roomType', function ($q) use ($request) {
-                $q->where('rate', '>=', $request->min_price);
-            });
+            $query->whereRaw("$effectiveRate >= ?", [$request->min_price]);
         }
 
         if ($request->filled('max_price')) {
-            $query->whereHas('roomType', function ($q) use ($request) {
-                $q->where('rate', '<=', $request->max_price);
-            });
+            $query->whereRaw("$effectiveRate <= ?", [$request->max_price]);
         }
 
-        // Filter by capacity
+        // Filter by capacity (per-room, types only set the baseline)
         if ($request->filled('capacity')) {
-            $query->whereHas('roomType', function ($q) use ($request) {
-                $q->where('capacity', '>=', $request->capacity);
-            });
+            $query->where('room_capacity', '>=', $request->capacity);
         }
 
         $rooms = $query->latest()->paginate(12);

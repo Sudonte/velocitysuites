@@ -55,7 +55,7 @@
                                     <option value="">-- Select room --</option>
                                     @foreach($rooms as $room)
                                         <option value="{{ $room->id }}">
-                                            Room {{ $room->room_number }} — {{ $room->room_name }}
+                                            Room {{ $room->room_number }} — {{ $room->room_name }} ({{ $room->room_capacity }} guests, ₱{{ number_format($room->room_rate, 2) }}{{ $room->has_rate_override ? ' *' : '' }})
                                         </option>
                                     @endforeach
                                 </select>

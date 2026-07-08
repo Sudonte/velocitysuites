@@ -85,6 +85,8 @@ class RoomTypeManagementController extends Controller
         $validated = $request->validate([
             'quantity' => 'required|integer|min:1|max:50',
             'room_name' => 'required|string|max:255',
+            'room_capacity' => 'required|integer|min:1',
+            'rate_override' => 'nullable|numeric|min:0',
             'status' => 'required|in:available,maintenance',
             'description' => 'nullable|string|max:2000',
         ]);
@@ -102,6 +104,8 @@ class RoomTypeManagementController extends Controller
                 'room_number' => $number,
                 'room_name' => $validated['room_name'],
                 'room_type_id' => $roomType->id,
+                'room_capacity' => $validated['room_capacity'],
+                'rate_override' => $validated['rate_override'] ?? null,
                 'description' => $validated['description'] ?? null,
                 'status' => $validated['status'],
             ]);

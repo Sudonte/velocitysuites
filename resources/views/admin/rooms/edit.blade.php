@@ -63,13 +63,39 @@
                                         id="room_type_id" name="room_type_id" required>
                                     <option value="">-- Select type --</option>
                                     @foreach($roomTypes as $type)
-                                        <option value="{{ $type->id }}" {{ old('room_type_id', $room->roomType->name_id) == $type->id ? 'selected' : '' }}>
-                                            {{ $type->name }} — ₱{{ number_format($type->rate, 2) }}/night, up to {{ $type->capacity }} guests
+                                        <option value="{{ $type->id }}" {{ old('room_type_id', $room->room_type_id) == $type->id ? 'selected' : '' }}>
+                                            {{ $type->name }} — base ₱{{ number_format($type->rate, 2) }}/night
                                         </option>
                                     @endforeach
                                 </select>
-                                <small class="text-muted">Rate and capacity come from the type. <a href="{{ route('admin.room-types.index') }}">Manage types</a></small>
+                                <small class="text-muted">The type sets the base rate. <a href="{{ route('admin.room-types.index') }}">Manage types</a></small>
                                 @error('room_type_id')
+                                    <div class="invalid-feedback">{{ $message }}</div>
+                                @enderror
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group mb-3">
+                                <label for="room_capacity">Capacity (guests) *</label>
+                                <input type="number" min="1" class="form-control @error('room_capacity') is-invalid @enderror"
+                                       id="room_capacity" name="room_capacity" value="{{ old('room_capacity', $room->room_capacity) }}" required>
+                                <small class="text-muted">This room's own capacity; the type's {{ $room->roomType->capacity }} is just the baseline.</small>
+                                @error('room_capacity')
+                                    <div class="invalid-feedback">{{ $message }}</div>
+                                @enderror
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group mb-3">
+                                <label for="rate_override">Rate Override (₱ per night)</label>
+                                <input type="number" step="0.01" min="0" class="form-control @error('rate_override') is-invalid @enderror"
+                                       id="rate_override" name="rate_override" value="{{ old('rate_override', $room->rate_override) }}"
+                                       placeholder="Base: {{ number_format($room->roomType->rate, 2) }}">
+                                <small class="text-muted">Leave blank to charge the type's base rate. Set for rooms worth more (better view, balcony, quieter floor).</small>
+                                @error('rate_override')
                                     <div class="invalid-feedback">{{ $message }}</div>
                                 @enderror
                             </div>

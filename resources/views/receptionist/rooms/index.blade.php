@@ -22,8 +22,8 @@
                             <strong>₱{{ number_format($roomType->rate, 2) }}/night</strong>
                         </div>
                         <div class="d-flex justify-content-between mb-1">
-                            <span class="text-muted">Capacity</span>
-                            <strong>Up to {{ $roomType->capacity }} guests</strong>
+                            <span class="text-muted">Baseline capacity</span>
+                            <strong>{{ $roomType->capacity }} guests (default)</strong>
                         </div>
                         <div class="d-flex justify-content-between">
                             <span class="text-muted">Available now</span>
