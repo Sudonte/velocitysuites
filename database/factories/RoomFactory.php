@@ -14,11 +14,13 @@ class RoomFactory extends Factory
      */
     public function definition(): array
     {
+        $roomType = RoomType::inRandomOrder()->first() ?? RoomType::factory()->create();
+
         return [
             'room_number' => fake()->unique()->numerify('###'),
             'room_name' => fake()->word() . ' ' . fake()->word(),
-            'room_type_id' => RoomType::inRandomOrder()->first()?->id
-                ?? RoomType::factory()->create()->id,
+            'room_type_id' => $roomType->id,
+            'room_capacity' => $roomType->capacity,
             'description' => fake()->paragraph(),
             'status' => fake()->randomElement(['available', 'occupied', 'reserved']),
         ];

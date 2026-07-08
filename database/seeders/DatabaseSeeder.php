@@ -85,6 +85,7 @@ class DatabaseSeeder extends Seeder
             'room_number' => '101',
             'room_name' => 'Deluxe Room',
             'room_type_id' => $deluxe->id,
+            'room_capacity' => $deluxe->capacity,
             'description' => 'A luxurious room with a king-size bed and modern amenities.',
             'status' => 'available',
         ]);
@@ -93,6 +94,7 @@ class DatabaseSeeder extends Seeder
             'room_number' => '102',
             'room_name' => 'Suite Room',
             'room_type_id' => $suite->id,
+            'room_capacity' => $suite->capacity,
             'description' => 'A spacious suite with separate living and sleeping areas.',
             'status' => 'available',
         ]);
@@ -101,6 +103,7 @@ class DatabaseSeeder extends Seeder
             'room_number' => '201',
             'room_name' => 'Standard Room',
             'room_type_id' => $standard->id,
+            'room_capacity' => $standard->capacity,
             'description' => 'A comfortable room perfect for single travelers or couples.',
             'status' => 'available',
         ]);
@@ -109,6 +112,7 @@ class DatabaseSeeder extends Seeder
             'room_number' => '301',
             'room_name' => 'Honeymoon Suite',
             'room_type_id' => $honeymoon->id,
+            'room_capacity' => $honeymoon->capacity,
             'description' => 'A romantic suite with special honeymoon amenities.',
             'status' => 'available',
         ]);
