@@ -105,27 +105,73 @@ server rejects the request before PHP ever runs, because it's serving the
 project root (which has no `index.php` and disabled directory listing)
 instead of `public/index.php`, Laravel's only web-facing entry point.
 
-**Option A - change the document root (use if your Hostinger plan allows it):**
-1. hPanel -> Websites -> your domain -> Manage -> look for a Document Root
-   / Advanced setting
-2. Point it to `.../hotel_reservation/public` (wherever you uploaded the
-   repo, plus `/public`)
-3. No file moves needed
+On Hostinger there is no Document Root setting for shared hosting plans,
+and Hostinger's Git auto-deploy tool can only target `public_html` or a
+subfolder under it - it cannot deploy to a sibling directory. The working
+setup for this project (**this is what's actually live**):
 
-**Option B - restructure manually (if there's no document-root setting):**
-1. Move the *contents* of `public/` (not the folder itself) up into
-   `public_html/`: `index.php`, `.htaccess`, `css/`, `js/`, etc.
-2. Move everything else (`app/`, `bootstrap/`, `config/`, `routes/`,
-   `vendor/`, etc.) into a sibling folder outside `public_html`, e.g.
-   `public_html/../hotel_reservation_app/`
-3. Edit the `index.php` now sitting in `public_html` - it has two
-   `require` lines pointing at `../vendor/autoload.php` and
-   `../bootstrap/app.php`. Update both paths to point at wherever you
-   moved the app folder in step 2 (e.g.
-   `../hotel_reservation_app/vendor/autoload.php`).
+- Git auto-deploy (hPanel -> Advanced -> Git) is configured with root
+  directory `hotel_reservation`, so every push to `master` clones the repo
+  into `public_html/hotel_reservation` and runs `composer install`
+  automatically.
+- Because that puts the whole app inside the web root, the repo ships a
+  root-level `.htaccess` (`Require all denied`) that blocks all direct
+  HTTP access to anything under `hotel_reservation/` - it's only ever
+  reached via PHP `require` from `public_html/index.php`, never via a URL.
+- `public_html/index.php` is **not** part of the repo (it's hand-maintained
+  on the server, see below) and its three paths point at
+  `./hotel_reservation/...` (child folder, not `../` parent) since
+  `hotel_reservation` is nested inside `public_html`.
+- `public_html/storage` is a symlink to
+  `public_html/hotel_reservation/storage/app/public` (recreate with `ln -s`
+  if it's ever missing - `php artisan storage:link` will fail on this host
+  because both `symlink()` and `exec()` are disabled by CageFS).
 
-Either way, verify by hitting the domain: you should get the Velocity
-Suites landing page, not a 403 or a directory listing.
+**One-time setup after connecting Git auto-deploy** (only needed once per
+fresh server, not on every subsequent push):
+1. In hPanel Git settings, set root directory to `hotel_reservation` and
+   deploy.
+2. Copy `.env` into `public_html/hotel_reservation/.env` (has real DB
+   credentials - never comes from git, since it's gitignored).
+3. `cd public_html/hotel_reservation && php artisan config:cache &&
+   php artisan route:cache && php artisan view:cache && chmod -R 775
+   storage bootstrap/cache`
+4. Create `public_html/index.php` by hand (see template below) and the
+   `public_html/storage` symlink.
+
+`public_html/index.php` template (copy of Laravel's default, with the two
+`require` paths and the maintenance-mode check pointed at the nested app
+folder):
+```php
+<?php
+
+use Illuminate\Foundation\Application;
+use Illuminate\Http\Request;
+
+define('LARAVEL_START', microtime(true));
+
+if (file_exists($maintenance = __DIR__.'/hotel_reservation/storage/framework/maintenance.php')) {
+    require $maintenance;
+}
+
+require __DIR__.'/hotel_reservation/vendor/autoload.php';
+
+/** @var Application $app */
+$app = require_once __DIR__.'/hotel_reservation/bootstrap/app.php';
+
+$app->handleRequest(Request::capture());
+```
+
+**On every subsequent push**, `git push origin master` triggers the
+redeploy automatically via Hostinger's Git tool (or click "Redeploy" in
+hPanel). If the change includes a new migration, SSH in and run
+`php artisan migrate --force` from `public_html/hotel_reservation` - schema
+changes are never applied automatically.
+
+Verify by hitting the domain: you should get the Velocity Suites landing
+page, not a 403 or a directory listing. Also spot-check that
+`https://your-domain.com/hotel_reservation/.env` returns 403 (proves the
+deny-all rule is active).
 
 ## Important Notes
 
