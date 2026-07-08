@@ -13,32 +13,12 @@ use Illuminate\View\View;
 class RoomManagementController extends Controller
 {
     /**
-     * Display list of rooms.
+     * Rooms are now managed per-type: the entry point is the room type
+     * card grid, and each type's page lists its individual rooms.
      */
-    public function index(Request $request): View
+    public function index(Request $request): RedirectResponse
     {
-        $query = Room::query();
-
-        // Search
-        if ($request->has('search') && $request->search) {
-            $query->where('room_name', 'like', '%' . $request->search . '%')
-                  ->orWhere('room_number', 'like', '%' . $request->search . '%');
-        }
-
-        // Filter by status
-        if ($request->has('status') && $request->status) {
-            $query->where('status', $request->status);
-        }
-
-        // Filter by type
-        if ($request->has('room_type_id') && $request->room_type_id) {
-            $query->where('room_type_id', $request->room_type_id);
-        }
-
-        $rooms = $query->paginate(15);
-        $roomTypes = RoomType::orderBy('name')->get();
-
-        return view('admin.rooms.index', compact('rooms', 'roomTypes'));
+        return redirect()->route('admin.room-types.index');
     }
 
     /**

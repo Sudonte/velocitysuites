@@ -356,6 +356,32 @@ class ReceptionistController extends Controller
     }
 
     /**
+     * Browse room types (read-only card grid). The receptionist can see
+     * inventory and status but cannot add or edit types/rooms.
+     */
+    public function roomsIndex(): View
+    {
+        $roomTypes = \App\Models\RoomType::withCount([
+            'rooms',
+            'rooms as available_rooms_count' => function ($q) {
+                $q->where('status', 'available');
+            },
+        ])->orderBy('name')->get();
+
+        return view('receptionist.rooms.index', compact('roomTypes'));
+    }
+
+    /**
+     * Rooms of one type with their live statuses (read-only).
+     */
+    public function roomsShow(\App\Models\RoomType $roomType): View
+    {
+        $rooms = $roomType->rooms()->orderBy('room_number')->paginate(20);
+
+        return view('receptionist.rooms.show', compact('roomType', 'rooms'));
+    }
+
+    /**
      * List all amenity requests.
      */
     public function amenitiesIndex(Request $request): View

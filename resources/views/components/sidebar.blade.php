@@ -74,10 +74,7 @@
                 <li><a href="/admin/users" class="nav-link {{ request()->is('admin/users*') ? 'active' : '' }}">
                     <i class="fas fa-users"></i> Users
                 </a></li>
-                <li><a href="/admin/room-types" class="nav-link {{ request()->is('admin/room-types*') ? 'active' : '' }}">
-                    <i class="fas fa-layer-group"></i> Room Types
-                </a></li>
-                <li><a href="/admin/rooms" class="nav-link {{ request()->is('admin/rooms*') ? 'active' : '' }}">
+                <li><a href="/admin/room-types" class="nav-link {{ request()->is('admin/room-types*') || request()->is('admin/rooms*') ? 'active' : '' }}">
                     <i class="fas fa-door-open"></i> Rooms
                 </a></li>
                 <li><a href="/admin/promotions" class="nav-link {{ request()->is('admin/promotions*') ? 'active' : '' }}">
@@ -121,6 +118,9 @@
                 </a></li>
                 <li><a href="/receptionist/check-out" class="nav-link {{ request()->is('receptionist/check-out*') ? 'active' : '' }}">
                     <i class="fas fa-sign-out-alt"></i> Check-Out
+                </a></li>
+                <li><a href="{{ route('receptionist.rooms.index') }}" class="nav-link {{ request()->routeIs('receptionist.rooms.*') ? 'active' : '' }}">
+                    <i class="fas fa-door-open"></i> Rooms
                 </a></li>
                 <li><a href="/receptionist/amenities" class="nav-link {{ request()->is('receptionist/amenities*') ? 'active' : '' }}">
                     <i class="fas fa-spa"></i> Amenity Requests

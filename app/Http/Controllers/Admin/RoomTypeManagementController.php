@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\Room;
 use App\Models\RoomType;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -31,11 +32,27 @@ class RoomTypeManagementController extends Controller
     }
 
     /**
+     * Show one room type with all its rooms (the per-type room
+     * management workspace: add rooms in bulk, edit, see status).
+     */
+    public function show(RoomType $roomType): View
+    {
+        $rooms = $roomType->rooms()->orderBy('room_number')->paginate(20);
+
+        // Preview of the next numbers the bulk-add would generate.
+        $nextNumbers = $roomType->nextRoomNumbers(3);
+
+        return view('admin.room-types.show', compact('roomType', 'rooms', 'nextNumbers'));
+    }
+
+    /**
      * Show create room type form.
      */
     public function create(): View
     {
-        return view('admin.room-types.create');
+        $existingFormats = RoomType::whereNotNull('number_format')->distinct()->pluck('number_format');
+
+        return view('admin.room-types.create', compact('existingFormats'));
     }
 
     /**
@@ -47,12 +64,51 @@ class RoomTypeManagementController extends Controller
             'name' => 'required|string|max:255|unique:room_types,name',
             'rate' => 'required|numeric|min:0',
             'capacity' => 'required|integer|min:1',
+            'description' => 'nullable|string|max:2000',
+            'number_format' => ['required', 'string', 'max:20', 'regex:/^[A-Za-z0-9\-]*#+[A-Za-z0-9\-]*$/'],
             'status' => 'required|in:active,inactive',
+        ], [
+            'number_format.regex' => 'The numbering format must contain a run of # placeholders (e.g. 1## for 101, 102... or D-## for D-01, D-02...).',
         ]);
 
-        RoomType::create($validated);
+        $roomType = RoomType::create($validated);
 
-        return redirect()->route('admin.room-types.index')->with('success', 'Room type created successfully!');
+        return redirect()->route('admin.room-types.show', $roomType)->with('success', 'Room type created! You can now add its rooms below.');
+    }
+
+    /**
+     * Bulk-add rooms to this type. Numbers are generated from the type's
+     * numbering format; all rooms in the batch share name/status/description.
+     */
+    public function storeRooms(Request $request, RoomType $roomType): RedirectResponse
+    {
+        $validated = $request->validate([
+            'quantity' => 'required|integer|min:1|max:50',
+            'room_name' => 'required|string|max:255',
+            'status' => 'required|in:available,maintenance',
+            'description' => 'nullable|string|max:2000',
+        ]);
+
+        $numbers = $roomType->nextRoomNumbers($validated['quantity']);
+
+        if (count($numbers) < $validated['quantity']) {
+            return back()->with('error',
+                'The numbering format "' . $roomType->number_format . '" only has ' . count($numbers) .
+                ' free number(s) left. Widen the format (more # digits) or reduce the quantity.');
+        }
+
+        foreach ($numbers as $number) {
+            Room::create([
+                'room_number' => $number,
+                'room_name' => $validated['room_name'],
+                'room_type_id' => $roomType->id,
+                'description' => $validated['description'] ?? null,
+                'status' => $validated['status'],
+            ]);
+        }
+
+        return redirect()->route('admin.room-types.show', $roomType)
+            ->with('success', count($numbers) . ' room(s) added: ' . implode(', ', $numbers));
     }
 
     /**
@@ -60,7 +116,12 @@ class RoomTypeManagementController extends Controller
      */
     public function edit(RoomType $roomType): View
     {
-        return view('admin.room-types.edit', compact('roomType'));
+        $existingFormats = RoomType::whereNotNull('number_format')
+            ->where('id', '!=', $roomType->id)
+            ->distinct()
+            ->pluck('number_format');
+
+        return view('admin.room-types.edit', compact('roomType', 'existingFormats'));
     }
 
     /**
@@ -72,7 +133,11 @@ class RoomTypeManagementController extends Controller
             'name' => 'required|string|max:255|unique:room_types,name,' . $roomType->id,
             'rate' => 'required|numeric|min:0',
             'capacity' => 'required|integer|min:1',
+            'description' => 'nullable|string|max:2000',
+            'number_format' => ['required', 'string', 'max:20', 'regex:/^[A-Za-z0-9\-]*#+[A-Za-z0-9\-]*$/'],
             'status' => 'required|in:active,inactive',
+        ], [
+            'number_format.regex' => 'The numbering format must contain a run of # placeholders (e.g. 1## for 101, 102... or D-## for D-01, D-02...).',
         ]);
 
         $roomType->update($validated);

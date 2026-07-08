@@ -43,6 +43,30 @@
                     </div>
 
                     <div class="mb-3">
+                        <label class="form-label">Description</label>
+                        <textarea name="description" class="form-control @error('description') is-invalid @enderror" rows="3"
+                                  placeholder="What makes this room type special? Shown on the room type card.">{{ old('description') }}</textarea>
+                        @error('description')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Room Numbering Format <span class="text-danger">*</span></label>
+                        <input type="text" name="number_format" list="existing-formats"
+                               class="form-control @error('number_format') is-invalid @enderror"
+                               value="{{ old('number_format') }}" placeholder="e.g. 1##  or  D-##" required>
+                        <datalist id="existing-formats">
+                            @foreach($existingFormats as $format)
+                                <option value="{{ $format }}">
+                            @endforeach
+                        </datalist>
+                        <small class="text-muted">
+                            The <code>#</code> run is the room counter: <code>1##</code> numbers rooms 101, 102, …
+                            <code>D-##</code> numbers them D-01, D-02, … Pick an existing format from the list or type a new one.
+                        </small>
+                        @error('number_format')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                    </div>
+
+                    <div class="mb-3">
                         <label class="form-label">Status <span class="text-danger">*</span></label>
                         <select name="status" class="form-select" required>
                             <option value="active" {{ old('status', 'active') === 'active' ? 'selected' : '' }}>Active</option>

@@ -78,7 +78,8 @@ Route::middleware(['auth', 'account.status', 'log.activity'])->group(function ()
         Route::put('/users/{user}/reset-password', [\App\Http\Controllers\Admin\UserManagementController::class, 'resetPassword'])->name('users.resetPassword');
 
         // Room Management
-        Route::resource('room-types', \App\Http\Controllers\Admin\RoomTypeManagementController::class)->except(['show']);
+        Route::resource('room-types', \App\Http\Controllers\Admin\RoomTypeManagementController::class);
+        Route::post('/room-types/{room_type}/rooms', [\App\Http\Controllers\Admin\RoomTypeManagementController::class, 'storeRooms'])->name('room-types.rooms.store');
         Route::resource('rooms', \App\Http\Controllers\Admin\RoomManagementController::class);
         Route::post('/room-images/{room}/upload', [\App\Http\Controllers\Admin\RoomManagementController::class, 'uploadImages'])->name('room-images.upload');
         Route::delete('/room-images/{roomImage}', [\App\Http\Controllers\Admin\RoomManagementController::class, 'deleteImage'])->name('room-images.destroy');
@@ -137,6 +138,10 @@ Route::middleware(['auth', 'account.status', 'log.activity'])->group(function ()
         Route::get('/check-out/{reservation}/billing', [ReceptionistController::class, 'checkOutBilling'])->name('check-out.billing');
         Route::delete('/check-out/billing/{billing}', [ReceptionistController::class, 'checkOutCancelBilling'])->name('check-out.billing.cancel');
         Route::get('/check-out/billing/{billing}/payment', [ReceptionistController::class, 'checkOutPaymentPanel'])->name('check-out.payment');
+
+        // Rooms browse (read-only: type cards -> rooms of type with status)
+        Route::get('/rooms', [ReceptionistController::class, 'roomsIndex'])->name('rooms.index');
+        Route::get('/rooms/{roomType}', [ReceptionistController::class, 'roomsShow'])->name('rooms.show');
 
         // Amenity Requests
         Route::get('/amenities', [ReceptionistController::class, 'amenitiesIndex'])->name('amenities.index');
