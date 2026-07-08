@@ -97,6 +97,36 @@ If using queue for background jobs:
 php artisan queue:work database --sleep=3 --tries=3 --max-time=3600
 ```
 
+### 9. Point the Web Root at `public/`, Not the Project Root
+
+**This is the single most common Laravel-on-shared-hosting mistake, and it
+produces a bare "403 Forbidden" with no Laravel error page** - the web
+server rejects the request before PHP ever runs, because it's serving the
+project root (which has no `index.php` and disabled directory listing)
+instead of `public/index.php`, Laravel's only web-facing entry point.
+
+**Option A - change the document root (use if your Hostinger plan allows it):**
+1. hPanel -> Websites -> your domain -> Manage -> look for a Document Root
+   / Advanced setting
+2. Point it to `.../hotel_reservation/public` (wherever you uploaded the
+   repo, plus `/public`)
+3. No file moves needed
+
+**Option B - restructure manually (if there's no document-root setting):**
+1. Move the *contents* of `public/` (not the folder itself) up into
+   `public_html/`: `index.php`, `.htaccess`, `css/`, `js/`, etc.
+2. Move everything else (`app/`, `bootstrap/`, `config/`, `routes/`,
+   `vendor/`, etc.) into a sibling folder outside `public_html`, e.g.
+   `public_html/../hotel_reservation_app/`
+3. Edit the `index.php` now sitting in `public_html` - it has two
+   `require` lines pointing at `../vendor/autoload.php` and
+   `../bootstrap/app.php`. Update both paths to point at wherever you
+   moved the app folder in step 2 (e.g.
+   `../hotel_reservation_app/vendor/autoload.php`).
+
+Either way, verify by hitting the domain: you should get the Velocity
+Suites landing page, not a 403 or a directory listing.
+
 ## Important Notes
 
 ### File Storage
@@ -125,6 +155,12 @@ chmod -R 775 storage
 - [ ] Verify landing page redirects for authenticated users
 
 ## Troubleshooting
+
+### 403 Forbidden (no Laravel error page, just a bare "Access to this
+### resource on the server is denied!")
+- This is the web server rejecting the request before Laravel runs - not
+  an application bug. See step 9 above: the document root is pointing at
+  the project root instead of `public/`.
 
 ### 500 Internal Server Error
 - Set `APP_DEBUG=true` temporarily to see error details
