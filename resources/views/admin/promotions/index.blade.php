@@ -55,7 +55,8 @@
             <thead>
                 <tr>
                     <th>Promo Name</th>
-                    <th>Discount</th>
+                    <th>Type</th>
+                    <th>Offer</th>
                     <th>Room Type</th>
                     <th>Period</th>
                     <th>Status</th>
@@ -72,10 +73,25 @@
                             @endif
                         </td>
                         <td>
-                            @if($promotion->discount_type === 'percentage')
-                                <span class="badge bg-info">{{ $promotion->discount_value }}%</span>
+                            @if($promotion->promo_type === 'amenity')
+                                <span class="badge bg-info"><i class="fas fa-spa"></i> Amenity</span>
                             @else
-                                <span class="badge bg-info">₱{{ number_format($promotion->discount_value, 2) }}</span>
+                                <span class="badge badge-brand"><i class="fas fa-percentage"></i> Discount</span>
+                            @endif
+                        </td>
+                        <td>
+                            @if($promotion->promo_type === 'amenity')
+                                <small>
+                                    @forelse($promotion->amenities as $amenity)
+                                        {{ $amenity->pivot->quantity }}× {{ $amenity->amenity_name }}@if(!$loop->last), @endif
+                                    @empty
+                                        <span class="text-muted">No amenities set</span>
+                                    @endforelse
+                                </small>
+                            @elseif($promotion->discount_type === 'percentage')
+                                <span class="badge bg-info">{{ $promotion->discount_value }}% off</span>
+                            @else
+                                <span class="badge bg-info">₱{{ number_format($promotion->discount_value, 2) }} off</span>
                             @endif
                         </td>
                         <td>
@@ -118,7 +134,7 @@
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="6">
+                        <td colspan="7">
                             <x-empty-state icon="fas fa-tag" message="No promotions found." />
                             <p class="text-center">
                                 <a href="{{ route('admin.promotions.create') }}">Create one now</a>

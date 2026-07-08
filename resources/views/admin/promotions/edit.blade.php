@@ -34,12 +34,26 @@
                         @enderror
                     </div>
 
-                    <div class="row">
+                    <div class="form-group mb-3">
+                        <label for="promo_type">Promotion Type *</label>
+                        <select class="form-select @error('promo_type') is-invalid @enderror"
+                                id="promo_type" name="promo_type" required>
+                            <option value="discount" {{ old('promo_type', $promotion->promo_type) === 'discount' ? 'selected' : '' }}>Discount — money off the room rate</option>
+                            <option value="amenity" {{ old('promo_type', $promotion->promo_type) === 'amenity' ? 'selected' : '' }}>Amenity — free included amenities with the stay</option>
+                        </select>
+                        @error('promo_type')
+                            <div class="invalid-feedback">{{ $message }}</div>
+                        @enderror
+                    </div>
+
+                    <!-- Discount promo fields -->
+                    <div id="discount-section" class="row">
                         <div class="col-md-6">
                             <div class="form-group mb-3">
                                 <label for="discount_type">Discount Type *</label>
                                 <select class="form-control @error('discount_type') is-invalid @enderror"
-                                        id="discount_type" name="discount_type" required>
+                                        id="discount_type" name="discount_type">
+                                    <option value="">Select Type</option>
                                     <option value="percentage" {{ old('discount_type', $promotion->discount_type) === 'percentage' ? 'selected' : '' }}>Percentage (%)</option>
                                     <option value="fixed" {{ old('discount_type', $promotion->discount_type) === 'fixed' ? 'selected' : '' }}>Fixed Amount (₱)</option>
                                 </select>
@@ -52,11 +66,45 @@
                             <div class="form-group mb-3">
                                 <label for="discount_value">Discount Value *</label>
                                 <input type="number" step="0.01" min="0" class="form-control @error('discount_value') is-invalid @enderror"
-                                       id="discount_value" name="discount_value" value="{{ old('discount_value', $promotion->discount_value) }}" required>
+                                       id="discount_value" name="discount_value" value="{{ old('discount_value', $promotion->discount_value) }}">
                                 @error('discount_value')
                                     <div class="invalid-feedback">{{ $message }}</div>
                                 @enderror
                             </div>
+                        </div>
+                    </div>
+
+                    <!-- Amenity promo fields -->
+                    <div id="amenity-section" class="form-group mb-3 d-none">
+                        <label>Included Amenities *</label>
+                        <p class="text-muted mb-2">Set how many of each amenity are included free with the stay (leave 0 to exclude).</p>
+                        @error('amenities')
+                            <div class="text-danger mb-2">{{ $message }}</div>
+                        @enderror
+                        <div class="table-responsive">
+                            <table class="table table-sm align-middle mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>Amenity</th>
+                                        <th class="text-end">Normal Charge</th>
+                                        <th style="width: 120px;">Included Qty</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach($amenities as $amenity)
+                                        @php $pivotQty = $promotion->amenities->firstWhere('id', $amenity->id)?->pivot->quantity ?? 0; @endphp
+                                        <tr>
+                                            <td>{{ $amenity->amenity_name }}</td>
+                                            <td class="text-end">₱{{ number_format($amenity->charge, 2) }}</td>
+                                            <td>
+                                                <input type="number" min="0" max="99" class="form-control form-control-sm"
+                                                       name="amenities[{{ $amenity->id }}]"
+                                                       value="{{ old('amenities.' . $amenity->id, $pivotQty) }}">
+                                            </td>
+                                        </tr>
+                                    @endforeach
+                                </tbody>
+                            </table>
                         </div>
                     </div>
 
@@ -69,6 +117,7 @@
                                 <option value="{{ $type->id }}" {{ old('room_type_id', $promotion->room_type_id) == $type->id ? 'selected' : '' }}>{{ $type->name }}</option>
                             @endforeach
                         </select>
+                        <small class="text-muted">Leave blank to apply to all room types.</small>
                         @error('room_type_id')
                             <div class="invalid-feedback">{{ $message }}</div>
                         @enderror
@@ -129,27 +178,25 @@
                 </form>
             </x-card>
         </div>
-
-        <div class="col-lg-4">
-            <x-card title="Quick Actions" bodyClass="card-body">
-                <form action="{{ route('admin.promotions.toggle', $promotion) }}" method="POST" class="mb-2">
-                    @csrf
-                    @method('PUT')
-                    <button type="submit" class="btn btn-{{ $promotion->status === 'active' ? 'warning' : 'success' }} w-100">
-                        <i class="fas fa-{{ $promotion->status === 'active' ? 'ban' : 'check' }}"></i>
-                        {{ $promotion->status === 'active' ? 'Deactivate' : 'Activate' }} Promotion
-                    </button>
-                </form>
-                <form action="{{ route('admin.promotions.destroy', $promotion) }}" method="POST">
-                    @csrf
-                    @method('DELETE')
-                    <button type="submit" class="btn btn-danger w-100"
-                            onclick="return confirm('Delete this promotion?')">
-                        <i class="fas fa-trash"></i> Delete Promotion
-                    </button>
-                </form>
-            </x-card>
-        </div>
     </div>
 </div>
+
+@push('scripts')
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const typeSelect = document.getElementById('promo_type');
+    const discountSection = document.getElementById('discount-section');
+    const amenitySection = document.getElementById('amenity-section');
+
+    function togglePromoSections() {
+        const isDiscount = typeSelect.value === 'discount';
+        discountSection.classList.toggle('d-none', !isDiscount);
+        amenitySection.classList.toggle('d-none', isDiscount);
+    }
+
+    typeSelect.addEventListener('change', togglePromoSections);
+    togglePromoSections();
+});
+</script>
+@endpush
 @endsection

@@ -231,11 +231,18 @@
                         <div class="card-body">
                             <h5 class="card-title text-brand">{{ $promo->promo_name }}</h5>
                             <p class="card-text mb-2">
-                                <strong>Discount:</strong>
-                                @if($promo->discount_type === 'percentage')
-                                    {{ $promo->discount_value }}%
+                                @if($promo->promo_type === 'amenity')
+                                    <strong>Includes free:</strong>
+                                    @foreach($promo->amenities as $amenity)
+                                        {{ $amenity->pivot->quantity }}× {{ $amenity->amenity_name }}@if(!$loop->last), @endif
+                                    @endforeach
                                 @else
-                                    ₱{{ number_format($promo->discount_value, 2) }}
+                                    <strong>Discount:</strong>
+                                    @if($promo->discount_type === 'percentage')
+                                        {{ $promo->discount_value }}%
+                                    @else
+                                        ₱{{ number_format($promo->discount_value, 2) }}
+                                    @endif
                                 @endif
                             </p>
                             <p class="card-text mb-2">

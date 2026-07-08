@@ -66,7 +66,7 @@ class GuestDashboardController extends Controller
             ->count();
 
         // Active promotions
-        $activePromotions = Promotion::where('status', 'active')
+        $activePromotions = Promotion::with('amenities')->where('status', 'active')
             ->whereDate('start_date', '<=', now())
             ->whereDate('end_date', '>=', now())
             ->limit(3)

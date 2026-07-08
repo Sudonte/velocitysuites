@@ -54,8 +54,10 @@ class ReservationController extends Controller
         $nights = $checkOut->diff($checkIn)->days;
         $totalRate = $roomType->rate * $nights;
 
-        // Check for active promotions
-        $applicablePromos = Promotion::where('status', 'active')
+        // Check for active promotions (both kinds: discount promos reduce
+        // the quote, amenity promos are shown as free inclusions).
+        $applicablePromos = Promotion::with('amenities')
+            ->where('status', 'active')
             ->where(function ($q) use ($roomType) {
                 $q->whereNull('room_type_id')
                   ->orWhere('room_type_id', $roomType->id);
@@ -65,12 +67,12 @@ class ReservationController extends Controller
             ->get();
 
         $discount = 0;
-        if ($applicablePromos->isNotEmpty()) {
-            $promo = $applicablePromos->first();
-            if ($promo->discount_type === 'percentage') {
-                $discount = ($totalRate * $promo->discount_value) / 100;
+        $discountPromo = $applicablePromos->firstWhere('promo_type', 'discount');
+        if ($discountPromo) {
+            if ($discountPromo->discount_type === 'percentage') {
+                $discount = ($totalRate * $discountPromo->discount_value) / 100;
             } else {
-                $discount = $promo->discount_value;
+                $discount = $discountPromo->discount_value;
             }
         }
 

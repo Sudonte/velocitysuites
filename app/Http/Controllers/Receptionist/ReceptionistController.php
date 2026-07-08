@@ -152,6 +152,46 @@ class ReceptionistController extends Controller
     }
 
     /**
+     * Create zero-charge, pre-approved amenity requests for every active
+     * amenity-type promotion matching the reservation's room type. Skipped
+     * if the reservation already has a zero-charge request for that
+     * amenity (guards against double-granting on re-confirmation).
+     */
+    private function grantPromoAmenities(Reservation $reservation): void
+    {
+        $promos = Promotion::with('amenities')
+            ->where('status', 'active')
+            ->where('promo_type', 'amenity')
+            ->whereDate('start_date', '<=', today())
+            ->whereDate('end_date', '>=', today())
+            ->where(function ($q) use ($reservation) {
+                $q->whereNull('room_type_id')
+                  ->orWhere('room_type_id', $reservation->room_type_id);
+            })
+            ->get();
+
+        foreach ($promos as $promo) {
+            foreach ($promo->amenities as $amenity) {
+                $alreadyGranted = AmenityRequest::where('reservation_id', $reservation->id)
+                    ->where('amenity_id', $amenity->id)
+                    ->where('charge', 0)
+                    ->exists();
+
+                if (!$alreadyGranted) {
+                    AmenityRequest::create([
+                        'guest_id' => $reservation->guest_id,
+                        'reservation_id' => $reservation->id,
+                        'amenity_id' => $amenity->id,
+                        'quantity' => $amenity->pivot->quantity,
+                        'charge' => 0, // included free by the promotion
+                        'status' => 'approved',
+                    ]);
+                }
+            }
+        }
+    }
+
+    /**
      * Assign a room to a pending booking request and confirm it.
      * The guest never picks a room number - the receptionist chooses the
      * physical room here, and confirmation only happens with a room set.
@@ -187,6 +227,11 @@ class ReceptionistController extends Controller
 
             // Mark the room as reserved to prevent double bookings
             $room->update(['status' => 'reserved']);
+
+            // Grant active amenity-promo inclusions for this room type as
+            // zero-charge approved amenity requests, so they appear on the
+            // stay (and the final bill) at no cost.
+            $this->grantPromoAmenities($reservation);
 
             // Notify the guest with their assigned room
             $this->notificationService->notifyReservationConfirmed(
@@ -561,8 +606,11 @@ class ReceptionistController extends Controller
             ->where('status', 'approved')
             ->sum(DB::raw('charge * quantity'));
 
-        // Find best applicable active promotion
+        // Find best applicable active DISCOUNT promotion (amenity promos
+        // don't reduce the rate - their inclusions are zero-charge
+        // amenity requests granted at confirmation time).
         $promo = Promotion::where('status', 'active')
+            ->where('promo_type', 'discount')
             ->whereDate('start_date', '<=', today())
             ->whereDate('end_date', '>=', today())
             ->where(function ($q) use ($reservation) {

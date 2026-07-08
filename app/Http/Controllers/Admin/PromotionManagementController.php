@@ -34,7 +34,7 @@ class PromotionManagementController extends Controller
             $query->where('discount_type', $request->discount_type);
         }
 
-        $promotions = $query->latest()->paginate(15);
+        $promotions = $query->with('amenities')->latest()->paginate(15);
         $roomTypes = RoomType::orderBy('name')->get();
 
         return view('admin.promotions.index', compact('promotions', 'roomTypes'));
@@ -46,8 +46,61 @@ class PromotionManagementController extends Controller
     public function create(): View
     {
         $roomTypes = RoomType::orderBy('name')->get();
+        $amenities = \App\Models\Amenity::where('status', 'active')->orderBy('amenity_name')->get();
 
-        return view('admin.promotions.create', compact('roomTypes'));
+        return view('admin.promotions.create', compact('roomTypes', 'amenities'));
+    }
+
+    /**
+     * Validate a promotion request. Discount promos require the discount
+     * fields; amenity promos instead require at least one included amenity
+     * (submitted as amenities[<id>] = quantity, 0/blank meaning excluded).
+     */
+    private function validatePromotion(Request $request): array
+    {
+        $validated = $request->validate([
+            'promo_name' => 'required|string|max:255',
+            'promo_type' => 'required|in:discount,amenity',
+            'discount_type' => 'required_if:promo_type,discount|nullable|in:percentage,fixed',
+            'discount_value' => 'required_if:promo_type,discount|nullable|numeric|min:0',
+            'description' => 'nullable|string',
+            'room_type_id' => 'nullable|exists:room_types,id',
+            'start_date' => 'required|date',
+            'end_date' => 'required|date|after_or_equal:start_date',
+            'status' => 'required|in:active,inactive',
+            'amenities' => 'array',
+            'amenities.*' => 'nullable|integer|min:0|max:99',
+        ]);
+
+        if ($validated['promo_type'] === 'amenity') {
+            $included = collect($validated['amenities'] ?? [])->filter(fn ($qty) => (int) $qty > 0);
+            if ($included->isEmpty()) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'amenities' => 'An amenity promotion must include at least one amenity (set a quantity above 0).',
+                ]);
+            }
+            // Amenity promos carry no discount.
+            $validated['discount_type'] = null;
+            $validated['discount_value'] = null;
+        }
+
+        return $validated;
+    }
+
+    /**
+     * Sync the included-amenities pivot from the validated payload.
+     */
+    private function syncAmenities(Promotion $promotion, array $validated): void
+    {
+        if ($validated['promo_type'] === 'amenity') {
+            $sync = collect($validated['amenities'] ?? [])
+                ->filter(fn ($qty) => (int) $qty > 0)
+                ->map(fn ($qty) => ['quantity' => (int) $qty])
+                ->all();
+            $promotion->amenities()->sync($sync);
+        } else {
+            $promotion->amenities()->detach();
+        }
     }
 
     /**
@@ -55,18 +108,10 @@ class PromotionManagementController extends Controller
      */
     public function store(Request $request): RedirectResponse
     {
-        $validated = $request->validate([
-            'promo_name' => 'required|string|max:255',
-            'discount_type' => 'required|in:percentage,fixed',
-            'discount_value' => 'required|numeric|min:0',
-            'description' => 'nullable|string',
-            'room_type_id' => 'nullable|exists:room_types,id',
-            'start_date' => 'required|date',
-            'end_date' => 'required|date|after_or_equal:start_date',
-            'status' => 'required|in:active,inactive',
-        ]);
+        $validated = $this->validatePromotion($request);
 
-        Promotion::create($validated);
+        $promotion = Promotion::create($validated);
+        $this->syncAmenities($promotion, $validated);
 
         return redirect()->route('admin.promotions.index')->with('success', 'Promotion created successfully!');
     }
@@ -77,8 +122,10 @@ class PromotionManagementController extends Controller
     public function edit(Promotion $promotion): View
     {
         $roomTypes = RoomType::orderBy('name')->get();
+        $amenities = \App\Models\Amenity::where('status', 'active')->orderBy('amenity_name')->get();
+        $promotion->load('amenities');
 
-        return view('admin.promotions.edit', compact('promotion', 'roomTypes'));
+        return view('admin.promotions.edit', compact('promotion', 'roomTypes', 'amenities'));
     }
 
     /**
@@ -86,18 +133,10 @@ class PromotionManagementController extends Controller
      */
     public function update(Request $request, Promotion $promotion): RedirectResponse
     {
-        $validated = $request->validate([
-            'promo_name' => 'required|string|max:255',
-            'discount_type' => 'required|in:percentage,fixed',
-            'discount_value' => 'required|numeric|min:0',
-            'description' => 'nullable|string',
-            'room_type_id' => 'nullable|exists:room_types,id',
-            'start_date' => 'required|date',
-            'end_date' => 'required|date|after_or_equal:start_date',
-            'status' => 'required|in:active,inactive',
-        ]);
+        $validated = $this->validatePromotion($request);
 
         $promotion->update($validated);
+        $this->syncAmenities($promotion, $validated);
 
         return redirect()->route('admin.promotions.index')->with('success', 'Promotion updated successfully!');
     }

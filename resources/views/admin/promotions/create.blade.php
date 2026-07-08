@@ -33,12 +33,25 @@
                         @enderror
                     </div>
 
-                    <div class="row">
+                    <div class="form-group mb-3">
+                        <label for="promo_type">Promotion Type *</label>
+                        <select class="form-select @error('promo_type') is-invalid @enderror"
+                                id="promo_type" name="promo_type" required>
+                            <option value="discount" {{ old('promo_type', 'discount') === 'discount' ? 'selected' : '' }}>Discount — money off the room rate</option>
+                            <option value="amenity" {{ old('promo_type') === 'amenity' ? 'selected' : '' }}>Amenity — free included amenities with the stay</option>
+                        </select>
+                        @error('promo_type')
+                            <div class="invalid-feedback">{{ $message }}</div>
+                        @enderror
+                    </div>
+
+                    <!-- Discount promo fields -->
+                    <div id="discount-section" class="row">
                         <div class="col-md-6">
                             <div class="form-group mb-3">
                                 <label for="discount_type">Discount Type *</label>
                                 <select class="form-control @error('discount_type') is-invalid @enderror"
-                                        id="discount_type" name="discount_type" required>
+                                        id="discount_type" name="discount_type">
                                     <option value="">Select Type</option>
                                     <option value="percentage" {{ old('discount_type') === 'percentage' ? 'selected' : '' }}>Percentage (%)</option>
                                     <option value="fixed" {{ old('discount_type') === 'fixed' ? 'selected' : '' }}>Fixed Amount (₱)</option>
@@ -52,11 +65,44 @@
                             <div class="form-group mb-3">
                                 <label for="discount_value">Discount Value *</label>
                                 <input type="number" step="0.01" min="0" class="form-control @error('discount_value') is-invalid @enderror"
-                                       id="discount_value" name="discount_value" value="{{ old('discount_value') }}" required>
+                                       id="discount_value" name="discount_value" value="{{ old('discount_value') }}">
                                 @error('discount_value')
                                     <div class="invalid-feedback">{{ $message }}</div>
                                 @enderror
                             </div>
+                        </div>
+                    </div>
+
+                    <!-- Amenity promo fields -->
+                    <div id="amenity-section" class="form-group mb-3 d-none">
+                        <label>Included Amenities *</label>
+                        <p class="text-muted mb-2">Set how many of each amenity are included free with the stay (leave 0 to exclude).</p>
+                        @error('amenities')
+                            <div class="text-danger mb-2">{{ $message }}</div>
+                        @enderror
+                        <div class="table-responsive">
+                            <table class="table table-sm align-middle mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>Amenity</th>
+                                        <th class="text-end">Normal Charge</th>
+                                        <th style="width: 120px;">Included Qty</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach($amenities as $amenity)
+                                        <tr>
+                                            <td>{{ $amenity->amenity_name }}</td>
+                                            <td class="text-end">₱{{ number_format($amenity->charge, 2) }}</td>
+                                            <td>
+                                                <input type="number" min="0" max="99" class="form-control form-control-sm"
+                                                       name="amenities[{{ $amenity->id }}]"
+                                                       value="{{ old('amenities.' . $amenity->id, 0) }}">
+                                            </td>
+                                        </tr>
+                                    @endforeach
+                                </tbody>
+                            </table>
                         </div>
                     </div>
 
@@ -136,13 +182,13 @@
                 <ul class="list-unstyled">
                     <li class="mb-3">
                         <i class="fas fa-percentage text-brand"></i>
-                        <strong>Percentage</strong>
-                        <p class="mb-0 ms-4 text-sm text-muted">e.g. 15 = 15% off the room rate.</p>
+                        <strong>Discount promo</strong>
+                        <p class="mb-0 ms-4 text-sm text-muted">Money off the room rate — percentage (15 = 15% off) or a fixed ₱ amount.</p>
                     </li>
                     <li class="mb-3">
-                        <i class="fas fa-money-bill text-brand"></i>
-                        <strong>Fixed Amount</strong>
-                        <p class="mb-0 ms-4 text-sm text-muted">e.g. 500 = ₱500 off the total.</p>
+                        <i class="fas fa-spa text-brand"></i>
+                        <strong>Amenity promo</strong>
+                        <p class="mb-0 ms-4 text-sm text-muted">Bundles free amenities with the stay, e.g. "Book a Deluxe, get 2 Breakfast Buffets". They're granted automatically when a booking is confirmed and appear on the bill at ₱0.00.</p>
                     </li>
                     <li class="mb-3">
                         <i class="fas fa-bed text-brand"></i>
@@ -154,4 +200,23 @@
         </div>
     </div>
 </div>
+
+@push('scripts')
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const typeSelect = document.getElementById('promo_type');
+    const discountSection = document.getElementById('discount-section');
+    const amenitySection = document.getElementById('amenity-section');
+
+    function togglePromoSections() {
+        const isDiscount = typeSelect.value === 'discount';
+        discountSection.classList.toggle('d-none', !isDiscount);
+        amenitySection.classList.toggle('d-none', isDiscount);
+    }
+
+    typeSelect.addEventListener('change', togglePromoSections);
+    togglePromoSections();
+});
+</script>
+@endpush
 @endsection

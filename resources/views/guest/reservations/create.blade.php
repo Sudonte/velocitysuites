@@ -123,17 +123,27 @@
                 <x-card title="Active Promotion" variant="warning" bodyClass="card-body" class="mt-3">
                     @foreach($applicablePromos as $promo)
                         <h6>{{ $promo->promo_name }}</h6>
-                        <p class="mb-2">
-                            <strong>Discount:</strong>
-                            @if($promo->discount_type === 'percentage')
-                                {{ $promo->discount_value }}%
-                            @else
-                                ₱{{ number_format($promo->discount_value, 2) }}
-                            @endif
-                        </p>
+                        @if($promo->promo_type === 'amenity')
+                            <p class="mb-2">
+                                <strong>Includes free:</strong>
+                                @foreach($promo->amenities as $amenity)
+                                    {{ $amenity->pivot->quantity }}× {{ $amenity->amenity_name }}@if(!$loop->last), @endif
+                                @endforeach
+                            </p>
+                        @else
+                            <p class="mb-2">
+                                <strong>Discount:</strong>
+                                @if($promo->discount_type === 'percentage')
+                                    {{ $promo->discount_value }}%
+                                @else
+                                    ₱{{ number_format($promo->discount_value, 2) }}
+                                @endif
+                            </p>
+                        @endif
                         <p class="mb-0">
                             <small>{{ $promo->description }}</small>
                         </p>
+                        @if(!$loop->last)<hr>@endif
                     @endforeach
                 </x-card>
             @endif

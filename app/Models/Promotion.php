@@ -11,6 +11,7 @@ class Promotion extends Model
 
     protected $fillable = [
         'promo_name',
+        'promo_type',
         'discount_type',
         'discount_value',
         'description',
@@ -32,6 +33,17 @@ class Promotion extends Model
     public function roomType()
     {
         return $this->belongsTo(RoomType::class);
+    }
+
+    /**
+     * Amenities bundled by an amenity-type promotion, with per-amenity
+     * quantities on the pivot. Empty for discount promotions.
+     */
+    public function amenities()
+    {
+        return $this->belongsToMany(Amenity::class, 'promotion_amenity')
+            ->withPivot('quantity')
+            ->withTimestamps();
     }
 
     /**
