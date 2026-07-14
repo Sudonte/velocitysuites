@@ -605,7 +605,10 @@ class ReceptionistController extends Controller
 
         $roomCharge = (float) $reservation->room->room_rate * $nights;
 
-        $extraGuests = max(0, $reservation->number_of_guests - $reservation->room->room_capacity);
+        // Children under 12 stay free - only adults count toward the
+        // extra-guest fee, even though both occupy the room's capacity.
+        $adults = $reservation->adults ?? $reservation->number_of_guests;
+        $extraGuests = max(0, $adults - $reservation->room->room_capacity);
         $extraGuestFee = $extraGuests * (float) config('hotel.extra_guest_fee_rate', 0);
 
         $amenityCharge = (float) AmenityRequest::where('reservation_id', $reservation->id)

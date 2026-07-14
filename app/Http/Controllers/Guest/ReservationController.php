@@ -99,8 +99,10 @@ class ReservationController extends Controller
             'room_id' => 'required|exists:rooms,id',
             'check_in' => 'required|date|after:today',
             'check_out' => 'required|date|after:check_in',
-            'number_of_guests' => 'required|integer|min:1',
+            'adults' => 'required|integer|min:1',
+            'children' => 'nullable|integer|min:0',
         ]);
+        $children = $validated['children'] ?? 0;
 
         $user = auth()->user();
         $guest = $user->guest;
@@ -127,7 +129,9 @@ class ReservationController extends Controller
             'room_type_id' => $roomType->id,
             'check_in' => $validated['check_in'],
             'check_out' => $validated['check_out'],
-            'number_of_guests' => $validated['number_of_guests'],
+            'adults' => $validated['adults'],
+            'children' => $children,
+            'number_of_guests' => $validated['adults'] + $children,
             'status' => 'pending',
         ]);
 
@@ -162,10 +166,18 @@ class ReservationController extends Controller
         $validated = $request->validate([
             'check_in' => 'required|date|after:today',
             'check_out' => 'required|date|after:check_in',
-            'number_of_guests' => 'required|integer|min:1',
+            'adults' => 'required|integer|min:1',
+            'children' => 'nullable|integer|min:0',
         ]);
+        $children = $validated['children'] ?? 0;
 
-        $reservation->update($validated);
+        $reservation->update([
+            'check_in' => $validated['check_in'],
+            'check_out' => $validated['check_out'],
+            'adults' => $validated['adults'],
+            'children' => $children,
+            'number_of_guests' => $validated['adults'] + $children,
+        ]);
 
         return back()->with('success', 'Reservation updated successfully!');
     }

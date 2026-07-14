@@ -23,13 +23,37 @@
     <form method="POST" action="{{ route('register.post') }}">
         @csrf
 
-        <div class="form-group">
-            <label for="full_name">Full Name</label>
-            <input type="text" class="form-control @error('full_name') is-invalid @enderror" 
-                   id="full_name" name="full_name" value="{{ old('full_name') }}" required>
-            @error('full_name')
-                <div class="invalid-feedback">{{ $message }}</div>
-            @enderror
+        <div class="row">
+            <div class="col-md-4">
+                <div class="form-group">
+                    <label for="first_name">First Name</label>
+                    <input type="text" class="form-control @error('first_name') is-invalid @enderror"
+                           id="first_name" name="first_name" value="{{ old('first_name') }}" required>
+                    @error('first_name')
+                        <div class="invalid-feedback">{{ $message }}</div>
+                    @enderror
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="form-group">
+                    <label for="middle_name">Middle Name <span class="text-muted">(optional)</span></label>
+                    <input type="text" class="form-control @error('middle_name') is-invalid @enderror"
+                           id="middle_name" name="middle_name" value="{{ old('middle_name') }}">
+                    @error('middle_name')
+                        <div class="invalid-feedback">{{ $message }}</div>
+                    @enderror
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="form-group">
+                    <label for="last_name">Last Name</label>
+                    <input type="text" class="form-control @error('last_name') is-invalid @enderror"
+                           id="last_name" name="last_name" value="{{ old('last_name') }}" required>
+                    @error('last_name')
+                        <div class="invalid-feedback">{{ $message }}</div>
+                    @enderror
+                </div>
+            </div>
         </div>
 
         <div class="form-group">

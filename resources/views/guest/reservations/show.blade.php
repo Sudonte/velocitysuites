@@ -77,7 +77,7 @@
                     </div>
                 </div>
                 <p class="mb-2">
-                    <strong>Number of Guests:</strong> {{ $reservation->number_of_guests }}
+                    <strong>Guests:</strong> {{ $reservation->adults }} adult{{ $reservation->adults == 1 ? '' : 's' }}@if($reservation->children > 0), {{ $reservation->children }} child{{ $reservation->children == 1 ? '' : 'ren' }} (under 12, free)@endif
                 </p>
                 <p class="mb-2">
                     <strong>Duration:</strong> {{ $reservation->number_of_nights ?? $reservation->check_out->diffInDays($reservation->check_in) }} night(s)
@@ -214,10 +214,21 @@
                             <input type="date" class="form-control" id="mod_check_out" name="check_out"
                                    value="{{ $reservation->check_out->toDateString() }}" required>
                         </div>
-                        <div class="form-group mb-3">
-                            <label for="mod_guests">Number of Guests</label>
-                            <input type="number" class="form-control" id="mod_guests" name="number_of_guests"
-                                   value="{{ $reservation->number_of_guests }}" min="1" max="{{ $reservation->room->room_capacity }}" required>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group mb-3">
+                                    <label for="mod_adults">Adults</label>
+                                    <input type="number" class="form-control" id="mod_adults" name="adults"
+                                           value="{{ $reservation->adults }}" min="1" max="{{ $reservation->room->room_capacity }}" required>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group mb-3">
+                                    <label for="mod_children">Children <span class="text-muted">(under 12)</span></label>
+                                    <input type="number" class="form-control" id="mod_children" name="children"
+                                           value="{{ $reservation->children }}" min="0">
+                                </div>
+                            </div>
                         </div>
                     </div>
                     <div class="modal-footer">

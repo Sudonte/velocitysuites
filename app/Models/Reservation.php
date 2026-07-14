@@ -16,6 +16,8 @@ class Reservation extends Model
         'check_in',
         'check_out',
         'number_of_guests',
+        'adults',
+        'children',
         'status',
     ];
 

@@ -70,16 +70,33 @@
                         </div>
                     </div>
 
-                    <div class="form-group mb-3">
-                        <label for="number_of_guests"><strong>Number of Guests *</strong></label>
-                        <input type="number" class="form-control @error('number_of_guests') is-invalid @enderror"
-                               id="number_of_guests" name="number_of_guests" min="1" max="{{ $room->room_capacity }}"
-                               value="{{ old('number_of_guests', request('guests', 1)) }}" required>
-                        <small class="text-muted">Maximum: {{ $room->room_capacity }} guests</small>
-                        @error('number_of_guests')
-                            <div class="invalid-feedback">{{ $message }}</div>
-                        @enderror
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group mb-3">
+                                <label for="adults"><strong>Adults *</strong></label>
+                                <input type="number" class="form-control @error('adults') is-invalid @enderror"
+                                       id="adults" name="adults" min="1" max="{{ $room->room_capacity }}"
+                                       value="{{ old('adults', request('guests', 1)) }}" required>
+                                @error('adults')
+                                    <div class="invalid-feedback">{{ $message }}</div>
+                                @enderror
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group mb-3">
+                                <label for="children"><strong>Children <span class="text-muted">(under 12)</span></strong></label>
+                                <input type="number" class="form-control @error('children') is-invalid @enderror"
+                                       id="children" name="children" min="0"
+                                       value="{{ old('children', 0) }}">
+                                @error('children')
+                                    <div class="invalid-feedback">{{ $message }}</div>
+                                @enderror
+                            </div>
+                        </div>
                     </div>
+                    <p class="text-muted small mb-3">
+                        Room capacity: {{ $room->room_capacity }} guests. Children under 12 stay free of charge.
+                    </p>
 
                     <button type="submit" class="btn btn-primary btn-lg w-100">
                         <i class="fas fa-check"></i> Confirm Booking
