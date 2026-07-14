@@ -13,7 +13,7 @@
 
     .hero-section {
         background: linear-gradient(rgba(0, 0, 0, 0.6), rgba(0, 0, 0, 0.6)),
-                    url('https://images.unsplash.com/photo-1566073771259-6a8506099945?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&q=80');
+                    url('{{ asset('images/hero-building.jpg') }}');
         background-size: cover;
         background-position: center;
         min-height: 100vh;

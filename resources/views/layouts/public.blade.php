@@ -85,9 +85,11 @@
     <!-- Navigation -->
     <nav class="navbar navbar-expand-lg navbar-dark bg-dark position-absolute w-100" style="z-index: 1000;">
         <div class="container">
-            <a class="navbar-brand" href="{{ route('home') }}">
-                <i class="fas fa-hotel text-brand me-2"></i>
-                <span class="gold-text">Velocity</span> Suites
+            <a class="navbar-brand d-flex align-items-center gap-2" href="{{ route('home') }}">
+                <span class="d-inline-flex align-items-center justify-content-center bg-white rounded-2 p-1" style="height: 40px;">
+                    <img src="{{ asset('images/logo.jpg') }}" alt="Velocity Suites" style="height: 100%; width: auto;">
+                </span>
+                <span><span class="gold-text">Velocity</span> Suites</span>
             </a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
                 <span class="navbar-toggler-icon"></span>

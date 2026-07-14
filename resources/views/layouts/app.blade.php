@@ -22,7 +22,10 @@
     @if(auth()->check())
         <div class="offcanvas offcanvas-start d-md-none" tabindex="-1" id="mobileSidebar" aria-labelledby="mobileSidebarLabel">
             <div class="offcanvas-header border-bottom">
-                <h5 class="offcanvas-title" id="mobileSidebarLabel"><i class="fas fa-hotel"></i> {{ config('app.name') }}</h5>
+                <h5 class="offcanvas-title d-flex align-items-center gap-2" id="mobileSidebarLabel">
+                    <img src="{{ asset('images/logo.jpg') }}" alt="{{ config('app.name') }}" style="height: 28px; width: auto;">
+                    {{ config('app.name') }}
+                </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
             </div>
             <div class="offcanvas-body p-0">

@@ -5,8 +5,8 @@
 @section('content')
 <div class="auth-card">
     <div class="logo">
-        <h1><i class="fas fa-hotel"></i></h1>
-        <p class="text-muted">Hotel Booking System</p>
+        <img src="{{ asset('images/logo.jpg') }}" alt="Velocity Suites" style="height: 90px; width: auto;">
+        <p class="text-muted mt-2">Hotel Booking System</p>
     </div>
 
     @if ($errors->any())

@@ -5,8 +5,11 @@
                 <i class="fas fa-bars fs-4"></i>
             </button>
         @endif
-        <a class="navbar-brand text-white fw-bold" href="/">
-            <i class="fas fa-hotel"></i> {{ config('app.name') }}
+        <a class="navbar-brand text-white fw-bold d-flex align-items-center gap-2" href="/">
+            <span class="d-inline-flex align-items-center justify-content-center bg-white rounded-2 p-1" style="height: 36px;">
+                <img src="{{ asset('images/logo.jpg') }}" alt="{{ config('app.name') }}" style="height: 100%; width: auto;">
+            </span>
+            {{ config('app.name') }}
         </a>
         <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
             <span class="navbar-toggler-icon"></span>
