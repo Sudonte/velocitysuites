@@ -44,6 +44,14 @@ class AuthController extends Controller
             return response()->json(['message' => 'Invalid credentials.'], 401);
         }
 
+        // This API/app is guest-facing only - staff (admin/manager/
+        // receptionist) have no screens here at all, so a correct
+        // password on a staff account should still be refused rather
+        // than silently handing out a token nothing in the app can use.
+        if ($user->role !== 'guest') {
+            return response()->json(['message' => 'This app is for guest accounts only. Staff should use the website.'], 403);
+        }
+
         $user->update([
             'failed_login_attempts' => 0,
             'last_login_at' => now(),
@@ -287,6 +295,7 @@ class AuthController extends Controller
                 'date_of_birth' => optional($user->guest->date_of_birth)->toDateString(),
                 'mobile_number' => $user->guest->mobile_number,
                 'address' => $user->guest->address,
+                'profile_picture_url' => $user->guest->profile_picture_url,
             ] : null,
         ];
     }

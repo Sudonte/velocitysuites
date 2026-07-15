@@ -8,6 +8,9 @@ use App\Models\Booking;
 use App\Models\Payment;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\Rules\Password;
 
 class ProfileController extends Controller
 {
@@ -56,6 +59,57 @@ class ProfileController extends Controller
         }
 
         return response()->json(['user' => $user->fresh(), 'guest' => $guest?->fresh()]);
+    }
+
+    /**
+     * Upload/replace the guest's profile picture. Unlike the ID card scan
+     * (see Api\ReservationController::uploadIdCard), an avatar is fine on
+     * the public disk - it's meant to be shown around the app, not kept
+     * private.
+     */
+    public function updatePicture(Request $request): JsonResponse
+    {
+        $request->validate([
+            'profile_picture' => 'required|image|max:5120',
+        ]);
+
+        $guest = auth()->user()->guest;
+        if (! $guest) {
+            return response()->json(['message' => 'No guest profile found for this account.'], 422);
+        }
+
+        if ($guest->profile_picture) {
+            Storage::disk('public')->delete($guest->profile_picture);
+        }
+
+        $path = $request->file('profile_picture')->store('profile-pictures', 'public');
+        $guest->update(['profile_picture' => $path]);
+
+        return response()->json(['guest' => $guest->fresh()]);
+    }
+
+    /**
+     * Same check as the web ProfileController@changePassword - was
+     * entirely mock on the Android side before (compared against a
+     * hardcoded local string, never the real password).
+     */
+    public function changePassword(Request $request): JsonResponse
+    {
+        $user = auth()->user();
+
+        $validated = $request->validate([
+            'current_password' => 'required|string',
+            'new_password' => ['required', 'confirmed', Password::min(8)],
+        ]);
+
+        if (! Hash::check($validated['current_password'], $user->password)) {
+            return response()->json(['message' => 'The current password is incorrect.'], 422);
+        }
+
+        $user->update(['password' => Hash::make($validated['new_password'])]);
+        $user->apiTokens()->where('id', '!=', optional($request->attributes->get('api_token'))->id)->delete();
+
+        return response()->json(['message' => 'Password changed successfully.']);
     }
 
     /**

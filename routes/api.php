@@ -36,6 +36,8 @@ Route::middleware(['auth.api', 'role:guest'])->group(function () {
     Route::get('/guest/payments', [ProfileController::class, 'payments']);
     Route::get('/guest/profile', [ProfileController::class, 'show']);
     Route::put('/guest/profile', [ProfileController::class, 'update']);
+    Route::post('/guest/profile/picture', [ProfileController::class, 'updatePicture']);
+    Route::put('/guest/profile/password', [ProfileController::class, 'changePassword']);
 
     Route::get('/notifications', [NotificationController::class, 'index']);
     Route::put('/notifications/{notification}/read', [NotificationController::class, 'markAsRead']);

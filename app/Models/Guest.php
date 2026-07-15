@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Storage;
 
 class Guest extends Model
 {
@@ -22,6 +23,20 @@ class Guest extends Model
     protected $casts = [
         'date_of_birth' => 'date',
     ];
+
+    protected $appends = [
+        'profile_picture_url',
+    ];
+
+    /**
+     * Full public URL for the stored profile_picture path, since API
+     * consumers (the mobile app) need something they can load directly
+     * rather than a bare storage-relative path.
+     */
+    public function getProfilePictureUrlAttribute(): ?string
+    {
+        return $this->profile_picture ? Storage::disk('public')->url($this->profile_picture) : null;
+    }
 
     /**
      * Get the user associated with the guest.
