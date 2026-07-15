@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\NotificationController;
+use App\Http\Controllers\Api\PaymentController;
 use App\Http\Controllers\Api\ProfileController;
 use App\Http\Controllers\Api\ReservationController;
 use App\Http\Controllers\Api\RoomController;
@@ -26,6 +27,7 @@ Route::middleware(['auth.api', 'role:guest'])->group(function () {
     Route::get('/guest/reservations/{reservation}', [ReservationController::class, 'show']);
     Route::put('/guest/reservations/{reservation}', [ReservationController::class, 'update']);
     Route::put('/guest/reservations/{reservation}/cancel', [ReservationController::class, 'cancel']);
+    Route::post('/guest/reservations/{reservation}/payments', [PaymentController::class, 'store']);
 
     Route::get('/guest/payments', [ProfileController::class, 'payments']);
     Route::get('/guest/profile', [ProfileController::class, 'show']);
