@@ -13,6 +13,8 @@ Route::post('/register', [AuthController::class, 'register']);
 Route::post('/verify-otp', [AuthController::class, 'verifyOtp']);
 Route::post('/resend-otp', [AuthController::class, 'resendOtp']);
 Route::post('/login', [AuthController::class, 'login']);
+Route::post('/forgot-password', [AuthController::class, 'forgotPassword']);
+Route::post('/reset-password', [AuthController::class, 'resetPassword']);
 
 Route::get('/rooms', [RoomController::class, 'index']);
 Route::get('/rooms/{room}', [RoomController::class, 'show']);
@@ -28,6 +30,8 @@ Route::middleware(['auth.api', 'role:guest'])->group(function () {
     Route::put('/guest/reservations/{reservation}', [ReservationController::class, 'update']);
     Route::put('/guest/reservations/{reservation}/cancel', [ReservationController::class, 'cancel']);
     Route::post('/guest/reservations/{reservation}/payments', [PaymentController::class, 'store']);
+    Route::post('/guest/reservations/{reservation}/id-card', [ReservationController::class, 'uploadIdCard']);
+    Route::get('/guest/reservations/{reservation}/id-card', [ReservationController::class, 'showIdCard']);
 
     Route::get('/guest/payments', [ProfileController::class, 'payments']);
     Route::get('/guest/profile', [ProfileController::class, 'show']);

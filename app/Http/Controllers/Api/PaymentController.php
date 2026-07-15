@@ -49,10 +49,21 @@ class PaymentController extends Controller
         $billing = $booking->billing;
         if (! $billing) {
             $roomCharge = $reservation->roomType->rate * $reservation->number_of_nights;
+
+            // Senior citizen / PWD statutory 20% discount, applied here
+            // since this is the first point a Billing row exists for a
+            // reservation that was never confirmed by a receptionist -
+            // see Api\ReservationController::store for where id_card_type
+            // gets recorded.
+            $discount = in_array($reservation->id_card_type, ['Senior Citizen', 'PWD'], true)
+                ? round($roomCharge * 0.20, 2)
+                : 0;
+
             $billing = Billing::create([
                 'booking_id' => $booking->id,
                 'room_charge' => $roomCharge,
-                'total_amount' => $roomCharge,
+                'discount' => $discount,
+                'total_amount' => $roomCharge - $discount,
                 'billing_status' => 'pending',
             ]);
         }

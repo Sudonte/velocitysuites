@@ -26,6 +26,19 @@ Route::get('/rooms/{room}', [\App\Http\Controllers\PublicRoomController::class, 
 // Store booking intent in session before redirecting to login
 Route::post('/booking/intent', [\App\Http\Controllers\BookingIntentController::class, 'store'])->name('booking.intent');
 
+// Fallback for the 'public' disk (room images etc). This deploy's document
+// root doesn't sit at Laravel's public/ folder (see DEPLOYMENT.md), so
+// `php artisan storage:link`'s symlink target isn't reachable from
+// public_html - serve those files through Laravel itself instead. Only
+// the 'public' disk (never 'local', which holds private uploads like ID
+// card scans - see Api\ReservationController::showIdCard).
+Route::get('/storage/{path}', function (string $path) {
+    if (! \Illuminate\Support\Facades\Storage::disk('public')->exists($path)) {
+        abort(404);
+    }
+    return \Illuminate\Support\Facades\Storage::disk('public')->response($path);
+})->where('path', '.*')->name('storage.fallback');
+
 // Redirect authenticated users from root to their dashboard
 Route::get('/dashboard', function () {
     if (!auth()->check()) {

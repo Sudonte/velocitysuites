@@ -19,11 +19,15 @@ class Reservation extends Model
         'adults',
         'children',
         'status',
+        'id_card_type',
+        'id_card_image_path',
+        'additional_guest_details',
     ];
 
     protected $casts = [
         'check_in' => 'datetime',
         'check_out' => 'datetime',
+        'additional_guest_details' => 'array',
     ];
 
     /**

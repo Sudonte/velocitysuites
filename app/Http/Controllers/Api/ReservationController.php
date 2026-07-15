@@ -10,6 +10,7 @@ use App\Services\NotificationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 
 class ReservationController extends Controller
 {
@@ -64,6 +65,12 @@ class ReservationController extends Controller
             'check_out' => 'required|date|after:check_in',
             'adults' => 'required|integer|min:1',
             'children' => 'nullable|integer|min:0',
+            'id_card_type' => 'nullable|in:None,Senior Citizen,PWD',
+            'additional_guests' => 'nullable|array',
+            'additional_guests.*.name' => 'required_with:additional_guests|string|max:150',
+            'additional_guests.*.age' => 'required_with:additional_guests|integer|min:0',
+            'additional_guests.*.gender' => 'nullable|string|max:30',
+            'additional_guests.*.relationship' => 'nullable|string|max:50',
         ]);
         $children = $validated['children'] ?? 0;
 
@@ -81,6 +88,8 @@ class ReservationController extends Controller
             return response()->json(['message' => 'No rooms of this type are currently in service.'], 422);
         }
 
+        $idCardType = $validated['id_card_type'] ?? 'None';
+
         $reservation = Reservation::create([
             'guest_id' => $guest->id,
             'room_type_id' => $roomType->id,
@@ -90,6 +99,8 @@ class ReservationController extends Controller
             'children' => $children,
             'number_of_guests' => $validated['adults'] + $children,
             'status' => 'pending',
+            'id_card_type' => $idCardType === 'None' ? null : $idCardType,
+            'additional_guest_details' => $validated['additional_guests'] ?? null,
         ]);
 
         Booking::create([
@@ -167,5 +178,51 @@ class ReservationController extends Controller
         $this->notificationService->notifyReservationCancelled($user, $roomName);
 
         return response()->json($reservation->fresh(['room.roomType', 'roomType', 'booking']));
+    }
+
+    /**
+     * Upload the senior-citizen/PWD ID image for a reservation. Separate
+     * multipart endpoint so reservation creation itself stays plain JSON.
+     *
+     * Stored on the PRIVATE local disk, not 'public' - this is a photo of
+     * a government ID, so it must not be reachable via a guessable public
+     * URL. It's only readable back through showIdCard(), which checks
+     * reservation ownership before streaming it.
+     */
+    public function uploadIdCard(Request $request, Reservation $reservation): JsonResponse
+    {
+        if ($reservation->guest_id !== auth()->user()->guest->id) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        $request->validate([
+            'id_card' => 'required|image|max:5120',
+        ]);
+
+        if ($reservation->id_card_image_path) {
+            Storage::disk('local')->delete($reservation->id_card_image_path);
+        }
+
+        $path = $request->file('id_card')->store('id-cards', 'local');
+        $reservation->update(['id_card_image_path' => $path]);
+
+        return response()->json(['message' => 'ID uploaded.']);
+    }
+
+    /**
+     * Stream back the guest's own uploaded ID card image. See
+     * uploadIdCard() for why this isn't just a public storage URL.
+     */
+    public function showIdCard(Reservation $reservation)
+    {
+        if ($reservation->guest_id !== auth()->user()->guest->id) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        if (! $reservation->id_card_image_path || ! Storage::disk('local')->exists($reservation->id_card_image_path)) {
+            return response()->json(['message' => 'No ID card uploaded for this reservation.'], 404);
+        }
+
+        return Storage::disk('local')->response($reservation->id_card_image_path);
     }
 }

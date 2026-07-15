@@ -9,6 +9,7 @@ use App\Models\RegistrationOtp;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -176,6 +177,71 @@ class AuthController extends Controller
         $this->issueOtp($validated['email'], $pending->payload);
 
         return response()->json(['message' => 'OTP resent.']);
+    }
+
+    /**
+     * Request a password reset OTP. Reuses the framework's own
+     * password_reset_tokens table (email primary key, token, created_at)
+     * rather than a bespoke table - it already models exactly this.
+     * Deliberately generic response either way so this can't be used to
+     * enumerate registered emails.
+     */
+    public function forgotPassword(Request $request): JsonResponse
+    {
+        $validated = $request->validate(['email' => 'required|email']);
+
+        $user = User::where('email', $validated['email'])->first();
+        if ($user) {
+            $otp = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+
+            DB::table('password_reset_tokens')->updateOrInsert(
+                ['email' => $validated['email']],
+                ['token' => Hash::make($otp), 'created_at' => now()]
+            );
+
+            Log::info("Password reset OTP for {$validated['email']}: {$otp}");
+        }
+
+        return response()->json(['message' => 'If that email is registered, a reset code has been sent.']);
+    }
+
+    /**
+     * Verify the reset OTP and set a new password. 15-minute expiry,
+     * matching the registration OTP window.
+     */
+    public function resetPassword(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'email' => 'required|email',
+            'otp' => 'required|string|size:6',
+            'password' => ['required', 'confirmed', Password::min(8)],
+        ]);
+
+        $row = DB::table('password_reset_tokens')->where('email', $validated['email'])->first();
+
+        if (! $row || ! Hash::check($validated['otp'], $row->token)) {
+            return response()->json(['message' => 'Invalid or expired code.'], 422);
+        }
+
+        if (now()->diffInMinutes($row->created_at) > 15) {
+            DB::table('password_reset_tokens')->where('email', $validated['email'])->delete();
+            return response()->json(['message' => 'Invalid or expired code.'], 422);
+        }
+
+        $user = User::where('email', $validated['email'])->first();
+        if (! $user) {
+            return response()->json(['message' => 'Invalid or expired code.'], 422);
+        }
+
+        $user->update([
+            'password' => Hash::make($validated['password']),
+            'failed_login_attempts' => 0,
+        ]);
+
+        DB::table('password_reset_tokens')->where('email', $validated['email'])->delete();
+        $user->apiTokens()->delete();
+
+        return response()->json(['message' => 'Password reset successfully.']);
     }
 
     /**
