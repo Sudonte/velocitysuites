@@ -16,11 +16,19 @@ class CheckRole
     public function handle(Request $request, Closure $next, ...$roles): Response
     {
         if (! auth()->check()) {
+            if ($request->expectsJson()) {
+                return response()->json(['message' => 'Unauthenticated.'], 401);
+            }
+
             return redirect()->route('login');
         }
 
         if (in_array(auth()->user()->role, $roles)) {
             return $next($request);
+        }
+
+        if ($request->expectsJson()) {
+            return response()->json(['message' => 'Unauthorized access.'], 403);
         }
 
         return redirect('/')->with('error', 'Unauthorized access');

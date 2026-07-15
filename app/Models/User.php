@@ -161,4 +161,12 @@ class User extends Authenticatable
     {
         return $this->hasMany(ActivityLog::class);
     }
+
+    /**
+     * Get the API tokens issued to the user (mobile app auth).
+     */
+    public function apiTokens()
+    {
+        return $this->hasMany(ApiToken::class);
+    }
 }
