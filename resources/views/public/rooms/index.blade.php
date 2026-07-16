@@ -27,17 +27,6 @@
                     <div class="card-body">
                         <form action="{{ route('public.rooms.index') }}" method="GET">
                             <div class="mb-3">
-                                <label class="form-label">Room Type</label>
-                                <select name="room_type" class="form-select">
-                                    <option value="">All Types</option>
-                                    @foreach($roomTypes as $type)
-                                        <option value="{{ $type }}" {{ request('room_type') == $type ? 'selected' : '' }}>
-                                            {{ $type }}
-                                        </option>
-                                    @endforeach
-                                </select>
-                            </div>
-                            <div class="mb-3">
                                 <label class="form-label">Min Price (₱)</label>
                                 <input type="number" name="min_price" class="form-control" value="{{ request('min_price') }}" placeholder="0">
                             </div>
@@ -62,29 +51,32 @@
                 </div>
             </div>
 
-            <!-- Room Listings -->
+            <!-- Room Type Listings -->
             <div class="col-lg-9">
-                @if($rooms->isEmpty())
+                @if($roomTypes->isEmpty())
                     <div class="alert alert-info">
-                        No rooms available matching your criteria. Please try different filters.
+                        No room types available matching your criteria. Please try different filters.
                     </div>
                 @else
                     <div class="row g-4">
-                        @foreach($rooms as $room)
+                        @foreach($roomTypes as $roomType)
                             <div class="col-md-6 col-lg-4">
                                 <div class="room-card">
-                                    <img src="{{ $room->image ? asset('storage/' . $room->image) : 'https://via.placeholder.com/400x300?text=No+Image' }}"
-                                         alt="{{ $room->roomType->name }}" class="img-fluid" style="height: 200px; width: 100%; object-fit: cover;">
+                                    <img src="{{ $roomType->image_url ?: 'https://via.placeholder.com/400x300?text=No+Image' }}"
+                                         alt="{{ $roomType->name }}" class="img-fluid" style="height: 200px; width: 100%; object-fit: cover;">
                                     <div class="p-4">
-                                        <h5 class="fw-bold">{{ $room->roomType->name }}</h5>
+                                        <h5 class="fw-bold">{{ $roomType->name }}</h5>
                                         <p class="mb-2 text-muted">
-                                            <i class="fas fa-user me-1 text-brand"></i> Up to {{ $room->room_capacity }} guests
+                                            <i class="fas fa-user me-1 text-brand"></i> Up to {{ $roomType->capacity }} guests
                                         </p>
                                         <p class="small text-muted">
-                                            {{ Str::limit($room->description, 100) }}
+                                            {{ Str::limit($roomType->description, 100) }}
                                         </p>
-                                        <p class="room-price mb-3">₱{{ number_format($room->room_rate, 2) }} <small class="text-muted">/night</small></p>
-                                        <a href="{{ route('public.rooms.show', $room) }}" class="btn btn-outline-danger w-100">View Details</a>
+                                        <p class="small text-success mb-2">
+                                            <i class="fas fa-check-circle me-1"></i> {{ $roomType->available_rooms_count }} {{ Str::plural('room', $roomType->available_rooms_count) }} available
+                                        </p>
+                                        <p class="room-price mb-3">₱{{ number_format($roomType->rate, 2) }} <small class="text-muted">/night</small></p>
+                                        <a href="{{ route('public.rooms.show', $roomType) }}" class="btn btn-outline-danger w-100">View Details</a>
                                     </div>
                                 </div>
                             </div>
@@ -93,7 +85,7 @@
 
                     <!-- Pagination -->
                     <div class="mt-4">
-                        {{ $rooms->links() }}
+                        {{ $roomTypes->links() }}
                     </div>
                 @endif
             </div>

@@ -21,7 +21,7 @@ Route::get('/', [\App\Http\Controllers\LandingPageController::class, 'index'])->
 
 // Public Room Routes (accessible without login)
 Route::get('/rooms', [\App\Http\Controllers\PublicRoomController::class, 'index'])->name('public.rooms.index');
-Route::get('/rooms/{room}', [\App\Http\Controllers\PublicRoomController::class, 'show'])->name('public.rooms.show');
+Route::get('/rooms/{roomType}', [\App\Http\Controllers\PublicRoomController::class, 'show'])->name('public.rooms.show');
 
 // Store booking intent in session before redirecting to login
 Route::post('/booking/intent', [\App\Http\Controllers\BookingIntentController::class, 'store'])->name('booking.intent');

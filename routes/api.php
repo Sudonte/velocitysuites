@@ -17,7 +17,7 @@ Route::post('/forgot-password', [AuthController::class, 'forgotPassword']);
 Route::post('/reset-password', [AuthController::class, 'resetPassword']);
 
 Route::get('/rooms', [RoomController::class, 'index']);
-Route::get('/rooms/{room}', [RoomController::class, 'show']);
+Route::get('/rooms/{roomType}', [RoomController::class, 'show']);
 
 // Requires a bearer token from /login or /verify-otp, and the guest role -
 // mirrors the web `auth + role:guest` route group in routes/web.php.

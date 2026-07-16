@@ -7,13 +7,13 @@
     <x-page-header icon="fas fa-calendar-alt" title="Book Your Room" />
 
     <div class="row">
-        <!-- Room Details -->
+        <!-- Room Type Details -->
         <div class="col-lg-8">
-            <x-card title="Room Details" bodyClass="card-body">
+            <x-card title="Room Type Details" bodyClass="card-body">
                 <div class="row">
                     <div class="col-md-4">
-                        @if($room->image)
-                            <img src="{{ asset('storage/' . $room->image) }}" alt="{{ $room->room_name }}" class="img-fluid rounded">
+                        @if($roomType->image_url)
+                            <img src="{{ $roomType->image_url }}" alt="{{ $roomType->name }}" class="img-fluid rounded">
                         @else
                             <div class="bg-secondary rounded d-flex align-items-center justify-content-center" style="height: 250px;">
                                 <i class="fas fa-image text-white" style="font-size: 3rem;"></i>
@@ -21,19 +21,19 @@
                         @endif
                     </div>
                     <div class="col-md-8">
-                        <h3 class="mb-3">{{ $room->roomType->name }} Room</h3>
+                        <h3 class="mb-3">{{ $roomType->name }} Room</h3>
                         <p class="mb-2">
-                            <strong>Type:</strong> {{ $room->roomType->name }}
+                            <strong>Type:</strong> {{ $roomType->name }}
                         </p>
                         <p class="mb-2">
-                            <strong>Capacity:</strong> Up to {{ $room->room_capacity }} guests
+                            <strong>Capacity:</strong> Up to {{ $roomType->capacity }} guests
                         </p>
                         <p class="mb-2">
-                            <strong>Rate:</strong> ₱{{ number_format($room->room_rate, 2) }} per night
+                            <strong>Rate:</strong> ₱{{ number_format($roomType->rate, 2) }} per night
                         </p>
                         <p class="mb-0">
                             <strong>Description:</strong><br>
-                            {{ $room->description ?: 'A comfortable room for your stay.' }}
+                            {{ $roomType->description ?: 'A comfortable room for your stay.' }}
                         </p>
                     </div>
                 </div>
@@ -43,15 +43,13 @@
             <x-card title="Booking Details" bodyClass="card-body" class="mt-4">
                 <div class="alert alert-info">
                     <i class="fas fa-info-circle"></i>
-                    You are requesting a <strong>{{ $room->roomType->name }}</strong> room.
+                    You are requesting a <strong>{{ $roomType->name }}</strong> room.
                     A specific room number will be assigned by our staff when your booking is confirmed.
-                    The total below uses the {{ $room->roomType->name }} base rate; premium rooms in this
-                    category may be priced slightly differently on your final bill.
                 </div>
                 <form action="{{ route('guest.reservations.store') }}" method="POST">
                     @csrf
 
-                    <input type="hidden" name="room_id" value="{{ $room->id }}">
+                    <input type="hidden" name="room_type_id" value="{{ $roomType->id }}">
                     <input type="hidden" name="check_in" value="{{ $checkIn->format('Y-m-d H:i:s') }}">
                     <input type="hidden" name="check_out" value="{{ $checkOut->format('Y-m-d H:i:s') }}">
 
@@ -75,7 +73,7 @@
                             <div class="form-group mb-3">
                                 <label for="adults"><strong>Adults *</strong></label>
                                 <input type="number" class="form-control @error('adults') is-invalid @enderror"
-                                       id="adults" name="adults" min="1" max="{{ $room->room_capacity }}"
+                                       id="adults" name="adults" min="1" max="{{ $roomType->capacity }}"
                                        value="{{ old('adults', request('guests', 1)) }}" required>
                                 @error('adults')
                                     <div class="invalid-feedback">{{ $message }}</div>
@@ -95,7 +93,7 @@
                         </div>
                     </div>
                     <p class="text-muted small mb-3">
-                        Room capacity: {{ $room->room_capacity }} guests. Children under 12 stay free of charge.
+                        Room capacity: {{ $roomType->capacity }} guests. Children under 12 stay free of charge.
                     </p>
 
                     <button type="submit" class="btn btn-primary btn-lg w-100">
@@ -110,7 +108,7 @@
             <x-card title="Price Summary" bodyClass="card-body" class="sticky-top" style="top: 20px;">
                 <div class="d-flex justify-content-between mb-2">
                     <span>Room Rate per Night:</span>
-                    <strong>₱{{ number_format($room->room_rate, 2) }}</strong>
+                    <strong>₱{{ number_format($roomType->rate, 2) }}</strong>
                 </div>
                 <div class="d-flex justify-content-between mb-2">
                     <span>Number of Nights:</span>

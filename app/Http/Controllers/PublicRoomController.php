@@ -2,64 +2,80 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Room;
+use App\Models\RoomImage;
+use App\Models\RoomType;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
 class PublicRoomController extends Controller
 {
     /**
-     * Display all available rooms (public access).
+     * Display all room types with at least one available room (public
+     * access). Guests browse by TYPE, never by individual room/unit - a
+     * receptionist assigns the actual room at confirmation time (see
+     * Receptionist\ReceptionistController::confirmReservation).
      */
     public function index(Request $request): View
     {
-        $query = Room::where('status', 'available');
-
-        // Filter by room type
-        if ($request->filled('room_type')) {
-            $query->whereHas('roomType', function ($q) use ($request) {
-                $q->where('name', $request->room_type);
-            });
-        }
-
-        // Filter by price range on the EFFECTIVE rate: the room's own
-        // override when set, otherwise its type's base rate.
-        $effectiveRate = 'COALESCE(rooms.rate_override, (SELECT rate FROM room_types WHERE room_types.id = rooms.room_type_id))';
+        $query = RoomType::where('status', 'active')
+            ->withCount(['rooms as available_rooms_count' => function ($q) {
+                $q->where('status', 'available');
+            }])
+            ->with(['rooms' => function ($q) {
+                $q->whereNotNull('image')->limit(1);
+            }]);
 
         if ($request->filled('min_price')) {
-            $query->whereRaw("$effectiveRate >= ?", [$request->min_price]);
+            $query->where('rate', '>=', $request->min_price);
         }
 
         if ($request->filled('max_price')) {
-            $query->whereRaw("$effectiveRate <= ?", [$request->max_price]);
+            $query->where('rate', '<=', $request->max_price);
         }
 
-        // Filter by capacity (per-room, types only set the baseline)
         if ($request->filled('capacity')) {
-            $query->where('room_capacity', '>=', $request->capacity);
+            $query->where('capacity', '>=', $request->capacity);
         }
 
-        $rooms = $query->latest()->paginate(12);
-        $roomTypes = \App\Models\RoomType::where('status', 'active')->orderBy('name')->pluck('name');
+        $roomTypes = $query->having('available_rooms_count', '>', 0)
+            ->orderBy('name')
+            ->paginate(12)
+            ->withQueryString();
 
-        return view('public.rooms.index', compact('rooms', 'roomTypes'));
+        return view('public.rooms.index', compact('roomTypes'));
     }
 
     /**
-     * Display room details (public access).
+     * Display a room type's details (public access) - no room_number,
+     * no per-unit status, since guests never pick a specific room.
      */
-    public function show(Room $room): View
+    public function show(RoomType $roomType): View
     {
-        // Load room with images
-        $room->load(['images']);
+        $roomType->loadCount(['rooms as available_rooms_count' => function ($q) {
+            $q->where('status', 'available');
+        }]);
+        $roomType->load(['rooms' => function ($q) {
+            $q->whereNotNull('image')->limit(1);
+        }]);
 
-        // Get related rooms (same type, excluding current)
-        $relatedRooms = Room::where('room_type_id', $room->room_type_id)
-            ->where('id', '!=', $room->id)
-            ->where('status', 'available')
+        // Aggregate the image gallery across every room of this type,
+        // since a RoomImage belongs to a Room, not a RoomType, and there's
+        // no per-type gallery table.
+        $galleryImages = RoomImage::whereIn('room_id', $roomType->rooms()->pluck('id'))->take(9)->get();
+
+        $otherTypes = RoomType::where('status', 'active')
+            ->where('id', '!=', $roomType->id)
+            ->withCount(['rooms as available_rooms_count' => function ($q) {
+                $q->where('status', 'available');
+            }])
+            ->with(['rooms' => function ($q) {
+                $q->whereNotNull('image')->limit(1);
+            }])
+            ->having('available_rooms_count', '>', 0)
+            ->inRandomOrder()
             ->take(3)
             ->get();
 
-        return view('public.rooms.show', compact('room', 'relatedRooms'));
+        return view('public.rooms.show', compact('roomType', 'galleryImages', 'otherTypes'));
     }
 }

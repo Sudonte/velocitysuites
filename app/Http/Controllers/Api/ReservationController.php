@@ -5,7 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Booking;
 use App\Models\Reservation;
-use App\Models\Room;
+use App\Models\RoomType;
 use App\Services\NotificationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -60,7 +60,7 @@ class ReservationController extends Controller
     public function store(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'room_id' => 'required|exists:rooms,id',
+            'room_type_id' => 'required|exists:room_types,id',
             'check_in' => 'required|date|after:today',
             'check_out' => 'required|date|after:check_in',
             'adults' => 'required|integer|min:1',
@@ -77,8 +77,7 @@ class ReservationController extends Controller
         $user = auth()->user();
         $guest = $user->guest;
 
-        $room = Room::findOrFail($validated['room_id']);
-        $roomType = $room->roomType;
+        $roomType = RoomType::findOrFail($validated['room_type_id']);
 
         if ($roomType->status !== 'active') {
             return response()->json(['message' => 'This room type is not currently offered.'], 422);

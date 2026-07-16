@@ -7,7 +7,7 @@ use App\Models\Booking;
 use App\Models\Notification;
 use App\Models\Promotion;
 use App\Models\Reservation;
-use App\Models\Room;
+use App\Models\RoomType;
 use App\Services\NotificationService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -37,18 +37,19 @@ class ReservationController extends Controller
     }
 
     /**
-     * Show booking form for a specific room.
+     * Show booking form for a room type. Guests never pick a specific
+     * room - a receptionist assigns one at confirmation (see
+     * Receptionist\ReceptionistController::confirmReservation).
      */
     public function create(Request $request): View
     {
         $request->validate([
-            'room_id' => 'required|exists:rooms,id',
+            'room_type_id' => 'required|exists:room_types,id',
             'check_in' => 'required|date|after:today',
             'check_out' => 'required|date|after:check_in',
         ]);
 
-        $room = Room::findOrFail($request->room_id);
-        $roomType = $room->roomType;
+        $roomType = RoomType::findOrFail($request->room_type_id);
         $checkIn = new \DateTime($request->check_in);
         $checkOut = new \DateTime($request->check_out);
         $nights = $checkOut->diff($checkIn)->days;
@@ -79,7 +80,7 @@ class ReservationController extends Controller
         $finalRate = $totalRate - $discount;
 
         return view('guest.reservations.create', compact(
-            'room',
+            'roomType',
             'checkIn',
             'checkOut',
             'nights',
@@ -96,7 +97,7 @@ class ReservationController extends Controller
     public function store(Request $request): RedirectResponse
     {
         $validated = $request->validate([
-            'room_id' => 'required|exists:rooms,id',
+            'room_type_id' => 'required|exists:room_types,id',
             'check_in' => 'required|date|after:today',
             'check_out' => 'required|date|after:check_in',
             'adults' => 'required|integer|min:1',
@@ -107,12 +108,11 @@ class ReservationController extends Controller
         $user = auth()->user();
         $guest = $user->guest;
 
-        // The guest booked from a specific example room's page, but the
-        // reservation only records the requested TYPE - a receptionist
-        // assigns the actual room when confirming. Availability against
-        // real inventory is checked at that assignment step.
-        $room = Room::findOrFail($validated['room_id']);
-        $roomType = $room->roomType;
+        // The reservation only ever records the requested TYPE - a
+        // receptionist assigns the actual room when confirming.
+        // Availability against real inventory is checked at that
+        // assignment step.
+        $roomType = RoomType::findOrFail($validated['room_type_id']);
 
         if ($roomType->status !== 'active') {
             return back()->with('error', 'This room type is not currently offered.');
