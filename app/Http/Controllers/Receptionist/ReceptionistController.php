@@ -46,14 +46,15 @@ class ReceptionistController extends Controller
         $awaitingCheckIn = Reservation::where('status', 'confirmed')->count();
         $inHouseGuests = Reservation::where('status', 'checked_in')->count();
 
-        // Today's schedule stays date-based - it's a schedule. Arrivals due
-        // today (not yet checked in) and departures due today (still in house).
-        $todayArrivals = Reservation::with(['guest.user', 'room'])
+        // Today's schedule stays date-based - it's a schedule. Guests due to
+        // check in today (not yet checked in) and guests due to check out
+        // today (still in house).
+        $todayCheckIns = Reservation::with(['guest.user', 'room'])
             ->whereDate('check_in', today())
             ->where('status', 'confirmed')
             ->get();
 
-        $todayDepartures = Reservation::with(['guest.user', 'room'])
+        $todayCheckOuts = Reservation::with(['guest.user', 'room'])
             ->whereDate('check_out', today())
             ->where('status', 'checked_in')
             ->get();
@@ -63,8 +64,8 @@ class ReceptionistController extends Controller
             'bookingRequests',
             'awaitingCheckIn',
             'inHouseGuests',
-            'todayArrivals',
-            'todayDepartures'
+            'todayCheckIns',
+            'todayCheckOuts'
         ));
     }
 

@@ -26,9 +26,9 @@
     </div>
 
     <div class="row">
-        <!-- Today's Arrivals -->
+        <!-- Today's Check-Ins -->
         <div class="col-lg-6">
-            <x-card title="Today's Arrivals" icon="fas fa-plane-arrival" bodyClass="table-responsive" class="mb-4">
+            <x-card title="Today's Check-Ins" icon="fas fa-sign-in-alt" bodyClass="table-responsive" class="mb-4">
                 <table class="table table-hover mb-0">
                     <thead>
                         <tr>
@@ -38,23 +38,23 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @forelse($todayArrivals as $reservation)
+                        @forelse($todayCheckIns as $reservation)
                             <tr>
                                 <td>{{ $reservation->guest->user->full_name ?? 'N/A' }}</td>
                                 <td>{{ $reservation->room->room_number ?? 'N/A' }}</td>
                                 <td><x-status-badge :status="$reservation->status" domain="reservation" /></td>
                             </tr>
                         @empty
-                            <tr><td colspan="3"><x-empty-state icon="fas fa-plane-arrival" message="No arrivals today." /></td></tr>
+                            <tr><td colspan="3"><x-empty-state icon="fas fa-sign-in-alt" message="No check-ins scheduled today." /></td></tr>
                         @endforelse
                     </tbody>
                 </table>
             </x-card>
         </div>
 
-        <!-- Today's Departures -->
+        <!-- Today's Check-Outs -->
         <div class="col-lg-6">
-            <x-card title="Today's Departures" icon="fas fa-plane-departure" bodyClass="table-responsive" class="mb-4">
+            <x-card title="Today's Check-Outs" icon="fas fa-sign-out-alt" bodyClass="table-responsive" class="mb-4">
                 <table class="table table-hover mb-0">
                     <thead>
                         <tr>
@@ -64,14 +64,14 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @forelse($todayDepartures as $reservation)
+                        @forelse($todayCheckOuts as $reservation)
                             <tr>
                                 <td>{{ $reservation->guest->user->full_name ?? 'N/A' }}</td>
                                 <td>{{ $reservation->room->room_number ?? 'N/A' }}</td>
                                 <td><x-status-badge :status="$reservation->status" domain="reservation" /></td>
                             </tr>
                         @empty
-                            <tr><td colspan="3"><x-empty-state icon="fas fa-plane-departure" message="No departures today." /></td></tr>
+                            <tr><td colspan="3"><x-empty-state icon="fas fa-sign-out-alt" message="No check-outs scheduled today." /></td></tr>
                         @endforelse
                     </tbody>
                 </table>
