@@ -27,7 +27,7 @@ class ReservationController extends Controller
     public function index(Request $request): JsonResponse
     {
         $guest = auth()->user()->guest;
-        $query = $guest->reservations()->with(['room.roomType', 'roomType', 'booking.billing']);
+        $query = $guest->reservations()->with(['room.roomType', 'roomType', 'booking.billing.payments']);
 
         if ($request->filled('status')) {
             $query->where('status', $request->status);
@@ -54,7 +54,7 @@ class ReservationController extends Controller
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 
-        $reservation->load(['room.roomType', 'roomType', 'booking.billing']);
+        $reservation->load(['room.roomType', 'roomType', 'booking.billing.payments']);
 
         return response()->json($reservation);
     }
