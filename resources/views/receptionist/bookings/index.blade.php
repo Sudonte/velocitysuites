@@ -73,7 +73,7 @@
                         </td>
                         <td>{{ $billing ? '₱' . number_format($billing->total_amount, 2) : '—' }}</td>
                         <td>
-                            <a href="{{ route('receptionist.reservations.show', $reservation) }}" class="btn btn-sm btn-primary">
+                            <a href="{{ route('receptionist.reservations.show', ['reservation' => $reservation, 'from' => 'bookings']) }}" class="btn btn-sm btn-primary">
                                 <i class="fas fa-eye"></i>
                             </a>
                         </td>

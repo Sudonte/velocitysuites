@@ -2,14 +2,26 @@
 
 @section('title', 'Reservation #' . $reservation->id . ' - Receptionist')
 
+@php
+    // reservations.show is shared by the Reservations and Bookings lists -
+    // whichever one linked here (see the "from" param) decides where
+    // Back goes, so the receptionist returns to the list they came from.
+    $viewedFromBookings = request()->query('from') === 'bookings';
+@endphp
+
 @section('content')
 <div class="container-fluid py-4">
-    <nav aria-label="breadcrumb">
-        <ol class="breadcrumb">
-            <li class="breadcrumb-item"><a href="{{ route('receptionist.reservations.index') }}">Reservations</a></li>
-            <li class="breadcrumb-item active" aria-current="page">Reservation #{{ $reservation->id }}</li>
-        </ol>
-    </nav>
+    <div class="mb-2">
+        @if($viewedFromBookings)
+            <a href="{{ route('receptionist.bookings.index') }}" class="btn btn-sm btn-secondary">
+                <i class="fas fa-arrow-left"></i> Back to Bookings
+            </a>
+        @else
+            <a href="{{ route('receptionist.reservations.index') }}" class="btn btn-sm btn-secondary">
+                <i class="fas fa-arrow-left"></i> Back to Reservations
+            </a>
+        @endif
+    </div>
 
     <x-page-header icon="fas fa-calendar-alt" title="Reservation #{{ $reservation->id }}"
         subtitle="{{ $reservation->guest->user->full_name ?? 'N/A' }} — {{ $reservation->roomType->name ?? 'N/A' }}, {{ $reservation->check_in->format('M d') }} – {{ $reservation->check_out->format('M d, Y') }}">

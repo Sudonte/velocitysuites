@@ -4,13 +4,11 @@
 
 @section('content')
 <div class="container-fluid py-4">
-    <nav aria-label="breadcrumb">
-        <ol class="breadcrumb">
-            <li class="breadcrumb-item"><a href="{{ route('receptionist.reservations.index') }}">Reservations</a></li>
-            <li class="breadcrumb-item"><a href="{{ route('receptionist.reservations.show', $reservation) }}">Reservation #{{ $reservation->id }}</a></li>
-            <li class="breadcrumb-item active" aria-current="page">Convert to Booking</li>
-        </ol>
-    </nav>
+    <div class="mb-2">
+        <a href="{{ route('receptionist.reservations.show', $reservation) }}" class="btn btn-sm btn-secondary">
+            <i class="fas fa-arrow-left"></i> Back to Reservation
+        </a>
+    </div>
 
     <x-page-header icon="fas fa-money-bill-wave" title="Convert to Booking"
         subtitle="Collect payment for Reservation #{{ $reservation->id }} to turn it into a Booking." />
