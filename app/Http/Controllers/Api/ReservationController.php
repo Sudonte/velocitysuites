@@ -3,7 +3,6 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\Booking;
 use App\Models\Reservation;
 use App\Models\RoomType;
 use App\Services\NotificationService;
@@ -32,6 +31,15 @@ class ReservationController extends Controller
 
         if ($request->filled('status')) {
             $query->where('status', $request->status);
+        }
+
+        // ?has_booking=1 -> "My Bookings" (paid), ?has_booking=0 -> "My
+        // Reservations" (not paid) - mirrors the website's split guest
+        // views (guest.reservations.index / guest.bookings.index).
+        if ($request->has('has_booking')) {
+            $request->boolean('has_booking')
+                ? $query->whereHas('booking')
+                : $query->whereDoesntHave('booking');
         }
 
         return response()->json($query->latest('check_in')->paginate(15));
@@ -89,6 +97,9 @@ class ReservationController extends Controller
 
         $idCardType = $validated['id_card_type'] ?? 'None';
 
+        // Plain Reserve - no payment, no Booking row (see BookingController
+        // for the pay-now path and PaymentController for paying against an
+        // already-created Reservation).
         $reservation = Reservation::create([
             'guest_id' => $guest->id,
             'room_type_id' => $roomType->id,
@@ -100,12 +111,6 @@ class ReservationController extends Controller
             'status' => 'pending',
             'id_card_type' => $idCardType === 'None' ? null : $idCardType,
             'additional_guest_details' => $validated['additional_guests'] ?? null,
-        ]);
-
-        Booking::create([
-            'reservation_id' => $reservation->id,
-            'booking_date' => now(),
-            'booking_status' => 'pending',
         ]);
 
         $this->notificationService->notifyNewBooking($user, $roomType->name);
@@ -167,7 +172,10 @@ class ReservationController extends Controller
 
         DB::transaction(function () use ($reservation) {
             $reservation->update(['status' => 'cancelled']);
-            $reservation->booking->update(['booking_status' => 'cancelled']);
+
+            if ($reservation->booking) {
+                $reservation->booking->update(['booking_status' => 'cancelled']);
+            }
 
             if ($reservation->room && $reservation->room->status === 'reserved') {
                 $reservation->room->update(['status' => 'available']);

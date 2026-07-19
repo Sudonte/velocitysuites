@@ -11,13 +11,12 @@ use Illuminate\View\View;
 class GuestController extends Controller
 {
     /**
-     * Display the guest's reservations (bookings list).
-     * This is the main reservations page for guests.
+     * Display the guest's Reservations (no payment/Booking attached).
      */
     public function bookings(Request $request): View
     {
         $guest = auth()->user()->guest;
-        $query = $guest->reservations()->with(['room', 'booking.billing']);
+        $query = $guest->reservations()->with(['room', 'roomType'])->whereDoesntHave('booking');
 
         if ($request->filled('status')) {
             $query->where('status', $request->status);
@@ -26,6 +25,23 @@ class GuestController extends Controller
         $reservations = $query->latest('check_in')->paginate(15);
 
         return view('guest.reservations.index', compact('reservations'));
+    }
+
+    /**
+     * Display the guest's Bookings (Reservations that have gone through payment).
+     */
+    public function myBookings(Request $request): View
+    {
+        $guest = auth()->user()->guest;
+        $query = $guest->reservations()->with(['room', 'roomType', 'booking.billing.payments'])->whereHas('booking');
+
+        if ($request->filled('status')) {
+            $query->where('status', $request->status);
+        }
+
+        $reservations = $query->latest('check_in')->paginate(15);
+
+        return view('guest.bookings.index', compact('reservations'));
     }
 
     /**

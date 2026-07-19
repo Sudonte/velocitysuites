@@ -14,4 +14,17 @@ return [
     */
 
     'extra_guest_fee_rate' => 500,
+
+    /*
+    |--------------------------------------------------------------------------
+    | Partial Payment Ratio
+    |--------------------------------------------------------------------------
+    |
+    | Fraction of the quoted total a guest pays when choosing "Partial
+    | Payment" on the Book & Pay flow (website + mobile app). Matches the
+    | ratio the Android app's PaymentActivity already hardcodes.
+    |
+    */
+
+    'partial_payment_ratio' => 0.5,
 ];

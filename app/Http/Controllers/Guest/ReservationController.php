@@ -3,7 +3,6 @@
 namespace App\Http\Controllers\Guest;
 
 use App\Http\Controllers\Controller;
-use App\Models\Booking;
 use App\Models\Notification;
 use App\Models\Promotion;
 use App\Models\Reservation;
@@ -122,7 +121,9 @@ class ReservationController extends Controller
             return back()->with('error', 'No rooms of this type are currently in service.');
         }
 
-        // Create reservation - room_id stays null until a receptionist
+        // Create the reservation - a plain Reserve, no payment, no Booking
+        // row (see App\Services\BookingService for the "Book & Pay" path
+        // that creates a Booking). room_id stays null until a receptionist
         // assigns a specific room at confirmation.
         $reservation = Reservation::create([
             'guest_id' => $guest->id,
@@ -135,17 +136,10 @@ class ReservationController extends Controller
             'status' => 'pending',
         ]);
 
-        // Create booking
-        Booking::create([
-            'reservation_id' => $reservation->id,
-            'booking_date' => now(),
-            'booking_status' => 'pending',
-        ]);
-
-        // Notify guest and staff about new booking request
+        // Notify guest and staff about the new reservation request
         $this->notificationService->notifyNewBooking($user, $roomType->name);
 
-        return redirect()->route('guest.reservations.show', $reservation)->with('success', 'Booking request sent! Our staff will assign your room and confirm shortly.');
+        return redirect()->route('guest.reservations.show', $reservation)->with('success', 'Reservation request sent! Our staff will assign your room and confirm shortly.');
     }
 
     /**
@@ -202,7 +196,11 @@ class ReservationController extends Controller
 
         DB::transaction(function () use ($reservation) {
             $reservation->update(['status' => 'cancelled']);
-            $reservation->booking->update(['booking_status' => 'cancelled']);
+
+            // A plain Reservation (Reserve, no payment) has no Booking row.
+            if ($reservation->booking) {
+                $reservation->booking->update(['booking_status' => 'cancelled']);
+            }
 
             // Release the assigned room if there is one (pending
             // reservations have no room assigned yet).

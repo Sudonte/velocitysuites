@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\BookingController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\PaymentController;
 use App\Http\Controllers\Api\ProfileController;
@@ -30,6 +31,7 @@ Route::middleware(['auth.api', 'role:guest'])->group(function () {
     Route::put('/guest/reservations/{reservation}', [ReservationController::class, 'update']);
     Route::put('/guest/reservations/{reservation}/cancel', [ReservationController::class, 'cancel']);
     Route::post('/guest/reservations/{reservation}/payments', [PaymentController::class, 'store']);
+    Route::post('/guest/bookings', [BookingController::class, 'store']);
     Route::post('/guest/reservations/{reservation}/id-card', [ReservationController::class, 'uploadIdCard']);
     Route::get('/guest/reservations/{reservation}/id-card', [ReservationController::class, 'showIdCard']);
 

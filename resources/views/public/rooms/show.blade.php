@@ -138,7 +138,7 @@
                     </div>
 
                     @auth
-                        <form action="{{ route('guest.reservations.create') }}" method="GET">
+                        <form method="GET">
                             <input type="hidden" name="room_type_id" value="{{ $roomType->id }}">
 
                             <div class="mb-3">
@@ -166,9 +166,15 @@
                                 </select>
                             </div>
 
-                            <button type="submit" class="btn btn-velocity w-100">
-                                <i class="fas fa-calendar-check me-2"></i> Continue to Book
+                            <button type="submit" formaction="{{ route('guest.bookings.create') }}" class="btn btn-velocity w-100 mb-2">
+                                <i class="fas fa-credit-card me-2"></i> Book & Pay Now
                             </button>
+                            <button type="submit" formaction="{{ route('guest.reservations.create') }}" class="btn btn-outline-danger w-100">
+                                <i class="fas fa-calendar-check me-2"></i> Reserve (No Payment)
+                            </button>
+                            <p class="text-center mt-2 small text-muted">
+                                Reserve holds the room type with no payment. Book & Pay confirms it faster once staff verify your payment.
+                            </p>
                         </form>
                     @else
                         <form action="{{ route('booking.intent') }}" method="POST" id="booking-form">

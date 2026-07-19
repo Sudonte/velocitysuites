@@ -13,6 +13,7 @@ use App\Models\Payment;
 use App\Models\Promotion;
 use App\Models\Reservation;
 use App\Models\Room;
+use App\Services\BookingService;
 use App\Services\NotificationService;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
@@ -24,10 +25,12 @@ use Illuminate\View\View;
 class ReceptionistController extends Controller
 {
     protected NotificationService $notificationService;
+    protected BookingService $bookingService;
 
-    public function __construct(NotificationService $notificationService)
+    public function __construct(NotificationService $notificationService, BookingService $bookingService)
     {
         $this->notificationService = $notificationService;
+        $this->bookingService = $bookingService;
     }
 
     /**
@@ -66,12 +69,43 @@ class ReceptionistController extends Controller
     }
 
     /**
-     * List all reservations (read-only).
+     * List reservations that have NOT been paid/booked yet (read-only) -
+     * the "Reservations" side of the Reservation/Booking split. See
+     * bookingsIndex() for the paid counterpart.
      */
     public function reservationsIndex(Request $request): View
     {
-        $query = Reservation::with(['guest.user', 'room', 'booking.billing']);
+        $query = Reservation::with(['guest.user', 'room', 'booking'])
+            ->whereDoesntHave('booking');
 
+        $this->applyReservationFilters($query, $request);
+
+        $reservations = $query->latest('check_in')->paginate(15);
+
+        return view('receptionist.reservations.index', compact('reservations'));
+    }
+
+    /**
+     * List reservations that HAVE been paid/booked (read-only), with
+     * payment/billing status - the "Bookings" side of the split.
+     */
+    public function bookingsIndex(Request $request): View
+    {
+        $query = Reservation::with(['guest.user', 'room', 'booking.billing.payments'])
+            ->whereHas('booking');
+
+        $this->applyReservationFilters($query, $request);
+
+        $reservations = $query->latest('check_in')->paginate(15);
+
+        return view('receptionist.bookings.index', compact('reservations'));
+    }
+
+    /**
+     * Shared status/search filters for reservationsIndex/bookingsIndex.
+     */
+    private function applyReservationFilters($query, Request $request): void
+    {
         if ($request->filled('status')) {
             $query->where('status', $request->status);
         }
@@ -79,16 +113,13 @@ class ReceptionistController extends Controller
         if ($request->filled('search')) {
             $search = $request->search;
             $query->whereHas('guest.user', function ($q) use ($search) {
-                $q->where('name', 'like', "%{$search}%")
+                $q->where('first_name', 'like', "%{$search}%")
+                  ->orWhere('last_name', 'like', "%{$search}%")
                   ->orWhere('email', 'like', "%{$search}%");
             })->orWhereHas('room', function ($q) use ($search) {
                 $q->where('room_number', 'like', "%{$search}%");
             });
         }
-
-        $reservations = $query->latest('check_in')->paginate(15);
-
-        return view('receptionist.reservations.index', compact('reservations'));
     }
 
     /**
@@ -99,6 +130,91 @@ class ReceptionistController extends Controller
         $reservation->load(['guest.user', 'room', 'booking.billing.payments', 'amenityRequests.amenity']);
 
         return view('receptionist.reservations.show', compact('reservation'));
+    }
+
+    /**
+     * Show the payment-collection form to convert a plain Reservation
+     * into a Booking (guest decided to pay - in person, over the phone,
+     * etc.). Only makes sense for a Reservation that isn't already one.
+     */
+    public function convertToBookingForm(Reservation $reservation): View
+    {
+        if ($reservation->booking) {
+            abort(422, 'This reservation is already a booking.');
+        }
+
+        $reservation->load(['guest.user', 'roomType']);
+        $quote = $this->bookingService->quoteRoomCharge($reservation);
+
+        return view('receptionist.reservations.convert', compact('reservation', 'quote'));
+    }
+
+    /**
+     * Record the payment and create the Booking. Staff directly
+     * collected this payment, so it's trusted immediately (unlike a
+     * guest's own self-service submission) - see BookingService.
+     */
+    public function convertToBooking(Request $request, Reservation $reservation): RedirectResponse
+    {
+        if ($reservation->booking) {
+            return back()->with('error', 'This reservation is already a booking.');
+        }
+
+        $validated = $request->validate([
+            'payment_method' => 'required|in:cash,gcash',
+            'reference_number' => 'required_if:payment_method,gcash|nullable|string|max:255',
+            'amount_paid' => 'required|numeric|min:0.01',
+        ]);
+
+        $this->bookingService->recordPayment($reservation, $validated, staffRecorded: true);
+
+        $this->notificationService->notifyPaymentReceived(
+            $reservation->guest->user,
+            (float) $validated['amount_paid'],
+            $reservation->roomType->name
+        );
+
+        return redirect()->route('receptionist.reservations.show', $reservation)
+            ->with('success', 'Payment recorded - reservation converted to a booking.');
+    }
+
+    /**
+     * Queue of guest-submitted payments awaiting staff verification (the
+     * self-service counterpart to confirmReservationsIndex's room-
+     * assignment queue - see BookingService::recordPayment).
+     */
+    public function pendingPaymentsIndex(): View
+    {
+        $payments = Payment::with(['billing.booking.reservation.guest.user', 'billing.booking.reservation.roomType'])
+            ->where('payment_status', 'pending')
+            ->orderBy('created_at')
+            ->paginate(15);
+
+        return view('receptionist.payments.pending', compact('payments'));
+    }
+
+    /**
+     * Approve a guest-submitted payment: flips it to completed and
+     * confirms the booking.
+     */
+    public function verifyPayment(Payment $payment): RedirectResponse
+    {
+        if ($payment->payment_status !== 'pending') {
+            return back()->with('error', 'This payment has already been processed.');
+        }
+
+        $this->bookingService->verifyPayment($payment);
+
+        $reservation = $payment->billing->booking?->reservation;
+        if ($reservation) {
+            $this->notificationService->notifyPaymentReceived(
+                $reservation->guest->user,
+                (float) $payment->amount_paid,
+                $reservation->roomType->name ?? 'your room'
+            );
+        }
+
+        return back()->with('success', 'Payment verified and booking confirmed.');
     }
 
     /**
@@ -358,11 +474,12 @@ class ReceptionistController extends Controller
             return response()->json(['message' => 'Only checked-in reservations can be billed.'], 422);
         }
 
-        if (!$reservation->booking) {
-            return response()->json(['message' => 'This reservation has no booking record.'], 422);
-        }
-
-        $billing = $reservation->booking->billing ?? $this->generateBilling($reservation);
+        // A guest who never pre-paid via "Book & Pay" has no Booking/
+        // Billing yet at this point - generateBilling() now creates
+        // them lazily (an implicit Reservation -> Booking conversion
+        // happening right here at checkout) rather than requiring one
+        // to already exist.
+        $billing = $this->generateBilling($reservation);
 
         $reservation->load(['guest.user', 'room']);
         $billing->load('additionalCharges');
@@ -503,22 +620,6 @@ class ReceptionistController extends Controller
     }
 
     /**
-     * Show a read-only receipt for a bill (reachable from the reservation page,
-     * not from a standalone Billing list).
-     */
-    public function receiptShow(Billing $billing): View
-    {
-        $billing->load(['booking.reservation.guest.user', 'booking.reservation.room', 'payments', 'additionalCharges']);
-
-        $amountPaid = (float) $billing->payments()
-            ->where('payment_status', 'completed')
-            ->sum('amount_paid');
-        $balance = $billing->balance;
-
-        return view('receptionist.billing.receipt', compact('billing', 'amountPaid', 'balance'));
-    }
-
-    /**
      * Record a payment against a billing from the Payment Panel. Completes the
      * check-out (reservation + room status, notifications) only once the
      * balance reaches zero; a partial payment leaves the guest checked in.
@@ -554,12 +655,8 @@ class ReceptionistController extends Controller
                 'payment_date' => now(),
             ]);
 
-            $paid = (float) $billing->payments()
-                ->where('payment_status', 'completed')
-                ->sum('amount_paid');
-
-            $completed = $paid >= (float) $billing->total_amount;
-            $billing->update(['billing_status' => $completed ? 'paid' : 'partial']);
+            $this->bookingService->recalculateBillingStatus($billing);
+            $completed = $billing->fresh()->billing_status === 'paid';
 
             $guest = $reservation->guest->user;
             $roomName = $reservation->room->room_name;
@@ -597,58 +694,22 @@ class ReceptionistController extends Controller
     }
 
     /**
-     * Generate a billing record for a reservation using the rule from the plan.
+     * Get (or lazily create) the billing record for a reservation. Idempotent:
+     * a guest who pre-paid via "Book & Pay" already has a Booking/Billing
+     * with room_charge/discount locked in from BookingService::quoteRoomCharge
+     * at that time (preserved here, not recomputed - a promo expiring
+     * between booking and checkout shouldn't retroactively change what they
+     * were quoted); a guest who never pre-paid gets both created fresh here.
+     * Either way, extra-guest-fee and amenity charges (only knowable once
+     * the stay is underway) are (re-)applied on top every time this runs.
      */
     private function generateBilling(Reservation $reservation): Billing
     {
-        $nights = max(1, abs($reservation->check_out->diffInDays($reservation->check_in)));
+        $booking = $this->bookingService->ensureBooking($reservation);
+        $billing = $this->bookingService->ensureBilling($booking, $reservation);
+        $this->bookingService->applyStayCharges($billing, $reservation);
 
-        $roomCharge = (float) $reservation->room->room_rate * $nights;
-
-        // Children under 12 stay free - only adults count toward the
-        // extra-guest fee, even though both occupy the room's capacity.
-        $adults = $reservation->adults ?? $reservation->number_of_guests;
-        $extraGuests = max(0, $adults - $reservation->room->room_capacity);
-        $extraGuestFee = $extraGuests * (float) config('hotel.extra_guest_fee_rate', 0);
-
-        $amenityCharge = (float) AmenityRequest::where('reservation_id', $reservation->id)
-            ->where('status', 'approved')
-            ->sum(DB::raw('charge * quantity'));
-
-        // Find best applicable active DISCOUNT promotion (amenity promos
-        // don't reduce the rate - their inclusions are zero-charge
-        // amenity requests granted at confirmation time).
-        $promo = Promotion::where('status', 'active')
-            ->where('promo_type', 'discount')
-            ->whereDate('start_date', '<=', today())
-            ->whereDate('end_date', '>=', today())
-            ->where(function ($q) use ($reservation) {
-                $q->whereNull('room_type_id')
-                  ->orWhere('room_type_id', $reservation->room_type_id);
-            })
-            ->orderByDesc('discount_value')
-            ->first();
-
-        $discount = 0;
-        if ($promo) {
-            $discount = $promo->discount_type === 'percentage'
-                ? round(($roomCharge * (float) $promo->discount_value) / 100, 2)
-                : (float) $promo->discount_value;
-        }
-        // Never discount more than the room charge
-        $discount = min($discount, $roomCharge);
-
-        $total = max(0, $roomCharge + $extraGuestFee + $amenityCharge - $discount);
-
-        return Billing::create([
-            'booking_id' => $reservation->booking->id,
-            'room_charge' => round($roomCharge, 2),
-            'additional_guest_fee' => round($extraGuestFee, 2),
-            'amenity_charge' => round($amenityCharge, 2),
-            'discount' => round($discount, 2),
-            'total_amount' => round($total, 2),
-            'billing_status' => 'pending',
-        ]);
+        return $billing->fresh();
     }
 
     /**

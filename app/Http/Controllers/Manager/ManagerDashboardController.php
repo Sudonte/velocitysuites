@@ -33,6 +33,10 @@ class ManagerDashboardController extends Controller
 
         $inHouseGuests = Reservation::where('status', 'checked_in')->count();
 
+        $totalReservations = Reservation::count();
+        $totalBookings = Reservation::whereHas('booking')->count();
+        $pendingPaymentVerifications = Payment::where('payment_status', 'pending')->count();
+
         $monthlyRevenue = (float) Payment::where('payment_status', 'completed')
             ->whereMonth('payment_date', now()->month)
             ->whereYear('payment_date', now()->year)
@@ -57,6 +61,9 @@ class ManagerDashboardController extends Controller
             'todayCheckIns',
             'todayCheckOuts',
             'inHouseGuests',
+            'totalReservations',
+            'totalBookings',
+            'pendingPaymentVerifications',
             'monthlyRevenue',
             'recentReservations',
             'topRoomTypes'

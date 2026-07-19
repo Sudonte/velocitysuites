@@ -28,6 +28,7 @@ class User extends Authenticatable
         'status',
         'failed_login_attempts',
         'last_login_at',
+        'email_verified_at',
     ];
 
     /**

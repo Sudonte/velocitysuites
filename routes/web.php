@@ -130,7 +130,7 @@ Route::middleware(['auth', 'account.status', 'log.activity'])->group(function ()
     Route::middleware('role:receptionist')->prefix('receptionist')->name('receptionist.')->group(function () {
         Route::get('/dashboard', [ReceptionistController::class, 'dashboard'])->name('dashboard');
 
-        // Reservations (read-only browse)
+        // Reservations (read-only browse) - "Reservations" = no Booking yet.
         // NOTE: /reservations/pending must be registered BEFORE the
         // /reservations/{reservation} wildcard or "pending" gets treated
         // as a reservation ID and 404s.
@@ -141,6 +141,21 @@ Route::middleware(['auth', 'account.status', 'log.activity'])->group(function ()
         // Room assignment + confirmation of pending booking requests
         Route::post('/reservations/{reservation}/confirm', [ReceptionistController::class, 'confirmReservation'])->name('reservations.confirm');
         Route::post('/reservations/{reservation}/reject', [ReceptionistController::class, 'rejectReservation'])->name('reservations.reject');
+
+        // Convert a plain Reservation into a Booking by collecting payment
+        Route::get('/reservations/{reservation}/convert', [ReceptionistController::class, 'convertToBookingForm'])->name('reservations.convert');
+        Route::post('/reservations/{reservation}/convert', [ReceptionistController::class, 'convertToBooking'])->name('reservations.convert.store');
+
+        // Bookings (read-only browse) - "Bookings" = has a Booking (paid)
+        Route::get('/bookings', [ReceptionistController::class, 'bookingsIndex'])->name('bookings.index');
+
+        // Guest-submitted payments awaiting verification
+        Route::get('/payments/pending', [ReceptionistController::class, 'pendingPaymentsIndex'])->name('payments.pending');
+        Route::post('/payments/{payment}/verify', [ReceptionistController::class, 'verifyPayment'])->name('payments.verify');
+
+        // Create a Reservation/Booking on behalf of a walk-in or assisted guest
+        Route::get('/walk-in', [\App\Http\Controllers\Receptionist\WalkInController::class, 'create'])->name('walk-in.create');
+        Route::post('/walk-in', [\App\Http\Controllers\Receptionist\WalkInController::class, 'store'])->name('walk-in.store');
 
         // Check-in
         Route::get('/check-in', [ReceptionistController::class, 'checkInIndex'])->name('check-in.index');
@@ -163,7 +178,7 @@ Route::middleware(['auth', 'account.status', 'log.activity'])->group(function ()
         Route::put('/amenities/{amenityRequest}', [ReceptionistController::class, 'amenitiesUpdate'])->name('amenities.update');
 
         // Billing (used from the Check-Out workflow's Billing Panel, plus a read-only receipt)
-        Route::get('/billing/{billing}/receipt', [ReceptionistController::class, 'receiptShow'])->name('billing.receipt');
+        Route::get('/billing/{billing}/receipt', [\App\Http\Controllers\BillingController::class, 'receipt'])->name('billing.receipt');
         Route::post('/billing/{billing}/payment', [ReceptionistController::class, 'recordPayment'])->name('billing.payment.store');
         Route::post('/billing/{billing}/additional-charge', [ReceptionistController::class, 'storeAdditionalCharge'])->name('billing.additional-charge.store');
         Route::put('/billing/additional-charge/{additionalCharge}', [ReceptionistController::class, 'updateAdditionalCharge'])->name('billing.additional-charge.update');
@@ -185,6 +200,21 @@ Route::middleware(['auth', 'account.status', 'log.activity'])->group(function ()
         Route::get('/reservations/{reservation}', [\App\Http\Controllers\Guest\ReservationController::class, 'show'])->name('reservations.show');
         Route::put('/reservations/{reservation}', [\App\Http\Controllers\Guest\ReservationController::class, 'update'])->name('reservations.update');
         Route::put('/reservations/{reservation}/cancel', [\App\Http\Controllers\Guest\ReservationController::class, 'cancel'])->name('reservations.cancel');
+
+        // Bookings - the "Book & Pay" path (Reservation + payment together,
+        // pending staff verification). Distinct from Reservations above
+        // (Reserve, no payment) - see App\Services\BookingService.
+        Route::get('/bookings', [GuestController::class, 'myBookings'])->name('bookings.index');
+        Route::get('/bookings/create', [\App\Http\Controllers\Guest\BookingController::class, 'create'])->name('bookings.create');
+        Route::post('/bookings', [\App\Http\Controllers\Guest\BookingController::class, 'store'])->name('bookings.store');
+
+        // Pay for an existing Reservation (converts it into a Booking) -
+        // website equivalent of the mobile Api\PaymentController flow.
+        Route::get('/reservations/{reservation}/pay', [\App\Http\Controllers\Guest\BookingController::class, 'payForm'])->name('reservations.pay');
+        Route::post('/reservations/{reservation}/pay', [\App\Http\Controllers\Guest\BookingController::class, 'pay'])->name('reservations.pay.store');
+
+        // Billing - guest's own receipt (ownership-checked in BillingController)
+        Route::get('/billing/{billing}/receipt', [\App\Http\Controllers\BillingController::class, 'receipt'])->name('billing.receipt');
 
         // Payments - view payment history and pending bills
         Route::get('/payments', [GuestController::class, 'payments'])->name('payments.index');

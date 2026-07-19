@@ -126,18 +126,31 @@
                     <span>Subtotal:</span>
                     <strong>₱{{ number_format($baseAmount, 2) }}</strong>
                 </div>
-                <hr>
-                <div class="d-flex justify-content-between">
-                    <strong>Total Amount Due:</strong>
-                    <strong class="text-brand" style="font-size: 1.25rem;">₱{{ number_format($baseAmount, 2) }}</strong>
-                </div>
 
                 @if($reservation->booking && $reservation->booking->billing)
+                    @php $billing = $reservation->booking->billing; @endphp
+                    <hr>
+                    <div class="d-flex justify-content-between">
+                        <strong>Total Amount:</strong>
+                        <strong class="text-brand" style="font-size: 1.25rem;">₱{{ number_format($billing->total_amount, 2) }}</strong>
+                    </div>
                     <hr>
                     <p class="mb-2">
                         <strong>Payment Status:</strong>
-                        <x-status-badge :status="$reservation->booking->billing->billing_status" domain="billing" />
+                        <x-status-badge :status="$billing->billing_status" domain="billing" />
+                        @if($billing->payments->where('payment_status', 'pending')->isNotEmpty())
+                            <span class="badge bg-warning text-dark">Awaiting Verification</span>
+                        @endif
                     </p>
+                    <a href="{{ route('guest.billing.receipt', $billing) }}" class="btn btn-outline-secondary w-100">
+                        <i class="fas fa-receipt"></i> View Receipt
+                    </a>
+                @else
+                    <hr>
+                    <p class="text-muted mb-3">This is a reservation only - no payment has been made yet.</p>
+                    <a href="{{ route('guest.reservations.pay', $reservation) }}" class="btn btn-velocity w-100">
+                        <i class="fas fa-credit-card"></i> Book &amp; Pay Now
+                    </a>
                 @endif
             </x-card>
 

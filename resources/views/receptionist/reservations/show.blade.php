@@ -90,8 +90,21 @@
                             <td class="text-end"><x-status-badge :status="$billing->billing_status" domain="billing" /></td>
                         </tr>
                     </table>
+                    @if($billing->payments->where('payment_status', 'pending')->isNotEmpty())
+                        <div class="alert alert-warning py-2 mb-3">
+                            <i class="fas fa-clock"></i> Has a payment awaiting verification -
+                            <a href="{{ route('receptionist.payments.pending') }}">go to the verification queue</a>.
+                        </div>
+                    @endif
                     <a href="{{ route('receptionist.billing.receipt', $billing) }}" class="btn btn-sm btn-primary">
                         <i class="fas fa-external-link-alt"></i> View Receipt
+                    </a>
+                </x-card>
+            @elseif(in_array($reservation->status, ['pending', 'confirmed']))
+                <x-card title="Booking" icon="fas fa-credit-card" bodyClass="card-body" class="mb-4">
+                    <p class="text-muted">This is a Reservation only - no payment has been made yet.</p>
+                    <a href="{{ route('receptionist.reservations.convert', $reservation) }}" class="btn btn-sm btn-success">
+                        <i class="fas fa-money-bill-wave"></i> Convert to Booking (Collect Payment)
                     </a>
                 </x-card>
             @endif

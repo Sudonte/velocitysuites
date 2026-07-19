@@ -107,11 +107,20 @@
                 <li><a href="/receptionist/dashboard" class="nav-link {{ request()->is('receptionist/dashboard') ? 'active' : '' }}">
                     <i class="fas fa-home"></i> Dashboard
                 </a></li>
+                <li><a href="{{ route('receptionist.walk-in.create') }}" class="nav-link {{ request()->routeIs('receptionist.walk-in.*') ? 'active' : '' }}">
+                    <i class="fas fa-user-plus"></i> New Reservation/Booking
+                </a></li>
                 <li><a href="{{ route('receptionist.reservations.confirm-index') }}" class="nav-link {{ request()->routeIs('receptionist.reservations.confirm-index') ? 'active' : '' }}">
                     <i class="fas fa-inbox"></i> Booking Requests
                 </a></li>
-                <li><a href="/receptionist/reservations" class="nav-link {{ request()->is('receptionist/reservations*') && !request()->routeIs('receptionist.reservations.confirm-index') ? 'active' : '' }}">
+                <li><a href="/receptionist/reservations" class="nav-link {{ request()->routeIs('receptionist.reservations.index') ? 'active' : '' }}">
                     <i class="fas fa-calendar-alt"></i> Reservations
+                </a></li>
+                <li><a href="{{ route('receptionist.bookings.index') }}" class="nav-link {{ request()->routeIs('receptionist.bookings.*') ? 'active' : '' }}">
+                    <i class="fas fa-credit-card"></i> Bookings
+                </a></li>
+                <li><a href="{{ route('receptionist.payments.pending') }}" class="nav-link {{ request()->routeIs('receptionist.payments.*') ? 'active' : '' }}">
+                    <i class="fas fa-hourglass-half"></i> Pending Payments
                 </a></li>
                 <li><a href="/receptionist/check-in" class="nav-link {{ request()->is('receptionist/check-in*') ? 'active' : '' }}">
                     <i class="fas fa-sign-in-alt"></i> Check-In
@@ -132,7 +141,10 @@
                     <i class="fas fa-home"></i> Dashboard
                 </a></li>
                 <li><a href="{{ route('guest.reservations.index') }}" class="nav-link {{ request()->routeIs('guest.reservations.*') ? 'active' : '' }}">
-                    <i class="fas fa-calendar-check"></i> My Bookings
+                    <i class="fas fa-calendar-alt"></i> My Reservations
+                </a></li>
+                <li><a href="{{ route('guest.bookings.index') }}" class="nav-link {{ request()->routeIs('guest.bookings.*') ? 'active' : '' }}">
+                    <i class="fas fa-credit-card"></i> My Bookings
                 </a></li>
                 <li><a href="{{ route('public.rooms.index') }}" class="nav-link {{ request()->routeIs('public.rooms.*') ? 'active' : '' }}">
                     <i class="fas fa-door-open"></i> Book Room

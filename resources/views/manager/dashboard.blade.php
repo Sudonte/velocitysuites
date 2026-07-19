@@ -37,6 +37,19 @@
         </div>
     </div>
 
+    <!-- Reservation / Booking KPIs -->
+    <div class="row mb-4">
+        <div class="col-md-4 mb-3">
+            <x-stat-card icon="fas fa-calendar-alt" label="Total Reservations" :value="$totalReservations" color="secondary" />
+        </div>
+        <div class="col-md-4 mb-3">
+            <x-stat-card icon="fas fa-credit-card" label="Total Bookings" :value="$totalBookings" color="primary" />
+        </div>
+        <div class="col-md-4 mb-3">
+            <x-stat-card icon="fas fa-hourglass-half" label="Pending Payment Verifications" :value="$pendingPaymentVerifications" color="warning" />
+        </div>
+    </div>
+
     <!-- Recent Reservations -->
     <div class="row">
         <div class="col-lg-8">

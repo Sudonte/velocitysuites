@@ -38,6 +38,35 @@
         </div>
     </div>
 
+    <!-- Revenue -->
+    <div class="row mb-4">
+        <div class="col-md-4 mb-3">
+            <x-stat-card icon="fas fa-peso-sign" label="Today's Revenue" value="₱{{ number_format($todayRevenue, 2) }}" color="success" />
+        </div>
+        <div class="col-md-4 mb-3">
+            <x-stat-card icon="fas fa-money-bill-wave" label="Monthly Revenue" value="₱{{ number_format($monthlyRevenue, 2) }}" color="success" />
+        </div>
+        <div class="col-md-4 mb-3">
+            <x-stat-card icon="fas fa-sack-dollar" label="Yearly Revenue" value="₱{{ number_format($yearlyRevenue, 2) }}" color="success" />
+        </div>
+    </div>
+
+    <!-- Reservation / Booking Status -->
+    <div class="row mb-4">
+        <div class="col-md-3 mb-3">
+            <x-stat-card icon="fas fa-hourglass-half" label="Pending Reservations" :value="$pendingReservations" color="warning" />
+        </div>
+        <div class="col-md-3 mb-3">
+            <x-stat-card icon="fas fa-calendar-check" label="Active Reservations" :value="$activeReservations" color="primary" />
+        </div>
+        <div class="col-md-3 mb-3">
+            <x-stat-card icon="fas fa-credit-card" label="Total Bookings" :value="$totalBookings" color="info" />
+        </div>
+        <div class="col-md-3 mb-3">
+            <x-stat-card icon="fas fa-clock" label="Pending Payment Verifications" :value="$pendingPaymentVerifications" color="danger" />
+        </div>
+    </div>
+
     <!-- Content Row -->
     <div class="row">
         <!-- Recent Reservations -->

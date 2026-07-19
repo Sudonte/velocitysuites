@@ -45,6 +45,14 @@
         </div>
     </div>
     <div class="row mb-4">
+        <div class="col-md-4 mb-3">
+            <x-stat-card icon="fas fa-credit-card" label="Total Bookings" :value="$bookingsCount" color="info" />
+        </div>
+        <div class="col-md-4 mb-3">
+            <x-stat-card icon="fas fa-hourglass-half" label="Pending Payment Verifications" :value="$pendingPaymentVerifications" color="warning" />
+        </div>
+    </div>
+    <div class="row mb-4">
         <div class="col-md-6">
             <small class="text-muted">Users — Active: {{ $userReports['active'] }} · Suspended: {{ $userReports['suspended'] }}</small>
         </div>
