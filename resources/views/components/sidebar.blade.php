@@ -110,10 +110,7 @@
                 <li><a href="{{ route('receptionist.walk-in.create') }}" class="nav-link {{ request()->routeIs('receptionist.walk-in.*') ? 'active' : '' }}">
                     <i class="fas fa-user-plus"></i> New Reservation/Booking
                 </a></li>
-                <li><a href="{{ route('receptionist.reservations.confirm-index') }}" class="nav-link {{ request()->routeIs('receptionist.reservations.confirm-index') ? 'active' : '' }}">
-                    <i class="fas fa-inbox"></i> Booking Requests
-                </a></li>
-                <li><a href="/receptionist/reservations" class="nav-link {{ request()->routeIs('receptionist.reservations.index') ? 'active' : '' }}">
+                <li><a href="/receptionist/reservations" class="nav-link {{ request()->routeIs('receptionist.reservations.index') || request()->routeIs('receptionist.reservations.show') ? 'active' : '' }}">
                     <i class="fas fa-calendar-alt"></i> Reservations
                 </a></li>
                 <li><a href="{{ route('receptionist.bookings.index') }}" class="nav-link {{ request()->routeIs('receptionist.bookings.*') ? 'active' : '' }}">

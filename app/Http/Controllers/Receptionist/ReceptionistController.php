@@ -69,14 +69,15 @@ class ReceptionistController extends Controller
     }
 
     /**
-     * List reservations that have NOT been paid/booked yet (read-only) -
-     * the "Reservations" side of the Reservation/Booking split. See
-     * bookingsIndex() for the paid counterpart.
+     * The central Reservations list: every reservation request regardless
+     * of payment state, filterable by status (including the derived
+     * "awaiting payment"). Processing (room assignment, confirm, reject)
+     * happens on the show page. bookingsIndex() remains the paid subset
+     * for stay/payment management - the Booking module proper.
      */
     public function reservationsIndex(Request $request): View
     {
-        $query = Reservation::with(['guest.user', 'room', 'booking'])
-            ->whereDoesntHave('booking');
+        $query = Reservation::with(['guest.user', 'room', 'roomType', 'booking.billing.payments']);
 
         $this->applyReservationFilters($query, $request);
 
@@ -103,11 +104,18 @@ class ReceptionistController extends Controller
 
     /**
      * Shared status/search filters for reservationsIndex/bookingsIndex.
+     * "awaiting_payment" is a derived filter (not a real status column) -
+     * still-open reservations (pending/confirmed) that haven't become a
+     * Booking yet, i.e. still need a payment or a staff-side conversion.
      */
     private function applyReservationFilters($query, Request $request): void
     {
         if ($request->filled('status')) {
-            $query->where('status', $request->status);
+            if ($request->status === 'awaiting_payment') {
+                $query->whereIn('status', ['pending', 'confirmed'])->whereDoesntHave('booking');
+            } else {
+                $query->where('status', $request->status);
+            }
         }
 
         if ($request->filled('search')) {
@@ -123,13 +131,20 @@ class ReceptionistController extends Controller
     }
 
     /**
-     * Show a reservation (read-only).
+     * Show a reservation. Pending reservations get their assignable-rooms
+     * list loaded too, since the show page is now also where the
+     * receptionist assigns a room, confirms, or rejects a request
+     * (the standalone "Booking Requests" queue was merged in here).
      */
     public function reservationShow(Reservation $reservation): View
     {
-        $reservation->load(['guest.user', 'room', 'booking.billing.payments', 'amenityRequests.amenity']);
+        $reservation->load(['guest.user', 'room', 'roomType', 'booking.billing.payments', 'amenityRequests.amenity']);
 
-        return view('receptionist.reservations.show', compact('reservation'));
+        $assignableRooms = $reservation->status === 'pending'
+            ? $this->assignableRoomsFor($reservation)
+            : collect();
+
+        return view('receptionist.reservations.show', compact('reservation', 'assignableRooms'));
     }
 
     /**
@@ -180,8 +195,8 @@ class ReceptionistController extends Controller
 
     /**
      * Queue of guest-submitted payments awaiting staff verification (the
-     * self-service counterpart to confirmReservationsIndex's room-
-     * assignment queue - see BookingService::recordPayment).
+     * self-service counterpart to the pending-reservation room-assignment
+     * step on reservationShow - see BookingService::recordPayment).
      */
     public function pendingPaymentsIndex(): View
     {
@@ -215,25 +230,6 @@ class ReceptionistController extends Controller
         }
 
         return back()->with('success', 'Payment verified and booking confirmed.');
-    }
-
-    /**
-     * List booking requests awaiting room assignment and confirmation.
-     * Each pending reservation gets a dropdown of rooms of the requested
-     * type that are actually free for the requested dates.
-     */
-    public function confirmReservationsIndex(): View
-    {
-        $reservations = Reservation::with(['guest.user', 'roomType'])
-            ->where('status', 'pending')
-            ->orderBy('created_at')
-            ->paginate(15);
-
-        $assignableRooms = $reservations->getCollection()->mapWithKeys(function ($reservation) {
-            return [$reservation->id => $this->assignableRoomsFor($reservation)];
-        });
-
-        return view('receptionist.reservations.confirm-index', compact('reservations', 'assignableRooms'));
     }
 
     /**
@@ -352,7 +348,7 @@ class ReceptionistController extends Controller
             );
         });
 
-        return redirect()->route('receptionist.reservations.confirm-index')
+        return redirect()->route('receptionist.reservations.index', ['status' => 'pending'])
             ->with('success', 'Room ' . $room->room_number . ' assigned and reservation confirmed!');
     }
 
@@ -392,7 +388,7 @@ class ReceptionistController extends Controller
             ]);
         });
 
-        return redirect()->route('receptionist.reservations.confirm-index')->with('success', 'Reservation rejected.');
+        return redirect()->route('receptionist.reservations.index', ['status' => 'pending'])->with('success', 'Reservation rejected.');
     }
 
     /**

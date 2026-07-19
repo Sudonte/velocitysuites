@@ -43,8 +43,12 @@
                     <div class="col-md-8">{{ $reservation->guest->mobile_number ?? 'N/A' }}</div>
                 </div>
                 <div class="row mb-2">
-                    <div class="col-md-4"><strong>Room:</strong></div>
-                    <div class="col-md-8">{{ $reservation->room ? $reservation->room->room_number . ' - ' . $reservation->room->room_name : 'Unassigned (' . $reservation->roomType->name . ' requested)' }}</div>
+                    <div class="col-md-4"><strong>Requested Room Type:</strong></div>
+                    <div class="col-md-8">{{ $reservation->roomType->name ?? 'N/A' }}</div>
+                </div>
+                <div class="row mb-2">
+                    <div class="col-md-4"><strong>Assigned Room:</strong></div>
+                    <div class="col-md-8">{{ $reservation->room ? $reservation->room->room_number . ' - ' . $reservation->room->room_name : 'Not yet assigned' }}</div>
                 </div>
                 <div class="row mb-2">
                     <div class="col-md-4"><strong>Check-In:</strong></div>
@@ -56,9 +60,55 @@
                 </div>
                 <div class="row mb-2">
                     <div class="col-md-4"><strong>Number of Guests:</strong></div>
-                    <div class="col-md-8">{{ $reservation->number_of_guests }}</div>
+                    <div class="col-md-8">
+                        {{ $reservation->number_of_guests }}
+                        @if($reservation->adults || $reservation->children)
+                            <small class="text-muted">({{ $reservation->adults }} adult{{ $reservation->adults == 1 ? '' : 's' }}@if($reservation->children), {{ $reservation->children }} child{{ $reservation->children == 1 ? '' : 'ren' }}@endif)</small>
+                        @endif
+                    </div>
                 </div>
+                @if(!empty($reservation->additional_guest_details))
+                    <div class="row mb-2">
+                        <div class="col-md-4"><strong>Additional Guests:</strong></div>
+                        <div class="col-md-8">
+                            @foreach($reservation->additional_guest_details as $g)
+                                {{ $g['name'] ?? 'N/A' }} ({{ $g['age'] ?? '?' }}@if(!empty($g['relationship'])), {{ $g['relationship'] }}@endif)<br>
+                            @endforeach
+                        </div>
+                    </div>
+                @endif
             </x-card>
+
+            @if($reservation->status === 'pending')
+                <!-- Process Reservation: room assignment, confirm, reject -->
+                <x-card title="Process Reservation" icon="fas fa-tasks" bodyClass="card-body" class="mb-4">
+                    @if($assignableRooms->isEmpty())
+                        <div class="alert alert-danger mb-3">
+                            <i class="fas fa-exclamation-triangle"></i> No {{ $reservation->roomType->name ?? '' }} room is currently free for these dates. Assign an alternative room type manually via Rooms, or reject this request.
+                        </div>
+                    @else
+                        <form id="confirm-form" action="{{ route('receptionist.reservations.confirm', $reservation) }}" method="POST" class="mb-3">
+                            @csrf
+                            <label class="form-label"><strong>Assign Room *</strong></label>
+                            <select name="room_id" class="form-select mb-2" required>
+                                <option value="">-- Select room --</option>
+                                @foreach($assignableRooms as $room)
+                                    <option value="{{ $room->id }}">
+                                        Room {{ $room->room_number }} — {{ $room->room_name }} ({{ $room->room_capacity }} guests, ₱{{ number_format($room->room_rate, 2) }}{{ $room->has_rate_override ? ' *' : '' }})
+                                    </option>
+                                @endforeach
+                            </select>
+                            <button type="submit" class="btn btn-success"
+                                    onclick="return confirm('Assign the selected room and confirm this reservation?')">
+                                <i class="fas fa-check"></i> Assign Room &amp; Confirm
+                            </button>
+                        </form>
+                    @endif
+                    <button type="button" class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#rejectModal">
+                        <i class="fas fa-times"></i> Reject Reservation
+                    </button>
+                </x-card>
+            @endif
 
             <!-- Billing summary -->
             @if($reservation->booking && $reservation->booking->billing)
@@ -142,4 +192,37 @@
         </div>
     </div>
 </div>
+
+@if($reservation->status === 'pending')
+    <!-- Reject Modal -->
+    <div class="modal fade" id="rejectModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header modal-header-brand">
+                    <h5 class="modal-title"><i class="fas fa-times-circle"></i> Reject Reservation</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <form action="{{ route('receptionist.reservations.reject', $reservation) }}" method="POST">
+                    @csrf
+                    <div class="modal-body">
+                        <p class="mb-2">
+                            Rejecting <strong>{{ $reservation->guest->user->full_name ?? 'N/A' }}</strong>'s request for a
+                            <strong>{{ $reservation->roomType->name ?? 'N/A' }}</strong> room
+                            ({{ $reservation->check_in->format('M d') }} &ndash; {{ $reservation->check_out->format('M d, Y') }}).
+                        </p>
+                        <div class="mb-2">
+                            <label class="form-label">Reason <span class="text-danger">*</span></label>
+                            <textarea name="reason" class="form-control" rows="3" maxlength="500" required
+                                      placeholder="This will be sent to the guest."></textarea>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-danger">Reject Request</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+@endif
 @endsection

@@ -9,7 +9,7 @@
     <!-- KPI Cards: live work-queue counts (click through to each module) -->
     <div class="row mb-4">
         <div class="col-md-3 mb-3">
-            <x-stat-card icon="fas fa-inbox" label="Booking Requests" :value="$bookingRequests" color="warning" :href="route('receptionist.reservations.confirm-index')" />
+            <x-stat-card icon="fas fa-inbox" label="Booking Requests" :value="$bookingRequests" color="warning" :href="route('receptionist.reservations.index', ['status' => 'pending'])" />
         </div>
 
         <div class="col-md-3 mb-3">

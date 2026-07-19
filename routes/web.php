@@ -130,15 +130,14 @@ Route::middleware(['auth', 'account.status', 'log.activity'])->group(function ()
     Route::middleware('role:receptionist')->prefix('receptionist')->name('receptionist.')->group(function () {
         Route::get('/dashboard', [ReceptionistController::class, 'dashboard'])->name('dashboard');
 
-        // Reservations (read-only browse) - "Reservations" = no Booking yet.
-        // NOTE: /reservations/pending must be registered BEFORE the
-        // /reservations/{reservation} wildcard or "pending" gets treated
-        // as a reservation ID and 404s.
+        // Reservations - the single, central list of every reservation
+        // request (filterable by status, including pending "booking
+        // requests" needing room assignment). Room assignment/confirm/
+        // reject now live on the show page instead of a separate queue.
         Route::get('/reservations', [ReceptionistController::class, 'reservationsIndex'])->name('reservations.index');
-        Route::get('/reservations/pending', [ReceptionistController::class, 'confirmReservationsIndex'])->name('reservations.confirm-index');
         Route::get('/reservations/{reservation}', [ReceptionistController::class, 'reservationShow'])->name('reservations.show');
 
-        // Room assignment + confirmation of pending booking requests
+        // Room assignment + confirmation of a pending reservation
         Route::post('/reservations/{reservation}/confirm', [ReceptionistController::class, 'confirmReservation'])->name('reservations.confirm');
         Route::post('/reservations/{reservation}/reject', [ReceptionistController::class, 'rejectReservation'])->name('reservations.reject');
 
