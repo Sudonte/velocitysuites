@@ -1,19 +1,25 @@
 @extends('layouts.app')
 
-@section('title', 'Reservation Details - Receptionist')
+@section('title', 'Reservation #' . $reservation->id . ' - Receptionist')
 
 @section('content')
 <div class="container-fluid py-4">
-    <div class="row mb-4">
-        <div class="col-12">
-            <a href="{{ route('receptionist.reservations.index') }}" class="btn btn-sm btn-secondary mb-2">
-                <i class="fas fa-arrow-left"></i> Back
-            </a>
-            <h1 class="mb-0">
-                <i class="fas fa-calendar-alt"></i> Reservation #{{ $reservation->id }}
-            </h1>
-        </div>
-    </div>
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{{ route('receptionist.reservations.index') }}">Reservations</a></li>
+            <li class="breadcrumb-item active" aria-current="page">Reservation #{{ $reservation->id }}</li>
+        </ol>
+    </nav>
+
+    <x-page-header icon="fas fa-calendar-alt" title="Reservation #{{ $reservation->id }}"
+        subtitle="{{ $reservation->guest->user->full_name ?? 'N/A' }} — {{ $reservation->roomType->name ?? 'N/A' }}, {{ $reservation->check_in->format('M d') }} – {{ $reservation->check_out->format('M d, Y') }}">
+        <x-slot:actions>
+            <x-status-badge :status="$reservation->status" domain="reservation" />
+            @if($reservation->booking)
+                <span class="badge bg-success"><i class="fas fa-link"></i> Converted to Booking</span>
+            @endif
+        </x-slot:actions>
+    </x-page-header>
 
     @if (session('success'))
         <div class="alert alert-success alert-dismissible fade show" role="alert">
@@ -82,6 +88,7 @@
             @if($reservation->status === 'pending')
                 <!-- Process Reservation: room assignment, confirm, reject -->
                 <x-card title="Process Reservation" icon="fas fa-tasks" bodyClass="card-body" class="mb-4">
+                    <p class="text-muted mb-3">Assign a physical room and confirm this request. Payment isn't required at this step - you can collect it next, or the guest can pay at check-out.</p>
                     @if($assignableRooms->isEmpty())
                         <div class="alert alert-danger mb-3">
                             <i class="fas fa-exclamation-triangle"></i> No {{ $reservation->roomType->name ?? '' }} room is currently free for these dates. Assign an alternative room type manually via Rooms, or reject this request.
@@ -150,12 +157,17 @@
                         <i class="fas fa-external-link-alt"></i> View Receipt
                     </a>
                 </x-card>
-            @elseif(in_array($reservation->status, ['pending', 'confirmed']))
+            @elseif($reservation->status === 'confirmed')
                 <x-card title="Booking" icon="fas fa-credit-card" bodyClass="card-body" class="mb-4">
-                    <p class="text-muted">This is a Reservation only - no payment has been made yet.</p>
+                    <p class="text-muted mb-2">This reservation is confirmed but hasn't been paid yet.</p>
+                    <p class="text-muted small mb-3">Converting it to a Booking is optional here - collect payment now if the guest wants to pay in advance, or leave it and they can pay at check-out instead.</p>
                     <a href="{{ route('receptionist.reservations.convert', $reservation) }}" class="btn btn-sm btn-success">
                         <i class="fas fa-money-bill-wave"></i> Convert to Booking (Collect Payment)
                     </a>
+                </x-card>
+            @elseif($reservation->status === 'pending')
+                <x-card title="Booking" icon="fas fa-credit-card" bodyClass="card-body" class="mb-4">
+                    <p class="text-muted mb-0">Payment can be collected once this reservation is confirmed (see Process Reservation above).</p>
                 </x-card>
             @endif
 

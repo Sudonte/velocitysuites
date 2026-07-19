@@ -1,18 +1,19 @@
 @extends('layouts.app')
 
-@section('title', 'Convert to Booking - Receptionist')
+@section('title', 'Convert to Booking - Reservation #' . $reservation->id . ' - Receptionist')
 
 @section('content')
 <div class="container-fluid py-4">
-    <div class="row mb-4">
-        <div class="col-12">
-            <a href="{{ route('receptionist.reservations.show', $reservation) }}" class="btn btn-sm btn-secondary mb-2">
-                <i class="fas fa-arrow-left"></i> Back to Reservation
-            </a>
-            <h1 class="mb-0"><i class="fas fa-money-bill-wave"></i> Convert to Booking</h1>
-            <p class="text-muted">Collect payment for Reservation #{{ $reservation->id }} to confirm it as a Booking.</p>
-        </div>
-    </div>
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{{ route('receptionist.reservations.index') }}">Reservations</a></li>
+            <li class="breadcrumb-item"><a href="{{ route('receptionist.reservations.show', $reservation) }}">Reservation #{{ $reservation->id }}</a></li>
+            <li class="breadcrumb-item active" aria-current="page">Convert to Booking</li>
+        </ol>
+    </nav>
+
+    <x-page-header icon="fas fa-money-bill-wave" title="Convert to Booking"
+        subtitle="Collect payment for Reservation #{{ $reservation->id }} to turn it into a Booking." />
 
     @if ($errors->any())
         <div class="alert alert-danger">

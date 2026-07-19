@@ -49,7 +49,7 @@
                     <th>Check-In</th>
                     <th>Check-Out</th>
                     <th>Status</th>
-                    <th>Payment</th>
+                    <th>Booking</th>
                     <th>Action</th>
                 </tr>
             </thead>
@@ -68,13 +68,19 @@
                         <td>{{ $reservation->check_out->format('M d, Y') }}</td>
                         <td><x-status-badge :status="$reservation->status" domain="reservation" /></td>
                         <td>
-                            @if($billing)
-                                <x-status-badge :status="$billing->billing_status" domain="billing" />
-                                @if($billing->payments->where('payment_status', 'pending')->isNotEmpty())
-                                    <span class="badge bg-warning text-dark">Awaiting Verification</span>
+                            @if($reservation->booking)
+                                {{-- The reservation has been converted - it now also lives in the
+                                     Booking module. This is the same record, not a duplicate. --}}
+                                <span class="badge bg-success"><i class="fas fa-link"></i> Converted to Booking</span>
+                                <br>
+                                @if($billing)
+                                    <x-status-badge :status="$billing->billing_status" domain="billing" />
+                                    @if($billing->payments->where('payment_status', 'pending')->isNotEmpty())
+                                        <span class="badge bg-warning text-dark">Awaiting Verification</span>
+                                    @endif
                                 @endif
                             @else
-                                <span class="text-muted">Not paid</span>
+                                <span class="badge bg-secondary">Not Converted</span>
                             @endif
                         </td>
                         <td>
@@ -84,7 +90,7 @@
                                 </a>
                             @else
                                 <a href="{{ route('receptionist.reservations.show', $reservation) }}" class="btn btn-sm btn-primary">
-                                    <i class="fas fa-eye"></i>
+                                    <i class="fas fa-eye"></i> View
                                 </a>
                             @endif
                         </td>

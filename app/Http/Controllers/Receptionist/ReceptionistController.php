@@ -151,12 +151,18 @@ class ReceptionistController extends Controller
     /**
      * Show the payment-collection form to convert a plain Reservation
      * into a Booking (guest decided to pay - in person, over the phone,
-     * etc.). Only makes sense for a Reservation that isn't already one.
+     * etc.). Requires the reservation to already be confirmed (room
+     * assigned) - collecting payment before a request is even confirmed
+     * would be collecting money for a room that might not be granted.
      */
     public function convertToBookingForm(Reservation $reservation): View
     {
         if ($reservation->booking) {
             abort(422, 'This reservation is already a booking.');
+        }
+
+        if ($reservation->status === 'pending') {
+            abort(422, 'This reservation must be confirmed (room assigned) before it can be converted to a booking.');
         }
 
         $reservation->load(['guest.user', 'roomType']);
@@ -174,6 +180,10 @@ class ReceptionistController extends Controller
     {
         if ($reservation->booking) {
             return back()->with('error', 'This reservation is already a booking.');
+        }
+
+        if ($reservation->status === 'pending') {
+            return back()->with('error', 'Confirm this reservation (assign a room) before collecting payment.');
         }
 
         $validated = $request->validate([
@@ -349,7 +359,11 @@ class ReceptionistController extends Controller
             );
         });
 
-        return redirect()->route('receptionist.reservations.index', ['status' => 'pending'])
+        // Stay on the same Reservation Details page instead of bouncing
+        // back to the list - the receptionist just assigned the room and
+        // likely wants to keep working this reservation (e.g. convert it
+        // to a Booking next) without having to reopen it.
+        return redirect()->route('receptionist.reservations.show', $reservation)
             ->with('success', 'Room ' . $room->room_number . ' assigned and reservation confirmed!');
     }
 
@@ -389,7 +403,10 @@ class ReceptionistController extends Controller
             ]);
         });
 
-        return redirect()->route('receptionist.reservations.index', ['status' => 'pending'])->with('success', 'Reservation rejected.');
+        // Same reasoning as confirmReservation() - stay on the reservation's
+        // own page so the receptionist immediately sees the Cancelled state
+        // instead of losing their place in the list.
+        return redirect()->route('receptionist.reservations.show', $reservation)->with('success', 'Reservation rejected.');
     }
 
     /**
