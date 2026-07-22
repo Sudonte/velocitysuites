@@ -13,7 +13,7 @@
         </div>
 
         <div class="col-md-3 mb-3">
-            <x-stat-card icon="fas fa-sign-in-alt" label="Awaiting Check-In" :value="$awaitingCheckIn" color="primary" :href="route('receptionist.check-in.index')" />
+            <x-stat-card icon="fas fa-sign-in-alt" label="Awaiting Check-In" :value="$awaitingCheckIn" color="primary" :href="route('receptionist.bookings.index', ['status' => 'confirmed'])" />
         </div>
 
         <div class="col-md-3 mb-3">

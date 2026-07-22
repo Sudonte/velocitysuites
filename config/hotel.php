@@ -17,14 +17,17 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Partial Payment Ratio
+    | Minimum Payment Ratio
     |--------------------------------------------------------------------------
     |
-    | Fraction of the quoted total a guest pays when choosing "Partial
-    | Payment" on the Book & Pay flow (website + mobile app). Matches the
-    | ratio the Android app's PaymentActivity already hardcodes.
+    | Minimum fraction of the quoted total a guest must pay on the Book &
+    | Pay flow (website + mobile app), enforced server-side. Replaces the
+    | old Partial/Full toggle with a single amount field the guest can pay
+    | anywhere between this minimum and the full total - simpler, and
+    | avoids a second payment-type concept the Billing/Payment modules
+    | would otherwise need to understand downstream.
     |
     */
 
-    'partial_payment_ratio' => 0.5,
+    'minimum_payment_ratio' => 0.5,
 ];

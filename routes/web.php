@@ -141,6 +141,9 @@ Route::middleware(['auth', 'account.status', 'log.activity'])->group(function ()
         Route::post('/reservations/{reservation}/confirm', [ReceptionistController::class, 'confirmReservation'])->name('reservations.confirm');
         Route::post('/reservations/{reservation}/reject', [ReceptionistController::class, 'rejectReservation'])->name('reservations.reject');
 
+        // Room (re)assignment on an already-confirmed Booking (Booking Details page)
+        Route::post('/reservations/{reservation}/assign-room', [ReceptionistController::class, 'assignBookingRoom'])->name('reservations.assign-room');
+
         // Convert a plain Reservation into a Booking by collecting payment
         Route::get('/reservations/{reservation}/convert', [ReceptionistController::class, 'convertToBookingForm'])->name('reservations.convert');
         Route::post('/reservations/{reservation}/convert', [ReceptionistController::class, 'convertToBooking'])->name('reservations.convert.store');

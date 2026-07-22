@@ -70,53 +70,51 @@ class ReceptionistController extends Controller
     }
 
     /**
-     * The central Reservations list: every reservation request regardless
-     * of payment state, filterable by status (including the derived
-     * "awaiting payment"). Processing (room assignment, confirm, reject)
-     * happens on the show page. bookingsIndex() remains the paid subset
-     * for stay/payment management - the Booking module proper.
+     * The Reservations module: only reservations that have NOT yet been
+     * converted into a Booking. Once confirmed and converted, a
+     * reservation moves exclusively to the Booking module (see
+     * bookingsIndex) and disappears from here. Sorted so the nearest
+     * upcoming check-in is first - that's the guest the receptionist
+     * needs to act on soonest.
      */
     public function reservationsIndex(Request $request): View
     {
-        $query = Reservation::with(['guest.user', 'room', 'roomType', 'booking.billing.payments']);
+        $query = Reservation::with(['guest.user', 'room', 'roomType'])
+            ->whereDoesntHave('booking');
 
         $this->applyReservationFilters($query, $request);
 
-        $reservations = $query->latest('check_in')->paginate(15);
+        $reservations = $query->orderBy('check_in')->paginate(15);
 
         return view('receptionist.reservations.index', compact('reservations'));
     }
 
     /**
-     * List reservations that HAVE been paid/booked (read-only), with
-     * payment/billing status - the "Bookings" side of the split.
+     * The Booking module: reservations already confirmed and converted
+     * into a Booking, but not yet checked in. Once checked in, a
+     * reservation moves exclusively to the Check-In module and
+     * disappears from here - each module represents exactly one stage.
      */
     public function bookingsIndex(Request $request): View
     {
-        $query = Reservation::with(['guest.user', 'room', 'booking.billing.payments'])
-            ->whereHas('booking');
+        $query = Reservation::with(['guest.user', 'roomType', 'booking.billing.payments'])
+            ->whereHas('booking')
+            ->whereIn('status', ['pending', 'confirmed']);
 
         $this->applyReservationFilters($query, $request);
 
-        $reservations = $query->latest('check_in')->paginate(15);
+        $reservations = $query->orderBy('check_in')->paginate(15);
 
         return view('receptionist.bookings.index', compact('reservations'));
     }
 
     /**
-     * Shared status/search filters for reservationsIndex/bookingsIndex.
-     * "awaiting_payment" is a derived filter (not a real status column) -
-     * still-open reservations (pending/confirmed) that haven't become a
-     * Booking yet, i.e. still need a payment or a staff-side conversion.
+     * Shared search filter for reservationsIndex/bookingsIndex.
      */
     private function applyReservationFilters($query, Request $request): void
     {
         if ($request->filled('status')) {
-            if ($request->status === 'awaiting_payment') {
-                $query->whereIn('status', ['pending', 'confirmed'])->whereDoesntHave('booking');
-            } else {
-                $query->where('status', $request->status);
-            }
+            $query->where('status', $request->status);
         }
 
         if ($request->filled('search')) {
@@ -141,7 +139,10 @@ class ReceptionistController extends Controller
     {
         $reservation->load(['guest.user', 'room', 'roomType', 'booking.billing.payments', 'amenityRequests.amenity']);
 
-        $assignableRooms = $reservation->status === 'pending'
+        // Pending reservations need a room assigned to be confirmed;
+        // a booked reservation whose room somehow never got assigned
+        // (or lost it) needs one too before Check-In can happen.
+        $assignableRooms = in_array($reservation->status, ['pending', 'confirmed'], true)
             ? $this->assignableRoomsFor($reservation)
             : collect();
 
@@ -368,6 +369,37 @@ class ReceptionistController extends Controller
     }
 
     /**
+     * Assign (or reassign) a room on an already-confirmed Booking, from
+     * the Booking Details page - covers a booking that never got a room
+     * or whose room fell through before check-in. Distinct from
+     * confirmReservation() above, which only runs on pending reservations.
+     */
+    public function assignBookingRoom(Request $request, Reservation $reservation): RedirectResponse
+    {
+        if ($reservation->status !== 'confirmed') {
+            return back()->with('error', 'Only confirmed bookings can have a room assigned here.');
+        }
+
+        $validated = $request->validate([
+            'room_id' => 'required|exists:rooms,id',
+        ]);
+
+        $room = $this->assignableRoomsFor($reservation)->firstWhere('id', (int) $validated['room_id']);
+
+        if (!$room) {
+            return back()->with('error', 'That room cannot be assigned: it is not an available ' . $reservation->roomType->name . ' room for these dates.');
+        }
+
+        DB::transaction(function () use ($reservation, $room) {
+            $reservation->update(['room_id' => $room->id]);
+            $room->update(['status' => 'reserved']);
+        });
+
+        return redirect()->route('receptionist.reservations.show', ['reservation' => $reservation, 'from' => 'bookings'])
+            ->with('success', 'Room ' . $room->room_number . ' assigned to this booking.');
+    }
+
+    /**
      * Reject a pending reservation.
      */
     public function rejectReservation(Request $request, Reservation $reservation): RedirectResponse
@@ -410,29 +442,36 @@ class ReceptionistController extends Controller
     }
 
     /**
-     * List reservations awaiting check-in: every confirmed reservation,
-     * regardless of its scheduled date - early arrivals can be checked in
-     * whenever their room is actually ready (room status is the real gate).
+     * The Check-In module: guests currently staying at the hotel. The
+     * Check-In action itself now lives on the Booking Details page (see
+     * checkIn() below) - this module represents the resulting state, and
+     * its primary action is Check-Out.
      */
     public function checkInIndex(): View
     {
         $reservations = Reservation::with(['guest.user', 'room'])
-            ->where('status', 'confirmed')
-            ->orderBy('check_in')
+            ->where('status', 'checked_in')
+            ->orderBy('check_out')
             ->paginate(15);
 
         return view('receptionist.check-in.index', compact('reservations'));
     }
 
     /**
-     * Mark reservation as checked in. Date is not a gate - the room's
-     * actual status is: a room still occupied by the previous guest or
-     * under maintenance can't receive a new check-in.
+     * Mark reservation as checked in, from the Booking Details page. Date
+     * is not a gate - the room's actual status is: a room still occupied
+     * by the previous guest or under maintenance can't receive a new
+     * check-in, and a booking with no room assigned yet can't check in at
+     * all until one is.
      */
     public function checkIn(Reservation $reservation): RedirectResponse
     {
         if ($reservation->status !== 'confirmed') {
-            return back()->with('error', 'Only confirmed reservations can be checked in.');
+            return back()->with('error', 'Only confirmed bookings can be checked in.');
+        }
+
+        if (!$reservation->room) {
+            return back()->with('error', 'Assign a room to this booking before checking the guest in.');
         }
 
         if (in_array($reservation->room->status, ['occupied', 'maintenance'])) {
@@ -459,7 +498,10 @@ class ReceptionistController extends Controller
             );
         });
 
-        return redirect()->route('receptionist.check-in.index')->with('success', 'Guest checked in successfully!');
+        // Stay on the booking's own page - it now reads as checked-in
+        // instead of bouncing the receptionist back to a list.
+        return redirect()->route('receptionist.reservations.show', ['reservation' => $reservation, 'from' => 'bookings'])
+            ->with('success', 'Guest checked in successfully!');
     }
 
     /**

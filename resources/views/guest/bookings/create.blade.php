@@ -82,19 +82,19 @@
                     <h5 class="mb-3">Payment</h5>
 
                     <div class="form-group mb-3">
-                        <label><strong>Payment Amount *</strong></label>
-                        <div class="btn-group w-100" role="group">
-                            <input type="radio" class="btn-check" name="payment_type" id="payFull" value="full" checked>
-                            <label class="btn btn-outline-primary" for="payFull">
-                                Full Payment<br><small>₱{{ number_format($finalRate, 2) }}</small>
-                            </label>
-
-                            <input type="radio" class="btn-check" name="payment_type" id="payPartial" value="partial">
-                            <label class="btn btn-outline-primary" for="payPartial">
-                                Partial Payment ({{ (int) (config('hotel.partial_payment_ratio', 0.5) * 100) }}%)<br>
-                                <small>₱{{ number_format($partialAmount, 2) }}</small>
-                            </label>
+                        <label for="amount_paid"><strong>Payment Amount *</strong></label>
+                        <div class="input-group">
+                            <span class="input-group-text">₱</span>
+                            <input type="number" step="0.01" class="form-control @error('amount_paid') is-invalid @enderror"
+                                   id="amount_paid" name="amount_paid"
+                                   min="{{ number_format($minimumPayment, 2, '.', '') }}"
+                                   max="{{ number_format($finalRate, 2, '.', '') }}"
+                                   value="{{ old('amount_paid', number_format($finalRate, 2, '.', '')) }}" required>
+                            @error('amount_paid')<div class="invalid-feedback">{{ $message }}</div>@enderror
                         </div>
+                        <small class="text-muted">
+                            Pay anywhere from ₱{{ number_format($minimumPayment, 2) }} (minimum) up to ₱{{ number_format($finalRate, 2) }} (full amount).
+                        </small>
                     </div>
 
                     <div class="row">

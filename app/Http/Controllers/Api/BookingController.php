@@ -43,7 +43,7 @@ class BookingController extends Controller
             'additional_guests.*.relationship' => 'nullable|string|max:50',
             'payment_method' => 'required|in:cash,gcash',
             'reference_number' => 'required|string|max:100',
-            'payment_type' => 'required|in:partial,full',
+            'amount_paid' => 'required|numeric|min:0.01',
         ]);
         $children = $validated['children'] ?? 0;
 
@@ -76,17 +76,25 @@ class BookingController extends Controller
         ]);
 
         $quote = $this->bookingService->quoteRoomCharge($reservation);
-        $amountPaid = $validated['payment_type'] === 'full'
-            ? $quote['total']
-            : round($quote['total'] * (float) config('hotel.partial_payment_ratio', 0.5), 2);
+        $minimumPayment = round($quote['total'] * (float) config('hotel.minimum_payment_ratio', 0.5), 2);
+
+        if ($validated['amount_paid'] < $minimumPayment || $validated['amount_paid'] > $quote['total']) {
+            $reservation->delete();
+
+            return response()->json([
+                'message' => 'Payment amount must be between the minimum and full total.',
+                'minimum_payment' => $minimumPayment,
+                'maximum_payment' => $quote['total'],
+            ], 422);
+        }
 
         $payment = $this->bookingService->recordPayment($reservation, [
             'payment_method' => $validated['payment_method'],
             'reference_number' => $validated['reference_number'],
-            'amount_paid' => $amountPaid,
+            'amount_paid' => $validated['amount_paid'],
         ], staffRecorded: false);
 
-        $this->notificationService->notifyPaymentSubmitted($user, $amountPaid, $roomType->name);
+        $this->notificationService->notifyPaymentSubmitted($user, $validated['amount_paid'], $roomType->name);
 
         $reservation->load(['room.roomType', 'roomType', 'booking.billing']);
 

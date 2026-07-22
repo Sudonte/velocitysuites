@@ -5,7 +5,7 @@
 @section('content')
 <div class="container-fluid py-4">
     <x-page-header icon="fas fa-calendar-alt" title="Reservations"
-        subtitle="Every reservation request - process pending ones, track payment status, and follow each stay through to check-out." />
+        subtitle="Requests not yet converted into a booking, nearest check-in first. Review and confirm to send a reservation to the Booking module." />
 
     @if (session('success'))
         <div class="alert alert-success alert-dismissible fade show" role="alert">
@@ -24,10 +24,7 @@
                 <select name="status" class="form-control">
                     <option value="">All Status</option>
                     <option value="pending" {{ request('status') === 'pending' ? 'selected' : '' }}>Pending (needs room assignment)</option>
-                    <option value="confirmed" {{ request('status') === 'confirmed' ? 'selected' : '' }}>Confirmed</option>
-                    <option value="awaiting_payment" {{ request('status') === 'awaiting_payment' ? 'selected' : '' }}>Awaiting Payment</option>
-                    <option value="checked_in" {{ request('status') === 'checked_in' ? 'selected' : '' }}>Checked-In</option>
-                    <option value="checked_out" {{ request('status') === 'checked_out' ? 'selected' : '' }}>Checked-Out</option>
+                    <option value="confirmed" {{ request('status') === 'confirmed' ? 'selected' : '' }}>Confirmed (not yet booked)</option>
                     <option value="cancelled" {{ request('status') === 'cancelled' ? 'selected' : '' }}>Cancelled</option>
                 </select>
             </div>
@@ -49,13 +46,11 @@
                     <th>Check-In</th>
                     <th>Check-Out</th>
                     <th>Status</th>
-                    <th>Booking</th>
                     <th>Action</th>
                 </tr>
             </thead>
             <tbody>
                 @forelse($reservations as $reservation)
-                    @php $billing = $reservation->booking->billing ?? null; @endphp
                     <tr>
                         <td>{{ $reservation->guest->user->full_name ?? 'N/A' }}</td>
                         <td>
@@ -67,22 +62,6 @@
                         <td>{{ $reservation->check_in->format('M d, Y') }}</td>
                         <td>{{ $reservation->check_out->format('M d, Y') }}</td>
                         <td><x-status-badge :status="$reservation->status" domain="reservation" /></td>
-                        <td>
-                            @if($reservation->booking)
-                                {{-- The reservation has been converted - it now also lives in the
-                                     Booking module. This is the same record, not a duplicate. --}}
-                                <span class="badge bg-success"><i class="fas fa-link"></i> Converted to Booking</span>
-                                <br>
-                                @if($billing)
-                                    <x-status-badge :status="$billing->billing_status" domain="billing" />
-                                    @if($billing->payments->where('payment_status', 'pending')->isNotEmpty())
-                                        <span class="badge bg-warning text-dark">Awaiting Verification</span>
-                                    @endif
-                                @endif
-                            @else
-                                <span class="badge bg-secondary">Not Converted</span>
-                            @endif
-                        </td>
                         <td>
                             @if($reservation->status === 'pending')
                                 <a href="{{ route('receptionist.reservations.show', $reservation) }}" class="btn btn-sm btn-success">
@@ -97,7 +76,7 @@
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="7"><x-empty-state icon="fas fa-calendar-alt" message="No reservations found." /></td>
+                        <td colspan="6"><x-empty-state icon="fas fa-calendar-alt" message="No reservations found." /></td>
                     </tr>
                 @endforelse
             </tbody>

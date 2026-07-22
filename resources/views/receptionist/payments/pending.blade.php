@@ -46,7 +46,7 @@
                         <td>
                             <div class="d-flex gap-1">
                                 @if($reservation)
-                                    <a href="{{ route('receptionist.reservations.show', $reservation) }}" class="btn btn-sm btn-outline-secondary">
+                                    <a href="{{ route('receptionist.reservations.show', ['reservation' => $reservation, 'from' => 'bookings']) }}" class="btn btn-sm btn-outline-secondary">
                                         <i class="fas fa-eye"></i>
                                     </a>
                                 @endif

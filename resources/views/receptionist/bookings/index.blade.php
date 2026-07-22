@@ -4,7 +4,7 @@
 
 @section('content')
 <div class="container-fluid py-4">
-    <x-page-header icon="fas fa-credit-card" title="Bookings" subtitle="Reservations that have been paid" />
+    <x-page-header icon="fas fa-credit-card" title="Bookings" subtitle="Confirmed bookings awaiting check-in, nearest check-in first." />
 
     @if (session('success'))
         <div class="alert alert-success alert-dismissible fade show" role="alert">
@@ -21,12 +21,9 @@
             </div>
             <div class="col-md-4">
                 <select name="status" class="form-control">
-                    <option value="">All Status</option>
-                    <option value="pending" {{ request('status') === 'pending' ? 'selected' : '' }}>Pending</option>
-                    <option value="confirmed" {{ request('status') === 'confirmed' ? 'selected' : '' }}>Confirmed</option>
-                    <option value="checked_in" {{ request('status') === 'checked_in' ? 'selected' : '' }}>Checked-In</option>
-                    <option value="checked_out" {{ request('status') === 'checked_out' ? 'selected' : '' }}>Checked-Out</option>
-                    <option value="cancelled" {{ request('status') === 'cancelled' ? 'selected' : '' }}>Cancelled</option>
+                    <option value="">All Bookings</option>
+                    <option value="pending" {{ request('status') === 'pending' ? 'selected' : '' }}>Pending (needs room assignment)</option>
+                    <option value="confirmed" {{ request('status') === 'confirmed' ? 'selected' : '' }}>Confirmed (awaiting check-in)</option>
                 </select>
             </div>
             <div class="col-md-4">
@@ -43,10 +40,9 @@
             <thead>
                 <tr>
                     <th>Guest</th>
-                    <th>Room</th>
+                    <th>Room Type</th>
                     <th>Check-In</th>
                     <th>Check-Out</th>
-                    <th>Reservation Status</th>
                     <th>Payment Status</th>
                     <th>Total</th>
                     <th>Action</th>
@@ -57,10 +53,9 @@
                     @php $billing = $reservation->booking->billing ?? null; @endphp
                     <tr>
                         <td>{{ $reservation->guest->user->full_name ?? 'N/A' }}</td>
-                        <td>{{ $reservation->room->room_number ?? 'Unassigned' }}</td>
+                        <td>{{ $reservation->roomType->name ?? 'N/A' }}</td>
                         <td>{{ $reservation->check_in->format('M d, Y') }}</td>
                         <td>{{ $reservation->check_out->format('M d, Y') }}</td>
-                        <td><x-status-badge :status="$reservation->status" domain="reservation" /></td>
                         <td>
                             @if($billing)
                                 <x-status-badge :status="$billing->billing_status" domain="billing" />
@@ -74,13 +69,13 @@
                         <td>{{ $billing ? '₱' . number_format($billing->total_amount, 2) : '—' }}</td>
                         <td>
                             <a href="{{ route('receptionist.reservations.show', ['reservation' => $reservation, 'from' => 'bookings']) }}" class="btn btn-sm btn-primary">
-                                <i class="fas fa-eye"></i>
+                                <i class="fas fa-eye"></i> View Booking
                             </a>
                         </td>
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="8"><x-empty-state icon="fas fa-credit-card" message="No bookings found." /></td>
+                        <td colspan="7"><x-empty-state icon="fas fa-credit-card" message="No bookings found." /></td>
                     </tr>
                 @endforelse
             </tbody>
