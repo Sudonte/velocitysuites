@@ -130,19 +130,18 @@ class ReceptionistController extends Controller
     }
 
     /**
-     * Show a reservation. Pending reservations get their assignable-rooms
-     * list loaded too, since the show page is now also where the
-     * receptionist assigns a room, confirms, or rejects a request
-     * (the standalone "Booking Requests" queue was merged in here).
+     * Show a reservation. Room assignment doesn't happen here anymore -
+     * the Reservation Details page is purely for reviewing guest/stay
+     * info and confirming or rejecting the request. A Booking (once
+     * converted) still needs its assignable-rooms list, since room
+     * assignment now happens exclusively during Booking Details'
+     * "Prepare for Check-In" step.
      */
     public function reservationShow(Reservation $reservation): View
     {
         $reservation->load(['guest.user', 'room', 'roomType', 'booking.billing.payments', 'amenityRequests.amenity']);
 
-        // Pending reservations need a room assigned to be confirmed;
-        // a booked reservation whose room somehow never got assigned
-        // (or lost it) needs one too before Check-In can happen.
-        $assignableRooms = in_array($reservation->status, ['pending', 'confirmed'], true)
+        $assignableRooms = ($reservation->booking && $reservation->status === 'confirmed')
             ? $this->assignableRoomsFor($reservation)
             : collect();
 
@@ -312,67 +311,49 @@ class ReceptionistController extends Controller
     }
 
     /**
-     * Assign a room to a pending booking request and confirm it.
-     * The guest never picks a room number - the receptionist chooses the
-     * physical room here, and confirmation only happens with a room set.
+     * Confirm a pending reservation request. Room assignment is no longer
+     * part of this step - the Reservation Details page only reviews
+     * guest/stay info and confirms or rejects. The physical room gets
+     * chosen later, during the Booking's "Prepare for Check-In" step
+     * (see assignBookingRoom() below), once the reservation has been
+     * paid and converted into a Booking.
      */
-    public function confirmReservation(Request $request, Reservation $reservation): RedirectResponse
+    public function confirmReservation(Reservation $reservation): RedirectResponse
     {
         if ($reservation->status !== 'pending') {
             return back()->with('error', 'Only pending reservations can be confirmed.');
         }
 
-        $validated = $request->validate([
-            'room_id' => 'required|exists:rooms,id',
-        ]);
+        DB::transaction(function () use ($reservation) {
+            $reservation->update(['status' => 'confirmed']);
 
-        // The chosen room must be one of the actually-assignable rooms
-        // (right type, available, no date conflict) - not just any room.
-        $room = $this->assignableRoomsFor($reservation)->firstWhere('id', (int) $validated['room_id']);
-
-        if (!$room) {
-            return back()->with('error', 'That room cannot be assigned: it is not an available ' . $reservation->roomType->name . ' room for these dates.');
-        }
-
-        DB::transaction(function () use ($reservation, $room) {
-            $reservation->update([
-                'room_id' => $room->id,
-                'status' => 'confirmed',
-            ]);
-
-            // Update booking status
             if ($reservation->booking) {
                 $reservation->booking->update(['booking_status' => 'confirmed']);
             }
-
-            // Mark the room as reserved to prevent double bookings
-            $room->update(['status' => 'reserved']);
 
             // Grant active amenity-promo inclusions for this room type as
             // zero-charge approved amenity requests, so they appear on the
             // stay (and the final bill) at no cost.
             $this->grantPromoAmenities($reservation);
 
-            // Notify the guest with their assigned room
             $this->notificationService->notifyReservationConfirmed(
                 $reservation->guest->user,
-                $room->room_name . ' (Room ' . $room->room_number . ')'
+                $reservation->roomType->name
             );
         });
 
         // Stay on the same Reservation Details page instead of bouncing
-        // back to the list - the receptionist just assigned the room and
-        // likely wants to keep working this reservation (e.g. convert it
-        // to a Booking next) without having to reopen it.
+        // back to the list - the receptionist likely wants to keep
+        // working this reservation (e.g. convert it to a Booking next)
+        // without having to reopen it.
         return redirect()->route('receptionist.reservations.show', $reservation)
-            ->with('success', 'Room ' . $room->room_number . ' assigned and reservation confirmed!');
+            ->with('success', 'Reservation confirmed!');
     }
 
     /**
-     * Assign (or reassign) a room on an already-confirmed Booking, from
-     * the Booking Details page - covers a booking that never got a room
-     * or whose room fell through before check-in. Distinct from
-     * confirmReservation() above, which only runs on pending reservations.
+     * Assign a room on a confirmed Booking, from the Booking Details
+     * page's "Prepare for Check-In" step - the only place a physical
+     * room is chosen now that confirmReservation() no longer does it.
      */
     public function assignBookingRoom(Request $request, Reservation $reservation): RedirectResponse
     {

@@ -135,29 +135,14 @@
 
                 @if($reservation->status === 'pending')
                     <x-card title="Confirm Reservation" icon="fas fa-tasks" bodyClass="card-body" class="mb-4">
-                        <p class="text-muted mb-3">Verify the details above, then assign a physical room to confirm this request. Once confirmed and paid, it moves to the Booking module.</p>
-                        @if($assignableRooms->isEmpty())
-                            <div class="alert alert-danger mb-3">
-                                <i class="fas fa-exclamation-triangle"></i> No {{ $reservation->roomType->name ?? '' }} room is currently free for these dates. Assign an alternative room type manually via Rooms, or reject this request.
-                            </div>
-                        @else
-                            <form action="{{ route('receptionist.reservations.confirm', $reservation) }}" method="POST" class="mb-3">
-                                @csrf
-                                <label class="form-label"><strong>Assign Room *</strong></label>
-                                <select name="room_id" class="form-select mb-2" required>
-                                    <option value="">-- Select room --</option>
-                                    @foreach($assignableRooms as $room)
-                                        <option value="{{ $room->id }}">
-                                            Room {{ $room->room_number }} — {{ $room->room_name }} ({{ $room->room_capacity }} guests, ₱{{ number_format($room->room_rate, 2) }}{{ $room->has_rate_override ? ' *' : '' }})
-                                        </option>
-                                    @endforeach
-                                </select>
-                                <button type="submit" class="btn btn-success"
-                                        onclick="return confirm('Assign the selected room and confirm this reservation?')">
-                                    <i class="fas fa-check"></i> Assign Room &amp; Confirm
-                                </button>
-                            </form>
-                        @endif
+                        <p class="text-muted mb-3">Verify the guest, stay, and payment details above, then confirm or reject this request. Room assignment happens later, when preparing the Booking for check-in.</p>
+                        <form action="{{ route('receptionist.reservations.confirm', $reservation) }}" method="POST" class="d-inline">
+                            @csrf
+                            <button type="submit" class="btn btn-success"
+                                    onclick="return confirm('Confirm this reservation?')">
+                                <i class="fas fa-check"></i> Confirm Reservation
+                            </button>
+                        </form>
                         <button type="button" class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#rejectModal">
                             <i class="fas fa-times"></i> Reject Reservation
                         </button>
