@@ -17,7 +17,7 @@
         </div>
 
         <div class="col-md-3 mb-3">
-            <x-stat-card icon="fas fa-concierge-bell" label="In-House Guests" :value="$inHouseGuests" color="info" :href="route('receptionist.check-out.index')" />
+            <x-stat-card icon="fas fa-concierge-bell" label="In-House Guests" :value="$inHouseGuests" color="info" :href="route('receptionist.check-in.index')" />
         </div>
 
         <div class="col-md-3 mb-3">

@@ -443,13 +443,14 @@ class ReceptionistController extends Controller
 
     /**
      * The Check-In module: guests currently staying at the hotel. The
-     * Check-In action itself now lives on the Booking Details page (see
+     * Check-In action itself lives on the Booking Details page (see
      * checkIn() below) - this module represents the resulting state, and
-     * its primary action is Check-Out.
+     * its primary action is Check-Out, handled right here (billing +
+     * payment) rather than on a separate page.
      */
     public function checkInIndex(): View
     {
-        $reservations = Reservation::with(['guest.user', 'room'])
+        $reservations = Reservation::with(['guest.user', 'room', 'booking.billing'])
             ->where('status', 'checked_in')
             ->orderBy('check_out')
             ->paginate(15);
@@ -505,15 +506,16 @@ class ReceptionistController extends Controller
     }
 
     /**
-     * List reservations available for check-out: every checked-in guest,
-     * regardless of scheduled departure date - a guest can leave early
-     * (or late) whenever they settle their bill.
+     * The Check-Out module: a read-only log of completed stays. The
+     * Check-Out action itself (billing + payment) now lives on the
+     * Check-In page (see checkInIndex()) - a guest disappears from
+     * Check-In and appears here once their stay is fully settled.
      */
     public function checkOutIndex(): View
     {
         $reservations = Reservation::with(['guest.user', 'room', 'booking.billing'])
-            ->where('status', 'checked_in')
-            ->orderBy('check_out')
+            ->where('status', 'checked_out')
+            ->orderByDesc('check_out')
             ->paginate(15);
 
         return view('receptionist.check-out.index', compact('reservations'));
