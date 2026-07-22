@@ -114,10 +114,11 @@ class WalkInController extends Controller
 
         $this->notificationService->notifyNewBooking($guest->user, $roomType->name);
 
-        return redirect()->route('receptionist.reservations.show', $reservation)
-            ->with('success', $validated['intent'] === 'book'
-                ? 'Booking created and payment recorded.'
-                : 'Reservation created.');
+        // Detail is a modal on the relevant index now, not a standalone
+        // page - land on whichever list this record actually belongs to.
+        return $validated['intent'] === 'book'
+            ? redirect()->route('receptionist.bookings.index')->with('success', 'Booking created and payment recorded.')
+            : redirect()->route('receptionist.reservations.index')->with('success', 'Reservation created.');
     }
 
     /**

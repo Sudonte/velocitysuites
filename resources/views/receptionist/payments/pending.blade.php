@@ -36,7 +36,7 @@
             <tbody>
                 @forelse($payments as $payment)
                     @php $reservation = $payment->billing->booking->reservation ?? null; @endphp
-                    <tr>
+                    <tr data-reservation-id="{{ $reservation->id ?? '' }}">
                         <td>{{ $reservation->guest->user->full_name ?? 'N/A' }}</td>
                         <td>{{ $reservation->roomType->name ?? 'N/A' }}</td>
                         <td>{{ ucfirst($payment->payment_method) }}</td>
@@ -46,9 +46,9 @@
                         <td>
                             <div class="d-flex gap-1">
                                 @if($reservation)
-                                    <a href="{{ route('receptionist.reservations.show', ['reservation' => $reservation, 'from' => 'bookings']) }}" class="btn btn-sm btn-outline-secondary">
+                                    <button type="button" class="btn btn-sm btn-outline-secondary btn-open-detail" data-reservation-id="{{ $reservation->id }}">
                                         <i class="fas fa-eye"></i>
-                                    </a>
+                                    </button>
                                 @endif
                                 <form action="{{ route('receptionist.payments.verify', $payment) }}" method="POST"
                                       onsubmit="return confirm('Verify this payment as received?');">
@@ -72,4 +72,6 @@
         </x-slot:footer>
     </x-card>
 </div>
+
+@include('receptionist.reservations.partials.detail-modal-shell')
 @endsection

@@ -130,14 +130,13 @@ class ReceptionistController extends Controller
     }
 
     /**
-     * Show a reservation. Room assignment doesn't happen here anymore -
-     * the Reservation Details page is purely for reviewing guest/stay
-     * info and confirming or rejecting the request. A Booking (once
-     * converted) still needs its assignable-rooms list, since room
-     * assignment now happens exclusively during Booking Details'
-     * "Prepare for Check-In" step.
+     * Fetch the Reservation/Booking Details modal body (AJAX). Replaces
+     * the old full-page show route - every action inside the modal
+     * (confirm, reject, convert to booking, assign room, check in, add
+     * amenity) posts via AJAX and gets this same fragment back so the
+     * modal refreshes in place without a page reload.
      */
-    public function reservationShow(Reservation $reservation): View
+    public function reservationDetail(Reservation $reservation)
     {
         $reservation->load(['guest.user', 'room', 'roomType', 'booking.billing.payments', 'amenityRequests.amenity']);
 
@@ -145,30 +144,15 @@ class ReceptionistController extends Controller
             ? $this->assignableRoomsFor($reservation)
             : collect();
 
-        return view('receptionist.reservations.show', compact('reservation', 'assignableRooms'));
-    }
+        $amenities = Amenity::where('status', 'active')->orderBy('amenity_name')->get();
 
-    /**
-     * Show the payment-collection form to convert a plain Reservation
-     * into a Booking (guest decided to pay - in person, over the phone,
-     * etc.). Requires the reservation to already be confirmed (room
-     * assigned) - collecting payment before a request is even confirmed
-     * would be collecting money for a room that might not be granted.
-     */
-    public function convertToBookingForm(Reservation $reservation): View
-    {
-        if ($reservation->booking) {
-            abort(422, 'This reservation is already a booking.');
-        }
+        $quote = $reservation->booking
+            ? null
+            : $this->bookingService->quoteRoomCharge($reservation);
 
-        if ($reservation->status === 'pending') {
-            abort(422, 'This reservation must be confirmed (room assigned) before it can be converted to a booking.');
-        }
-
-        $reservation->load(['guest.user', 'roomType']);
-        $quote = $this->bookingService->quoteRoomCharge($reservation);
-
-        return view('receptionist.reservations.convert', compact('reservation', 'quote'));
+        return view('receptionist.reservations.partials.detail-modal', compact(
+            'reservation', 'assignableRooms', 'amenities', 'quote'
+        ));
     }
 
     /**
@@ -176,14 +160,14 @@ class ReceptionistController extends Controller
      * collected this payment, so it's trusted immediately (unlike a
      * guest's own self-service submission) - see BookingService.
      */
-    public function convertToBooking(Request $request, Reservation $reservation): RedirectResponse
+    public function convertToBooking(Request $request, Reservation $reservation)
     {
         if ($reservation->booking) {
-            return back()->with('error', 'This reservation is already a booking.');
+            return response()->json(['message' => 'This reservation is already a booking.'], 422);
         }
 
         if ($reservation->status === 'pending') {
-            return back()->with('error', 'Confirm this reservation (assign a room) before collecting payment.');
+            return response()->json(['message' => 'Confirm this reservation before collecting payment.'], 422);
         }
 
         $validated = $request->validate([
@@ -200,14 +184,38 @@ class ReceptionistController extends Controller
             $reservation->roomType->name
         );
 
-        return redirect()->route('receptionist.reservations.show', $reservation)
-            ->with('success', 'Payment recorded - reservation converted to a booking.');
+        return $this->reservationDetailResponse($reservation, 'Payment recorded - reservation converted to a booking.');
+    }
+
+    /**
+     * Re-render the detail modal fragment with a flash message, used by
+     * every AJAX action below to refresh the modal in place.
+     */
+    private function reservationDetailResponse(Reservation $reservation, string $message)
+    {
+        $reservation->refresh()->load(['guest.user', 'room', 'roomType', 'booking.billing.payments', 'amenityRequests.amenity']);
+
+        $assignableRooms = ($reservation->booking && $reservation->status === 'confirmed')
+            ? $this->assignableRoomsFor($reservation)
+            : collect();
+
+        $amenities = Amenity::where('status', 'active')->orderBy('amenity_name')->get();
+
+        $quote = $reservation->booking
+            ? null
+            : $this->bookingService->quoteRoomCharge($reservation);
+
+        $html = view('receptionist.reservations.partials.detail-modal', compact(
+            'reservation', 'assignableRooms', 'amenities', 'quote'
+        ))->render();
+
+        return response()->json(['html' => $html, 'message' => $message]);
     }
 
     /**
      * Queue of guest-submitted payments awaiting staff verification (the
-     * self-service counterpart to the pending-reservation room-assignment
-     * step on reservationShow - see BookingService::recordPayment).
+     * self-service counterpart to a staff member directly recording a
+     * payment - see BookingService::recordPayment).
      */
     public function pendingPaymentsIndex(): View
     {
@@ -312,16 +320,16 @@ class ReceptionistController extends Controller
 
     /**
      * Confirm a pending reservation request. Room assignment is no longer
-     * part of this step - the Reservation Details page only reviews
+     * part of this step - the Reservation Details modal only reviews
      * guest/stay info and confirms or rejects. The physical room gets
      * chosen later, during the Booking's "Prepare for Check-In" step
      * (see assignBookingRoom() below), once the reservation has been
      * paid and converted into a Booking.
      */
-    public function confirmReservation(Reservation $reservation): RedirectResponse
+    public function confirmReservation(Reservation $reservation)
     {
         if ($reservation->status !== 'pending') {
-            return back()->with('error', 'Only pending reservations can be confirmed.');
+            return response()->json(['message' => 'Only pending reservations can be confirmed.'], 422);
         }
 
         DB::transaction(function () use ($reservation) {
@@ -342,23 +350,18 @@ class ReceptionistController extends Controller
             );
         });
 
-        // Stay on the same Reservation Details page instead of bouncing
-        // back to the list - the receptionist likely wants to keep
-        // working this reservation (e.g. convert it to a Booking next)
-        // without having to reopen it.
-        return redirect()->route('receptionist.reservations.show', $reservation)
-            ->with('success', 'Reservation confirmed!');
+        return $this->reservationDetailResponse($reservation, 'Reservation confirmed!');
     }
 
     /**
      * Assign a room on a confirmed Booking, from the Booking Details
-     * page's "Prepare for Check-In" step - the only place a physical
+     * modal's "Prepare for Check-In" step - the only place a physical
      * room is chosen now that confirmReservation() no longer does it.
      */
-    public function assignBookingRoom(Request $request, Reservation $reservation): RedirectResponse
+    public function assignBookingRoom(Request $request, Reservation $reservation)
     {
         if ($reservation->status !== 'confirmed') {
-            return back()->with('error', 'Only confirmed bookings can have a room assigned here.');
+            return response()->json(['message' => 'Only confirmed bookings can have a room assigned here.'], 422);
         }
 
         $validated = $request->validate([
@@ -368,7 +371,7 @@ class ReceptionistController extends Controller
         $room = $this->assignableRoomsFor($reservation)->firstWhere('id', (int) $validated['room_id']);
 
         if (!$room) {
-            return back()->with('error', 'That room cannot be assigned: it is not an available ' . $reservation->roomType->name . ' room for these dates.');
+            return response()->json(['message' => 'That room cannot be assigned: it is not an available ' . $reservation->roomType->name . ' room for these dates.'], 422);
         }
 
         DB::transaction(function () use ($reservation, $room) {
@@ -376,17 +379,16 @@ class ReceptionistController extends Controller
             $room->update(['status' => 'reserved']);
         });
 
-        return redirect()->route('receptionist.reservations.show', ['reservation' => $reservation, 'from' => 'bookings'])
-            ->with('success', 'Room ' . $room->room_number . ' assigned to this booking.');
+        return $this->reservationDetailResponse($reservation, 'Room ' . $room->room_number . ' assigned to this booking.');
     }
 
     /**
      * Reject a pending reservation.
      */
-    public function rejectReservation(Request $request, Reservation $reservation): RedirectResponse
+    public function rejectReservation(Request $request, Reservation $reservation)
     {
         if ($reservation->status !== 'pending') {
-            return back()->with('error', 'Only pending reservations can be rejected.');
+            return response()->json(['message' => 'Only pending reservations can be rejected.'], 422);
         }
 
         $request->validate([
@@ -416,10 +418,7 @@ class ReceptionistController extends Controller
             ]);
         });
 
-        // Same reasoning as confirmReservation() - stay on the reservation's
-        // own page so the receptionist immediately sees the Cancelled state
-        // instead of losing their place in the list.
-        return redirect()->route('receptionist.reservations.show', $reservation)->with('success', 'Reservation rejected.');
+        return $this->reservationDetailResponse($reservation, 'Reservation rejected.');
     }
 
     /**
@@ -446,20 +445,20 @@ class ReceptionistController extends Controller
      * check-in, and a booking with no room assigned yet can't check in at
      * all until one is.
      */
-    public function checkIn(Reservation $reservation): RedirectResponse
+    public function checkIn(Reservation $reservation)
     {
         if ($reservation->status !== 'confirmed') {
-            return back()->with('error', 'Only confirmed bookings can be checked in.');
+            return response()->json(['message' => 'Only confirmed bookings can be checked in.'], 422);
         }
 
         if (!$reservation->room) {
-            return back()->with('error', 'Assign a room to this booking before checking the guest in.');
+            return response()->json(['message' => 'Assign a room to this booking before checking the guest in.'], 422);
         }
 
         if (in_array($reservation->room->status, ['occupied', 'maintenance'])) {
-            return back()->with('error',
+            return response()->json(['message' =>
                 'Room ' . $reservation->room->room_number . ' is not ready (' . $reservation->room->status . '). ' .
-                'Free it up first or assign a different room.');
+                'Free it up first or assign a different room.'], 422);
         }
 
         DB::transaction(function () use ($reservation) {
@@ -480,10 +479,10 @@ class ReceptionistController extends Controller
             );
         });
 
-        // Stay on the booking's own page - it now reads as checked-in
-        // instead of bouncing the receptionist back to a list.
-        return redirect()->route('receptionist.reservations.show', ['reservation' => $reservation, 'from' => 'bookings'])
-            ->with('success', 'Guest checked in successfully!');
+        // The booking leaves the Bookings module entirely once checked
+        // in (it now belongs to Check-In) - the modal closes and the row
+        // is removed from the list, rather than refreshing in place.
+        return response()->json(['checkedIn' => true, 'message' => 'Guest checked in successfully!']);
     }
 
     /**
@@ -607,21 +606,11 @@ class ReceptionistController extends Controller
     }
 
     /**
-     * Show form to create an amenity request for a reservation.
+     * Add an amenity request to a reservation, from the inline form on
+     * the Reservation/Booking Details modal. Snapshots the amenity's
+     * current charge per unit.
      */
-    public function amenitiesCreate(Reservation $reservation): View
-    {
-        $amenities = Amenity::where('status', 'active')
-            ->orderBy('amenity_name')
-            ->get();
-
-        return view('receptionist.amenities.create', compact('reservation', 'amenities'));
-    }
-
-    /**
-     * Store a new amenity request, snapshotting the amenity's current charge.
-     */
-    public function amenitiesStore(Request $request, Reservation $reservation): RedirectResponse
+    public function amenitiesStore(Request $request, Reservation $reservation)
     {
         $validated = $request->validate([
             'amenity_id' => 'required|exists:amenities,id',
@@ -641,7 +630,7 @@ class ReceptionistController extends Controller
             'status' => $validated['status'],
         ]);
 
-        return redirect()->route('receptionist.amenities.index')->with('success', 'Amenity request added.');
+        return $this->reservationDetailResponse($reservation, 'Amenity request added.');
     }
 
     /**

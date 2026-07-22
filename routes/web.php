@@ -132,20 +132,24 @@ Route::middleware(['auth', 'account.status', 'log.activity'])->group(function ()
 
         // Reservations - the single, central list of every reservation
         // request (filterable by status, including pending "booking
-        // requests" needing room assignment). Room assignment/confirm/
-        // reject now live on the show page instead of a separate queue.
+        // requests" needing room assignment). Clicking a row opens the
+        // Reservation/Booking Details modal (see reservations.detail)
+        // instead of navigating to a separate page.
         Route::get('/reservations', [ReceptionistController::class, 'reservationsIndex'])->name('reservations.index');
-        Route::get('/reservations/{reservation}', [ReceptionistController::class, 'reservationShow'])->name('reservations.show');
+
+        // AJAX: fetch the Reservation/Booking Details modal body. Every
+        // action below returns this same fragment so the modal refreshes
+        // in place rather than reloading the page.
+        Route::get('/reservations/{reservation}/detail', [ReceptionistController::class, 'reservationDetail'])->name('reservations.detail');
 
         // Room assignment + confirmation of a pending reservation
         Route::post('/reservations/{reservation}/confirm', [ReceptionistController::class, 'confirmReservation'])->name('reservations.confirm');
         Route::post('/reservations/{reservation}/reject', [ReceptionistController::class, 'rejectReservation'])->name('reservations.reject');
 
-        // Room (re)assignment on an already-confirmed Booking (Booking Details page)
+        // Room (re)assignment on an already-confirmed Booking (Booking Details modal)
         Route::post('/reservations/{reservation}/assign-room', [ReceptionistController::class, 'assignBookingRoom'])->name('reservations.assign-room');
 
         // Convert a plain Reservation into a Booking by collecting payment
-        Route::get('/reservations/{reservation}/convert', [ReceptionistController::class, 'convertToBookingForm'])->name('reservations.convert');
         Route::post('/reservations/{reservation}/convert', [ReceptionistController::class, 'convertToBooking'])->name('reservations.convert.store');
 
         // Bookings (read-only browse) - "Bookings" = has a Booking (paid)
@@ -175,7 +179,6 @@ Route::middleware(['auth', 'account.status', 'log.activity'])->group(function ()
 
         // Amenity Requests
         Route::get('/amenities', [ReceptionistController::class, 'amenitiesIndex'])->name('amenities.index');
-        Route::get('/amenities/{reservation}/create', [ReceptionistController::class, 'amenitiesCreate'])->name('amenities.create');
         Route::post('/amenities/{reservation}', [ReceptionistController::class, 'amenitiesStore'])->name('amenities.store');
         Route::put('/amenities/{amenityRequest}', [ReceptionistController::class, 'amenitiesUpdate'])->name('amenities.update');
 

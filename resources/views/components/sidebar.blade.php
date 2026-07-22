@@ -110,19 +110,10 @@
                 <li><a href="{{ route('receptionist.walk-in.create') }}" class="nav-link {{ request()->routeIs('receptionist.walk-in.*') ? 'active' : '' }}">
                     <i class="fas fa-user-plus"></i> New Reservation/Booking
                 </a></li>
-                @php
-                    // reservations.show is shared by both the Reservations
-                    // and Bookings lists (there's one detail page, not two
-                    // duplicated views) - the "from" query param set by
-                    // whichever list linked here decides which nav item
-                    // should read as active, so opening a booking's detail
-                    // page doesn't wrongly light up "Reservations".
-                    $viewingFromBookings = request()->routeIs('receptionist.reservations.show') && request()->query('from') === 'bookings';
-                @endphp
-                <li><a href="/receptionist/reservations" class="nav-link {{ (request()->routeIs('receptionist.reservations.index') || (request()->routeIs('receptionist.reservations.show') && !$viewingFromBookings)) ? 'active' : '' }}">
+                <li><a href="/receptionist/reservations" class="nav-link {{ request()->routeIs('receptionist.reservations.index') ? 'active' : '' }}">
                     <i class="fas fa-calendar-alt"></i> Reservations
                 </a></li>
-                <li><a href="{{ route('receptionist.bookings.index') }}" class="nav-link {{ (request()->routeIs('receptionist.bookings.*') || $viewingFromBookings) ? 'active' : '' }}">
+                <li><a href="{{ route('receptionist.bookings.index') }}" class="nav-link {{ request()->routeIs('receptionist.bookings.*') ? 'active' : '' }}">
                     <i class="fas fa-credit-card"></i> Bookings
                 </a></li>
                 <li><a href="{{ route('receptionist.payments.pending') }}" class="nav-link {{ request()->routeIs('receptionist.payments.*') ? 'active' : '' }}">

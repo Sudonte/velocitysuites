@@ -51,7 +51,7 @@
             <tbody>
                 @forelse($reservations as $reservation)
                     @php $billing = $reservation->booking->billing ?? null; @endphp
-                    <tr>
+                    <tr data-reservation-id="{{ $reservation->id }}">
                         <td>{{ $reservation->guest->user->full_name ?? 'N/A' }}</td>
                         <td>{{ $reservation->roomType->name ?? 'N/A' }}</td>
                         <td>{{ $reservation->check_in->format('M d, Y') }}</td>
@@ -68,9 +68,9 @@
                         </td>
                         <td>{{ $billing ? '₱' . number_format($billing->total_amount, 2) : '—' }}</td>
                         <td>
-                            <a href="{{ route('receptionist.reservations.show', ['reservation' => $reservation, 'from' => 'bookings']) }}" class="btn btn-sm btn-primary">
+                            <button type="button" class="btn btn-sm btn-primary btn-open-detail" data-reservation-id="{{ $reservation->id }}">
                                 <i class="fas fa-eye"></i> View Booking
-                            </a>
+                            </button>
                         </td>
                     </tr>
                 @empty
@@ -85,4 +85,6 @@
         </x-slot:footer>
     </x-card>
 </div>
+
+@include('receptionist.reservations.partials.detail-modal-shell')
 @endsection

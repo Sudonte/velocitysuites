@@ -51,7 +51,7 @@
             </thead>
             <tbody>
                 @forelse($reservations as $reservation)
-                    <tr>
+                    <tr data-reservation-id="{{ $reservation->id }}">
                         <td>{{ $reservation->guest->user->full_name ?? 'N/A' }}</td>
                         <td>
                             {{ $reservation->roomType->name ?? 'N/A' }}
@@ -64,13 +64,13 @@
                         <td><x-status-badge :status="$reservation->status" domain="reservation" /></td>
                         <td>
                             @if($reservation->status === 'pending')
-                                <a href="{{ route('receptionist.reservations.show', $reservation) }}" class="btn btn-sm btn-success">
+                                <button type="button" class="btn btn-sm btn-success btn-open-detail" data-reservation-id="{{ $reservation->id }}">
                                     <i class="fas fa-tasks"></i> Process
-                                </a>
+                                </button>
                             @else
-                                <a href="{{ route('receptionist.reservations.show', $reservation) }}" class="btn btn-sm btn-primary">
+                                <button type="button" class="btn btn-sm btn-primary btn-open-detail" data-reservation-id="{{ $reservation->id }}">
                                     <i class="fas fa-eye"></i> View
-                                </a>
+                                </button>
                             @endif
                         </td>
                     </tr>
@@ -86,4 +86,6 @@
         </x-slot:footer>
     </x-card>
 </div>
+
+@include('receptionist.reservations.partials.detail-modal-shell')
 @endsection

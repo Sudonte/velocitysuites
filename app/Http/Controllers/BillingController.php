@@ -34,9 +34,12 @@ class BillingController extends Controller
         $reservation = $billing->booking?->reservation;
         $backRoute = null;
         if ($reservation) {
+            // Receptionist detail is a modal on the Bookings list now, not
+            // a standalone page - link back to that list rather than a
+            // deep link that no longer exists.
             $backRoute = $user->role === 'guest'
                 ? route('guest.reservations.show', $reservation)
-                : route('receptionist.reservations.show', $reservation);
+                : route('receptionist.bookings.index');
         }
 
         return view('billing.receipt', compact('billing', 'amountPaid', 'balance', 'backRoute'));
