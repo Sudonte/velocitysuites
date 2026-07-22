@@ -52,7 +52,12 @@
             <tbody>
                 @forelse($reservations as $reservation)
                     <tr data-reservation-id="{{ $reservation->id }}">
-                        <td>{{ $reservation->guest->user->full_name ?? 'N/A' }}</td>
+                        <td>
+                            {{ $reservation->stay_guest_full_name ?? $reservation->guest->user->full_name ?? 'N/A' }}
+                            @if($reservation->stay_guest_full_name && $reservation->guest->user->full_name !== $reservation->stay_guest_full_name)
+                                <br><small class="text-muted">Account: {{ $reservation->guest->user->full_name }}</small>
+                            @endif
+                        </td>
                         <td>
                             {{ $reservation->roomType->name ?? 'N/A' }}
                             @if($reservation->room)

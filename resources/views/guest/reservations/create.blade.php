@@ -68,6 +68,37 @@
                         </div>
                     </div>
 
+                    <hr>
+                    <h5 class="mb-3">Who's Staying?</h5>
+                    <p class="text-muted small mb-3">
+                        Defaults to your account name - change it if you're reserving for someone else.
+                    </p>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group mb-3">
+                                <label for="guest_first_name"><strong>Guest First Name *</strong></label>
+                                <input type="text" class="form-control @error('guest_first_name') is-invalid @enderror"
+                                       id="guest_first_name" name="guest_first_name"
+                                       value="{{ old('guest_first_name', auth()->user()->first_name) }}" required>
+                                @error('guest_first_name')
+                                    <div class="invalid-feedback">{{ $message }}</div>
+                                @enderror
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group mb-3">
+                                <label for="guest_last_name"><strong>Guest Last Name *</strong></label>
+                                <input type="text" class="form-control @error('guest_last_name') is-invalid @enderror"
+                                       id="guest_last_name" name="guest_last_name"
+                                       value="{{ old('guest_last_name', auth()->user()->last_name) }}" required>
+                                @error('guest_last_name')
+                                    <div class="invalid-feedback">{{ $message }}</div>
+                                @enderror
+                            </div>
+                        </div>
+                    </div>
+
+                    <hr>
                     <div class="row">
                         <div class="col-md-6">
                             <div class="form-group mb-3">

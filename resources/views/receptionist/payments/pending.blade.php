@@ -37,7 +37,7 @@
                 @forelse($payments as $payment)
                     @php $reservation = $payment->billing->booking->reservation ?? null; @endphp
                     <tr data-reservation-id="{{ $reservation->id ?? '' }}">
-                        <td>{{ $reservation->guest->user->full_name ?? 'N/A' }}</td>
+                        <td>{{ $reservation->stay_guest_full_name ?? $reservation->guest->user->full_name ?? 'N/A' }}</td>
                         <td>{{ $reservation->roomType->name ?? 'N/A' }}</td>
                         <td>{{ ucfirst($payment->payment_method) }}</td>
                         <td>{{ $payment->reference_number ?? '—' }}</td>

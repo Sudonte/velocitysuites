@@ -73,6 +73,8 @@ class ReservationController extends Controller
             'check_out' => 'required|date|after:check_in',
             'adults' => 'required|integer|min:1',
             'children' => 'nullable|integer|min:0',
+            'guest_first_name' => 'required|string|max:100',
+            'guest_last_name' => 'required|string|max:100',
             'id_card_type' => 'nullable|in:None,Senior Citizen,PWD',
             'additional_guests' => 'nullable|array',
             'additional_guests.*.name' => 'required_with:additional_guests|string|max:150',
@@ -102,6 +104,8 @@ class ReservationController extends Controller
         // already-created Reservation).
         $reservation = Reservation::create([
             'guest_id' => $guest->id,
+            'guest_first_name' => $validated['guest_first_name'],
+            'guest_last_name' => $validated['guest_last_name'],
             'room_type_id' => $roomType->id,
             'check_in' => $validated['check_in'],
             'check_out' => $validated['check_out'],

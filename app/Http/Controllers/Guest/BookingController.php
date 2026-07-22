@@ -97,6 +97,8 @@ class BookingController extends Controller
             'payment_method' => 'required|in:cash,gcash',
             'reference_number' => 'required_if:payment_method,gcash|nullable|string|max:255',
             'amount_paid' => 'required|numeric|min:0.01',
+            'guest_first_name' => 'required|string|max:100',
+            'guest_last_name' => 'required|string|max:100',
         ]);
         $children = $validated['children'] ?? 0;
 
@@ -113,6 +115,8 @@ class BookingController extends Controller
 
         $reservation = Reservation::create([
             'guest_id' => $guest->id,
+            'guest_first_name' => $validated['guest_first_name'],
+            'guest_last_name' => $validated['guest_last_name'],
             'room_type_id' => $roomType->id,
             'check_in' => $validated['check_in'],
             'check_out' => $validated['check_out'],

@@ -17,7 +17,7 @@
             @if($billing->booking && $billing->booking->reservation)
                 <p class="text-muted">
                     Reservation #{{ $billing->booking->reservation->id }} —
-                    Guest: {{ $billing->booking->reservation->guest->user->full_name ?? 'N/A' }} —
+                    Guest: {{ $billing->booking->reservation->stay_guest_full_name ?? $billing->booking->reservation->guest->user->full_name ?? 'N/A' }} —
                     Room: {{ $billing->booking->reservation->room->room_number ?? 'To be assigned' }}
                     ({{ $billing->booking->reservation->room->room_name ?? $billing->booking->reservation->roomType->name }})
                 </p>

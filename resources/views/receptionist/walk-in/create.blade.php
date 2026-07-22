@@ -37,7 +37,7 @@
                             <select class="form-select" id="existing_guest_id" name="existing_guest_id">
                                 <option value="">-- Select --</option>
                                 @foreach($existingGuests as $user)
-                                    <option value="{{ $user->id }}">{{ $user->full_name }} ({{ $user->email }})</option>
+                                    <option value="{{ $user->id }}" data-first-name="{{ $user->first_name }}" data-last-name="{{ $user->last_name }}">{{ $user->full_name }} ({{ $user->email }})</option>
                                 @endforeach
                             </select>
                             <small class="text-muted">{{ $existingGuests->count() }} guests shown. Use browser search (Ctrl+F) if the list is long.</small>
@@ -78,6 +78,23 @@
 
             <div class="col-lg-6">
                 <x-card title="Stay Details" bodyClass="card-body" class="mb-4">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group mb-3">
+                                <label for="guest_first_name"><strong>Guest First Name *</strong></label>
+                                <input type="text" class="form-control" id="guest_first_name" name="guest_first_name" required>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group mb-3">
+                                <label for="guest_last_name"><strong>Guest Last Name *</strong></label>
+                                <input type="text" class="form-control" id="guest_last_name" name="guest_last_name" required>
+                            </div>
+                        </div>
+                    </div>
+                    <p class="text-muted small mb-3">
+                        The person actually staying - may differ from the account holder.
+                    </p>
                     <div class="form-group mb-3">
                         <label for="room_type_id"><strong>Room Type *</strong></label>
                         <select class="form-select" id="room_type_id" name="room_type_id" required>
@@ -167,6 +184,33 @@
         }
         modeExisting.addEventListener('change', toggleGuestMode);
         modeNew.addEventListener('change', toggleGuestMode);
+
+        // Auto-fill the stay-guest name from whichever guest is
+        // selected/entered - staff can still override it if the person
+        // actually staying is someone else (e.g. booking on a
+        // relative's account).
+        var guestFirstName = document.getElementById('guest_first_name');
+        var guestLastName = document.getElementById('guest_last_name');
+        var existingGuestSelect = document.getElementById('existing_guest_id');
+        var newFirstName = document.getElementById('first_name');
+        var newLastName = document.getElementById('last_name');
+        var stayNameTouched = false;
+        guestFirstName.addEventListener('input', function () { stayNameTouched = true; });
+        guestLastName.addEventListener('input', function () { stayNameTouched = true; });
+
+        existingGuestSelect.addEventListener('change', function () {
+            if (stayNameTouched) return;
+            var opt = existingGuestSelect.options[existingGuestSelect.selectedIndex];
+            guestFirstName.value = opt.dataset.firstName || '';
+            guestLastName.value = opt.dataset.lastName || '';
+        });
+        [newFirstName, newLastName].forEach(function (input) {
+            input.addEventListener('input', function () {
+                if (stayNameTouched || !modeNew.checked) return;
+                guestFirstName.value = newFirstName.value;
+                guestLastName.value = newLastName.value;
+            });
+        });
 
         var intentReserve = document.getElementById('intentReserve');
         var intentBook = document.getElementById('intentBook');

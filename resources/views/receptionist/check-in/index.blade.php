@@ -39,7 +39,7 @@
                 <tbody id="checkOutTableBody">
                     @forelse($reservations as $reservation)
                         <tr data-reservation-id="{{ $reservation->id }}">
-                            <td>{{ $reservation->guest->user->full_name ?? 'N/A' }}</td>
+                            <td>{{ $reservation->stay_guest_full_name ?? $reservation->guest->user->full_name ?? 'N/A' }}</td>
                             <td>{{ $reservation->room->room_number ?? 'N/A' }} ({{ $reservation->room->roomType->name ?? '' }})</td>
                             <td>{{ $reservation->check_in->format('M d, Y') }}</td>
                             <td>
@@ -58,7 +58,7 @@
                             <td>
                                 <button type="button" class="btn btn-sm btn-primary btn-start-checkout"
                                     data-reservation-id="{{ $reservation->id }}"
-                                    data-guest-name="{{ $reservation->guest->user->full_name ?? 'N/A' }}"
+                                    data-guest-name="{{ $reservation->stay_guest_full_name ?? $reservation->guest->user->full_name ?? 'N/A' }}"
                                     data-room-number="{{ $reservation->room->room_number ?? 'N/A' }}">
                                     <i class="fas fa-sign-out-alt"></i> Check Out
                                 </button>

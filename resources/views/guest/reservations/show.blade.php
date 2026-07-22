@@ -90,6 +90,11 @@
 
             <!-- Guest Information -->
             <x-card title="Guest Information" bodyClass="card-body">
+                @if($reservation->stay_guest_full_name && $reservation->stay_guest_full_name !== $reservation->guest->user->full_name)
+                    <p class="mb-2">
+                        <strong>Staying Guest:</strong> {{ $reservation->stay_guest_full_name }}
+                    </p>
+                @endif
                 <p class="mb-2">
                     <strong>Name:</strong> {{ $reservation->guest->user->full_name }}
                 </p>

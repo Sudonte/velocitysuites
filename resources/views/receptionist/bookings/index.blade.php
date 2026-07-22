@@ -52,7 +52,12 @@
                 @forelse($reservations as $reservation)
                     @php $billing = $reservation->booking->billing ?? null; @endphp
                     <tr data-reservation-id="{{ $reservation->id }}">
-                        <td>{{ $reservation->guest->user->full_name ?? 'N/A' }}</td>
+                        <td>
+                            {{ $reservation->stay_guest_full_name ?? $reservation->guest->user->full_name ?? 'N/A' }}
+                            @if($reservation->stay_guest_full_name && $reservation->guest->user->full_name !== $reservation->stay_guest_full_name)
+                                <br><small class="text-muted">Account: {{ $reservation->guest->user->full_name }}</small>
+                            @endif
+                        </td>
                         <td>{{ $reservation->roomType->name ?? 'N/A' }}</td>
                         <td>{{ $reservation->check_in->format('M d, Y') }}</td>
                         <td>{{ $reservation->check_out->format('M d, Y') }}</td>

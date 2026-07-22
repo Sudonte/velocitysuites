@@ -11,6 +11,8 @@ class Reservation extends Model
 
     protected $fillable = [
         'guest_id',
+        'guest_first_name',
+        'guest_last_name',
         'room_type_id',
         'room_id',
         'check_in',
@@ -79,5 +81,34 @@ class Reservation extends Model
     public function getNumberOfNightsAttribute()
     {
         return abs($this->check_out->diffInDays($this->check_in));
+    }
+
+    /**
+     * The name of the person actually staying, as provided at
+     * reservation/booking time - may differ from the account holder's
+     * name (e.g. booking made on a friend's account).
+     */
+    public function getStayGuestFullNameAttribute(): ?string
+    {
+        if (! $this->guest_first_name && ! $this->guest_last_name) {
+            return null;
+        }
+        return trim("{$this->guest_first_name} {$this->guest_last_name}");
+    }
+
+    /**
+     * Title-case the stay guest's first name, matching User's convention.
+     */
+    public function setGuestFirstNameAttribute(?string $value): void
+    {
+        $this->attributes['guest_first_name'] = $value ? ucwords(strtolower($value)) : $value;
+    }
+
+    /**
+     * Title-case the stay guest's last name, matching User's convention.
+     */
+    public function setGuestLastNameAttribute(?string $value): void
+    {
+        $this->attributes['guest_last_name'] = $value ? ucwords(strtolower($value)) : $value;
     }
 }

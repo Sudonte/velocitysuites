@@ -40,7 +40,7 @@
                     <tbody>
                         @forelse($todayCheckIns as $reservation)
                             <tr>
-                                <td>{{ $reservation->guest->user->full_name ?? 'N/A' }}</td>
+                                <td>{{ $reservation->stay_guest_full_name ?? $reservation->guest->user->full_name ?? 'N/A' }}</td>
                                 <td>{{ $reservation->room->room_number ?? 'N/A' }}</td>
                                 <td><x-status-badge :status="$reservation->status" domain="reservation" /></td>
                             </tr>
@@ -66,7 +66,7 @@
                     <tbody>
                         @forelse($todayCheckOuts as $reservation)
                             <tr>
-                                <td>{{ $reservation->guest->user->full_name ?? 'N/A' }}</td>
+                                <td>{{ $reservation->stay_guest_full_name ?? $reservation->guest->user->full_name ?? 'N/A' }}</td>
                                 <td>{{ $reservation->room->room_number ?? 'N/A' }}</td>
                                 <td><x-status-badge :status="$reservation->status" domain="reservation" /></td>
                             </tr>

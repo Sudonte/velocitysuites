@@ -68,7 +68,7 @@
                     <tbody>
                         @forelse($recentReservations as $reservation)
                             <tr>
-                                <td>{{ $reservation->guest->user->full_name ?? 'N/A' }}</td>
+                                <td>{{ $reservation->stay_guest_full_name ?? $reservation->guest->user->full_name ?? 'N/A' }}</td>
                                 <td>{{ $reservation->room->room_number ?? 'N/A' }}</td>
                                 <td>{{ $reservation->check_in->format('M d, Y') }}</td>
                                 <td>{{ $reservation->check_out->format('M d, Y') }}</td>

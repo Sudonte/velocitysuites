@@ -10,7 +10,7 @@
             {{ $isBooking ? 'Booking' : 'Reservation' }} #{{ $reservation->id }}
         </h5>
         <div class="small text-white-50 mt-1">
-            {{ $reservation->guest->user->full_name ?? 'N/A' }} &middot; {{ $reservation->roomType->name ?? 'N/A' }}
+            {{ $reservation->stay_guest_full_name ?? $reservation->guest->user->full_name ?? 'N/A' }} &middot; {{ $reservation->roomType->name ?? 'N/A' }}
             &middot; {{ $reservation->check_in->format('M d') }} &ndash; {{ $reservation->check_out->format('M d, Y') }}
         </div>
     </div>
@@ -38,7 +38,8 @@
             <section class="detail-section">
                 <h6 class="detail-section-title"><i class="fas fa-user"></i> Guest Information</h6>
                 <dl class="detail-list">
-                    <div><dt>Name</dt><dd>{{ $reservation->guest->user->full_name ?? 'N/A' }}</dd></div>
+                    <div><dt>Staying Guest</dt><dd>{{ $reservation->stay_guest_full_name ?? 'N/A' }}</dd></div>
+                    <div><dt>Account Holder</dt><dd>{{ $reservation->guest->user->full_name ?? 'N/A' }}</dd></div>
                     <div><dt>Email</dt><dd>{{ $reservation->guest->user->email ?? 'N/A' }}</dd></div>
                     <div><dt>Mobile</dt><dd>{{ $reservation->guest->mobile_number ?? 'N/A' }}</dd></div>
                 </dl>
