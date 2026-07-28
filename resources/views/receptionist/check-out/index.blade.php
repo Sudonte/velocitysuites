@@ -4,7 +4,7 @@
 
 @section('content')
 <div class="container-fluid py-4">
-    <x-page-header icon="fas fa-sign-out-alt" title="Pending Check-Outs" subtitle="All checked-in guests - checkout can happen before or after the scheduled date; the bill is settled either way." />
+    <x-page-header icon="fas fa-sign-out-alt" title="Check-Out" subtitle="Checkout can happen before or after the scheduled date; the bill is settled either way." />
 
     @if (session('success'))
         <div class="alert alert-success alert-dismissible fade show" role="alert">
@@ -20,9 +20,22 @@
         </div>
     @endif
 
+    <ul class="nav nav-tabs mb-3">
+        <li class="nav-item">
+            <a class="nav-link {{ $tab === 'expected' ? 'active' : '' }}" href="{{ route('receptionist.check-out.index', ['tab' => 'expected']) }}">
+                Expected Check-outs <span class="badge bg-warning text-dark">{{ $expectedCount }}</span>
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link {{ $tab === 'checked_out' ? 'active' : '' }}" href="{{ route('receptionist.check-out.index', ['tab' => 'checked_out']) }}">
+                Checked-out Guests <span class="badge bg-secondary">{{ $checkedOutCount }}</span>
+            </a>
+        </li>
+    </ul>
+
     <div class="card border-0 shadow-sm">
         <div class="card-header">
-            <h5 class="mb-0"><i class="fas fa-list"></i> Awaiting Check-Out</h5>
+            <h5 class="mb-0"><i class="fas fa-list"></i> {{ $tab === 'expected' ? 'Expected Check-outs' : 'Checked-out Guests' }}</h5>
         </div>
         <div class="table-responsive">
             <table class="table table-hover mb-0" id="checkOutTable">
@@ -32,7 +45,7 @@
                         <th>Room</th>
                         <th>Check-Out</th>
                         <th>Bill</th>
-                        <th>Action</th>
+                        @if($tab === 'expected')<th>Action</th>@endif
                     </tr>
                 </thead>
                 <tbody id="checkOutTableBody">
@@ -42,29 +55,41 @@
                             <td>{{ $booking->room->room_number ?? 'N/A' }} ({{ $booking->roomType->name ?? '' }})</td>
                             <td>
                                 {{ $booking->check_out->format('M d, Y') }}
-                                @if($booking->check_out->isAfter(today()))
+                                @if($tab === 'expected' && $booking->check_out->isAfter(today()))
                                     <span class="badge bg-info" title="Departing before the scheduled date">Early</span>
                                 @endif
                             </td>
                             <td class="bill-status-cell">
-                                @if($booking->billing && $booking->billing->billing_status === 'partial')
+                                @if($tab === 'checked_out')
+                                    @if($booking->billing)
+                                        <a href="{{ route('receptionist.billing.receipt', $booking->billing) }}" class="btn btn-sm btn-outline-secondary">
+                                            <i class="fas fa-receipt"></i> View Receipt
+                                        </a>
+                                    @else
+                                        <span class="text-muted">N/A</span>
+                                    @endif
+                                @elseif($booking->billing && $booking->billing->billing_status === 'partial')
                                     <span class="badge bg-warning text-dark">Partially Paid</span>
                                 @else
                                     <span class="text-muted">Not started</span>
                                 @endif
                             </td>
-                            <td>
-                                <button type="button" class="btn btn-sm btn-primary btn-start-checkout"
-                                    data-booking-id="{{ $booking->id }}"
-                                    data-guest-name="{{ $booking->reservation->guest->user->full_name ?? 'N/A' }}"
-                                    data-room-number="{{ $booking->room->room_number ?? 'N/A' }}">
-                                    <i class="fas fa-sign-out-alt"></i> Check Out
-                                </button>
-                            </td>
+                            @if($tab === 'expected')
+                                <td>
+                                    <button type="button" class="btn btn-sm btn-primary btn-start-checkout"
+                                        data-booking-id="{{ $booking->id }}"
+                                        data-guest-name="{{ $booking->reservation->guest->user->full_name ?? 'N/A' }}"
+                                        data-room-number="{{ $booking->room->room_number ?? 'N/A' }}">
+                                        <i class="fas fa-sign-out-alt"></i> Check Out
+                                    </button>
+                                </td>
+                            @endif
                         </tr>
                     @empty
                         <tr id="noCheckOutsRow">
-                            <td colspan="5"><x-empty-state icon="fas fa-sign-out-alt" message="No pending check-outs." /></td>
+                            <td colspan="{{ $tab === 'expected' ? 5 : 4 }}">
+                                <x-empty-state icon="fas fa-sign-out-alt" :message="$tab === 'expected' ? 'No pending check-outs.' : 'No checked-out guests yet.'" />
+                            </td>
                         </tr>
                     @endforelse
                 </tbody>
@@ -142,6 +167,7 @@ document.addEventListener('DOMContentLoaded', function () {
         chargeStore: @json(route('receptionist.billing.additional-charge.store', ['billing' => '__ID__'])),
         chargeUpdate: @json(route('receptionist.billing.additional-charge.update', ['additionalCharge' => '__ID__'])),
         chargeDestroy: @json(route('receptionist.billing.additional-charge.destroy', ['additionalCharge' => '__ID__'])),
+        discountStore: @json(route('receptionist.billing.discount.store', ['billing' => '__ID__'])),
         recordPayment: @json(route('receptionist.billing.payment.store', ['billing' => '__ID__'])),
     };
 
@@ -318,6 +344,25 @@ document.addEventListener('DOMContentLoaded', function () {
             });
             document.getElementById('chargesTableContainer').innerHTML = data.html;
             document.getElementById('runningTotalDisplay').textContent = '₱' + Number(data.running_total).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        } catch (err) {
+            showBillingError(err.message);
+        }
+    });
+
+    // Apply discount form submit - reloads the whole panel since the
+    // discount line above Running Total lives outside the swapped fragment.
+    billingPanelContent.addEventListener('submit', async function (e) {
+        if (e.target.id !== 'applyDiscountForm') return;
+        e.preventDefault();
+        const form = e.target;
+        const payload = Object.fromEntries(new FormData(form).entries());
+        try {
+            await fetchJson(buildUrl(urls.discountStore, currentBillingId()), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+            await reloadBillingPanel();
         } catch (err) {
             showBillingError(err.message);
         }

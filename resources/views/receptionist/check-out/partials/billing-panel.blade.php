@@ -58,10 +58,12 @@
         @include('receptionist.check-out.partials.charges-table', ['billing' => $billing])
     </div>
 
+    @include('receptionist.check-out.partials.discount-panel', ['billing' => $billing, 'discounts' => $discounts])
+
     <table class="table table-sm mb-0 mt-3">
         @if($billing->discount > 0)
             <tr>
-                <td>Discount</td>
+                <td>Discount{{ $billing->discountApplied ? ' (' . $billing->discountApplied->name . ')' : '' }}</td>
                 <td class="text-end text-success">-₱{{ number_format($billing->discount, 2) }}</td>
             </tr>
         @endif

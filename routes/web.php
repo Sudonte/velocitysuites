@@ -15,6 +15,7 @@ use App\Http\Controllers\Receptionist\ReceptionistController;
 use App\Http\Controllers\Receptionist\ReservationController as ReceptionistReservationController;
 use App\Http\Controllers\Receptionist\BookingController as ReceptionistBookingController;
 use App\Http\Controllers\Receptionist\CheckInController as ReceptionistCheckInController;
+use App\Http\Controllers\Receptionist\CheckOutController as ReceptionistCheckOutController;
 use App\Http\Controllers\Guest\GuestController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\ProfileController;
@@ -166,12 +167,13 @@ Route::middleware(['auth', 'account.status', 'log.activity'])->group(function ()
         Route::post('/check-in/{booking}/assign-room', [ReceptionistCheckInController::class, 'assignRoom'])->name('check-in.assign-room');
         Route::post('/check-in/{booking}', [ReceptionistCheckInController::class, 'checkIn'])->name('check-in.store');
 
-        // Check-out (pre-redesign single list - the Expected Check-outs /
-        // Checked-out Guests tabs are built in the Check-out Module phase)
-        Route::get('/check-out', [ReceptionistController::class, 'checkOutIndex'])->name('check-out.index');
-        Route::get('/check-out/{booking}/billing', [ReceptionistController::class, 'checkOutBilling'])->name('check-out.billing');
-        Route::delete('/check-out/billing/{billing}', [ReceptionistController::class, 'checkOutCancelBilling'])->name('check-out.billing.cancel');
-        Route::get('/check-out/billing/{billing}/payment', [ReceptionistController::class, 'checkOutPaymentPanel'])->name('check-out.payment');
+        // Check-out Module: two tabs - "Expected Check-outs" (checked-in
+        // guests; Check Out starts the Billing/Payment AJAX flow) and
+        // "Checked-out Guests" (view-only history).
+        Route::get('/check-out', [ReceptionistCheckOutController::class, 'index'])->name('check-out.index');
+        Route::get('/check-out/{booking}/billing', [ReceptionistCheckOutController::class, 'checkOutBilling'])->name('check-out.billing');
+        Route::delete('/check-out/billing/{billing}', [ReceptionistCheckOutController::class, 'checkOutCancelBilling'])->name('check-out.billing.cancel');
+        Route::get('/check-out/billing/{billing}/payment', [ReceptionistCheckOutController::class, 'checkOutPaymentPanel'])->name('check-out.payment');
 
         // Rooms browse (read-only: type cards -> rooms of type with status)
         Route::get('/rooms', [ReceptionistController::class, 'roomsIndex'])->name('rooms.index');
@@ -186,10 +188,11 @@ Route::middleware(['auth', 'account.status', 'log.activity'])->group(function ()
 
         // Billing (used from the Check-Out workflow's Billing Panel, plus a read-only receipt)
         Route::get('/billing/{billing}/receipt', [\App\Http\Controllers\BillingController::class, 'receipt'])->name('billing.receipt');
-        Route::post('/billing/{billing}/payment', [ReceptionistController::class, 'recordPayment'])->name('billing.payment.store');
-        Route::post('/billing/{billing}/additional-charge', [ReceptionistController::class, 'storeAdditionalCharge'])->name('billing.additional-charge.store');
-        Route::put('/billing/additional-charge/{additionalCharge}', [ReceptionistController::class, 'updateAdditionalCharge'])->name('billing.additional-charge.update');
-        Route::delete('/billing/additional-charge/{additionalCharge}', [ReceptionistController::class, 'destroyAdditionalCharge'])->name('billing.additional-charge.destroy');
+        Route::post('/billing/{billing}/payment', [ReceptionistCheckOutController::class, 'recordPayment'])->name('billing.payment.store');
+        Route::post('/billing/{billing}/discount', [ReceptionistCheckOutController::class, 'applyDiscount'])->name('billing.discount.store');
+        Route::post('/billing/{billing}/additional-charge', [ReceptionistCheckOutController::class, 'storeAdditionalCharge'])->name('billing.additional-charge.store');
+        Route::put('/billing/additional-charge/{additionalCharge}', [ReceptionistCheckOutController::class, 'updateAdditionalCharge'])->name('billing.additional-charge.update');
+        Route::delete('/billing/additional-charge/{additionalCharge}', [ReceptionistCheckOutController::class, 'destroyAdditionalCharge'])->name('billing.additional-charge.destroy');
     });
 
     // Guest Routes

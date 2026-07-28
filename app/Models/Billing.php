@@ -15,6 +15,9 @@ class Billing extends Model
         'additional_guest_fee',
         'amenity_charge',
         'discount',
+        'discount_id',
+        'discount_verified_by',
+        'discount_verified_at',
         'total_amount',
         'billing_status',
     ];
@@ -25,6 +28,7 @@ class Billing extends Model
         'amenity_charge' => 'decimal:2',
         'discount' => 'decimal:2',
         'total_amount' => 'decimal:2',
+        'discount_verified_at' => 'datetime',
     ];
 
     /**
@@ -33,6 +37,23 @@ class Billing extends Model
     public function booking()
     {
         return $this->belongsTo(Booking::class);
+    }
+
+    /**
+     * The specific authorized Discount (Senior Citizen, PWD, etc.) manually
+     * applied by a receptionist after ID verification, if any.
+     */
+    public function discountApplied()
+    {
+        return $this->belongsTo(Discount::class, 'discount_id');
+    }
+
+    /**
+     * The receptionist who verified the guest's ID and applied the discount.
+     */
+    public function discountVerifier()
+    {
+        return $this->belongsTo(User::class, 'discount_verified_by');
     }
 
     /**
