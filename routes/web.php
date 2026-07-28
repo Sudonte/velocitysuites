@@ -11,6 +11,8 @@ use App\Http\Controllers\Manager\ReservationViewController;
 use App\Http\Controllers\Manager\ReportController;
 use App\Http\Controllers\Manager\ManagerNotificationController;
 use App\Http\Controllers\Receptionist\ReceptionistController;
+use App\Http\Controllers\Receptionist\ReservationController as ReceptionistReservationController;
+use App\Http\Controllers\Receptionist\BookingController as ReceptionistBookingController;
 use App\Http\Controllers\Guest\GuestController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\ProfileController;
@@ -19,9 +21,10 @@ use Illuminate\Support\Facades\Route;
 // Landing page - shown to all users (guests can browse, auth users can see featured rooms)
 Route::get('/', [\App\Http\Controllers\LandingPageController::class, 'index'])->name('home');
 
-// Public Room Routes (accessible without login)
+// Public Room Routes (accessible without login) - guests browse room TYPES,
+// not individual room numbers; room assignment happens at check-in.
 Route::get('/rooms', [\App\Http\Controllers\PublicRoomController::class, 'index'])->name('public.rooms.index');
-Route::get('/rooms/{room}', [\App\Http\Controllers\PublicRoomController::class, 'show'])->name('public.rooms.show');
+Route::get('/rooms/{roomType}', [\App\Http\Controllers\PublicRoomController::class, 'show'])->name('public.rooms.show');
 
 // Store booking intent in session before redirecting to login
 Route::post('/booking/intent', [\App\Http\Controllers\BookingIntentController::class, 'store'])->name('booking.intent');
@@ -117,25 +120,30 @@ Route::middleware(['auth', 'account.status', 'log.activity'])->group(function ()
     Route::middleware('role:receptionist')->prefix('receptionist')->name('receptionist.')->group(function () {
         Route::get('/dashboard', [ReceptionistController::class, 'dashboard'])->name('dashboard');
 
-        // Reservations (read-only browse)
-        // NOTE: /reservations/pending must be registered BEFORE the
-        // /reservations/{reservation} wildcard or "pending" gets treated
-        // as a reservation ID and 404s.
-        Route::get('/reservations', [ReceptionistController::class, 'reservationsIndex'])->name('reservations.index');
-        Route::get('/reservations/pending', [ReceptionistController::class, 'confirmReservationsIndex'])->name('reservations.confirm-index');
-        Route::get('/reservations/{reservation}', [ReceptionistController::class, 'reservationShow'])->name('reservations.show');
+        // Reservation Module: two tabs - "To Be Confirmed Reservations"
+        // (pending_review) and "To Be Converted to Booking" (ready_for_booking).
+        Route::get('/reservations', [ReceptionistReservationController::class, 'index'])->name('reservations.index');
+        Route::get('/reservations/{reservation}/details', [ReceptionistReservationController::class, 'details'])->name('reservations.details');
+        Route::post('/reservations/{reservation}/accept', [ReceptionistReservationController::class, 'accept'])->name('reservations.accept');
+        Route::post('/reservations/{reservation}/reject', [ReceptionistReservationController::class, 'reject'])->name('reservations.reject');
+        Route::post('/reservations/{reservation}/convert', [ReceptionistReservationController::class, 'convert'])->name('reservations.convert');
 
-        // Room assignment + confirmation of pending booking requests
-        Route::post('/reservations/{reservation}/confirm', [ReceptionistController::class, 'confirmReservation'])->name('reservations.confirm');
-        Route::post('/reservations/{reservation}/reject', [ReceptionistController::class, 'rejectReservation'])->name('reservations.reject');
+        // Booking Module: view-only registry of confirmed bookings. No
+        // check-in or room-assignment action lives here.
+        Route::get('/bookings', [ReceptionistBookingController::class, 'index'])->name('bookings.index');
+        Route::get('/bookings/{booking}', [ReceptionistBookingController::class, 'show'])->name('bookings.show');
 
-        // Check-in
+        // Check-in (pre-redesign single list - the Expected Check-ins /
+        // Checked-in Guests tabs and check-in-time room assignment are
+        // built in the Check-in Module phase)
         Route::get('/check-in', [ReceptionistController::class, 'checkInIndex'])->name('check-in.index');
-        Route::post('/check-in/{reservation}', [ReceptionistController::class, 'checkIn'])->name('check-in.store');
+        Route::post('/check-in/{booking}/assign-room', [ReceptionistController::class, 'assignRoom'])->name('check-in.assign-room');
+        Route::post('/check-in/{booking}', [ReceptionistController::class, 'checkIn'])->name('check-in.store');
 
-        // Check-out
+        // Check-out (pre-redesign single list - the Expected Check-outs /
+        // Checked-out Guests tabs are built in the Check-out Module phase)
         Route::get('/check-out', [ReceptionistController::class, 'checkOutIndex'])->name('check-out.index');
-        Route::get('/check-out/{reservation}/billing', [ReceptionistController::class, 'checkOutBilling'])->name('check-out.billing');
+        Route::get('/check-out/{booking}/billing', [ReceptionistController::class, 'checkOutBilling'])->name('check-out.billing');
         Route::delete('/check-out/billing/{billing}', [ReceptionistController::class, 'checkOutCancelBilling'])->name('check-out.billing.cancel');
         Route::get('/check-out/billing/{billing}/payment', [ReceptionistController::class, 'checkOutPaymentPanel'])->name('check-out.payment');
 
@@ -172,6 +180,7 @@ Route::middleware(['auth', 'account.status', 'log.activity'])->group(function ()
         Route::get('/reservations/{reservation}', [\App\Http\Controllers\Guest\ReservationController::class, 'show'])->name('reservations.show');
         Route::put('/reservations/{reservation}', [\App\Http\Controllers\Guest\ReservationController::class, 'update'])->name('reservations.update');
         Route::put('/reservations/{reservation}/cancel', [\App\Http\Controllers\Guest\ReservationController::class, 'cancel'])->name('reservations.cancel');
+        Route::post('/reservations/{reservation}/pay-deposit', [\App\Http\Controllers\Guest\ReservationController::class, 'payDeposit'])->name('reservations.pay-deposit');
 
         // Payments - view payment history and pending bills
         Route::get('/payments', [GuestController::class, 'payments'])->name('payments.index');

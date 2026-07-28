@@ -6,7 +6,6 @@ use App\Http\Controllers\Controller;
 use App\Models\Billing;
 use App\Models\Payment;
 use App\Models\Promotion;
-use App\Models\Reservation;
 use Illuminate\View\View;
 
 class GuestDashboardController extends Controller
@@ -20,43 +19,62 @@ class GuestDashboardController extends Controller
         $user = auth()->user();
         $guest = $user->guest;
 
-        // Get current active reservation (checked in)
+        // Current active stay: a converted reservation whose Booking is
+        // currently checked in.
         $currentReservation = $guest->reservations()
-            ->where('status', 'checked_in')
-            ->with(['room', 'booking.billing'])
+            ->where('status', 'converted')
+            ->whereHas('booking', fn ($q) => $q->where('booking_status', 'checked_in'))
+            ->with(['roomType', 'booking.room', 'booking.billing'])
             ->first();
 
-        // Get upcoming reservations (confirmed)
+        // Upcoming: still awaiting staff action, or converted into a
+        // confirmed booking that hasn't checked in yet.
         $upcomingReservations = $guest->reservations()
-            ->whereIn('status', ['confirmed', 'pending'])
-            ->with(['room', 'booking'])
+            ->where(function ($q) {
+                $q->whereIn('status', ['pending_review', 'ready_for_booking'])
+                  ->orWhere(function ($q2) {
+                      $q2->where('status', 'converted')
+                         ->whereHas('booking', fn ($b) => $b->where('booking_status', 'confirmed'));
+                  });
+            })
+            ->with(['roomType', 'booking'])
             ->orderBy('check_in')
             ->get();
 
-        // Get past reservations (checked out, cancelled)
+        // Past: checked out, rejected, or cancelled.
         $pastReservations = $guest->reservations()
-            ->whereIn('status', ['checked_out', 'cancelled'])
-            ->with(['room', 'booking.billing.payments'])
+            ->where(function ($q) {
+                $q->whereIn('status', ['rejected', 'cancelled'])
+                  ->orWhere(function ($q2) {
+                      $q2->where('status', 'converted')
+                         ->whereHas('booking', fn ($b) => $b->where('booking_status', 'checked_out'));
+                  });
+            })
+            ->with(['roomType', 'booking.billing.payments'])
             ->latest('check_out')
             ->limit(10)
             ->get();
 
-        // Get pending payments (billing status pending or partial)
+        // Pending payments (billing status pending or partial)
         $pendingPayments = Billing::whereHas('booking', function ($query) use ($guest) {
             $query->whereHas('reservation', function ($q) use ($guest) {
                 $q->where('guest_id', $guest->id);
             });
         })
         ->whereIn('billing_status', ['pending', 'partial'])
-        ->with(['booking.reservation.room'])
+        ->with(['booking.reservation.roomType', 'booking.room'])
         ->get();
 
-        // Get recent payments
-        $recentPayments = Payment::whereHas('billing.booking.reservation', function ($query) use ($guest) {
-            $query->where('guest_id', $guest->id);
+        // Recent payments (both deposit and final)
+        $reservationIds = $guest->reservations()->pluck('id');
+        $recentPayments = Payment::where(function ($q) use ($reservationIds) {
+            $q->whereIn('reservation_id', $reservationIds)
+              ->orWhereHas('billing.booking.reservation', function ($q2) use ($reservationIds) {
+                  $q2->whereIn('id', $reservationIds);
+              });
         })
-        ->with(['billing.booking.reservation.room'])
-        ->latest('payment_date')
+        ->with(['billing.booking.reservation.roomType', 'billing.booking.room', 'reservation.roomType'])
+        ->latest('created_at')
         ->limit(5)
         ->get();
 

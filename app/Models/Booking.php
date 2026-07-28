@@ -11,12 +11,21 @@ class Booking extends Model
 
     protected $fillable = [
         'reservation_id',
-        'booking_date',
+        'room_type_id',
+        'room_id',
+        'check_in',
+        'check_out',
+        'adults',
+        'children',
+        'number_of_guests',
+        'confirmed_at',
         'booking_status',
     ];
 
     protected $casts = [
-        'booking_date' => 'date',
+        'check_in' => 'datetime',
+        'check_out' => 'datetime',
+        'confirmed_at' => 'datetime',
     ];
 
     /**
@@ -28,10 +37,36 @@ class Booking extends Model
     }
 
     /**
+     * Get the room type requested (copied from the reservation at
+     * conversion time).
+     */
+    public function roomType()
+    {
+        return $this->belongsTo(RoomType::class);
+    }
+
+    /**
+     * Get the physical room. Null until the receptionist assigns one at
+     * check-in.
+     */
+    public function room()
+    {
+        return $this->belongsTo(Room::class);
+    }
+
+    /**
      * Get the billing associated with the booking.
      */
     public function billing()
     {
         return $this->hasOne(Billing::class);
+    }
+
+    /**
+     * Calculate the number of nights.
+     */
+    public function getNumberOfNightsAttribute()
+    {
+        return abs($this->check_out->diffInDays($this->check_in));
     }
 }

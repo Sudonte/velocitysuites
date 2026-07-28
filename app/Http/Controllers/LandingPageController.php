@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Room;
+use App\Models\RoomType;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\View\View;
 
@@ -27,11 +28,15 @@ class LandingPageController extends Controller
             };
         }
 
-        $featuredRooms = Room::where('status', 'available')
+        $featuredRoomTypes = RoomType::where('status', 'active')
             ->latest()
             ->take(6)
-            ->get();
+            ->get()
+            ->each(function (RoomType $roomType) {
+                $roomType->representative_image = Room::where('room_type_id', $roomType->id)
+                    ->whereNotNull('image')->value('image');
+            });
 
-        return view('welcome', compact('featuredRooms'));
+        return view('welcome', ['featuredRoomTypes' => $featuredRoomTypes]);
     }
 }

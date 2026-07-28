@@ -19,11 +19,18 @@ class Reservation extends Model
         'adults',
         'children',
         'status',
+        'payment_preference',
+        'payment_method',
+        'discount_requested',
+        'id_document_path',
+        'discount_verification_status',
+        'rejection_reason',
     ];
 
     protected $casts = [
         'check_in' => 'datetime',
         'check_out' => 'datetime',
+        'discount_requested' => 'boolean',
     ];
 
     /**
@@ -45,8 +52,10 @@ class Reservation extends Model
     }
 
     /**
-     * Get the room associated with the reservation. Null while the
-     * reservation is pending (no room assigned yet).
+     * Get the room associated with the reservation. Deprecated going
+     * forward - room assignment now happens at check-in, against the
+     * Booking, not the Reservation. Kept for historical/pre-redesign
+     * records; new code should not write to reservations.room_id.
      */
     public function room()
     {
@@ -54,11 +63,22 @@ class Reservation extends Model
     }
 
     /**
-     * Get the booking associated with the reservation.
+     * Get the booking associated with the reservation. Only exists once
+     * the reservation has been converted (status = converted).
      */
     public function booking()
     {
         return $this->hasOne(Booking::class);
+    }
+
+    /**
+     * Get deposit payments made against this reservation before a Billing
+     * exists (payment_stage = 'deposit', billing_id null until re-parented
+     * at checkout).
+     */
+    public function payments()
+    {
+        return $this->hasMany(Payment::class);
     }
 
     /**

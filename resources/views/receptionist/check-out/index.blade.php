@@ -36,18 +36,18 @@
                     </tr>
                 </thead>
                 <tbody id="checkOutTableBody">
-                    @forelse($reservations as $reservation)
-                        <tr data-reservation-id="{{ $reservation->id }}">
-                            <td>{{ $reservation->guest->user->full_name ?? 'N/A' }}</td>
-                            <td>{{ $reservation->room->room_number ?? 'N/A' }} ({{ $reservation->room->roomType->name ?? '' }})</td>
+                    @forelse($bookings as $booking)
+                        <tr data-booking-id="{{ $booking->id }}">
+                            <td>{{ $booking->reservation->guest->user->full_name ?? 'N/A' }}</td>
+                            <td>{{ $booking->room->room_number ?? 'N/A' }} ({{ $booking->roomType->name ?? '' }})</td>
                             <td>
-                                {{ $reservation->check_out->format('M d, Y') }}
-                                @if($reservation->check_out->isAfter(today()))
+                                {{ $booking->check_out->format('M d, Y') }}
+                                @if($booking->check_out->isAfter(today()))
                                     <span class="badge bg-info" title="Departing before the scheduled date">Early</span>
                                 @endif
                             </td>
                             <td class="bill-status-cell">
-                                @if($reservation->booking && $reservation->booking->billing && $reservation->booking->billing->billing_status === 'partial')
+                                @if($booking->billing && $booking->billing->billing_status === 'partial')
                                     <span class="badge bg-warning text-dark">Partially Paid</span>
                                 @else
                                     <span class="text-muted">Not started</span>
@@ -55,9 +55,9 @@
                             </td>
                             <td>
                                 <button type="button" class="btn btn-sm btn-primary btn-start-checkout"
-                                    data-reservation-id="{{ $reservation->id }}"
-                                    data-guest-name="{{ $reservation->guest->user->full_name ?? 'N/A' }}"
-                                    data-room-number="{{ $reservation->room->room_number ?? 'N/A' }}">
+                                    data-booking-id="{{ $booking->id }}"
+                                    data-guest-name="{{ $booking->reservation->guest->user->full_name ?? 'N/A' }}"
+                                    data-room-number="{{ $booking->room->room_number ?? 'N/A' }}">
                                     <i class="fas fa-sign-out-alt"></i> Check Out
                                 </button>
                             </td>
@@ -71,7 +71,7 @@
             </table>
         </div>
         <div class="card-footer">
-            {{ $reservations->links() }}
+            {{ $bookings->links() }}
         </div>
     </div>
 </div>
@@ -87,7 +87,7 @@
             <div class="modal-body">
                 <p class="mb-1"><strong>Guest:</strong> <span id="confirmGuestName"></span></p>
                 <p class="mb-1"><strong>Room:</strong> <span id="confirmRoomNumber"></span></p>
-                <p class="mb-1"><strong>Reservation:</strong> <span id="confirmReservationCode"></span></p>
+                <p class="mb-1"><strong>Booking:</strong> <span id="confirmReservationCode"></span></p>
                 <p class="text-muted mt-3 mb-0">Are you sure you want to begin the check-out process?</p>
             </div>
             <div class="modal-footer">
@@ -133,10 +133,10 @@ document.addEventListener('DOMContentLoaded', function () {
     const billingPanelContent = document.getElementById('billingPanelContent');
     const paymentPanelContent = document.getElementById('paymentPanelContent');
 
-    let activeReservationId = null;
+    let activeBookingId = null;
 
     const urls = {
-        billing: @json(route('receptionist.check-out.billing', ['reservation' => '__ID__'])),
+        billing: @json(route('receptionist.check-out.billing', ['booking' => '__ID__'])),
         cancelBilling: @json(route('receptionist.check-out.billing.cancel', ['billing' => '__ID__'])),
         payment: @json(route('receptionist.check-out.payment', ['billing' => '__ID__'])),
         chargeStore: @json(route('receptionist.billing.additional-charge.store', ['billing' => '__ID__'])),
@@ -181,17 +181,17 @@ document.addEventListener('DOMContentLoaded', function () {
         const btn = e.target.closest('.btn-start-checkout');
         if (!btn) return;
 
-        activeReservationId = btn.dataset.reservationId;
+        activeBookingId = btn.dataset.bookingId;
         document.getElementById('confirmGuestName').textContent = btn.dataset.guestName;
         document.getElementById('confirmRoomNumber').textContent = btn.dataset.roomNumber;
-        document.getElementById('confirmReservationCode').textContent = 'RSV-' + String(activeReservationId).padStart(5, '0');
+        document.getElementById('confirmReservationCode').textContent = 'BKG-' + String(activeBookingId).padStart(5, '0');
         confirmModal.show();
     });
 
     // ---- Step 1 -> 2: Continue to Billing ----
     document.getElementById('continueToBillingBtn').addEventListener('click', async function () {
         try {
-            const html = await fetchHtml(buildUrl(urls.billing, activeReservationId));
+            const html = await fetchHtml(buildUrl(urls.billing, activeBookingId));
             billingPanelContent.innerHTML = html;
             confirmModal.hide();
             billingModal.show();
@@ -216,7 +216,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     async function reloadBillingPanel() {
-        const html = await fetchHtml(buildUrl(urls.billing, activeReservationId));
+        const html = await fetchHtml(buildUrl(urls.billing, activeBookingId));
         billingPanelContent.innerHTML = html;
     }
 
@@ -405,7 +405,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
             paymentModal.hide();
 
-            const row = document.querySelector('tr[data-reservation-id="' + activeReservationId + '"]');
+            const row = document.querySelector('tr[data-booking-id="' + activeBookingId + '"]');
 
             if (data.completed) {
                 if (row) row.remove();
@@ -422,7 +422,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 alert(data.message + ' Remaining balance: ₱' + Number(data.balance).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
             }
 
-            activeReservationId = null;
+            activeBookingId = null;
         } catch (err) {
             showPaymentError(err.message);
         }

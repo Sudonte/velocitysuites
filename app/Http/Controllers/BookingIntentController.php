@@ -14,7 +14,7 @@ class BookingIntentController extends Controller
     {
         // Validate required data
         $validated = $request->validate([
-            'room_id' => 'required|integer|exists:rooms,id',
+            'room_type_id' => 'required|integer|exists:room_types,id',
             'check_in' => 'nullable|date',
             'check_out' => 'nullable|date|after:check_in',
             'guests' => 'nullable|integer|min:1',
@@ -22,7 +22,7 @@ class BookingIntentController extends Controller
 
         // Store booking intent in session
         session()->put('booking_intent', [
-            'room_id' => $validated['room_id'],
+            'room_type_id' => $validated['room_type_id'],
             'check_in' => $validated['check_in'] ?? null,
             'check_out' => $validated['check_out'] ?? null,
             'guests' => $validated['guests'] ?? 1,

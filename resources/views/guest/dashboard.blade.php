@@ -21,7 +21,7 @@
             <x-stat-card
                 icon="fas fa-bed"
                 label="Current Stay"
-                :value="$currentReservation ? $currentReservation->room->room_name : 'None'"
+                :value="$currentReservation ? ($currentReservation->booking->room->room_name ?? $currentReservation->roomType->name) : 'None'"
                 color="primary" />
         </div>
         <div class="col-md-3 mb-3">
@@ -58,8 +58,8 @@
             <div class="card-body">
                 <div class="row">
                     <div class="col-md-4">
-                        <p class="mb-1"><strong>Room:</strong> {{ $currentReservation->room->room_name }}</p>
-                        <p class="mb-1"><strong>Type:</strong> {{ $currentReservation->room->roomType->name }}</p>
+                        <p class="mb-1"><strong>Room:</strong> {{ $currentReservation->booking->room->room_name ?? 'N/A' }}</p>
+                        <p class="mb-1"><strong>Type:</strong> {{ $currentReservation->roomType->name }}</p>
                     </div>
                     <div class="col-md-4">
                         <p class="mb-1"><strong>Check-In:</strong> {{ $currentReservation->check_in->format('M d, Y H:i') }}</p>
@@ -67,7 +67,7 @@
                     </div>
                     <div class="col-md-4">
                         <p class="mb-1"><strong>Guests:</strong> {{ $currentReservation->number_of_guests }}</p>
-                        <p class="mb-1"><strong>Status:</strong> <x-status-badge status="checked_in" domain="reservation" /></p>
+                        <p class="mb-1"><strong>Status:</strong> <x-status-badge status="checked_in" domain="booking" /></p>
                     </div>
                 </div>
                 <div class="mt-3">
@@ -120,7 +120,7 @@
                                 $balance = max(0, (float) $billing->total_amount - (float) $paid);
                             @endphp
                             <tr>
-                                <td>{{ $reservation->room->room_name ?? $reservation->roomType->name . ' (room to be assigned)' }}</td>
+                                <td>{{ $billing->booking->room->room_name ?? $reservation->roomType->name }}</td>
                                 <td>{{ $reservation->check_in->format('M d, Y') }}</td>
                                 <td>{{ $reservation->check_out->format('M d, Y') }}</td>
                                 <td>₱{{ number_format($billing->total_amount, 2) }}</td>
@@ -162,11 +162,17 @@
                     <tbody>
                         @foreach($upcomingReservations as $reservation)
                             <tr>
-                                <td>{{ $reservation->room->room_name ?? $reservation->roomType->name . ' (room to be assigned)' }}</td>
+                                <td>{{ $reservation->roomType->name }} @if($reservation->status !== 'converted')<small class="text-muted">(room to be assigned)</small>@endif</td>
                                 <td>{{ $reservation->check_in->format('M d, Y') }}</td>
                                 <td>{{ $reservation->check_out->format('M d, Y') }}</td>
                                 <td>{{ $reservation->number_of_guests }}</td>
-                                <td><x-status-badge :status="$reservation->status" domain="reservation" /></td>
+                                <td>
+                                    @if($reservation->status === 'converted' && $reservation->booking)
+                                        <x-status-badge :status="$reservation->booking->booking_status" domain="booking" />
+                                    @else
+                                        <x-status-badge :status="$reservation->status" domain="reservation" />
+                                    @endif
+                                </td>
                                 <td>
                                     <a href="{{ route('guest.reservations.show', $reservation) }}" class="btn btn-sm btn-primary">
                                         <i class="fas fa-eye"></i>
@@ -203,8 +209,14 @@
                     <tbody>
                         @foreach($recentPayments as $payment)
                             <tr>
-                                <td>{{ $payment->payment_date->format('M d, Y H:i') }}</td>
-                                <td>{{ $payment->billing->booking->reservation->room->room_name }}</td>
+                                <td>{{ ($payment->payment_date ?? $payment->created_at)->format('M d, Y H:i') }}</td>
+                                <td>
+                                    @if($payment->billing)
+                                        {{ $payment->billing->booking->room->room_name ?? $payment->billing->booking->reservation->roomType->name }}
+                                    @else
+                                        {{ $payment->reservation->roomType->name }} <small class="text-muted">(deposit)</small>
+                                    @endif
+                                </td>
                                 <td>₱{{ number_format($payment->amount_paid, 2) }}</td>
                                 <td>{{ ucfirst($payment->payment_method) }}</td>
                                 <td><small>{{ $payment->reference_number }}</small></td>
@@ -280,10 +292,16 @@
                     <tbody>
                         @foreach($pastReservations as $reservation)
                             <tr>
-                                <td>{{ $reservation->room->room_name ?? $reservation->roomType->name . ' (room to be assigned)' }}</td>
+                                <td>{{ $reservation->booking->room->room_name ?? $reservation->roomType->name }}</td>
                                 <td>{{ $reservation->check_in->format('M d, Y') }}</td>
                                 <td>{{ $reservation->check_out->format('M d, Y') }}</td>
-                                <td><x-status-badge :status="$reservation->status" domain="reservation" /></td>
+                                <td>
+                                    @if($reservation->status === 'converted' && $reservation->booking)
+                                        <x-status-badge :status="$reservation->booking->booking_status" domain="booking" />
+                                    @else
+                                        <x-status-badge :status="$reservation->status" domain="reservation" />
+                                    @endif
+                                </td>
                                 <td>
                                     <a href="{{ route('guest.reservations.show', $reservation) }}" class="btn btn-sm btn-outline-secondary">
                                         <i class="fas fa-eye"></i>

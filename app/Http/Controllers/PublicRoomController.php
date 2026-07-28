@@ -3,63 +3,118 @@
 namespace App\Http\Controllers;
 
 use App\Models\Room;
+use App\Models\RoomType;
+use App\Services\RoomAvailabilityService;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
 class PublicRoomController extends Controller
 {
-    /**
-     * Display all available rooms (public access).
-     */
-    public function index(Request $request): View
+    public function __construct(private RoomAvailabilityService $availability)
     {
-        $query = Room::where('status', 'available');
-
-        // Filter by room type
-        if ($request->filled('room_type')) {
-            $query->whereHas('roomType', function ($q) use ($request) {
-                $q->where('name', $request->room_type);
-            });
-        }
-
-        // Filter by price range on the EFFECTIVE rate: the room's own
-        // override when set, otherwise its type's base rate.
-        $effectiveRate = 'COALESCE(rooms.rate_override, (SELECT rate FROM room_types WHERE room_types.id = rooms.room_type_id))';
-
-        if ($request->filled('min_price')) {
-            $query->whereRaw("$effectiveRate >= ?", [$request->min_price]);
-        }
-
-        if ($request->filled('max_price')) {
-            $query->whereRaw("$effectiveRate <= ?", [$request->max_price]);
-        }
-
-        // Filter by capacity (per-room, types only set the baseline)
-        if ($request->filled('capacity')) {
-            $query->where('room_capacity', '>=', $request->capacity);
-        }
-
-        $rooms = $query->latest()->paginate(12);
-        $roomTypes = \App\Models\RoomType::where('status', 'active')->orderBy('name')->pluck('name');
-
-        return view('public.rooms.index', compact('rooms', 'roomTypes'));
     }
 
     /**
-     * Display room details (public access).
+     * Display all room types (public access). Guests browse types, not
+     * individual room numbers - room assignment happens at check-in.
      */
-    public function show(Room $room): View
+    public function index(Request $request): View
     {
-        // Load room with images
-        $room->load(['images']);
+        [$checkIn, $checkOut] = $this->resolveDates($request);
 
-        // Get related rooms (same type, excluding current)
-        $relatedRooms = Room::where('room_type_id', $room->room_type_id)
-            ->where('id', '!=', $room->id)
-            ->where('status', 'available')
+        $query = RoomType::where('status', 'active');
+
+        if ($request->filled('room_type')) {
+            $query->where('name', $request->room_type);
+        }
+
+        if ($request->filled('min_price')) {
+            $query->where('rate', '>=', $request->min_price);
+        }
+
+        if ($request->filled('max_price')) {
+            $query->where('rate', '<=', $request->max_price);
+        }
+
+        if ($request->filled('capacity')) {
+            $query->where('capacity', '>=', $request->capacity);
+        }
+
+        $roomTypes = $query->orderBy('name')->paginate(12)->withQueryString();
+
+        $roomTypes->getCollection()->transform(function (RoomType $roomType) use ($checkIn, $checkOut) {
+            $roomType->available_count = $this->availability->availableCount($roomType, $checkIn, $checkOut);
+            $roomType->is_fully_booked = $roomType->available_count <= 0;
+            $roomType->representative_image = Room::where('room_type_id', $roomType->id)
+                ->whereNotNull('image')->value('image');
+
+            return $roomType;
+        });
+
+        $allRoomTypes = RoomType::where('status', 'active')->orderBy('name')->pluck('name');
+
+        return view('public.rooms.index', [
+            'roomTypes' => $roomTypes,
+            'allRoomTypes' => $allRoomTypes,
+            'checkIn' => $checkIn,
+            'checkOut' => $checkOut,
+        ]);
+    }
+
+    /**
+     * Display room type details with real-time availability (public
+     * access).
+     */
+    public function show(RoomType $roomType, Request $request): View
+    {
+        [$checkIn, $checkOut] = $this->resolveDates($request);
+
+        $availableCount = $this->availability->availableCount($roomType, $checkIn, $checkOut);
+        $isFullyBooked = $availableCount <= 0;
+
+        $rooms = Room::where('room_type_id', $roomType->id)->with('images')->get();
+        $gallery = $rooms->flatMap(function (Room $room) {
+            $paths = $room->images->pluck('image_path')->all();
+            if ($room->image) {
+                array_unshift($paths, $room->image);
+            }
+
+            return $paths;
+        })->unique()->values();
+
+        $relatedRoomTypes = RoomType::where('status', 'active')
+            ->where('id', '!=', $roomType->id)
             ->take(3)
             ->get();
 
-        return view('public.rooms.show', compact('room', 'relatedRooms'));
+        return view('public.rooms.show', [
+            'roomType' => $roomType,
+            'gallery' => $gallery,
+            'availableCount' => $availableCount,
+            'totalInventory' => $this->availability->totalInventory($roomType),
+            'isFullyBooked' => $isFullyBooked,
+            'checkIn' => $checkIn,
+            'checkOut' => $checkOut,
+            'relatedRoomTypes' => $relatedRoomTypes,
+        ]);
+    }
+
+    /**
+     * Guest-selected dates for availability checking, defaulting to a
+     * near-term window (tomorrow -> day after) when none are given, so the
+     * Fully Booked badge always has a meaningful date range to check.
+     */
+    private function resolveDates(Request $request): array
+    {
+        $checkIn = $request->filled('check_in')
+            ? Carbon::parse($request->check_in)->startOfDay()
+            : now()->addDay()->startOfDay();
+
+        $checkOut = $request->filled('check_out')
+            ? Carbon::parse($request->check_out)->startOfDay()
+            : $checkIn->copy()->addDay();
+
+        return [$checkIn, $checkOut];
     }
 }

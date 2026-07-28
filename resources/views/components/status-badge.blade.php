@@ -3,8 +3,14 @@
 @php
 $maps = [
     'reservation' => [
-        'pending' => 'warning', 'confirmed' => 'success', 'checked_in' => 'primary',
-        'checked_out' => 'secondary', 'cancelled' => 'danger',
+        'pending_review' => 'warning', 'ready_for_booking' => 'info', 'rejected' => 'danger',
+        'cancelled' => 'danger', 'converted' => 'success',
+    ],
+    'booking' => [
+        'confirmed' => 'success', 'checked_in' => 'primary', 'checked_out' => 'secondary', 'cancelled' => 'danger',
+    ],
+    'discount_verification' => [
+        'not_requested' => 'secondary', 'pending' => 'warning', 'approved' => 'success', 'rejected' => 'danger',
     ],
     'billing' => [
         'pending' => 'secondary', 'partial' => 'warning', 'paid' => 'success',

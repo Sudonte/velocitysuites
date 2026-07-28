@@ -14,6 +14,7 @@ use App\Models\Promotion;
 use App\Models\Reservation;
 use App\Models\Room;
 use App\Services\NotificationService;
+use App\Services\RoomAvailabilityService;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -24,10 +25,12 @@ use Illuminate\View\View;
 class ReceptionistController extends Controller
 {
     protected NotificationService $notificationService;
+    protected RoomAvailabilityService $availability;
 
-    public function __construct(NotificationService $notificationService)
+    public function __construct(NotificationService $notificationService, RoomAvailabilityService $availability)
     {
         $this->notificationService = $notificationService;
+        $this->availability = $availability;
     }
 
     /**
@@ -36,23 +39,23 @@ class ReceptionistController extends Controller
     public function dashboard(): View
     {
         // Status-driven counts that mirror the actual work queues, so any
-        // action (confirm, check-in, check-out) moves these immediately -
-        // check-in/check-out are no longer date-gated.
+        // action (accept, convert, check-in, check-out) moves these
+        // immediately - check-in/check-out are no longer date-gated.
         $availableRooms = Room::where('status', 'available')->count();
-        $bookingRequests = Reservation::where('status', 'pending')->count();
-        $awaitingCheckIn = Reservation::where('status', 'confirmed')->count();
-        $inHouseGuests = Reservation::where('status', 'checked_in')->count();
+        $bookingRequests = Reservation::whereIn('status', ['pending_review', 'ready_for_booking'])->count();
+        $awaitingCheckIn = Booking::where('booking_status', 'confirmed')->count();
+        $inHouseGuests = Booking::where('booking_status', 'checked_in')->count();
 
         // Today's schedule stays date-based - it's a schedule. Arrivals due
         // today (not yet checked in) and departures due today (still in house).
-        $todayArrivals = Reservation::with(['guest.user', 'room'])
+        $todayArrivals = Booking::with(['reservation.guest.user', 'room', 'roomType'])
             ->whereDate('check_in', today())
-            ->where('status', 'confirmed')
+            ->where('booking_status', 'confirmed')
             ->get();
 
-        $todayDepartures = Reservation::with(['guest.user', 'room'])
+        $todayDepartures = Booking::with(['reservation.guest.user', 'room'])
             ->whereDate('check_out', today())
-            ->where('status', 'checked_in')
+            ->where('booking_status', 'checked_in')
             ->get();
 
         return view('receptionist.dashboard', compact(
@@ -66,266 +69,89 @@ class ReceptionistController extends Controller
     }
 
     /**
-     * List all reservations (read-only).
-     */
-    public function reservationsIndex(Request $request): View
-    {
-        $query = Reservation::with(['guest.user', 'room', 'booking.billing']);
-
-        if ($request->filled('status')) {
-            $query->where('status', $request->status);
-        }
-
-        if ($request->filled('search')) {
-            $search = $request->search;
-            $query->whereHas('guest.user', function ($q) use ($search) {
-                $q->where('name', 'like', "%{$search}%")
-                  ->orWhere('email', 'like', "%{$search}%");
-            })->orWhereHas('room', function ($q) use ($search) {
-                $q->where('room_number', 'like', "%{$search}%");
-            });
-        }
-
-        $reservations = $query->latest('check_in')->paginate(15);
-
-        return view('receptionist.reservations.index', compact('reservations'));
-    }
-
-    /**
-     * Show a reservation (read-only).
-     */
-    public function reservationShow(Reservation $reservation): View
-    {
-        $reservation->load(['guest.user', 'room', 'booking.billing.payments', 'amenityRequests.amenity']);
-
-        return view('receptionist.reservations.show', compact('reservation'));
-    }
-
-    /**
-     * List booking requests awaiting room assignment and confirmation.
-     * Each pending reservation gets a dropdown of rooms of the requested
-     * type that are actually free for the requested dates.
-     */
-    public function confirmReservationsIndex(): View
-    {
-        $reservations = Reservation::with(['guest.user', 'roomType'])
-            ->where('status', 'pending')
-            ->orderBy('created_at')
-            ->paginate(15);
-
-        $assignableRooms = $reservations->getCollection()->mapWithKeys(function ($reservation) {
-            return [$reservation->id => $this->assignableRoomsFor($reservation)];
-        });
-
-        return view('receptionist.reservations.confirm-index', compact('reservations', 'assignableRooms'));
-    }
-
-    /**
-     * Rooms of the reservation's requested type that can be assigned to it:
-     * in service, currently available, big enough for the party (capacity
-     * varies per room within a type), and with no confirmed/checked-in
-     * reservation overlapping the requested dates.
-     */
-    private function assignableRoomsFor(Reservation $reservation)
-    {
-        return Room::where('room_type_id', $reservation->room_type_id)
-            ->where('room_capacity', '>=', $reservation->number_of_guests)
-            ->where('status', 'available')
-            ->whereDoesntHave('reservations', function ($q) use ($reservation) {
-                $q->whereIn('status', ['confirmed', 'checked_in'])
-                  ->where('id', '!=', $reservation->id)
-                  ->where(function ($dates) use ($reservation) {
-                      $dates->whereBetween('check_in', [$reservation->check_in, $reservation->check_out])
-                            ->orWhereBetween('check_out', [$reservation->check_in, $reservation->check_out])
-                            ->orWhere(function ($spanning) use ($reservation) {
-                                $spanning->where('check_in', '<=', $reservation->check_in)
-                                         ->where('check_out', '>=', $reservation->check_out);
-                            });
-                  });
-            })
-            ->orderBy('room_number')
-            ->get();
-    }
-
-    /**
-     * Create zero-charge, pre-approved amenity requests for every active
-     * amenity-type promotion matching the reservation's room type. Skipped
-     * if the reservation already has a zero-charge request for that
-     * amenity (guards against double-granting on re-confirmation).
-     */
-    private function grantPromoAmenities(Reservation $reservation): void
-    {
-        $promos = Promotion::with('amenities')
-            ->where('status', 'active')
-            ->where('promo_type', 'amenity')
-            ->whereDate('start_date', '<=', today())
-            ->whereDate('end_date', '>=', today())
-            ->where(function ($q) use ($reservation) {
-                $q->whereNull('room_type_id')
-                  ->orWhere('room_type_id', $reservation->room_type_id);
-            })
-            ->get();
-
-        foreach ($promos as $promo) {
-            foreach ($promo->amenities as $amenity) {
-                $alreadyGranted = AmenityRequest::where('reservation_id', $reservation->id)
-                    ->where('amenity_id', $amenity->id)
-                    ->where('charge', 0)
-                    ->exists();
-
-                if (!$alreadyGranted) {
-                    AmenityRequest::create([
-                        'guest_id' => $reservation->guest_id,
-                        'reservation_id' => $reservation->id,
-                        'amenity_id' => $amenity->id,
-                        'quantity' => $amenity->pivot->quantity,
-                        'charge' => 0, // included free by the promotion
-                        'status' => 'approved',
-                    ]);
-                }
-            }
-        }
-    }
-
-    /**
-     * Assign a room to a pending booking request and confirm it.
-     * The guest never picks a room number - the receptionist chooses the
-     * physical room here, and confirmation only happens with a room set.
-     */
-    public function confirmReservation(Request $request, Reservation $reservation): RedirectResponse
-    {
-        if ($reservation->status !== 'pending') {
-            return back()->with('error', 'Only pending reservations can be confirmed.');
-        }
-
-        $validated = $request->validate([
-            'room_id' => 'required|exists:rooms,id',
-        ]);
-
-        // The chosen room must be one of the actually-assignable rooms
-        // (right type, available, no date conflict) - not just any room.
-        $room = $this->assignableRoomsFor($reservation)->firstWhere('id', (int) $validated['room_id']);
-
-        if (!$room) {
-            return back()->with('error', 'That room cannot be assigned: it is not an available ' . $reservation->roomType->name . ' room for these dates.');
-        }
-
-        DB::transaction(function () use ($reservation, $room) {
-            $reservation->update([
-                'room_id' => $room->id,
-                'status' => 'confirmed',
-            ]);
-
-            // Update booking status
-            if ($reservation->booking) {
-                $reservation->booking->update(['booking_status' => 'confirmed']);
-            }
-
-            // Mark the room as reserved to prevent double bookings
-            $room->update(['status' => 'reserved']);
-
-            // Grant active amenity-promo inclusions for this room type as
-            // zero-charge approved amenity requests, so they appear on the
-            // stay (and the final bill) at no cost.
-            $this->grantPromoAmenities($reservation);
-
-            // Notify the guest with their assigned room
-            $this->notificationService->notifyReservationConfirmed(
-                $reservation->guest->user,
-                $room->room_name . ' (Room ' . $room->room_number . ')'
-            );
-        });
-
-        return redirect()->route('receptionist.reservations.confirm-index')
-            ->with('success', 'Room ' . $room->room_number . ' assigned and reservation confirmed!');
-    }
-
-    /**
-     * Reject a pending reservation.
-     */
-    public function rejectReservation(Request $request, Reservation $reservation): RedirectResponse
-    {
-        if ($reservation->status !== 'pending') {
-            return back()->with('error', 'Only pending reservations can be rejected.');
-        }
-
-        $request->validate([
-            'reason' => 'required|string|max:500',
-        ]);
-
-        DB::transaction(function () use ($reservation, $request) {
-            $reservation->update(['status' => 'cancelled']);
-
-            // Update booking status
-            if ($reservation->booking) {
-                $reservation->booking->update(['booking_status' => 'cancelled']);
-            }
-
-            // Release the room if one was already assigned (pending
-            // requests usually have none yet).
-            if ($reservation->room) {
-                $reservation->room->update(['status' => 'available']);
-            }
-
-            // Notify the guest about rejection
-            Notification::create([
-                'user_id' => $reservation->guest->user_id,
-                'title' => 'Reservation Rejected',
-                'message' => 'Your booking request for a ' . $reservation->roomType->name . ' room has been rejected. Reason: ' . $request->reason,
-                'category' => 'booking',
-            ]);
-        });
-
-        return redirect()->route('receptionist.reservations.confirm-index')->with('success', 'Reservation rejected.');
-    }
-
-    /**
-     * List reservations awaiting check-in: every confirmed reservation,
+     * List reservations awaiting check-in: every confirmed booking,
      * regardless of its scheduled date - early arrivals can be checked in
      * whenever their room is actually ready (room status is the real gate).
+     *
+     * NOTE: this still uses the pre-redesign single-list UI. The dedicated
+     * "Expected Check-ins" / "Checked-in Guests" tabs and check-in-time room
+     * assignment are built in the Check-in Module phase - this keeps
+     * check-in functionally correct against the new Booking-based model in
+     * the meantime.
      */
     public function checkInIndex(): View
     {
-        $reservations = Reservation::with(['guest.user', 'room'])
-            ->where('status', 'confirmed')
+        $bookings = Booking::with(['reservation.guest.user', 'room', 'roomType'])
+            ->where('booking_status', 'confirmed')
             ->orderBy('check_in')
             ->paginate(15);
 
-        return view('receptionist.check-in.index', compact('reservations'));
+        // Room assignment happens here, at check-in, per the redesigned
+        // workflow. NOTE: this list/assign-inline UI is a minimal stand-in
+        // for the full "Expected Check-ins" / "Checked-in Guests" tabs the
+        // Check-in Module phase builds - kept simple for now so the system
+        // isn't left unable to assign rooms at all in the meantime.
+        $assignableRooms = $bookings->getCollection()
+            ->filter(fn (Booking $booking) => !$booking->room)
+            ->mapWithKeys(fn (Booking $booking) => [$booking->id => $this->availability->assignableRooms($booking)]);
+
+        return view('receptionist.check-in.index', compact('bookings', 'assignableRooms'));
     }
 
     /**
-     * Mark reservation as checked in. Date is not a gate - the room's
-     * actual status is: a room still occupied by the previous guest or
-     * under maintenance can't receive a new check-in.
+     * Assign a room to an unassigned confirmed booking. The room must
+     * actually be free for the booking's dates (not just "available"
+     * status) - reuses the same assignableRooms() query the check-in list
+     * used to populate the dropdown, so a stale/concurrent selection can't
+     * double-book a room.
      */
-    public function checkIn(Reservation $reservation): RedirectResponse
+    public function assignRoom(Request $request, Booking $booking): RedirectResponse
     {
-        if ($reservation->status !== 'confirmed') {
-            return back()->with('error', 'Only confirmed reservations can be checked in.');
+        if ($booking->booking_status !== 'confirmed') {
+            return back()->with('error', 'Only confirmed bookings can have a room assigned.');
         }
 
-        if (in_array($reservation->room->status, ['occupied', 'maintenance'])) {
+        $validated = $request->validate(['room_id' => 'required|exists:rooms,id']);
+
+        $room = $this->availability->assignableRooms($booking)->firstWhere('id', (int) $validated['room_id']);
+
+        if (!$room) {
+            return back()->with('error', 'That room cannot be assigned: it is not an available ' . $booking->roomType->name . ' room for these dates.');
+        }
+
+        $booking->update(['room_id' => $room->id]);
+
+        return back()->with('success', 'Room ' . $room->room_number . ' assigned.');
+    }
+
+    /**
+     * Mark booking as checked in. Date is not a gate - the room's actual
+     * status is: a room still occupied by the previous guest or under
+     * maintenance can't receive a new check-in.
+     */
+    public function checkIn(Booking $booking): RedirectResponse
+    {
+        if ($booking->booking_status !== 'confirmed') {
+            return back()->with('error', 'Only confirmed bookings can be checked in.');
+        }
+
+        if (!$booking->room) {
+            return back()->with('error', 'Assign a room to this booking before checking in.');
+        }
+
+        if (in_array($booking->room->status, ['occupied', 'maintenance'])) {
             return back()->with('error',
-                'Room ' . $reservation->room->room_number . ' is not ready (' . $reservation->room->status . '). ' .
+                'Room ' . $booking->room->room_number . ' is not ready (' . $booking->room->status . '). ' .
                 'Free it up first or assign a different room.');
         }
 
-        DB::transaction(function () use ($reservation) {
-            $reservation->update(['status' => 'checked_in']);
+        DB::transaction(function () use ($booking) {
+            $booking->update(['booking_status' => 'checked_in']);
+            $booking->room->update(['status' => 'occupied']);
 
-            // Update the booking's status to confirmed
-            if ($reservation->booking) {
-                $reservation->booking->update(['booking_status' => 'confirmed']);
-            }
-
-            // Mark the room as occupied
-            $reservation->room->update(['status' => 'occupied']);
-
-            // Notify guest and managers
             $this->notificationService->notifyCheckIn(
-                $reservation->guest->user,
-                $reservation->room->room_name
+                $booking->reservation->guest->user,
+                $booking->room->room_name
             );
         });
 
@@ -333,46 +159,44 @@ class ReceptionistController extends Controller
     }
 
     /**
-     * List reservations available for check-out: every checked-in guest,
+     * List bookings available for check-out: every checked-in guest,
      * regardless of scheduled departure date - a guest can leave early
      * (or late) whenever they settle their bill.
+     *
+     * NOTE: pre-redesign single-list UI, same caveat as checkInIndex().
      */
     public function checkOutIndex(): View
     {
-        $reservations = Reservation::with(['guest.user', 'room', 'booking.billing'])
-            ->where('status', 'checked_in')
+        $bookings = Booking::with(['reservation.guest.user', 'room', 'billing'])
+            ->where('booking_status', 'checked_in')
             ->orderBy('check_out')
             ->paginate(15);
 
-        return view('receptionist.check-out.index', compact('reservations'));
+        return view('receptionist.check-out.index', compact('bookings'));
     }
 
     /**
      * Open (or resume) the Billing Panel for a check-out in progress.
      * Creates a draft billing if one doesn't exist yet; does not change
-     * reservation or room status.
+     * booking or room status.
      */
-    public function checkOutBilling(Reservation $reservation)
+    public function checkOutBilling(Booking $booking)
     {
-        if ($reservation->status !== 'checked_in') {
-            return response()->json(['message' => 'Only checked-in reservations can be billed.'], 422);
+        if ($booking->booking_status !== 'checked_in') {
+            return response()->json(['message' => 'Only checked-in bookings can be billed.'], 422);
         }
 
-        if (!$reservation->booking) {
-            return response()->json(['message' => 'This reservation has no booking record.'], 422);
-        }
+        $billing = $booking->billing ?? $this->generateBilling($booking);
 
-        $billing = $reservation->booking->billing ?? $this->generateBilling($reservation);
-
-        $reservation->load(['guest.user', 'room']);
+        $booking->load(['reservation.guest.user', 'room']);
         $billing->load('additionalCharges');
 
         $amenityRequests = AmenityRequest::with('amenity')
-            ->where('reservation_id', $reservation->id)
+            ->where('reservation_id', $booking->reservation_id)
             ->where('status', 'approved')
             ->get();
 
-        return view('receptionist.check-out.partials.billing-panel', compact('reservation', 'billing', 'amenityRequests'));
+        return view('receptionist.check-out.partials.billing-panel', compact('booking', 'billing', 'amenityRequests'));
     }
 
     /**
@@ -398,7 +222,7 @@ class ReceptionistController extends Controller
      */
     public function checkOutPaymentPanel(Billing $billing)
     {
-        $billing->load(['booking.reservation.guest.user', 'booking.reservation.room', 'payments', 'additionalCharges']);
+        $billing->load(['booking.reservation.guest.user', 'booking.room', 'payments', 'additionalCharges']);
 
         $balance = $billing->balance;
         $amountPaidSoFar = (float) $billing->payments()
@@ -508,7 +332,7 @@ class ReceptionistController extends Controller
      */
     public function receiptShow(Billing $billing): View
     {
-        $billing->load(['booking.reservation.guest.user', 'booking.reservation.room', 'payments', 'additionalCharges']);
+        $billing->load(['booking.reservation.guest.user', 'booking.room', 'payments', 'additionalCharges']);
 
         $amountPaid = (float) $billing->payments()
             ->where('payment_status', 'completed')
@@ -531,15 +355,15 @@ class ReceptionistController extends Controller
             'amount_paid' => 'required|numeric|min:0.01',
         ]);
 
-        $reservation = $billing->booking?->reservation;
+        $booking = $billing->booking;
 
-        if (!$reservation || $reservation->status !== 'checked_in') {
-            return response()->json(['message' => 'This reservation is not awaiting checkout.'], 422);
+        if (!$booking || $booking->booking_status !== 'checked_in') {
+            return response()->json(['message' => 'This booking is not awaiting checkout.'], 422);
         }
 
         $completed = false;
 
-        DB::transaction(function () use ($validated, $billing, $reservation, &$completed) {
+        DB::transaction(function () use ($validated, $billing, $booking, &$completed) {
             // Auto-generate reference for cash if blank
             if (empty($validated['reference_number'])) {
                 $validated['reference_number'] = 'PAY-' . strtoupper(Str::random(10));
@@ -551,6 +375,7 @@ class ReceptionistController extends Controller
                 'reference_number' => $validated['reference_number'],
                 'amount_paid' => $validated['amount_paid'],
                 'payment_status' => 'completed',
+                'payment_stage' => 'final',
                 'payment_date' => now(),
             ]);
 
@@ -561,8 +386,8 @@ class ReceptionistController extends Controller
             $completed = $paid >= (float) $billing->total_amount;
             $billing->update(['billing_status' => $completed ? 'paid' : 'partial']);
 
-            $guest = $reservation->guest->user;
-            $roomName = $reservation->room->room_name;
+            $guest = $booking->reservation->guest->user;
+            $roomName = $booking->room->room_name;
 
             $this->notificationService->notifyPaymentReceived(
                 $guest,
@@ -571,8 +396,8 @@ class ReceptionistController extends Controller
             );
 
             if ($completed) {
-                $reservation->update(['status' => 'checked_out']);
-                $reservation->room->update(['status' => 'available']);
+                $booking->update(['booking_status' => 'checked_out']);
+                $booking->room->update(['status' => 'available']);
 
                 $this->notificationService->notifyCheckOut($guest, $roomName);
                 $this->notificationService->notifyPaymentComplete($guest);
@@ -597,34 +422,41 @@ class ReceptionistController extends Controller
     }
 
     /**
-     * Generate a billing record for a reservation using the rule from the plan.
+     * Generate a billing record for a booking using the rule from the plan.
+     * Any already-verified deposit payment made at reservation time (see
+     * ReservationWorkflowService::convertToBooking()) is re-parented onto
+     * this billing so it counts toward the balance immediately - the
+     * checkout Billing/Payment Panels need no other changes to reflect it.
      */
-    private function generateBilling(Reservation $reservation): Billing
+    private function generateBilling(Booking $booking): Billing
     {
-        $nights = max(1, abs($reservation->check_out->diffInDays($reservation->check_in)));
+        $reservation = $booking->reservation;
+        $nights = max(1, abs($booking->check_out->diffInDays($booking->check_in)));
 
-        $roomCharge = (float) $reservation->room->room_rate * $nights;
+        $roomCharge = (float) $booking->room->room_rate * $nights;
 
         // Children under 12 stay free - only adults count toward the
         // extra-guest fee, even though both occupy the room's capacity.
-        $adults = $reservation->adults ?? $reservation->number_of_guests;
-        $extraGuests = max(0, $adults - $reservation->room->room_capacity);
+        $adults = $booking->adults ?? $booking->number_of_guests;
+        $extraGuests = max(0, $adults - $booking->room->room_capacity);
         $extraGuestFee = $extraGuests * (float) config('hotel.extra_guest_fee_rate', 0);
 
-        $amenityCharge = (float) AmenityRequest::where('reservation_id', $reservation->id)
+        $amenityCharge = (float) AmenityRequest::where('reservation_id', $booking->reservation_id)
             ->where('status', 'approved')
             ->sum(DB::raw('charge * quantity'));
 
         // Find best applicable active DISCOUNT promotion (amenity promos
         // don't reduce the rate - their inclusions are zero-charge
-        // amenity requests granted at confirmation time).
+        // amenity requests granted at conversion time). Removed once the
+        // Discount Module phase separates guest-verified discounts from
+        // promotions entirely.
         $promo = Promotion::where('status', 'active')
             ->where('promo_type', 'discount')
             ->whereDate('start_date', '<=', today())
             ->whereDate('end_date', '>=', today())
-            ->where(function ($q) use ($reservation) {
+            ->where(function ($q) use ($booking) {
                 $q->whereNull('room_type_id')
-                  ->orWhere('room_type_id', $reservation->room_type_id);
+                  ->orWhere('room_type_id', $booking->room_type_id);
             })
             ->orderByDesc('discount_value')
             ->first();
@@ -640,8 +472,8 @@ class ReceptionistController extends Controller
 
         $total = max(0, $roomCharge + $extraGuestFee + $amenityCharge - $discount);
 
-        return Billing::create([
-            'booking_id' => $reservation->booking->id,
+        $billing = Billing::create([
+            'booking_id' => $booking->id,
             'room_charge' => round($roomCharge, 2),
             'additional_guest_fee' => round($extraGuestFee, 2),
             'amenity_charge' => round($amenityCharge, 2),
@@ -649,6 +481,19 @@ class ReceptionistController extends Controller
             'total_amount' => round($total, 2),
             'billing_status' => 'pending',
         ]);
+
+        $reservation->payments()
+            ->where('payment_stage', 'deposit')
+            ->where('payment_status', 'completed')
+            ->whereNull('billing_id')
+            ->update(['billing_id' => $billing->id]);
+
+        $paid = (float) $billing->payments()->where('payment_status', 'completed')->sum('amount_paid');
+        if ($paid > 0) {
+            $billing->update(['billing_status' => $paid >= (float) $billing->total_amount ? 'paid' : 'partial']);
+        }
+
+        return $billing;
     }
 
     /**

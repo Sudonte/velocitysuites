@@ -17,7 +17,7 @@ class GuestController extends Controller
     public function bookings(Request $request): View
     {
         $guest = auth()->user()->guest;
-        $query = $guest->reservations()->with(['room', 'booking.billing']);
+        $query = $guest->reservations()->with(['roomType', 'booking.room', 'booking.billing']);
 
         if ($request->filled('status')) {
             $query->where('status', $request->status);
@@ -29,7 +29,9 @@ class GuestController extends Controller
     }
 
     /**
-     * Display guest payments and billing history.
+     * Display guest payments and billing history - both deposit payments
+     * (made directly against a reservation, before a Billing exists) and
+     * final/checkout payments (against a Billing).
      */
     public function payments(Request $request): View
     {
@@ -38,17 +40,20 @@ class GuestController extends Controller
         $bookingIds = \App\Models\Booking::whereIn('reservation_id', $reservationIds)->pluck('id');
         $billingIds = Billing::whereIn('booking_id', $bookingIds)->pluck('id');
 
-        $query = Payment::with(['billing.booking.reservation.room'])
-            ->whereIn('billing_id', $billingIds);
+        $query = Payment::with(['billing.booking.reservation.roomType', 'billing.booking.room', 'reservation.roomType'])
+            ->where(function ($q) use ($billingIds, $reservationIds) {
+                $q->whereIn('billing_id', $billingIds)
+                  ->orWhereIn('reservation_id', $reservationIds);
+            });
 
         if ($request->filled('status')) {
             $query->where('payment_status', $request->status);
         }
 
-        $payments = $query->latest('payment_date')->paginate(15);
+        $payments = $query->latest('created_at')->paginate(15);
 
         // Pending bills summary
-        $pendingBills = Billing::with('booking.reservation.room')
+        $pendingBills = Billing::with('booking.reservation.roomType', 'booking.room')
             ->whereIn('booking_id', $bookingIds)
             ->whereIn('billing_status', ['pending', 'partial'])
             ->get();

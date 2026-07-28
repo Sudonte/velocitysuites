@@ -69,10 +69,21 @@ class Room extends Model
     }
 
     /**
-     * Get the reservations for the room.
+     * Get the reservations for the room. Deprecated going forward -
+     * reservations.room_id is no longer written to (room assignment now
+     * happens at check-in, against a Booking, not a Reservation); kept for
+     * historical/pre-redesign records.
      */
     public function reservations()
     {
         return $this->hasMany(Reservation::class);
+    }
+
+    /**
+     * Get the bookings assigned to this physical room (set at check-in).
+     */
+    public function bookings()
+    {
+        return $this->hasMany(Booking::class);
     }
 }

@@ -5,13 +5,13 @@
 @section('content')
     @auth
         <div class="container-fluid py-4">
-            <x-page-header icon="fas fa-door-open" title="Book a Room" subtitle="Find the perfect room for your stay" />
+            <x-page-header icon="fas fa-door-open" title="Book a Room" subtitle="Find the perfect room type for your stay" />
     @else
         <!-- Page Banner -->
         <section class="page-banner text-center">
             <div class="container">
                 <h1 class="display-4 fw-bold mb-2" style="text-shadow: 2px 2px 4px rgba(0,0,0,0.7);">Our <span class="gold-text">Rooms</span></h1>
-                <p class="lead mb-0" style="text-shadow: 1px 1px 3px rgba(0,0,0,0.7);">Find the perfect room for your stay</p>
+                <p class="lead mb-0" style="text-shadow: 1px 1px 3px rgba(0,0,0,0.7);">Find the perfect room type for your stay</p>
             </div>
         </section>
 
@@ -27,10 +27,20 @@
                     <div class="card-body">
                         <form action="{{ route('public.rooms.index') }}" method="GET">
                             <div class="mb-3">
+                                <label class="form-label">Check-in</label>
+                                <input type="date" name="check_in" class="form-control" min="{{ date('Y-m-d') }}"
+                                       value="{{ $checkIn->toDateString() }}">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Check-out</label>
+                                <input type="date" name="check_out" class="form-control" min="{{ date('Y-m-d', strtotime('+1 day')) }}"
+                                       value="{{ $checkOut->toDateString() }}">
+                            </div>
+                            <div class="mb-3">
                                 <label class="form-label">Room Type</label>
                                 <select name="room_type" class="form-select">
                                     <option value="">All Types</option>
-                                    @foreach($roomTypes as $type)
+                                    @foreach($allRoomTypes as $type)
                                         <option value="{{ $type }}" {{ request('room_type') == $type ? 'selected' : '' }}>
                                             {{ $type }}
                                         </option>
@@ -62,29 +72,37 @@
                 </div>
             </div>
 
-            <!-- Room Listings -->
+            <!-- Room Type Listings -->
             <div class="col-lg-9">
-                @if($rooms->isEmpty())
+                <p class="text-muted mb-3">
+                    <i class="fas fa-calendar-alt me-1"></i>
+                    Showing availability for <strong>{{ $checkIn->format('M d, Y') }}</strong> to <strong>{{ $checkOut->format('M d, Y') }}</strong>
+                </p>
+                @if($roomTypes->isEmpty())
                     <div class="alert alert-info">
-                        No rooms available matching your criteria. Please try different filters.
+                        No room types available matching your criteria. Please try different filters.
                     </div>
                 @else
                     <div class="row g-4">
-                        @foreach($rooms as $room)
+                        @foreach($roomTypes as $roomType)
                             <div class="col-md-6 col-lg-4">
-                                <div class="room-card">
-                                    <img src="{{ $room->image ? asset('storage/' . $room->image) : 'https://via.placeholder.com/400x300?text=No+Image' }}"
-                                         alt="{{ $room->roomType->name }}" class="img-fluid" style="height: 200px; width: 100%; object-fit: cover;">
+                                <div class="room-card position-relative">
+                                    @if($roomType->is_fully_booked)
+                                        <span class="badge bg-danger position-absolute m-2" style="z-index: 2;">Fully Booked</span>
+                                    @endif
+                                    <img src="{{ $roomType->representative_image ? asset('storage/' . $roomType->representative_image) : 'https://via.placeholder.com/400x300?text=No+Image' }}"
+                                         alt="{{ $roomType->name }}" class="img-fluid" style="height: 200px; width: 100%; object-fit: cover; {{ $roomType->is_fully_booked ? 'opacity: 0.6;' : '' }}">
                                     <div class="p-4">
-                                        <h5 class="fw-bold">{{ $room->roomType->name }}</h5>
+                                        <h5 class="fw-bold">{{ $roomType->name }}</h5>
                                         <p class="mb-2 text-muted">
-                                            <i class="fas fa-user me-1 text-brand"></i> Up to {{ $room->room_capacity }} guests
+                                            <i class="fas fa-user me-1 text-brand"></i> Up to {{ $roomType->capacity }} guests
                                         </p>
                                         <p class="small text-muted">
-                                            {{ Str::limit($room->description, 100) }}
+                                            {{ Str::limit($roomType->description, 100) }}
                                         </p>
-                                        <p class="room-price mb-3">₱{{ number_format($room->room_rate, 2) }} <small class="text-muted">/night</small></p>
-                                        <a href="{{ route('public.rooms.show', $room) }}" class="btn btn-outline-danger w-100">View Details</a>
+                                        <p class="room-price mb-3">₱{{ number_format($roomType->rate, 2) }} <small class="text-muted">/night</small></p>
+                                        <a href="{{ route('public.rooms.show', array_merge(['roomType' => $roomType], request()->only('check_in', 'check_out'))) }}"
+                                           class="btn btn-outline-danger w-100">View Details</a>
                                     </div>
                                 </div>
                             </div>
@@ -93,7 +111,7 @@
 
                     <!-- Pagination -->
                     <div class="mt-4">
-                        {{ $rooms->links() }}
+                        {{ $roomTypes->links() }}
                     </div>
                 @endif
             </div>

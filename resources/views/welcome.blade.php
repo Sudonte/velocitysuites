@@ -50,24 +50,24 @@
         <div class="container">
             <h2 class="text-center mb-5">Featured <span class="gold-text">Rooms</span></h2>
             <div class="row g-4">
-                @forelse($featuredRooms ?? [] as $room)
+                @forelse($featuredRoomTypes ?? [] as $roomType)
                 <div class="col-md-4">
                     <div class="room-card">
-                        <img src="{{ $room->image ? asset('storage/' . $room->image) : 'https://images.unsplash.com/photo-1631049307264-da0ec9d70304?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80' }}"
-                             alt="{{ $room->roomType->name }}" class="img-fluid" style="height: 200px; width: 100%; object-fit: cover;">
+                        <img src="{{ $roomType->representative_image ? asset('storage/' . $roomType->representative_image) : 'https://images.unsplash.com/photo-1631049307264-da0ec9d70304?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80' }}"
+                             alt="{{ $roomType->name }}" class="img-fluid" style="height: 200px; width: 100%; object-fit: cover;">
                         <div class="p-4">
-                            <h5 class="fw-bold">{{ $room->roomType->name }}</h5>
+                            <h5 class="fw-bold">{{ $roomType->name }}</h5>
                             <p class="mb-2 text-muted">
-                                <i class="fas fa-user me-1 text-brand"></i> Up to {{ $room->room_capacity }} guests
+                                <i class="fas fa-user me-1 text-brand"></i> Up to {{ $roomType->capacity }} guests
                             </p>
-                            <p class="room-price">₱{{ number_format($room->room_rate, 2) }} <small class="text-muted">/night</small></p>
-                            <a href="{{ route('public.rooms.show', $room) }}" class="btn btn-outline-danger w-100">View Details</a>
+                            <p class="room-price">₱{{ number_format($roomType->rate, 2) }} <small class="text-muted">/night</small></p>
+                            <a href="{{ route('public.rooms.show', $roomType) }}" class="btn btn-outline-danger w-100">View Details</a>
                         </div>
                     </div>
                 </div>
                 @empty
                 <div class="col-12 text-center">
-                    <p class="text-muted">No rooms available at the moment. Please check back later.</p>
+                    <p class="text-muted">No room types available at the moment. Please check back later.</p>
                 </div>
                 @endforelse
             </div>

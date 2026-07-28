@@ -6,20 +6,20 @@
 <div class="container-fluid py-4">
     <div class="row mb-4">
         <div class="col-12">
-            @if($billing->booking && $billing->booking->reservation)
-                <a href="{{ route('receptionist.reservations.show', $billing->booking->reservation) }}" class="btn btn-sm btn-secondary mb-2">
-                    <i class="fas fa-arrow-left"></i> Back to Reservation
+            @if($billing->booking)
+                <a href="{{ route('receptionist.bookings.show', $billing->booking) }}" class="btn btn-sm btn-secondary mb-2">
+                    <i class="fas fa-arrow-left"></i> Back to Booking
                 </a>
             @endif
             <h1 class="mb-0">
                 <i class="fas fa-receipt"></i> Receipt
             </h1>
-            @if($billing->booking && $billing->booking->reservation)
+            @if($billing->booking)
                 <p class="text-muted">
-                    Reservation #{{ $billing->booking->reservation->id }} —
+                    Booking #{{ $billing->booking->id }} —
                     Guest: {{ $billing->booking->reservation->guest->user->full_name ?? 'N/A' }} —
-                    Room: {{ $billing->booking->reservation->room->room_number ?? 'N/A' }}
-                    ({{ $billing->booking->reservation->room->room_name ?? 'N/A' }})
+                    Room: {{ $billing->booking->room->room_number ?? 'N/A' }}
+                    ({{ $billing->booking->room->room_name ?? 'N/A' }})
                 </p>
             @endif
         </div>

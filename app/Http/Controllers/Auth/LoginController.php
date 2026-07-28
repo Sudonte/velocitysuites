@@ -66,9 +66,9 @@ class LoginController extends Controller
 
             // For Guest users, check for booking intent and redirect to booking flow
             $bookingIntent = session()->get('booking_intent');
-            if ($bookingIntent && isset($bookingIntent['room_id'])) {
+            if ($bookingIntent && isset($bookingIntent['room_type_id'])) {
                 // Build the redirect URL with booking data
-                $roomUrl = route('public.rooms.show', ['room' => $bookingIntent['room_id']]);
+                $roomUrl = route('public.rooms.show', ['roomType' => $bookingIntent['room_type_id']]);
 
                 // Add query parameters for pre-filled booking data
                 $queryParams = [];

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Manager;
 
 use App\Http\Controllers\Controller;
+use App\Models\Booking;
 use App\Models\Payment;
 use App\Models\Reservation;
 use App\Models\Room;
@@ -23,15 +24,19 @@ class ManagerDashboardController extends Controller
             ? round((($occupiedRooms + $reservedRooms) / $totalRooms) * 100, 1)
             : 0;
 
-        $todayCheckIns = Reservation::whereDate('check_in', today())
-            ->where('status', 'confirmed')
+        // Check-in/check-out/in-house state now lives on Booking (the
+        // operational record from conversion onward), not on Reservation's
+        // own status. Full dashboard redesign against the new model is a
+        // later phase; these counts are patched now for correctness.
+        $todayCheckIns = Booking::whereDate('check_in', today())
+            ->where('booking_status', 'confirmed')
             ->count();
 
-        $todayCheckOuts = Reservation::whereDate('check_out', today())
-            ->where('status', 'checked_in')
+        $todayCheckOuts = Booking::whereDate('check_out', today())
+            ->where('booking_status', 'checked_in')
             ->count();
 
-        $inHouseGuests = Reservation::where('status', 'checked_in')->count();
+        $inHouseGuests = Booking::where('booking_status', 'checked_in')->count();
 
         $monthlyRevenue = (float) Payment::where('payment_status', 'completed')
             ->whereMonth('payment_date', now()->month)

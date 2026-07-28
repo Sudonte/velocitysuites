@@ -2,26 +2,26 @@
     <h5 class="modal-title"><i class="fas fa-cash-register"></i> Billing</h5>
     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
 </div>
-<div class="modal-body" data-billing-id="{{ $billing->id }}" data-reservation-id="{{ $reservation->id }}">
+<div class="modal-body" data-billing-id="{{ $billing->id }}" data-booking-id="{{ $booking->id }}">
     <div class="alert alert-danger d-none" id="billingErrorAlert"></div>
 
     <div class="row mb-3">
         <div class="col-md-6">
-            <strong>Guest:</strong> {{ $reservation->guest->user->full_name ?? 'N/A' }}<br>
-            <strong>Reservation:</strong> #{{ $reservation->id }}<br>
-            <strong>Room:</strong> {{ $reservation->room->room_number ?? 'N/A' }} ({{ $reservation->room->room_name ?? '' }})
+            <strong>Guest:</strong> {{ $booking->reservation->guest->user->full_name ?? 'N/A' }}<br>
+            <strong>Booking:</strong> #{{ $booking->id }}<br>
+            <strong>Room:</strong> {{ $booking->room->room_number ?? 'N/A' }} ({{ $booking->room->room_name ?? '' }})
         </div>
         <div class="col-md-6 text-md-end">
-            <strong>Check-In:</strong> {{ $reservation->check_in->format('M d, Y') }}<br>
-            <strong>Check-Out:</strong> {{ $reservation->check_out->format('M d, Y') }}<br>
-            <strong>Nights:</strong> {{ $reservation->number_of_nights }}
+            <strong>Check-In:</strong> {{ $booking->check_in->format('M d, Y') }}<br>
+            <strong>Check-Out:</strong> {{ $booking->check_out->format('M d, Y') }}<br>
+            <strong>Nights:</strong> {{ $booking->number_of_nights }}
         </div>
     </div>
 
     <h6><i class="fas fa-calculator"></i> Charges</h6>
     <table class="table table-sm table-borderless mb-3">
         <tr>
-            <td>Room Charge ({{ $reservation->number_of_nights }} night{{ $reservation->number_of_nights === 1 ? '' : 's' }})</td>
+            <td>Room Charge ({{ $booking->number_of_nights }} night{{ $booking->number_of_nights === 1 ? '' : 's' }})</td>
             <td class="text-end">₱{{ number_format($billing->room_charge, 2) }}</td>
         </tr>
         @if($billing->additional_guest_fee > 0)

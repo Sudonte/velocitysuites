@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\ActivityLog;
+use App\Models\Booking;
 use App\Models\Payment;
 use App\Models\Promotion;
 use App\Models\Reservation;
@@ -32,11 +33,16 @@ class AdminDashboardController extends Controller
             ->whereYear('payment_date', now()->year)
             ->sum('amount_paid');
 
-        // Reservation statistics
+        // Reservation statistics - "active" and "completed" now live on
+        // Booking (the operational record from conversion onward), not on
+        // Reservation's own status (which only covers the pre-booking
+        // lifecycle). Full dashboard redesign against the new model is a
+        // later phase; these counts are patched now so they aren't simply
+        // wrong on the live site in the meantime.
         $totalReservations = Reservation::count();
-        $pendingReservations = Reservation::where('status', 'pending')->count();
-        $activeReservations = Reservation::whereIn('status', ['confirmed', 'checked_in'])->count();
-        $completedReservations = Reservation::where('status', 'checked_out')->count();
+        $pendingReservations = Reservation::whereIn('status', ['pending_review', 'ready_for_booking'])->count();
+        $activeReservations = Booking::whereIn('booking_status', ['confirmed', 'checked_in'])->count();
+        $completedReservations = Booking::where('booking_status', 'checked_out')->count();
 
         $data = [
             // User stats

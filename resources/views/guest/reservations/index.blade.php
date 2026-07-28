@@ -26,13 +26,24 @@
                 </tr>
             </thead>
             <tbody>
-                @forelse(auth()->user()->guest->reservations()->with('room')->latest('check_in')->get() as $reservation)
+                @forelse(auth()->user()->guest->reservations()->with(['roomType', 'booking.room'])->latest('check_in')->get() as $reservation)
                     <tr>
                         <td>#{{ $reservation->id }}</td>
-                        <td>{{ $reservation->room->room_number ?? 'To be assigned' }}</td>
+                        <td>
+                            {{ $reservation->roomType->name }}
+                            @if($reservation->booking?->room)
+                                <small class="text-muted">(Room {{ $reservation->booking->room->room_number }})</small>
+                            @endif
+                        </td>
                         <td>{{ $reservation->check_in->format('M d, Y') }}</td>
                         <td>{{ $reservation->check_out->format('M d, Y') }}</td>
-                        <td><x-status-badge :status="$reservation->status" domain="reservation" /></td>
+                        <td>
+                            @if($reservation->status === 'converted' && $reservation->booking)
+                                <x-status-badge :status="$reservation->booking->booking_status" domain="booking" />
+                            @else
+                                <x-status-badge :status="$reservation->status" domain="reservation" />
+                            @endif
+                        </td>
                         <td>
                             <a href="{{ route('guest.reservations.show', $reservation) }}" class="btn btn-sm btn-primary">
                                 <i class="fas fa-eye"></i>

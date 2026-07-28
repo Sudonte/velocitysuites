@@ -9,7 +9,7 @@
     <!-- KPI Cards: live work-queue counts (click through to each module) -->
     <div class="row mb-4">
         <div class="col-md-3 mb-3">
-            <x-stat-card icon="fas fa-inbox" label="Booking Requests" :value="$bookingRequests" color="warning" :href="route('receptionist.reservations.confirm-index')" />
+            <x-stat-card icon="fas fa-inbox" label="Reservations" :value="$bookingRequests" color="warning" :href="route('receptionist.reservations.index')" />
         </div>
 
         <div class="col-md-3 mb-3">
@@ -38,11 +38,11 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @forelse($todayArrivals as $reservation)
+                        @forelse($todayArrivals as $booking)
                             <tr>
-                                <td>{{ $reservation->guest->user->full_name ?? 'N/A' }}</td>
-                                <td>{{ $reservation->room->room_number ?? 'N/A' }}</td>
-                                <td><x-status-badge :status="$reservation->status" domain="reservation" /></td>
+                                <td>{{ $booking->reservation->guest->user->full_name ?? 'N/A' }}</td>
+                                <td>{{ $booking->room->room_number ?? 'N/A' }}</td>
+                                <td><x-status-badge :status="$booking->booking_status" domain="booking" /></td>
                             </tr>
                         @empty
                             <tr><td colspan="3"><x-empty-state icon="fas fa-plane-arrival" message="No arrivals today." /></td></tr>
@@ -64,11 +64,11 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @forelse($todayDepartures as $reservation)
+                        @forelse($todayDepartures as $booking)
                             <tr>
-                                <td>{{ $reservation->guest->user->full_name ?? 'N/A' }}</td>
-                                <td>{{ $reservation->room->room_number ?? 'N/A' }}</td>
-                                <td><x-status-badge :status="$reservation->status" domain="reservation" /></td>
+                                <td>{{ $booking->reservation->guest->user->full_name ?? 'N/A' }}</td>
+                                <td>{{ $booking->room->room_number ?? 'N/A' }}</td>
+                                <td><x-status-badge :status="$booking->booking_status" domain="booking" /></td>
                             </tr>
                         @empty
                             <tr><td colspan="3"><x-empty-state icon="fas fa-plane-departure" message="No departures today." /></td></tr>

@@ -30,7 +30,7 @@
                     @foreach($pendingBills as $bill)
                         <tr>
                             <td>#{{ $bill->id }}</td>
-                            <td>{{ $bill->booking->reservation->room->room_number ?? 'N/A' }}</td>
+                            <td>{{ $bill->booking->room->room_number ?? $bill->booking->reservation->roomType->name }}</td>
                             <td>{{ $bill->booking->reservation->check_out->format('M d, Y') }}</td>
                             <td class="text-end">₱{{ number_format($bill->total_amount, 2) }}</td>
                             <td><x-status-badge :status="$bill->billing_status" domain="billing" /></td>
@@ -77,9 +77,15 @@
             <tbody>
                 @forelse($payments as $payment)
                     <tr>
-                        <td>{{ $payment->payment_date->format('M d, Y h:i A') }}</td>
-                        <td>#{{ $payment->billing_id }}</td>
-                        <td>{{ $payment->billing->booking->reservation->room->room_number ?? 'N/A' }}</td>
+                        <td>{{ ($payment->payment_date ?? $payment->created_at)->format('M d, Y h:i A') }}</td>
+                        <td>{{ $payment->billing_id ? '#' . $payment->billing_id : 'Deposit' }}</td>
+                        <td>
+                            @if($payment->billing)
+                                {{ $payment->billing->booking->room->room_number ?? $payment->billing->booking->reservation->roomType->name }}
+                            @else
+                                {{ $payment->reservation->roomType->name }}
+                            @endif
+                        </td>
                         <td>{{ ucfirst($payment->payment_method) }}</td>
                         <td>{{ $payment->reference_number ?? '—' }}</td>
                         <td class="text-end">₱{{ number_format($payment->amount_paid, 2) }}</td>
