@@ -148,6 +148,7 @@ Route::middleware(['auth', 'account.status', 'log.activity'])->group(function ()
         // (pending_review) and "To Be Converted to Booking" (ready_for_booking).
         Route::get('/reservations', [ReceptionistReservationController::class, 'index'])->name('reservations.index');
         Route::get('/reservations/{reservation}/details', [ReceptionistReservationController::class, 'details'])->name('reservations.details');
+        Route::get('/reservations/{reservation}/id-card', [ReceptionistReservationController::class, 'idCard'])->name('reservations.id-card');
         Route::post('/reservations/{reservation}/accept', [ReceptionistReservationController::class, 'accept'])->name('reservations.accept');
         Route::post('/reservations/{reservation}/reject', [ReceptionistReservationController::class, 'reject'])->name('reservations.reject');
         Route::post('/reservations/{reservation}/convert', [ReceptionistReservationController::class, 'convert'])->name('reservations.convert');

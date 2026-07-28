@@ -27,7 +27,7 @@ class ReservationController extends Controller
     public function index(Request $request): JsonResponse
     {
         $guest = auth()->user()->guest;
-        $query = $guest->reservations()->with(['room.roomType', 'roomType', 'booking.billing.payments']);
+        $query = $guest->reservations()->with(['roomType', 'booking.room', 'booking.billing.payments']);
 
         if ($request->filled('status')) {
             $query->where('status', $request->status);
@@ -54,7 +54,7 @@ class ReservationController extends Controller
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 
-        $reservation->load(['room.roomType', 'roomType', 'booking.billing.payments']);
+        $reservation->load(['roomType', 'booking.room', 'booking.billing.payments']);
 
         return response()->json($reservation);
     }
@@ -98,10 +98,17 @@ class ReservationController extends Controller
         }
 
         $idCardType = $validated['id_card_type'] ?? 'None';
+        $discountRequested = $idCardType !== 'None';
 
-        // Plain Reserve - no payment, no Booking row (see BookingController
-        // for the pay-now path and PaymentController for paying against an
-        // already-created Reservation).
+        // Plain Reserve - no payment, no Booking row (payment goes through
+        // PaymentController against this reservation once created).
+        // discount_requested is set alongside the mobile-specific
+        // id_card_type field so the receptionist's billing Discount panel
+        // (which only checks discount_requested - the same flag the
+        // website's checkbox sets) actually surfaces this request; the
+        // *type* the guest picked is informational only, same as the
+        // website's checkbox - only a receptionist can apply a specific
+        // Discount, after verifying the uploaded ID.
         $reservation = Reservation::create([
             'guest_id' => $guest->id,
             'guest_first_name' => $validated['guest_first_name'],
@@ -113,14 +120,15 @@ class ReservationController extends Controller
             'children' => $children,
             'number_of_guests' => $validated['adults'] + $children,
             'status' => 'pending_review',
-            'discount_verification_status' => $idCardType === 'None' ? 'not_requested' : 'pending',
-            'id_card_type' => $idCardType === 'None' ? null : $idCardType,
+            'discount_requested' => $discountRequested,
+            'discount_verification_status' => $discountRequested ? 'pending' : 'not_requested',
+            'id_card_type' => $discountRequested ? $idCardType : null,
             'additional_guest_details' => $validated['additional_guests'] ?? null,
         ]);
 
         $this->notificationService->notifyNewBooking($user, $roomType->name);
 
-        $reservation->load(['room.roomType', 'roomType', 'booking']);
+        $reservation->load(['roomType', 'booking.room']);
 
         return response()->json($reservation, 201);
     }
@@ -186,7 +194,7 @@ class ReservationController extends Controller
 
         $this->notificationService->notifyReservationCancelled($user, $roomName);
 
-        return response()->json($reservation->fresh(['room.roomType', 'roomType', 'booking']));
+        return response()->json($reservation->fresh(['roomType', 'booking.room']));
     }
 
     /**

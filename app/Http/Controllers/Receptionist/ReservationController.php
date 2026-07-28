@@ -12,6 +12,7 @@ use App\Services\ReservationWorkflowService;
 use App\Services\RoomAvailabilityService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 
@@ -73,6 +74,23 @@ class ReservationController extends Controller
         $reservation->load(['guest.user', 'roomType', 'payments']);
 
         return view('receptionist.reservations.partials.details', compact('reservation'));
+    }
+
+    /**
+     * Stream a mobile-app-submitted ID card image for staff verification.
+     * Stored on the private 'local' disk (see Api\ReservationController@
+     * uploadIdCard) rather than 'public' - a government ID shouldn't be
+     * reachable via a guessable URL - so it needs this auth-gated route
+     * instead of a plain asset() link. No ownership check: any receptionist
+     * may verify any guest's discount request.
+     */
+    public function idCard(Reservation $reservation)
+    {
+        if (!$reservation->id_card_image_path || !Storage::disk('local')->exists($reservation->id_card_image_path)) {
+            abort(404);
+        }
+
+        return Storage::disk('local')->response($reservation->id_card_image_path);
     }
 
     /**

@@ -10,6 +10,10 @@
                 <a href="{{ asset('storage/' . $reservation->id_document_path) }}" target="_blank" class="btn btn-sm btn-outline-secondary mb-2">
                     <i class="fas fa-id-card"></i> View Uploaded ID
                 </a>
+            @elseif($reservation->id_card_image_path)
+                <a href="{{ route('receptionist.reservations.id-card', $reservation) }}" target="_blank" class="btn btn-sm btn-outline-secondary mb-2">
+                    <i class="fas fa-id-card"></i> View Uploaded ID ({{ $reservation->id_card_type }}, via mobile)
+                </a>
             @endif
 
             @if($billing->discount_id)

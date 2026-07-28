@@ -47,6 +47,13 @@
                     <img src="{{ asset('storage/' . $reservation->id_document_path) }}" alt="ID Document" class="img-thumbnail" style="max-height: 150px;">
                     <small class="d-block text-muted">Click to view full size</small>
                 </a>
+            @elseif($reservation->id_card_image_path)
+                <a href="{{ route('receptionist.reservations.id-card', $reservation) }}" target="_blank" class="d-block mt-1">
+                    <img src="{{ route('receptionist.reservations.id-card', $reservation) }}" alt="ID Card ({{ $reservation->id_card_type }})" class="img-thumbnail" style="max-height: 150px;">
+                    <small class="d-block text-muted">{{ $reservation->id_card_type }} - submitted via mobile app. Click to view full size</small>
+                </a>
+            @else
+                <p class="text-muted mb-0">Requested but no ID uploaded yet.</p>
             @endif
         @else
             <p class="text-muted mb-0">No discount requested.</p>

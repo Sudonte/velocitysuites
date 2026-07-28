@@ -113,7 +113,11 @@ class ProfileController extends Controller
     }
 
     /**
-     * Same query chain as Guest\GuestController@payments.
+     * Same query chain as Guest\GuestController@payments - must also catch
+     * deposit payments, which are created with billing_id null (and
+     * reservation_id set instead) before the reservation is converted to a
+     * booking; a billing_id-only query would hide them from the guest's
+     * own payment history until conversion.
      */
     public function payments(Request $request): JsonResponse
     {
@@ -122,8 +126,11 @@ class ProfileController extends Controller
         $bookingIds = Booking::whereIn('reservation_id', $reservationIds)->pluck('id');
         $billingIds = Billing::whereIn('booking_id', $bookingIds)->pluck('id');
 
-        $query = Payment::with(['billing.booking.reservation.room'])
-            ->whereIn('billing_id', $billingIds);
+        $query = Payment::with(['billing.booking.roomType', 'billing.booking.room', 'reservation.roomType'])
+            ->where(function ($q) use ($billingIds, $reservationIds) {
+                $q->whereIn('billing_id', $billingIds)
+                  ->orWhereIn('reservation_id', $reservationIds);
+            });
 
         if ($request->filled('status')) {
             $query->where('payment_status', $request->status);
@@ -131,7 +138,7 @@ class ProfileController extends Controller
 
         $payments = $query->latest('payment_date')->paginate(15);
 
-        $pendingBills = Billing::with('booking.reservation.room')
+        $pendingBills = Billing::with('booking.roomType', 'booking.room')
             ->whereIn('booking_id', $bookingIds)
             ->whereIn('billing_status', ['pending', 'partial'])
             ->get();
