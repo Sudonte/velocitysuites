@@ -123,10 +123,6 @@ Route::middleware(['auth', 'account.status', 'log.activity'])->group(function ()
     Route::middleware('role:manager')->prefix('manager')->name('manager.')->group(function () {
         Route::get('/dashboard', [ManagerDashboardController::class, 'index'])->name('dashboard');
 
-        // Reservation viewing (read-only index + show)
-        Route::get('/reservations', [ReservationViewController::class, 'index'])->name('reservations.index');
-        Route::get('/reservations/{reservation}', [ReservationViewController::class, 'show'])->name('reservations.show');
-
         // Reports
         Route::get('/reports', [ReportController::class, 'index'])->name('reports.index');
 
@@ -134,6 +130,14 @@ Route::middleware(['auth', 'account.status', 'log.activity'])->group(function ()
         Route::get('/notifications', [ManagerNotificationController::class, 'index'])->name('notifications.index');
         Route::put('/notifications/{notification}/read', [ManagerNotificationController::class, 'markAsRead'])->name('notifications.markAsRead');
         Route::put('/notifications/read-all', [ManagerNotificationController::class, 'markAllAsRead'])->name('notifications.markAllAsRead');
+    });
+
+    // Reservation viewing (read-only index + show) - shared between Manager
+    // and Admin (the Admin dashboard's "Recent Reservations" links here)
+    // rather than duplicating the controller/views per role.
+    Route::middleware('role:manager,admin')->prefix('manager')->name('manager.')->group(function () {
+        Route::get('/reservations', [ReservationViewController::class, 'index'])->name('reservations.index');
+        Route::get('/reservations/{reservation}', [ReservationViewController::class, 'show'])->name('reservations.show');
     });
 
     // Receptionist Routes

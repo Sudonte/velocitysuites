@@ -29,7 +29,11 @@
                 <div class="row mb-2">
                     <div class="col-md-4"><strong>Status:</strong></div>
                     <div class="col-md-8">
-                        <x-status-badge :status="$reservation->status" domain="reservation" />
+                        @if($reservation->booking)
+                            <x-status-badge :status="$reservation->booking->booking_status" domain="booking" />
+                        @else
+                            <x-status-badge :status="$reservation->status" domain="reservation" />
+                        @endif
                     </div>
                 </div>
                 <div class="row mb-2">
@@ -42,10 +46,17 @@
                     </div>
                 </div>
                 <div class="row mb-2">
+                    <div class="col-md-4"><strong>Room Type:</strong></div>
+                    <div class="col-md-8">{{ $reservation->roomType->name ?? 'N/A' }}</div>
+                </div>
+                <div class="row mb-2">
                     <div class="col-md-4"><strong>Room:</strong></div>
                     <div class="col-md-8">
-                        {{ $reservation->room->room_number ?? 'Unassigned' }} - {{ $reservation->room->room_name ?? '' }}
-                        ({{ $reservation->roomType->name ?? '' }})
+                        @if($reservation->booking?->room)
+                            {{ $reservation->booking->room->room_number }} - {{ $reservation->booking->room->room_name }}
+                        @else
+                            <span class="text-muted">Assigned at check-in</span>
+                        @endif
                     </div>
                 </div>
                 <div class="row mb-2">
@@ -70,13 +81,13 @@
             @if($reservation->booking)
                 <x-card title="Booking Details" icon="fas fa-bookmark" bodyClass="card-body" class="mb-4">
                     <div class="row mb-2">
-                        <div class="col-md-4"><strong>Booking Date:</strong></div>
-                        <div class="col-md-8">{{ $reservation->booking->booking_date->format('M d, Y') }}</div>
+                        <div class="col-md-4"><strong>Confirmed At:</strong></div>
+                        <div class="col-md-8">{{ $reservation->booking->confirmed_at->format('M d, Y') }}</div>
                     </div>
                     <div class="row mb-2">
                         <div class="col-md-4"><strong>Booking Status:</strong></div>
                         <div class="col-md-8">
-                            <span class="badge bg-info">{{ ucfirst($reservation->booking->booking_status) }}</span>
+                            <x-status-badge :status="$reservation->booking->booking_status" domain="booking" />
                         </div>
                     </div>
                 </x-card>

@@ -69,10 +69,16 @@
                         @forelse($recentReservations as $reservation)
                             <tr>
                                 <td>{{ $reservation->stay_guest_full_name ?? $reservation->guest->user->full_name ?? 'N/A' }}</td>
-                                <td>{{ $reservation->room->room_number ?? 'N/A' }}</td>
+                                <td>{{ $reservation->booking->room->room_number ?? $reservation->roomType->name ?? 'N/A' }}</td>
                                 <td>{{ $reservation->check_in->format('M d, Y') }}</td>
                                 <td>{{ $reservation->check_out->format('M d, Y') }}</td>
-                                <td><x-status-badge :status="$reservation->status" domain="reservation" /></td>
+                                <td>
+                                    @if($reservation->booking)
+                                        <x-status-badge :status="$reservation->booking->booking_status" domain="booking" />
+                                    @else
+                                        <x-status-badge :status="$reservation->status" domain="reservation" />
+                                    @endif
+                                </td>
                                 <td>
                                     <a href="{{ route('manager.reservations.show', $reservation) }}" class="btn btn-sm btn-primary">
                                         <i class="fas fa-eye"></i>
@@ -100,7 +106,7 @@
                             <strong>{{ $room->room_name }}</strong><br>
                             <small class="text-muted">{{ $room->roomType->name }}</small>
                         </div>
-                        <span class="badge badge-brand">{{ $room->reservations_count }} bookings</span>
+                        <span class="badge badge-brand">{{ $room->bookings_count }} bookings</span>
                     </div>
                 @empty
                     <x-empty-state icon="fas fa-star" message="No data yet." />

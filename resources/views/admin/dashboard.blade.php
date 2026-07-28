@@ -31,10 +31,10 @@
             <x-stat-card icon="fas fa-bed" label="Occupied Rooms" :value="$occupiedRooms" color="primary" />
         </div>
         <div class="col-md-3 mb-3">
-            <x-stat-card icon="fas fa-calendar-alt" label="Reserved Rooms" :value="$reservedRooms" color="info" />
+            <x-stat-card icon="fas fa-tools" label="Maintenance Rooms" :value="$maintenanceRooms" color="warning" />
         </div>
         <div class="col-md-3 mb-3">
-            <x-stat-card icon="fas fa-building" label="Total Rooms" :value="$availableRooms + $occupiedRooms + $reservedRooms" color="secondary" />
+            <x-stat-card icon="fas fa-building" label="Total Rooms" :value="$totalRooms" color="secondary" />
         </div>
     </div>
 
@@ -87,12 +87,18 @@
                         @forelse($recentReservations as $reservation)
                             <tr>
                                 <td>{{ $reservation->stay_guest_full_name ?? $reservation->guest->user->full_name }}</td>
-                                <td>{{ $reservation->room->room_number ?? 'Unassigned' }}</td>
+                                <td>{{ $reservation->roomType->name ?? 'N/A' }}</td>
                                 <td>{{ $reservation->check_in->format('M d, Y') }}</td>
                                 <td>{{ $reservation->check_out->format('M d, Y') }}</td>
-                                <td><x-status-badge :status="$reservation->status" domain="reservation" /></td>
                                 <td>
-                                    <a href="#" class="btn btn-sm btn-primary">
+                                    @if($reservation->booking)
+                                        <x-status-badge :status="$reservation->booking->booking_status" domain="booking" />
+                                    @else
+                                        <x-status-badge :status="$reservation->status" domain="reservation" />
+                                    @endif
+                                </td>
+                                <td>
+                                    <a href="{{ route('manager.reservations.show', $reservation) }}" class="btn btn-sm btn-primary">
                                         <i class="fas fa-eye"></i>
                                     </a>
                                 </td>

@@ -19,10 +19,12 @@
             <div class="col-md-3">
                 <select name="status" class="form-control">
                     <option value="">All Status</option>
-                    <option value="pending" {{ request('status') === 'pending' ? 'selected' : '' }}>Pending</option>
-                    <option value="confirmed" {{ request('status') === 'confirmed' ? 'selected' : '' }}>Confirmed</option>
+                    <option value="pending_review" {{ request('status') === 'pending_review' ? 'selected' : '' }}>Pending Review</option>
+                    <option value="ready_for_booking" {{ request('status') === 'ready_for_booking' ? 'selected' : '' }}>Ready for Booking</option>
+                    <option value="confirmed" {{ request('status') === 'confirmed' ? 'selected' : '' }}>Confirmed (Booked)</option>
                     <option value="checked_in" {{ request('status') === 'checked_in' ? 'selected' : '' }}>Checked-In</option>
                     <option value="checked_out" {{ request('status') === 'checked_out' ? 'selected' : '' }}>Checked-Out</option>
+                    <option value="rejected" {{ request('status') === 'rejected' ? 'selected' : '' }}>Rejected</option>
                     <option value="cancelled" {{ request('status') === 'cancelled' ? 'selected' : '' }}>Cancelled</option>
                 </select>
             </div>
@@ -58,11 +60,22 @@
                 @forelse($reservations as $reservation)
                     <tr>
                         <td>{{ $reservation->stay_guest_full_name ?? $reservation->guest->user->full_name ?? 'N/A' }}</td>
-                        <td>{{ $reservation->room->room_number ?? 'Unassigned' }} ({{ $reservation->roomType->name ?? '' }})</td>
+                        <td>
+                            {{ $reservation->roomType->name ?? 'N/A' }}
+                            @if($reservation->booking?->room)
+                                <br><small class="text-muted">Room {{ $reservation->booking->room->room_number }}</small>
+                            @endif
+                        </td>
                         <td>{{ $reservation->check_in->format('M d, Y') }}</td>
                         <td>{{ $reservation->check_out->format('M d, Y') }}</td>
                         <td>{{ $reservation->number_of_guests }}</td>
-                        <td><x-status-badge :status="$reservation->status" domain="reservation" /></td>
+                        <td>
+                            @if($reservation->booking)
+                                <x-status-badge :status="$reservation->booking->booking_status" domain="booking" />
+                            @else
+                                <x-status-badge :status="$reservation->status" domain="reservation" />
+                            @endif
+                        </td>
                         <td>
                             <a href="{{ route('manager.reservations.show', $reservation) }}" class="btn btn-sm btn-primary">
                                 <i class="fas fa-eye"></i>
