@@ -132,7 +132,7 @@
                     <i class="fas fa-home"></i> Dashboard
                 </a></li>
                 <li><a href="{{ route('guest.reservations.index') }}" class="nav-link {{ request()->routeIs('guest.reservations.*') ? 'active' : '' }}">
-                    <i class="fas fa-calendar-check"></i> My Bookings
+                    <i class="fas fa-calendar-alt"></i> My Reservations
                 </a></li>
                 <li><a href="{{ route('public.rooms.index') }}" class="nav-link {{ request()->routeIs('public.rooms.*') ? 'active' : '' }}">
                     <i class="fas fa-door-open"></i> Book Room

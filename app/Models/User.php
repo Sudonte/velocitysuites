@@ -28,6 +28,7 @@ class User extends Authenticatable
         'status',
         'failed_login_attempts',
         'last_login_at',
+        'email_verified_at',
     ];
 
     /**
@@ -160,5 +161,13 @@ class User extends Authenticatable
     public function activityLogs()
     {
         return $this->hasMany(ActivityLog::class);
+    }
+
+    /**
+     * Get the API tokens issued to the user (mobile app auth).
+     */
+    public function apiTokens()
+    {
+        return $this->hasMany(ApiToken::class);
     }
 }

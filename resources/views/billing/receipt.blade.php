@@ -1,14 +1,14 @@
 @extends('layouts.app')
 
-@section('title', 'Receipt - Receptionist')
+@section('title', 'Receipt')
 
 @section('content')
 <div class="container-fluid py-4">
     <div class="row mb-4">
         <div class="col-12">
-            @if($billing->booking)
-                <a href="{{ route('receptionist.bookings.show', $billing->booking) }}" class="btn btn-sm btn-secondary mb-2">
-                    <i class="fas fa-arrow-left"></i> Back to Booking
+            @if($backRoute)
+                <a href="{{ $backRoute }}" class="btn btn-sm btn-secondary mb-2">
+                    <i class="fas fa-arrow-left"></i> Back
                 </a>
             @endif
             <h1 class="mb-0">
@@ -17,10 +17,15 @@
             @if($billing->booking)
                 <p class="text-muted">
                     Booking #{{ $billing->booking->id }} —
-                    Guest: {{ $billing->booking->reservation->guest->user->full_name ?? 'N/A' }} —
+                    Guest: {{ $billing->booking->reservation->stay_guest_full_name ?? $billing->booking->reservation->guest->user->full_name ?? 'N/A' }} —
                     Room: {{ $billing->booking->room->room_number ?? 'N/A' }}
-                    ({{ $billing->booking->room->room_name ?? 'N/A' }})
+                    ({{ $billing->booking->room->room_name ?? $billing->booking->reservation->roomType->name }})
                 </p>
+            @endif
+            @if($billing->billing_status !== 'paid' && $billing->payments->where('payment_status', 'pending')->isNotEmpty())
+                <div class="alert alert-warning d-inline-block">
+                    <i class="fas fa-clock"></i> This payment is awaiting staff verification. Your booking will be confirmed once verified.
+                </div>
             @endif
         </div>
     </div>
@@ -69,6 +74,7 @@
                             <th>Date</th>
                             <th>Method</th>
                             <th>Reference</th>
+                            <th>Status</th>
                             <th class="text-end">Amount</th>
                         </tr>
                     </thead>
@@ -78,14 +84,15 @@
                                 <td>{{ $payment->payment_date->format('M d, Y h:i A') }}</td>
                                 <td>{{ ucfirst($payment->payment_method) }}</td>
                                 <td>{{ $payment->reference_number ?? '—' }}</td>
+                                <td><x-status-badge :status="$payment->payment_status" domain="payment" /></td>
                                 <td class="text-end">₱{{ number_format($payment->amount_paid, 2) }}</td>
                             </tr>
                         @empty
-                            <tr><td colspan="4"><x-empty-state icon="fas fa-history" message="No payments recorded." /></td></tr>
+                            <tr><td colspan="5"><x-empty-state icon="fas fa-history" message="No payments recorded." /></td></tr>
                         @endforelse
                         @if($billing->payments->count() > 0)
                             <tr class="table-light">
-                                <td colspan="3"><strong>Total Paid</strong></td>
+                                <td colspan="4"><strong>Total Verified Paid</strong></td>
                                 <td class="text-end"><strong>₱{{ number_format($amountPaid, 2) }}</strong></td>
                             </tr>
                         @endif

@@ -35,6 +35,7 @@ class ReportController extends Controller
 
         $totalRevenue = (float) $revenueByDay->sum('total');
         $totalReservations = Reservation::whereBetween('check_in', [$from, $to])->count();
+        $totalBookings = Reservation::whereBetween('check_in', [$from, $to])->whereHas('booking')->count();
         $averageStay = (float) Reservation::whereBetween('check_in', [$from, $to])
             ->selectRaw('AVG(DATEDIFF(check_out, check_in)) as avg_nights')
             ->value('avg_nights');
@@ -62,6 +63,7 @@ class ReportController extends Controller
             'revenueByDay',
             'totalRevenue',
             'totalReservations',
+            'totalBookings',
             'averageStay',
             'topRoomTypes',
             'topGuests'

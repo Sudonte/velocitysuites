@@ -27,13 +27,16 @@
 
     <!-- Summary Cards -->
     <div class="row mb-4">
-        <div class="col-md-4 mb-3">
+        <div class="col-md-3 mb-3">
             <x-stat-card icon="fas fa-money-bill-wave" label="Total Revenue" value="₱{{ number_format($totalRevenue, 2) }}" color="success" />
         </div>
-        <div class="col-md-4 mb-3">
+        <div class="col-md-3 mb-3">
             <x-stat-card icon="fas fa-calendar-alt" label="Total Reservations" :value="$totalReservations" color="primary" />
         </div>
-        <div class="col-md-4 mb-3">
+        <div class="col-md-3 mb-3">
+            <x-stat-card icon="fas fa-credit-card" label="Total Bookings" :value="$totalBookings" color="secondary" />
+        </div>
+        <div class="col-md-3 mb-3">
             <x-stat-card icon="fas fa-moon" label="Average Stay" value="{{ number_format($averageStay, 1) }} nights" color="info" />
         </div>
     </div>

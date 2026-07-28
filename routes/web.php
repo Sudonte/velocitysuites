@@ -29,6 +29,19 @@ Route::get('/rooms/{roomType}', [\App\Http\Controllers\PublicRoomController::cla
 // Store booking intent in session before redirecting to login
 Route::post('/booking/intent', [\App\Http\Controllers\BookingIntentController::class, 'store'])->name('booking.intent');
 
+// Fallback for the 'public' disk (room images etc). This deploy's document
+// root doesn't sit at Laravel's public/ folder (see DEPLOYMENT.md), so
+// `php artisan storage:link`'s symlink target isn't reachable from
+// public_html - serve those files through Laravel itself instead. Only
+// the 'public' disk (never 'local', which holds private uploads like ID
+// card scans - see Api\ReservationController::showIdCard).
+Route::get('/storage/{path}', function (string $path) {
+    if (! \Illuminate\Support\Facades\Storage::disk('public')->exists($path)) {
+        abort(404);
+    }
+    return \Illuminate\Support\Facades\Storage::disk('public')->response($path);
+})->where('path', '.*')->name('storage.fallback');
+
 // Redirect authenticated users from root to their dashboard
 Route::get('/dashboard', function () {
     if (!auth()->check()) {
@@ -133,6 +146,14 @@ Route::middleware(['auth', 'account.status', 'log.activity'])->group(function ()
         Route::get('/bookings', [ReceptionistBookingController::class, 'index'])->name('bookings.index');
         Route::get('/bookings/{booking}', [ReceptionistBookingController::class, 'show'])->name('bookings.show');
 
+        // NOTE: an earlier session (merged into this branch) also built a
+        // walk-in guest registration flow (Receptionist\WalkInController)
+        // and a pending-payments verification page - both still exist in
+        // the codebase but wrote the pre-redesign status values directly
+        // ('pending' etc, no longer valid enum members) and aren't wired
+        // up here until they're updated against the new Reservation/
+        // Booking status model.
+
         // Check-in (pre-redesign single list - the Expected Check-ins /
         // Checked-in Guests tabs and check-in-time room assignment are
         // built in the Check-in Module phase)
@@ -153,12 +174,11 @@ Route::middleware(['auth', 'account.status', 'log.activity'])->group(function ()
 
         // Amenity Requests
         Route::get('/amenities', [ReceptionistController::class, 'amenitiesIndex'])->name('amenities.index');
-        Route::get('/amenities/{reservation}/create', [ReceptionistController::class, 'amenitiesCreate'])->name('amenities.create');
         Route::post('/amenities/{reservation}', [ReceptionistController::class, 'amenitiesStore'])->name('amenities.store');
         Route::put('/amenities/{amenityRequest}', [ReceptionistController::class, 'amenitiesUpdate'])->name('amenities.update');
 
         // Billing (used from the Check-Out workflow's Billing Panel, plus a read-only receipt)
-        Route::get('/billing/{billing}/receipt', [ReceptionistController::class, 'receiptShow'])->name('billing.receipt');
+        Route::get('/billing/{billing}/receipt', [\App\Http\Controllers\BillingController::class, 'receipt'])->name('billing.receipt');
         Route::post('/billing/{billing}/payment', [ReceptionistController::class, 'recordPayment'])->name('billing.payment.store');
         Route::post('/billing/{billing}/additional-charge', [ReceptionistController::class, 'storeAdditionalCharge'])->name('billing.additional-charge.store');
         Route::put('/billing/additional-charge/{additionalCharge}', [ReceptionistController::class, 'updateAdditionalCharge'])->name('billing.additional-charge.update');
@@ -181,6 +201,17 @@ Route::middleware(['auth', 'account.status', 'log.activity'])->group(function ()
         Route::put('/reservations/{reservation}', [\App\Http\Controllers\Guest\ReservationController::class, 'update'])->name('reservations.update');
         Route::put('/reservations/{reservation}/cancel', [\App\Http\Controllers\Guest\ReservationController::class, 'cancel'])->name('reservations.cancel');
         Route::post('/reservations/{reservation}/pay-deposit', [\App\Http\Controllers\Guest\ReservationController::class, 'payDeposit'])->name('reservations.pay-deposit');
+
+        // NOTE: an earlier session (merged into this branch) also built a
+        // separate Guest\BookingController "Book & Pay" flow - it still
+        // exists in the codebase but wrote the pre-redesign status values
+        // directly ('pending' etc, no longer valid enum members) and isn't
+        // wired up here until it's updated against the new Reservation/
+        // Booking status model. Guests pay a deposit via reservations.
+        // pay-deposit above instead.
+
+        // Billing - guest's own receipt (ownership-checked in BillingController)
+        Route::get('/billing/{billing}/receipt', [\App\Http\Controllers\BillingController::class, 'receipt'])->name('billing.receipt');
 
         // Payments - view payment history and pending bills
         Route::get('/payments', [GuestController::class, 'payments'])->name('payments.index');

@@ -53,6 +53,8 @@ class AdminReportController extends Controller
 
         // Recent reservations count for stats
         $reservationsCount = Reservation::count();
+        $bookingsCount = Reservation::whereHas('booking')->count();
+        $pendingPaymentVerifications = Payment::where('payment_status', 'pending')->count();
 
         return view('admin.reports.index', compact(
             'activityLogs',
@@ -60,7 +62,9 @@ class AdminReportController extends Controller
             'userReports',
             'roomReports',
             'revenue',
-            'reservationsCount'
+            'reservationsCount',
+            'bookingsCount',
+            'pendingPaymentVerifications'
         ));
     }
 }

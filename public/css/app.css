@@ -446,6 +446,57 @@ tbody tr:hover {
     border-bottom: none;
 }
 
+/* Reservation/Booking Details modal (receptionist): grouped sections
+   with consistent spacing/typography instead of stacked cards, so a
+   large modal still reads cleanly at a glance. */
+.detail-section {
+    margin-bottom: 1.75rem;
+}
+
+.detail-section:last-child {
+    margin-bottom: 0;
+}
+
+.detail-section-title {
+    font-size: 0.8rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-light);
+    margin-bottom: 0.9rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.detail-section-title i {
+    color: var(--primary-color);
+}
+
+.detail-list > div {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.4rem 0;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.detail-list > div:last-child {
+    border-bottom: none;
+}
+
+.detail-list dt {
+    color: var(--text-light);
+    font-size: 0.875rem;
+    flex-shrink: 0;
+}
+
+.detail-list dd {
+    margin: 0;
+    text-align: right;
+    font-weight: 500;
+}
+
 /* Notifications */
 .alert {
     padding: 1rem;

@@ -44,6 +44,9 @@ class AdminDashboardController extends Controller
         $activeReservations = Booking::whereIn('booking_status', ['confirmed', 'checked_in'])->count();
         $completedReservations = Booking::where('booking_status', 'checked_out')->count();
 
+        $totalBookings = Reservation::whereHas('booking')->count();
+        $pendingPaymentVerifications = Payment::where('payment_status', 'pending')->count();
+
         $data = [
             // User stats
             'totalUsers' => User::count(),
@@ -69,6 +72,10 @@ class AdminDashboardController extends Controller
             'pendingReservations' => $pendingReservations,
             'activeReservations' => $activeReservations,
             'completedReservations' => $completedReservations,
+
+            // Booking / payment stats
+            'totalBookings' => $totalBookings,
+            'pendingPaymentVerifications' => $pendingPaymentVerifications,
 
             // Other
             'activePromotions' => Promotion::where('status', 'active')->count(),

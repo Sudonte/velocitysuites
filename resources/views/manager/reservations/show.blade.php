@@ -34,7 +34,12 @@
                 </div>
                 <div class="row mb-2">
                     <div class="col-md-4"><strong>Guest:</strong></div>
-                    <div class="col-md-8">{{ $reservation->guest->user->full_name ?? 'N/A' }} ({{ $reservation->guest->user->email ?? '' }})</div>
+                    <div class="col-md-8">
+                        {{ $reservation->stay_guest_full_name ?? $reservation->guest->user->full_name ?? 'N/A' }} ({{ $reservation->guest->user->email ?? '' }})
+                        @if($reservation->stay_guest_full_name && $reservation->guest->user->full_name !== $reservation->stay_guest_full_name)
+                            <br><small class="text-muted">Account: {{ $reservation->guest->user->full_name }}</small>
+                        @endif
+                    </div>
                 </div>
                 <div class="row mb-2">
                     <div class="col-md-4"><strong>Room:</strong></div>

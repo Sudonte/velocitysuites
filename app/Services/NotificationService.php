@@ -201,6 +201,28 @@ class NotificationService
     }
 
     /**
+     * Notify about a guest-submitted payment claim (e.g. GCash) awaiting
+     * staff verification - distinct from notifyPaymentReceived, which is
+     * for a payment staff already recorded/confirmed themselves.
+     */
+    public function notifyPaymentSubmitted(User $guest, float $amount, string $roomName): void
+    {
+        $this->toUser(
+            $guest,
+            'Payment Pending Validation',
+            'Your payment of ₱' . number_format($amount, 2) . " for {$roomName} has been submitted and is pending validation.",
+            'payment'
+        );
+
+        $this->toStaff(
+            'Payment Submitted for Review',
+            "{$guest->full_name} submitted a payment of ₱" . number_format($amount, 2) . " for {$roomName} - needs verification.",
+            'payment',
+            $guest->email
+        );
+    }
+
+    /**
      * Notify manager about payment.
      */
     public function notifyManagerPayment(User $guest, float $amount, string $billStatus, ?string $roomName = null): void
