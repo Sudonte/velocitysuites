@@ -74,7 +74,7 @@ class BookingController extends Controller
             'adults' => $validated['adults'],
             'children' => $children,
             'number_of_guests' => $validated['adults'] + $children,
-            'status' => 'pending',
+            'status' => 'pending_review',
             'id_card_type' => $idCardType === 'None' ? null : $idCardType,
             'additional_guest_details' => $validated['additional_guests'] ?? null,
         ]);

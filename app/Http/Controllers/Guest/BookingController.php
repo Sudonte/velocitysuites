@@ -123,7 +123,7 @@ class BookingController extends Controller
             'adults' => $validated['adults'],
             'children' => $children,
             'number_of_guests' => $validated['adults'] + $children,
-            'status' => 'pending',
+            'status' => 'pending_review',
         ]);
 
         $quote = $this->bookingService->quoteRoomCharge($reservation);

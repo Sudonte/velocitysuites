@@ -80,18 +80,39 @@ class BookingService
      * plain Reserve has none until this is called - explicitly when a
      * guest/staff pays, or implicitly at checkout for a guest who never
      * pre-paid (see Receptionist\ReceptionistController::generateBilling).
+     *
+     * Creating a Booking is what "conversion" means under the current
+     * Reservation/Booking split (see ReservationWorkflowService) - a
+     * Booking only ever exists for a converted reservation, and Booking
+     * carries its own copy of room_type/dates/guest counts taken here
+     * (Reservation is frozen/historical afterward). $bookingStatus of
+     * 'pending' is coerced to 'confirmed' - the new booking_status enum
+     * has no 'pending' member, since a Booking never exists before that
+     * point.
      */
-    public function ensureBooking(Reservation $reservation, string $bookingStatus = 'pending'): Booking
+    public function ensureBooking(Reservation $reservation, string $bookingStatus = 'confirmed'): Booking
     {
         if ($reservation->booking) {
             return $reservation->booking;
         }
 
-        return Booking::create([
+        $booking = Booking::create([
             'reservation_id' => $reservation->id,
-            'booking_date' => now(),
-            'booking_status' => $bookingStatus,
+            'room_type_id' => $reservation->room_type_id,
+            'check_in' => $reservation->check_in,
+            'check_out' => $reservation->check_out,
+            'adults' => $reservation->adults,
+            'children' => $reservation->children,
+            'number_of_guests' => $reservation->number_of_guests,
+            'confirmed_at' => now(),
+            'booking_status' => $bookingStatus === 'pending' ? 'confirmed' : $bookingStatus,
         ]);
+
+        if ($reservation->status !== 'converted') {
+            $reservation->update(['status' => 'converted']);
+        }
+
+        return $booking;
     }
 
     /**

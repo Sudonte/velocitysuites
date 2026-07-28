@@ -4,6 +4,7 @@ use App\Http\Controllers\Auth\ForgotPasswordController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\RegisterController;
 use App\Http\Controllers\Admin\PromotionManagementController;
+use App\Http\Controllers\Admin\DiscountManagementController;
 use App\Http\Controllers\Admin\AmenityManagementController;
 use App\Http\Controllers\Admin\AdminReportController;
 use App\Http\Controllers\Manager\ManagerDashboardController;
@@ -103,6 +104,10 @@ Route::middleware(['auth', 'account.status', 'log.activity'])->group(function ()
         // Promotion Management
         Route::resource('promotions', PromotionManagementController::class);
         Route::put('promotions/{promotion}/toggle', [PromotionManagementController::class, 'toggle'])->name('promotions.toggle');
+
+        // Discount Management - separate from Promotions, no shared logic/records
+        Route::resource('discounts', DiscountManagementController::class);
+        Route::put('discounts/{discount}/toggle', [DiscountManagementController::class, 'toggle'])->name('discounts.toggle');
 
         // Amenity Management
         Route::resource('amenities', AmenityManagementController::class);

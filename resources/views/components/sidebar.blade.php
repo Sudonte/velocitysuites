@@ -80,6 +80,9 @@
                 <li><a href="/admin/promotions" class="nav-link {{ request()->is('admin/promotions*') ? 'active' : '' }}">
                     <i class="fas fa-tag"></i> Promotions
                 </a></li>
+                <li><a href="/admin/discounts" class="nav-link {{ request()->is('admin/discounts*') ? 'active' : '' }}">
+                    <i class="fas fa-id-card"></i> Discounts
+                </a></li>
                 <li><a href="/admin/amenities" class="nav-link {{ request()->is('admin/amenities*') ? 'active' : '' }}">
                     <i class="fas fa-spa"></i> Amenities
                 </a></li>

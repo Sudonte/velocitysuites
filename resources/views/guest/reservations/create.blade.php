@@ -215,13 +215,6 @@
                     <strong>₱{{ number_format($totalRate, 2) }}</strong>
                 </div>
 
-                @if($discount > 0)
-                    <div class="d-flex justify-content-between mb-2 text-success">
-                        <span>Promotion Discount:</span>
-                        <strong>-₱{{ number_format($discount, 2) }}</strong>
-                    </div>
-                @endif
-
                 <hr>
                 <div class="d-flex justify-content-between">
                     <strong>Estimated Total:</strong>
@@ -234,23 +227,12 @@
                 <x-card title="Active Promotion" variant="warning" bodyClass="card-body" class="mt-3">
                     @foreach($applicablePromos as $promo)
                         <h6>{{ $promo->promo_name }}</h6>
-                        @if($promo->promo_type === 'amenity')
-                            <p class="mb-2">
-                                <strong>Includes free:</strong>
-                                @foreach($promo->amenities as $amenity)
-                                    {{ $amenity->pivot->quantity }}× {{ $amenity->amenity_name }}@if(!$loop->last), @endif
-                                @endforeach
-                            </p>
-                        @else
-                            <p class="mb-2">
-                                <strong>Discount:</strong>
-                                @if($promo->discount_type === 'percentage')
-                                    {{ $promo->discount_value }}%
-                                @else
-                                    ₱{{ number_format($promo->discount_value, 2) }}
-                                @endif
-                            </p>
-                        @endif
+                        <p class="mb-2">
+                            <strong>Includes free:</strong>
+                            @foreach($promo->amenities as $amenity)
+                                {{ $amenity->pivot->quantity }}× {{ $amenity->amenity_name }}@if(!$loop->last), @endif
+                            @endforeach
+                        </p>
                         <p class="mb-0">
                             <small>{{ $promo->description }}</small>
                         </p>

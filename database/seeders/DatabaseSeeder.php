@@ -117,26 +117,31 @@ class DatabaseSeeder extends Seeder
             'status' => 'available',
         ]);
 
-        // Create Sample Promotions
-        Promotion::create([
-            'promo_name' => 'Early Bird Discount',
+        // Create Sample Discounts (Senior Citizen/PWD/Student - authorized
+        // discounts a receptionist applies manually at billing after
+        // verifying a guest's uploaded ID; genuinely separate from
+        // Promotions below, no shared logic/records).
+        Discount::create([
+            'name' => 'Senior Citizen',
             'discount_type' => 'percentage',
-            'discount_value' => 15,
-            'description' => 'Get 15% discount when booking 30 days in advance.',
-            'room_type_id' => null,
-            'start_date' => now(),
-            'end_date' => now()->addMonths(3),
+            'value' => 20,
+            'description' => '20% discount for senior citizens, valid ID required.',
             'status' => 'active',
         ]);
 
-        Promotion::create([
-            'promo_name' => 'Weekend Special',
-            'discount_type' => 'fixed',
-            'discount_value' => 500,
-            'description' => 'Get ₱500 off on weekend stays.',
-            'room_type_id' => $deluxe->id,
-            'start_date' => now(),
-            'end_date' => now()->addMonths(2),
+        Discount::create([
+            'name' => 'PWD',
+            'discount_type' => 'percentage',
+            'value' => 20,
+            'description' => '20% discount for persons with disability, valid ID required.',
+            'status' => 'active',
+        ]);
+
+        Discount::create([
+            'name' => 'Student',
+            'discount_type' => 'percentage',
+            'value' => 10,
+            'description' => '10% discount for students, valid school ID required.',
             'status' => 'active',
         ]);
 
@@ -165,12 +170,26 @@ class DatabaseSeeder extends Seeder
             'status' => 'active',
         ]);
 
-        Amenity::create([
+        $breakfastBuffet = Amenity::create([
             'amenity_name' => 'Breakfast Buffet',
             'description' => 'Complimentary or paid breakfast buffet.',
             'quantity' => 100,
             'charge' => 800,
             'status' => 'active',
         ]);
+
+        // Sample amenity-type Promotion (package/bundle) - Promotions are
+        // amenity/package-only now; authorized discounts live in the
+        // Discount module seeded above instead.
+        $weekendPackage = Promotion::create([
+            'promo_name' => 'Weekend Breakfast Package',
+            'promo_type' => 'amenity',
+            'description' => 'Book a Deluxe room and get breakfast buffet included, free.',
+            'room_type_id' => $deluxe->id,
+            'start_date' => now(),
+            'end_date' => now()->addMonths(2),
+            'status' => 'active',
+        ]);
+        $weekendPackage->amenities()->attach($breakfastBuffet->id, ['quantity' => 2]);
     }
 }

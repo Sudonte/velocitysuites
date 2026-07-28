@@ -29,11 +29,6 @@ class PromotionManagementController extends Controller
             $query->where('status', $request->status);
         }
 
-        // Filter by discount type
-        if ($request->has('discount_type') && $request->discount_type) {
-            $query->where('discount_type', $request->discount_type);
-        }
-
         $promotions = $query->with('amenities')->latest()->paginate(15);
         $roomTypes = RoomType::orderBy('name')->get();
 
@@ -52,17 +47,16 @@ class PromotionManagementController extends Controller
     }
 
     /**
-     * Validate a promotion request. Discount promos require the discount
-     * fields; amenity promos instead require at least one included amenity
-     * (submitted as amenities[<id>] = quantity, 0/blank meaning excluded).
+     * Validate a promotion request. Promotions are package/amenity-only -
+     * authorized discounts (Senior Citizen, PWD, etc.) live in the
+     * separate Discount module now, applied manually by the receptionist
+     * at billing. Requires at least one included amenity (submitted as
+     * amenities[<id>] = quantity, 0/blank meaning excluded).
      */
     private function validatePromotion(Request $request): array
     {
         $validated = $request->validate([
             'promo_name' => 'required|string|max:255',
-            'promo_type' => 'required|in:discount,amenity',
-            'discount_type' => 'required_if:promo_type,discount|nullable|in:percentage,fixed',
-            'discount_value' => 'required_if:promo_type,discount|nullable|numeric|min:0',
             'description' => 'nullable|string',
             'room_type_id' => 'nullable|exists:room_types,id',
             'start_date' => 'required|date',
@@ -72,17 +66,14 @@ class PromotionManagementController extends Controller
             'amenities.*' => 'nullable|integer|min:0|max:99',
         ]);
 
-        if ($validated['promo_type'] === 'amenity') {
-            $included = collect($validated['amenities'] ?? [])->filter(fn ($qty) => (int) $qty > 0);
-            if ($included->isEmpty()) {
-                throw \Illuminate\Validation\ValidationException::withMessages([
-                    'amenities' => 'An amenity promotion must include at least one amenity (set a quantity above 0).',
-                ]);
-            }
-            // Amenity promos carry no discount.
-            $validated['discount_type'] = null;
-            $validated['discount_value'] = null;
+        $included = collect($validated['amenities'] ?? [])->filter(fn ($qty) => (int) $qty > 0);
+        if ($included->isEmpty()) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'amenities' => 'A promotion must include at least one amenity (set a quantity above 0).',
+            ]);
         }
+
+        $validated['promo_type'] = 'amenity';
 
         return $validated;
     }
@@ -92,15 +83,11 @@ class PromotionManagementController extends Controller
      */
     private function syncAmenities(Promotion $promotion, array $validated): void
     {
-        if ($validated['promo_type'] === 'amenity') {
-            $sync = collect($validated['amenities'] ?? [])
-                ->filter(fn ($qty) => (int) $qty > 0)
-                ->map(fn ($qty) => ['quantity' => (int) $qty])
-                ->all();
-            $promotion->amenities()->sync($sync);
-        } else {
-            $promotion->amenities()->detach();
-        }
+        $sync = collect($validated['amenities'] ?? [])
+            ->filter(fn ($qty) => (int) $qty > 0)
+            ->map(fn ($qty) => ['quantity' => (int) $qty])
+            ->all();
+        $promotion->amenities()->sync($sync);
     }
 
     /**

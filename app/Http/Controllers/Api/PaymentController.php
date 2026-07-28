@@ -34,7 +34,7 @@ class PaymentController extends Controller
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 
-        if (! in_array($reservation->status, ['pending', 'confirmed'])) {
+        if (! in_array($reservation->status, ['pending_review', 'ready_for_booking'])) {
             return response()->json(['message' => 'This reservation is not payable.'], 422);
         }
 
@@ -47,8 +47,8 @@ class PaymentController extends Controller
         $payment = $this->bookingService->recordPayment($reservation, $validated, staffRecorded: false);
 
         $user = auth()->user();
-        $reservation->loadMissing(['roomType', 'room']);
-        $roomName = $reservation->room->room_name ?? $reservation->roomType->name;
+        $reservation->loadMissing(['roomType', 'booking.room']);
+        $roomName = $reservation->booking?->room?->room_name ?? $reservation->roomType->name;
         $this->notificationService->notifyPaymentSubmitted($user, (float) $validated['amount_paid'], $roomName);
 
         return response()->json([

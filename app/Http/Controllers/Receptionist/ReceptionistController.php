@@ -445,30 +445,13 @@ class ReceptionistController extends Controller
             ->where('status', 'approved')
             ->sum(DB::raw('charge * quantity'));
 
-        // Find best applicable active DISCOUNT promotion (amenity promos
-        // don't reduce the rate - their inclusions are zero-charge
-        // amenity requests granted at conversion time). Removed once the
-        // Discount Module phase separates guest-verified discounts from
-        // promotions entirely.
-        $promo = Promotion::where('status', 'active')
-            ->where('promo_type', 'discount')
-            ->whereDate('start_date', '<=', today())
-            ->whereDate('end_date', '>=', today())
-            ->where(function ($q) use ($booking) {
-                $q->whereNull('room_type_id')
-                  ->orWhere('room_type_id', $booking->room_type_id);
-            })
-            ->orderByDesc('discount_value')
-            ->first();
-
+        // No automatic discount - Promotions are package/amenity-only now
+        // (their inclusions are zero-charge amenity requests granted at
+        // conversion time, handled separately above via $amenityCharge).
+        // Authorized discounts (Senior Citizen, PWD, etc.) are applied
+        // manually here by the receptionist after verifying the guest's
+        // uploaded ID, via the Discount module - see applyDiscount().
         $discount = 0;
-        if ($promo) {
-            $discount = $promo->discount_type === 'percentage'
-                ? round(($roomCharge * (float) $promo->discount_value) / 100, 2)
-                : (float) $promo->discount_value;
-        }
-        // Never discount more than the room charge
-        $discount = min($discount, $roomCharge);
 
         $total = max(0, $roomCharge + $extraGuestFee + $amenityCharge - $discount);
 

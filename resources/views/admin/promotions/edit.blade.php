@@ -21,6 +21,14 @@
                     </div>
                 @endif
 
+                @if($promotion->promo_type !== 'amenity')
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle"></i> This was a discount-type promotion, deactivated when
+                        Promotions became package/amenity-only. Add at least one included amenity below to convert it,
+                        or leave it inactive and use the new <a href="{{ route('admin.discounts.index') }}">Discounts</a> module instead.
+                    </div>
+                @endif
+
                 <form action="{{ route('admin.promotions.update', $promotion) }}" method="POST">
                     @csrf
                     @method('PUT')
@@ -35,47 +43,6 @@
                     </div>
 
                     <div class="form-group mb-3">
-                        <label for="promo_type">Promotion Type *</label>
-                        <select class="form-select @error('promo_type') is-invalid @enderror"
-                                id="promo_type" name="promo_type" required>
-                            <option value="discount" {{ old('promo_type', $promotion->promo_type) === 'discount' ? 'selected' : '' }}>Discount — money off the room rate</option>
-                            <option value="amenity" {{ old('promo_type', $promotion->promo_type) === 'amenity' ? 'selected' : '' }}>Amenity — free included amenities with the stay</option>
-                        </select>
-                        @error('promo_type')
-                            <div class="invalid-feedback">{{ $message }}</div>
-                        @enderror
-                    </div>
-
-                    <!-- Discount promo fields -->
-                    <div id="discount-section" class="row">
-                        <div class="col-md-6">
-                            <div class="form-group mb-3">
-                                <label for="discount_type">Discount Type *</label>
-                                <select class="form-control @error('discount_type') is-invalid @enderror"
-                                        id="discount_type" name="discount_type">
-                                    <option value="">Select Type</option>
-                                    <option value="percentage" {{ old('discount_type', $promotion->discount_type) === 'percentage' ? 'selected' : '' }}>Percentage (%)</option>
-                                    <option value="fixed" {{ old('discount_type', $promotion->discount_type) === 'fixed' ? 'selected' : '' }}>Fixed Amount (₱)</option>
-                                </select>
-                                @error('discount_type')
-                                    <div class="invalid-feedback">{{ $message }}</div>
-                                @enderror
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="form-group mb-3">
-                                <label for="discount_value">Discount Value *</label>
-                                <input type="number" step="0.01" min="0" class="form-control @error('discount_value') is-invalid @enderror"
-                                       id="discount_value" name="discount_value" value="{{ old('discount_value', $promotion->discount_value) }}">
-                                @error('discount_value')
-                                    <div class="invalid-feedback">{{ $message }}</div>
-                                @enderror
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Amenity promo fields -->
-                    <div id="amenity-section" class="form-group mb-3 d-none">
                         <label>Included Amenities *</label>
                         <p class="text-muted mb-2">Set how many of each amenity are included free with the stay (leave 0 to exclude).</p>
                         @error('amenities')
@@ -180,23 +147,4 @@
         </div>
     </div>
 </div>
-
-@push('scripts')
-<script>
-document.addEventListener('DOMContentLoaded', function () {
-    const typeSelect = document.getElementById('promo_type');
-    const discountSection = document.getElementById('discount-section');
-    const amenitySection = document.getElementById('amenity-section');
-
-    function togglePromoSections() {
-        const isDiscount = typeSelect.value === 'discount';
-        discountSection.classList.toggle('d-none', !isDiscount);
-        amenitySection.classList.toggle('d-none', isDiscount);
-    }
-
-    typeSelect.addEventListener('change', togglePromoSections);
-    togglePromoSections();
-});
-</script>
-@endpush
 @endsection

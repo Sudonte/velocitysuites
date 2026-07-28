@@ -23,18 +23,11 @@
     <!-- Search and Filter -->
     <x-card bodyClass="card-body" class="mb-4">
         <form method="GET" action="{{ route('admin.promotions.index') }}" class="row g-3">
-            <div class="col-md-4">
+            <div class="col-md-6">
                 <input type="text" name="search" class="form-control"
                        placeholder="Search by promo name" value="{{ request('search') }}">
             </div>
-            <div class="col-md-3">
-                <select name="discount_type" class="form-control">
-                    <option value="">All Discount Types</option>
-                    <option value="percentage" {{ request('discount_type') === 'percentage' ? 'selected' : '' }}>Percentage</option>
-                    <option value="fixed" {{ request('discount_type') === 'fixed' ? 'selected' : '' }}>Fixed Amount</option>
-                </select>
-            </div>
-            <div class="col-md-3">
+            <div class="col-md-4">
                 <select name="status" class="form-control">
                     <option value="">All Status</option>
                     <option value="active" {{ request('status') === 'active' ? 'selected' : '' }}>Active</option>

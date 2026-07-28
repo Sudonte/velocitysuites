@@ -112,7 +112,8 @@ class ReservationController extends Controller
             'adults' => $validated['adults'],
             'children' => $children,
             'number_of_guests' => $validated['adults'] + $children,
-            'status' => 'pending',
+            'status' => 'pending_review',
+            'discount_verification_status' => $idCardType === 'None' ? 'not_requested' : 'pending',
             'id_card_type' => $idCardType === 'None' ? null : $idCardType,
             'additional_guest_details' => $validated['additional_guests'] ?? null,
         ]);
@@ -134,8 +135,8 @@ class ReservationController extends Controller
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 
-        if ($reservation->status !== 'pending') {
-            return response()->json(['message' => 'Can only modify pending reservations.'], 422);
+        if ($reservation->status !== 'pending_review') {
+            return response()->json(['message' => 'Can only modify a reservation that is still awaiting review.'], 422);
         }
 
         $validated = $request->validate([
@@ -167,23 +168,20 @@ class ReservationController extends Controller
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 
-        if (! in_array($reservation->status, ['pending', 'confirmed'])) {
+        if (! in_array($reservation->status, ['pending_review', 'ready_for_booking'])) {
             return response()->json(['message' => 'Cannot cancel this reservation.'], 422);
         }
 
         $user = auth()->user();
-        $roomName = $reservation->room->room_name ?? $reservation->roomType->name;
+        $roomName = $reservation->roomType->name;
 
         DB::transaction(function () use ($reservation) {
             $reservation->update(['status' => 'cancelled']);
 
-            if ($reservation->booking) {
-                $reservation->booking->update(['booking_status' => 'cancelled']);
-            }
-
-            if ($reservation->room && $reservation->room->status === 'reserved') {
-                $reservation->room->update(['status' => 'available']);
-            }
+            $reservation->payments()
+                ->where('payment_stage', 'deposit')
+                ->where('payment_status', 'pending')
+                ->update(['payment_status' => 'failed']);
         });
 
         $this->notificationService->notifyReservationCancelled($user, $roomName);

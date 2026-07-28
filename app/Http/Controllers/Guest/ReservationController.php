@@ -54,13 +54,17 @@ class ReservationController extends Controller
         $nights = $checkOut->diff($checkIn)->days;
         $totalRate = $roomType->rate * $nights;
 
-        // Amenity-type promotions are shown as free inclusions (granted at
-        // conversion time). Discount-type promotions still auto-preview
-        // here for now - removed in the upcoming Discount Module phase,
-        // which separates guest-requested/staff-verified discounts from
-        // promotions entirely.
+        // Promotions are package/amenity-only - shown as free inclusions,
+        // granted automatically when the reservation is converted to a
+        // booking. No discount preview here: authorized discounts (Senior
+        // Citizen, PWD, etc.) are never self-service - a guest can only
+        // request one (see the discount_requested/id_document upload
+        // below), and the reservation amount is never reduced until a
+        // receptionist verifies the ID and applies a specific Discount at
+        // billing.
         $applicablePromos = Promotion::with('amenities')
             ->where('status', 'active')
+            ->where('promo_type', 'amenity')
             ->where(function ($q) use ($roomType) {
                 $q->whereNull('room_type_id')
                   ->orWhere('room_type_id', $roomType->id);
@@ -69,15 +73,7 @@ class ReservationController extends Controller
             ->whereDate('end_date', '>=', now())
             ->get();
 
-        $discount = 0;
-        $discountPromo = $applicablePromos->firstWhere('promo_type', 'discount');
-        if ($discountPromo) {
-            $discount = $discountPromo->discount_type === 'percentage'
-                ? ($totalRate * $discountPromo->discount_value) / 100
-                : $discountPromo->discount_value;
-        }
-
-        $finalRate = $totalRate - $discount;
+        $finalRate = $totalRate;
         $isFullyBooked = $this->availability->isFullyBooked($roomType, $checkIn, $checkOut);
 
         return view('guest.reservations.create', compact(
@@ -86,7 +82,6 @@ class ReservationController extends Controller
             'checkOut',
             'nights',
             'totalRate',
-            'discount',
             'finalRate',
             'applicablePromos',
             'isFullyBooked'
