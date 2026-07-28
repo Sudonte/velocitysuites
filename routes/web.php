@@ -14,6 +14,7 @@ use App\Http\Controllers\Manager\ManagerNotificationController;
 use App\Http\Controllers\Receptionist\ReceptionistController;
 use App\Http\Controllers\Receptionist\ReservationController as ReceptionistReservationController;
 use App\Http\Controllers\Receptionist\BookingController as ReceptionistBookingController;
+use App\Http\Controllers\Receptionist\CheckInController as ReceptionistCheckInController;
 use App\Http\Controllers\Guest\GuestController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\ProfileController;
@@ -159,12 +160,11 @@ Route::middleware(['auth', 'account.status', 'log.activity'])->group(function ()
         // up here until they're updated against the new Reservation/
         // Booking status model.
 
-        // Check-in (pre-redesign single list - the Expected Check-ins /
-        // Checked-in Guests tabs and check-in-time room assignment are
-        // built in the Check-in Module phase)
-        Route::get('/check-in', [ReceptionistController::class, 'checkInIndex'])->name('check-in.index');
-        Route::post('/check-in/{booking}/assign-room', [ReceptionistController::class, 'assignRoom'])->name('check-in.assign-room');
-        Route::post('/check-in/{booking}', [ReceptionistController::class, 'checkIn'])->name('check-in.store');
+        // Check-in Module: two tabs - "Expected Check-ins" (confirmed
+        // bookings, where room assignment happens) and "Checked-in Guests".
+        Route::get('/check-in', [ReceptionistCheckInController::class, 'index'])->name('check-in.index');
+        Route::post('/check-in/{booking}/assign-room', [ReceptionistCheckInController::class, 'assignRoom'])->name('check-in.assign-room');
+        Route::post('/check-in/{booking}', [ReceptionistCheckInController::class, 'checkIn'])->name('check-in.store');
 
         // Check-out (pre-redesign single list - the Expected Check-outs /
         // Checked-out Guests tabs are built in the Check-out Module phase)
@@ -177,8 +177,10 @@ Route::middleware(['auth', 'account.status', 'log.activity'])->group(function ()
         Route::get('/rooms', [ReceptionistController::class, 'roomsIndex'])->name('rooms.index');
         Route::get('/rooms/{roomType}', [ReceptionistController::class, 'roomsShow'])->name('rooms.show');
 
-        // Amenity Requests
+        // Amenity Requests - creation is only reachable for checked-in
+        // guests (linked from the Check-in Module's "Checked-in Guests" tab).
         Route::get('/amenities', [ReceptionistController::class, 'amenitiesIndex'])->name('amenities.index');
+        Route::get('/amenities/{reservation}/create', [ReceptionistController::class, 'amenitiesCreate'])->name('amenities.create');
         Route::post('/amenities/{reservation}', [ReceptionistController::class, 'amenitiesStore'])->name('amenities.store');
         Route::put('/amenities/{amenityRequest}', [ReceptionistController::class, 'amenitiesUpdate'])->name('amenities.update');
 

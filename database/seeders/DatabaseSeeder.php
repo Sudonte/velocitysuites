@@ -3,6 +3,7 @@
 namespace Database\Seeders;
 
 use App\Models\Amenity;
+use App\Models\Discount;
 use App\Models\Guest;
 use App\Models\Promotion;
 use App\Models\Room;

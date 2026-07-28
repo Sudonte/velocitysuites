@@ -68,102 +68,16 @@ class ReceptionistController extends Controller
         ));
     }
 
-    /**
-     * List reservations awaiting check-in: every confirmed booking,
-     * regardless of its scheduled date - early arrivals can be checked in
-     * whenever their room is actually ready (room status is the real gate).
-     *
-     * NOTE: this still uses the pre-redesign single-list UI. The dedicated
-     * "Expected Check-ins" / "Checked-in Guests" tabs and check-in-time room
-     * assignment are built in the Check-in Module phase - this keeps
-     * check-in functionally correct against the new Booking-based model in
-     * the meantime.
-     */
-    public function checkInIndex(): View
-    {
-        $bookings = Booking::with(['reservation.guest.user', 'room', 'roomType'])
-            ->where('booking_status', 'confirmed')
-            ->orderBy('check_in')
-            ->paginate(15);
-
-        // Room assignment happens here, at check-in, per the redesigned
-        // workflow. NOTE: this list/assign-inline UI is a minimal stand-in
-        // for the full "Expected Check-ins" / "Checked-in Guests" tabs the
-        // Check-in Module phase builds - kept simple for now so the system
-        // isn't left unable to assign rooms at all in the meantime.
-        $assignableRooms = $bookings->getCollection()
-            ->filter(fn (Booking $booking) => !$booking->room)
-            ->mapWithKeys(fn (Booking $booking) => [$booking->id => $this->availability->assignableRooms($booking)]);
-
-        return view('receptionist.check-in.index', compact('bookings', 'assignableRooms'));
-    }
-
-    /**
-     * Assign a room to an unassigned confirmed booking. The room must
-     * actually be free for the booking's dates (not just "available"
-     * status) - reuses the same assignableRooms() query the check-in list
-     * used to populate the dropdown, so a stale/concurrent selection can't
-     * double-book a room.
-     */
-    public function assignRoom(Request $request, Booking $booking): RedirectResponse
-    {
-        if ($booking->booking_status !== 'confirmed') {
-            return back()->with('error', 'Only confirmed bookings can have a room assigned.');
-        }
-
-        $validated = $request->validate(['room_id' => 'required|exists:rooms,id']);
-
-        $room = $this->availability->assignableRooms($booking)->firstWhere('id', (int) $validated['room_id']);
-
-        if (!$room) {
-            return back()->with('error', 'That room cannot be assigned: it is not an available ' . $booking->roomType->name . ' room for these dates.');
-        }
-
-        $booking->update(['room_id' => $room->id]);
-
-        return back()->with('success', 'Room ' . $room->room_number . ' assigned.');
-    }
-
-    /**
-     * Mark booking as checked in. Date is not a gate - the room's actual
-     * status is: a room still occupied by the previous guest or under
-     * maintenance can't receive a new check-in.
-     */
-    public function checkIn(Booking $booking): RedirectResponse
-    {
-        if ($booking->booking_status !== 'confirmed') {
-            return back()->with('error', 'Only confirmed bookings can be checked in.');
-        }
-
-        if (!$booking->room) {
-            return back()->with('error', 'Assign a room to this booking before checking in.');
-        }
-
-        if (in_array($booking->room->status, ['occupied', 'maintenance'])) {
-            return back()->with('error',
-                'Room ' . $booking->room->room_number . ' is not ready (' . $booking->room->status . '). ' .
-                'Free it up first or assign a different room.');
-        }
-
-        DB::transaction(function () use ($booking) {
-            $booking->update(['booking_status' => 'checked_in']);
-            $booking->room->update(['status' => 'occupied']);
-
-            $this->notificationService->notifyCheckIn(
-                $booking->reservation->guest->user,
-                $booking->room->room_name
-            );
-        });
-
-        return redirect()->route('receptionist.check-in.index')->with('success', 'Guest checked in successfully!');
-    }
+    // NOTE: check-in listing/room-assignment/check-in-store now live in
+    // Receptionist\CheckInController (two-tab Check-in Module).
 
     /**
      * List bookings available for check-out: every checked-in guest,
      * regardless of scheduled departure date - a guest can leave early
      * (or late) whenever they settle their bill.
      *
-     * NOTE: pre-redesign single-list UI, same caveat as checkInIndex().
+     * NOTE: pre-redesign single-list UI - the Expected Check-outs /
+     * Checked-out Guests tabs are built in the Check-out Module phase.
      */
     public function checkOutIndex(): View
     {
@@ -275,10 +189,17 @@ class ReceptionistController extends Controller
     }
 
     /**
-     * Show form to create an amenity request for a reservation.
+     * Show form to create an amenity request for a reservation. Amenity
+     * Requests are only available for guests who are actually checked in -
+     * a room-service or extra-bed request makes no sense before the guest
+     * has a room, and once checked out billing is already closed.
      */
     public function amenitiesCreate(Reservation $reservation): View
     {
+        if (!$reservation->booking || $reservation->booking->booking_status !== 'checked_in') {
+            abort(404);
+        }
+
         $amenities = Amenity::where('status', 'active')
             ->orderBy('amenity_name')
             ->get();
@@ -291,6 +212,10 @@ class ReceptionistController extends Controller
      */
     public function amenitiesStore(Request $request, Reservation $reservation): RedirectResponse
     {
+        if (!$reservation->booking || $reservation->booking->booking_status !== 'checked_in') {
+            return back()->with('error', 'Amenity requests can only be added for checked-in guests.');
+        }
+
         $validated = $request->validate([
             'amenity_id' => 'required|exists:amenities,id',
             'quantity' => 'required|integer|min:1',
