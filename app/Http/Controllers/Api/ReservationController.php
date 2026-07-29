@@ -27,7 +27,11 @@ class ReservationController extends Controller
     public function index(Request $request): JsonResponse
     {
         $guest = auth()->user()->guest;
-        $query = $guest->reservations()->with(['roomType', 'booking.room', 'booking.billing.payments']);
+        // 'payments' (reservation-level) covers a deposit made before
+        // conversion (billing_id null); 'booking.billing.payments' covers
+        // final/re-parented payments once a Booking exists. Both are
+        // needed - a reservation only ever has one or the other active.
+        $query = $guest->reservations()->with(['roomType', 'booking.room', 'booking.billing.payments', 'payments']);
 
         if ($request->filled('status')) {
             $query->where('status', $request->status);
@@ -54,7 +58,7 @@ class ReservationController extends Controller
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 
-        $reservation->load(['roomType', 'booking.room', 'booking.billing.payments']);
+        $reservation->load(['roomType', 'booking.room', 'booking.billing.payments', 'payments']);
 
         return response()->json($reservation);
     }
@@ -74,6 +78,7 @@ class ReservationController extends Controller
             'adults' => 'required|integer|min:1',
             'children' => 'nullable|integer|min:0',
             'guest_first_name' => 'required|string|max:100',
+            'guest_middle_name' => 'nullable|string|max:100',
             'guest_last_name' => 'required|string|max:100',
             'id_card_type' => 'nullable|in:None,Senior Citizen,PWD',
             'additional_guests' => 'nullable|array',
@@ -112,6 +117,7 @@ class ReservationController extends Controller
         $reservation = Reservation::create([
             'guest_id' => $guest->id,
             'guest_first_name' => $validated['guest_first_name'],
+            'guest_middle_name' => $validated['guest_middle_name'] ?? null,
             'guest_last_name' => $validated['guest_last_name'],
             'room_type_id' => $roomType->id,
             'check_in' => $validated['check_in'],
@@ -163,7 +169,7 @@ class ReservationController extends Controller
             'number_of_guests' => $validated['adults'] + $children,
         ]);
 
-        return response()->json($reservation);
+        return response()->json($reservation->fresh(['roomType', 'booking.room', 'payments']));
     }
 
     /**
@@ -194,7 +200,7 @@ class ReservationController extends Controller
 
         $this->notificationService->notifyReservationCancelled($user, $roomName);
 
-        return response()->json($reservation->fresh(['roomType', 'booking.room']));
+        return response()->json($reservation->fresh(['roomType', 'booking.room', 'payments']));
     }
 
     /**

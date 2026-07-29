@@ -12,6 +12,7 @@ class Reservation extends Model
     protected $fillable = [
         'guest_id',
         'guest_first_name',
+        'guest_middle_name',
         'guest_last_name',
         'room_type_id',
         'room_id',
@@ -113,6 +114,9 @@ class Reservation extends Model
         if (! $this->guest_first_name && ! $this->guest_last_name) {
             return null;
         }
+        if ($this->guest_middle_name) {
+            return trim("{$this->guest_first_name} {$this->guest_middle_name} {$this->guest_last_name}");
+        }
         return trim("{$this->guest_first_name} {$this->guest_last_name}");
     }
 
@@ -122,6 +126,14 @@ class Reservation extends Model
     public function setGuestFirstNameAttribute(?string $value): void
     {
         $this->attributes['guest_first_name'] = $value ? ucwords(strtolower($value)) : $value;
+    }
+
+    /**
+     * Title-case the stay guest's middle name, matching User's convention.
+     */
+    public function setGuestMiddleNameAttribute(?string $value): void
+    {
+        $this->attributes['guest_middle_name'] = $value ? ucwords(strtolower($value)) : null;
     }
 
     /**
