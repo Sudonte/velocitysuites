@@ -28,7 +28,7 @@
     <div class="row">
         <!-- Today's Arrivals -->
         <div class="col-lg-6">
-            <x-card title="Today's Arrivals" icon="fas fa-plane-arrival" bodyClass="table-responsive" class="mb-4">
+            <x-card title="Today's Arrivals" icon="fas fa-sign-in-alt" bodyClass="table-responsive" class="mb-4">
                 <table class="table table-hover mb-0">
                     <thead>
                         <tr>
@@ -45,7 +45,7 @@
                                 <td><x-status-badge :status="$booking->booking_status" domain="booking" /></td>
                             </tr>
                         @empty
-                            <tr><td colspan="3"><x-empty-state icon="fas fa-plane-arrival" message="No arrivals today." /></td></tr>
+                            <tr><td colspan="3"><x-empty-state icon="fas fa-sign-in-alt" message="No arrivals today." /></td></tr>
                         @endforelse
                     </tbody>
                 </table>
@@ -54,7 +54,7 @@
 
         <!-- Today's Departures -->
         <div class="col-lg-6">
-            <x-card title="Today's Departures" icon="fas fa-plane-departure" bodyClass="table-responsive" class="mb-4">
+            <x-card title="Today's Departures" icon="fas fa-sign-out-alt" bodyClass="table-responsive" class="mb-4">
                 <table class="table table-hover mb-0">
                     <thead>
                         <tr>
@@ -71,7 +71,7 @@
                                 <td><x-status-badge :status="$booking->booking_status" domain="booking" /></td>
                             </tr>
                         @empty
-                            <tr><td colspan="3"><x-empty-state icon="fas fa-plane-departure" message="No departures today." /></td></tr>
+                            <tr><td colspan="3"><x-empty-state icon="fas fa-sign-out-alt" message="No departures today." /></td></tr>
                         @endforelse
                     </tbody>
                 </table>
