@@ -150,20 +150,26 @@ class RoomTypeManagementController extends Controller
     }
 
     /**
-     * Delete room type (only when no rooms are attached to it).
+     * Deactivate a room type instead of deleting it - rooms.room_type_id,
+     * reservations.room_type_id and bookings.room_type_id all have no
+     * cascade/nullOnDelete, so a real delete is blocked (raw FK error) the
+     * moment any room or reservation of this type has ever existed, which
+     * is true for any type actually in use.
      */
-    public function destroy(RoomType $roomType): RedirectResponse
+    public function deactivate(RoomType $roomType): RedirectResponse
     {
-        if ($roomType->rooms()->exists()) {
-            return back()->with('error', 'Cannot delete a room type that still has rooms. Reassign or delete those rooms first.');
-        }
+        $roomType->update(['status' => 'inactive']);
 
-        if ($roomType->reservations()->whereIn('status', ['pending', 'confirmed', 'checked_in'])->exists()) {
-            return back()->with('error', 'Cannot delete a room type with active reservations.');
-        }
+        return redirect()->route('admin.room-types.index')->with('success', 'Room type deactivated.');
+    }
 
-        $roomType->delete();
+    /**
+     * Reactivate a deactivated room type.
+     */
+    public function reactivate(RoomType $roomType): RedirectResponse
+    {
+        $roomType->update(['status' => 'active']);
 
-        return redirect()->route('admin.room-types.index')->with('success', 'Room type deleted successfully!');
+        return redirect()->route('admin.room-types.index')->with('success', 'Room type reactivated.');
     }
 }

@@ -155,21 +155,12 @@
                     </form>
                 @endif
 
-                <form action="{{ route('admin.users.resetPassword', $user) }}" method="POST" class="mb-2">
+                <form action="{{ route('admin.users.resetPassword', $user) }}" method="POST">
                     @csrf
                     @method('PUT')
                     <button type="submit" class="btn btn-secondary w-100"
                             onclick="return confirm('Reset password for this user?')">
                         <i class="fas fa-key"></i> Reset Password
-                    </button>
-                </form>
-
-                <form action="{{ route('admin.users.destroy', $user) }}" method="POST">
-                    @csrf
-                    @method('DELETE')
-                    <button type="submit" class="btn btn-danger w-100"
-                            onclick="return confirm('Delete this user? This action cannot be undone.')">
-                        <i class="fas fa-trash"></i> Delete User
                     </button>
                 </form>
             </x-card>

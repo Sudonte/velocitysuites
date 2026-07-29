@@ -133,13 +133,4 @@ class UserManagementController extends Controller
         return redirect()->route('admin.users.index')->with('success', 'User reactivated successfully!');
     }
 
-    /**
-     * Delete user.
-     */
-    public function destroy(User $user): RedirectResponse
-    {
-        $user->delete();
-
-        return redirect()->route('admin.users.index')->with('success', 'User deleted successfully!');
-    }
 }

@@ -110,15 +110,6 @@
                                     <i class="fas fa-key"></i>
                                 </button>
                             </form>
-
-                            <form action="{{ route('admin.users.destroy', $user) }}" method="POST" class="d-inline">
-                                @csrf
-                                @method('DELETE')
-                                <button type="submit" class="btn btn-sm btn-danger"
-                                        onclick="return confirm('Delete this user? This action cannot be undone.')">
-                                    <i class="fas fa-trash"></i>
-                                </button>
-                            </form>
                         </td>
                     </tr>
                 @empty

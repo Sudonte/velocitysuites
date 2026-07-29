@@ -103,14 +103,6 @@
                         {{ $amenity->status === 'active' ? 'Deactivate' : 'Activate' }}
                     </button>
                 </form>
-                <form action="{{ route('admin.amenities.destroy', $amenity) }}" method="POST">
-                    @csrf
-                    @method('DELETE')
-                    <button type="submit" class="btn btn-danger w-100"
-                            onclick="return confirm('Delete this amenity?')">
-                        <i class="fas fa-trash"></i> Delete
-                    </button>
-                </form>
             </x-card>
 
             <x-card title="Recent Requests" bodyClass="card-body">

@@ -90,16 +90,30 @@ Route::middleware(['auth', 'account.status', 'log.activity'])->group(function ()
     Route::middleware('role:admin')->prefix('admin')->name('admin.')->group(function () {
         Route::get('/dashboard', [\App\Http\Controllers\Admin\AdminDashboardController::class, 'index'])->name('dashboard');
 
-        // User Management
-        Route::resource('users', \App\Http\Controllers\Admin\UserManagementController::class);
+        // User Management - no hard delete: deleting a User cascades away
+        // their Guest profile and every Reservation/Booking/Billing/Payment
+        // tied to it. Deactivate/reactivate is the only removal path.
+        Route::resource('users', \App\Http\Controllers\Admin\UserManagementController::class)->except(['destroy']);
         Route::put('/users/{user}/deactivate', [\App\Http\Controllers\Admin\UserManagementController::class, 'deactivate'])->name('users.deactivate');
         Route::put('/users/{user}/reactivate', [\App\Http\Controllers\Admin\UserManagementController::class, 'reactivate'])->name('users.reactivate');
         Route::put('/users/{user}/reset-password', [\App\Http\Controllers\Admin\UserManagementController::class, 'resetPassword'])->name('users.resetPassword');
 
         // Room Management
-        Route::resource('room-types', \App\Http\Controllers\Admin\RoomTypeManagementController::class);
+        // No hard delete: rooms/reservations/bookings.room_type_id all
+        // restrict on delete for any type that's ever been used. Deactivate
+        // is the only removal path.
+        Route::resource('room-types', \App\Http\Controllers\Admin\RoomTypeManagementController::class)->except(['destroy']);
+        Route::put('/room-types/{room_type}/deactivate', [\App\Http\Controllers\Admin\RoomTypeManagementController::class, 'deactivate'])->name('room-types.deactivate');
+        Route::put('/room-types/{room_type}/reactivate', [\App\Http\Controllers\Admin\RoomTypeManagementController::class, 'reactivate'])->name('room-types.reactivate');
         Route::post('/room-types/{room_type}/rooms', [\App\Http\Controllers\Admin\RoomTypeManagementController::class, 'storeRooms'])->name('room-types.rooms.store');
-        Route::resource('rooms', \App\Http\Controllers\Admin\RoomManagementController::class);
+        // No hard delete: bookings.room_id has no cascade/nullOnDelete, so
+        // real deletion would either crash (FK restrict, if ever booked) or
+        // silently cascade away old reservations that still point at the
+        // deprecated reservations.room_id. Deactivate (-> maintenance) is
+        // the only removal path.
+        Route::resource('rooms', \App\Http\Controllers\Admin\RoomManagementController::class)->except(['destroy']);
+        Route::put('/rooms/{room}/deactivate', [\App\Http\Controllers\Admin\RoomManagementController::class, 'deactivate'])->name('rooms.deactivate');
+        Route::put('/rooms/{room}/reactivate', [\App\Http\Controllers\Admin\RoomManagementController::class, 'reactivate'])->name('rooms.reactivate');
         Route::post('/room-images/{room}/upload', [\App\Http\Controllers\Admin\RoomManagementController::class, 'uploadImages'])->name('room-images.upload');
         Route::delete('/room-images/{roomImage}', [\App\Http\Controllers\Admin\RoomManagementController::class, 'deleteImage'])->name('room-images.destroy');
 
@@ -112,7 +126,11 @@ Route::middleware(['auth', 'account.status', 'log.activity'])->group(function ()
         Route::put('discounts/{discount}/toggle', [DiscountManagementController::class, 'toggle'])->name('discounts.toggle');
 
         // Amenity Management
-        Route::resource('amenities', AmenityManagementController::class);
+        // No hard delete: amenity_requests.amenity_id cascades on delete,
+        // so removing an amenity would silently wipe out historical
+        // amenity request/billing records tied to it. Toggle active/
+        // inactive is the only removal path.
+        Route::resource('amenities', AmenityManagementController::class)->except(['destroy']);
         Route::put('amenities/{amenity}/toggle', [AmenityManagementController::class, 'toggle'])->name('amenities.toggle');
 
         // Reports

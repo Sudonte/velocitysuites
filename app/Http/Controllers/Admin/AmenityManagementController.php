@@ -99,22 +99,4 @@ class AmenityManagementController extends Controller
             ->with('success', "Amenity {$newStatus}d successfully!");
     }
 
-    /**
-     * Delete amenity.
-     */
-    public function destroy(Amenity $amenity): RedirectResponse
-    {
-        $activeRequests = $amenity->amenityRequests()
-            ->whereIn('status', ['pending', 'approved'])
-            ->count();
-
-        if ($activeRequests > 0) {
-            return redirect()->route('admin.amenities.index')
-                ->with('error', "Cannot delete amenity with {$activeRequests} active request(s). Resolve them first.");
-        }
-
-        $amenity->delete();
-
-        return redirect()->route('admin.amenities.index')->with('success', 'Amenity deleted successfully!');
-    }
 }

@@ -89,14 +89,6 @@
                                     <i class="fas fa-{{ $amenity->status === 'active' ? 'ban' : 'check' }}"></i>
                                 </button>
                             </form>
-                            <form action="{{ route('admin.amenities.destroy', $amenity) }}" method="POST" class="d-inline">
-                                @csrf
-                                @method('DELETE')
-                                <button type="submit" class="btn btn-sm btn-danger"
-                                        onclick="return confirm('Delete this amenity?')">
-                                    <i class="fas fa-trash"></i>
-                                </button>
-                            </form>
                         </td>
                     </tr>
                 @empty

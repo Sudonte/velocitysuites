@@ -128,12 +128,28 @@ class RoomManagementController extends Controller
     }
 
     /**
-     * Delete room.
+     * Deactivate a room (status -> maintenance) instead of deleting it -
+     * bookings.room_id has no cascade/nullOnDelete, so a real delete would
+     * either be blocked by a raw FK error (if the room has any booking) or
+     * silently cascade-delete old reservations pointed at it directly
+     * (the pre-redesign reservations.room_id, which does cascade). Setting
+     * it to maintenance removes it from availability without touching any
+     * historical record.
      */
-    public function destroy(Room $room): RedirectResponse
+    public function deactivate(Room $room): RedirectResponse
     {
-        $room->delete();
+        $room->update(['status' => 'maintenance']);
 
-        return redirect()->route('admin.rooms.index')->with('success', 'Room deleted successfully!');
+        return redirect()->route('admin.rooms.index')->with('success', 'Room deactivated (set to maintenance).');
+    }
+
+    /**
+     * Reactivate a deactivated room back to available.
+     */
+    public function reactivate(Room $room): RedirectResponse
+    {
+        $room->update(['status' => 'available']);
+
+        return redirect()->route('admin.rooms.index')->with('success', 'Room reactivated.');
     }
 }

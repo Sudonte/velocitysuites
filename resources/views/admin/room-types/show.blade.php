@@ -79,13 +79,23 @@
                             <a href="{{ route('admin.rooms.edit', $room) }}" class="btn btn-sm btn-outline-primary">
                                 <i class="fas fa-edit"></i>
                             </a>
-                            <form action="{{ route('admin.rooms.destroy', $room) }}" method="POST" class="d-inline">
-                                @csrf
-                                @method('DELETE')
-                                <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('Delete Room {{ $room->room_number }}?')">
-                                    <i class="fas fa-trash"></i>
-                                </button>
-                            </form>
+                            @if($room->status === 'maintenance')
+                                <form action="{{ route('admin.rooms.reactivate', $room) }}" method="POST" class="d-inline">
+                                    @csrf
+                                    @method('PUT')
+                                    <button type="submit" class="btn btn-sm btn-outline-success">
+                                        <i class="fas fa-undo"></i>
+                                    </button>
+                                </form>
+                            @else
+                                <form action="{{ route('admin.rooms.deactivate', $room) }}" method="POST" class="d-inline">
+                                    @csrf
+                                    @method('PUT')
+                                    <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('Deactivate Room {{ $room->room_number }}? It will be set to maintenance and removed from availability.')">
+                                        <i class="fas fa-ban"></i>
+                                    </button>
+                                </form>
+                            @endif
                         </td>
                     </tr>
                 @empty

@@ -61,13 +61,23 @@
                             <a href="{{ route('admin.room-types.edit', $roomType) }}" class="btn btn-sm btn-outline-primary position-relative" style="z-index: 2;">
                                 <i class="fas fa-edit"></i>
                             </a>
-                            <form action="{{ route('admin.room-types.destroy', $roomType) }}" method="POST" class="d-inline position-relative" style="z-index: 2;">
-                                @csrf
-                                @method('DELETE')
-                                <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('Delete this room type?')">
-                                    <i class="fas fa-trash"></i>
-                                </button>
-                            </form>
+                            @if($roomType->status === 'inactive')
+                                <form action="{{ route('admin.room-types.reactivate', $roomType) }}" method="POST" class="d-inline position-relative" style="z-index: 2;">
+                                    @csrf
+                                    @method('PUT')
+                                    <button type="submit" class="btn btn-sm btn-outline-success">
+                                        <i class="fas fa-undo"></i>
+                                    </button>
+                                </form>
+                            @else
+                                <form action="{{ route('admin.room-types.deactivate', $roomType) }}" method="POST" class="d-inline position-relative" style="z-index: 2;">
+                                    @csrf
+                                    @method('PUT')
+                                    <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('Deactivate this room type? Guests will no longer be able to browse or book it.')">
+                                        <i class="fas fa-ban"></i>
+                                    </button>
+                                </form>
+                            @endif
                         </span>
                     </div>
                     <a href="{{ route('admin.room-types.show', $roomType) }}" class="stretched-link" aria-label="Manage {{ $roomType->name }} rooms"></a>

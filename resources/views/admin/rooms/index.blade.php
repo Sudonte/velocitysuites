@@ -81,14 +81,24 @@
                             <a href="{{ route('admin.rooms.edit', $room) }}" class="btn btn-sm btn-primary">
                                 <i class="fas fa-edit"></i> Edit
                             </a>
-                            <form action="{{ route('admin.rooms.destroy', $room) }}" method="POST" class="d-inline">
-                                @csrf
-                                @method('DELETE')
-                                <button type="submit" class="btn btn-sm btn-danger w-100"
-                                        onclick="return confirm('Delete this room?')">
-                                    <i class="fas fa-trash"></i> Delete
-                                </button>
-                            </form>
+                            @if($room->status === 'maintenance')
+                                <form action="{{ route('admin.rooms.reactivate', $room) }}" method="POST" class="d-inline">
+                                    @csrf
+                                    @method('PUT')
+                                    <button type="submit" class="btn btn-sm btn-success w-100">
+                                        <i class="fas fa-undo"></i> Reactivate
+                                    </button>
+                                </form>
+                            @else
+                                <form action="{{ route('admin.rooms.deactivate', $room) }}" method="POST" class="d-inline">
+                                    @csrf
+                                    @method('PUT')
+                                    <button type="submit" class="btn btn-sm btn-warning w-100"
+                                            onclick="return confirm('Deactivate this room? It will be set to maintenance and removed from availability.')">
+                                        <i class="fas fa-ban"></i> Deactivate
+                                    </button>
+                                </form>
+                            @endif
                         </div>
                     </div>
                 </div>
