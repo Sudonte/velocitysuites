@@ -36,10 +36,17 @@ class PaymentController extends Controller
             return response()->json(['message' => 'This reservation is not payable.'], 422);
         }
 
+        $reservation->loadMissing('roomType');
+        $nights = abs($reservation->check_out->diffInDays($reservation->check_in));
+        $range = $this->workflow->depositRange($reservation->roomType, $nights);
+
         $validated = $request->validate([
             'payment_method' => 'required|in:cash,gcash',
             'reference_number' => 'required_if:payment_method,gcash|nullable|string|max:100',
-            'amount_paid' => 'required|numeric|min:1',
+            'amount_paid' => ['required', 'numeric', 'min:' . $range['min'], 'max:' . $range['max']],
+        ], [
+            'amount_paid.min' => "The deposit must be at least ₱{$range['min']} (10% of the quoted total).",
+            'amount_paid.max' => "The deposit can be at most ₱{$range['max']} (20% of the quoted total) - the rest is settled at checkout.",
         ]);
 
         if ($validated['payment_method'] === 'gcash') {

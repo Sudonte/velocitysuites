@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Booking;
 use App\Models\Payment;
 use App\Models\Reservation;
+use App\Models\RoomType;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 
@@ -34,6 +35,25 @@ class ReservationWorkflowService
         }
 
         return 'pending_review';
+    }
+
+    /**
+     * The deposit range a guest can pay upfront for a stay - a config-
+     * driven percentage of the undiscounted quoted total (room rate x
+     * nights), never the full total. A discount is never applied until a
+     * receptionist verifies it at billing, and the final amount (extra
+     * guest fees, amenities, additional charges) isn't known until
+     * checkout, so nothing upfront can legitimately be "the full amount."
+     */
+    public function depositRange(RoomType $roomType, int $nights): array
+    {
+        $total = (float) $roomType->rate * max(1, $nights);
+
+        return [
+            'total' => round($total, 2),
+            'min' => round($total * (float) config('hotel.minimum_payment_ratio', 0.10), 2),
+            'max' => round($total * (float) config('hotel.maximum_payment_ratio', 0.20), 2),
+        ];
     }
 
     /**

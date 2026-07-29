@@ -61,4 +61,6 @@
         </x-slot:footer>
     </x-card>
 </div>
+
+@include('components.auto-refresh')
 @endsection

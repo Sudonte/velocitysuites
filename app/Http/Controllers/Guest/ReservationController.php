@@ -34,7 +34,11 @@ class ReservationController extends Controller
             abort(403, 'Unauthorized');
         }
 
-        return view('guest.reservations.show', compact('reservation'));
+        $reservation->loadMissing('roomType');
+        $nights = abs($reservation->check_out->diffInDays($reservation->check_in));
+        $depositRange = $this->workflow->depositRange($reservation->roomType, $nights);
+
+        return view('guest.reservations.show', compact('reservation', 'depositRange'));
     }
 
     /**
@@ -75,6 +79,7 @@ class ReservationController extends Controller
 
         $finalRate = $totalRate;
         $isFullyBooked = $this->availability->isFullyBooked($roomType, $checkIn, $checkOut);
+        $depositRange = $this->workflow->depositRange($roomType, $nights);
 
         return view('guest.reservations.create', compact(
             'roomType',
@@ -84,7 +89,8 @@ class ReservationController extends Controller
             'totalRate',
             'finalRate',
             'applicablePromos',
-            'isFullyBooked'
+            'isFullyBooked',
+            'depositRange'
         ));
     }
 
@@ -110,6 +116,7 @@ class ReservationController extends Controller
             // it can't be verified online.
             'payment_choice' => 'required|in:pay_now_gcash,pay_later_cash,pay_later_gcash',
             'cash_amount' => 'nullable|numeric|min:0',
+            'gcash_amount' => 'required_if:payment_choice,pay_now_gcash|nullable|numeric|min:0',
             'gcash_receipt' => 'required_if:payment_choice,pay_now_gcash|nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
             'reference_number' => 'required_if:payment_choice,pay_now_gcash|nullable|string|max:100',
         ]);
@@ -130,6 +137,19 @@ class ReservationController extends Controller
             'pay_later_cash' => ['pay_later', 'cash'],
             'pay_later_gcash' => ['pay_later', 'gcash'],
         };
+
+        // Deposit amount (whichever field applies) is capped to a small
+        // range of the undiscounted quoted total - never the full amount.
+        // Discounts aren't applied until billing and the final bill isn't
+        // known until checkout, so nothing paid upfront can be "full."
+        $nights = abs(\Carbon\Carbon::parse($validated['check_out'])->diffInDays(\Carbon\Carbon::parse($validated['check_in'])));
+        $range = $this->workflow->depositRange($roomType, $nights);
+        $declaredAmount = $paymentMethod === 'gcash' ? ($validated['gcash_amount'] ?? null) : ($validated['cash_amount'] ?? null);
+        if ($declaredAmount !== null && ((float) $declaredAmount < $range['min'] || (float) $declaredAmount > $range['max'])) {
+            return back()->withInput()->with('error',
+                "The deposit amount must be between ₱{$range['min']} and ₱{$range['max']} (10%-20% of the quoted total). " .
+                'The rest is settled at checkout.');
+        }
 
         $guest = auth()->user()->guest;
 
@@ -154,16 +174,15 @@ class ReservationController extends Controller
                 'discount_verification_status' => $discountRequested ? 'pending' : 'not_requested',
             ]);
 
-            // Pay Now + GCash: guest already paid, upload the proof now.
-            // Amount is left at 0 and set by staff from the receipt during
-            // verification - guests never self-declare an amount for
-            // online payments (only Cash shows an amount field).
+            // Pay Now + GCash: guest already paid and declares the amount
+            // upfront (validated against the deposit range above); staff
+            // still verify it against the uploaded receipt.
             if ($paymentPreference === 'pay_now' && $paymentMethod === 'gcash') {
                 $this->workflow->recordDepositPayment($reservation, [
                     'payment_method' => 'gcash',
                     'reference_number' => $validated['reference_number'],
                     'receipt_path' => $request->file('gcash_receipt')->store('payment-receipts', 'public'),
-                    'amount_paid' => 0,
+                    'amount_paid' => (float) $validated['gcash_amount'],
                 ]);
             } elseif ($paymentMethod === 'cash' && !empty($validated['cash_amount'])) {
                 $this->workflow->recordCashIntent($reservation, (float) $validated['cash_amount']);
@@ -194,16 +213,24 @@ class ReservationController extends Controller
             return back()->with('error', 'This reservation is not awaiting an online payment.');
         }
 
+        $reservation->loadMissing('roomType');
+        $nights = abs($reservation->check_out->diffInDays($reservation->check_in));
+        $range = $this->workflow->depositRange($reservation->roomType, $nights);
+
         $validated = $request->validate([
             'gcash_receipt' => 'required|image|mimes:jpeg,png,jpg,gif|max:2048',
             'reference_number' => 'required|string|max:100',
+            'gcash_amount' => ['required', 'numeric', 'min:' . $range['min'], 'max:' . $range['max']],
+        ], [
+            'gcash_amount.min' => "The deposit must be at least ₱{$range['min']} (10% of the quoted total).",
+            'gcash_amount.max' => "The deposit can be at most ₱{$range['max']} (20% of the quoted total).",
         ]);
 
         $this->workflow->recordDepositPayment($reservation, [
             'payment_method' => 'gcash',
             'reference_number' => $validated['reference_number'],
             'receipt_path' => $request->file('gcash_receipt')->store('payment-receipts', 'public'),
-            'amount_paid' => 0,
+            'amount_paid' => (float) $validated['gcash_amount'],
         ]);
 
         return redirect()->route('guest.reservations.show', $reservation)

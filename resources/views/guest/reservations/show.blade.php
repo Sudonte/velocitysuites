@@ -172,6 +172,16 @@
                             <img src="{{ asset('images/gcash-qr.png') }}" alt="GCash QR" class="img-fluid" style="max-width: 200px;" onerror="this.style.display='none'">
                         </div>
                         <div class="form-group mb-3">
+                            <label>Deposit Amount</label>
+                            <input type="number" step="0.01" class="form-control @error('gcash_amount') is-invalid @enderror"
+                                   name="gcash_amount" min="{{ $depositRange['min'] }}" max="{{ $depositRange['max'] }}"
+                                   value="{{ old('gcash_amount', $depositRange['min']) }}" required>
+                            <small class="text-muted">Between ₱{{ number_format($depositRange['min'], 2) }} and ₱{{ number_format($depositRange['max'], 2) }} (10%-20% of the quoted total). The rest is settled at checkout.</small>
+                            @error('gcash_amount')
+                                <div class="invalid-feedback d-block">{{ $message }}</div>
+                            @enderror
+                        </div>
+                        <div class="form-group mb-3">
                             <label>Payment Receipt</label>
                             <input type="file" class="form-control" name="gcash_receipt" accept="image/*" required>
                         </div>

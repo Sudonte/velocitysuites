@@ -17,17 +17,20 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Minimum Payment Ratio
+    | Deposit Payment Range
     |--------------------------------------------------------------------------
     |
-    | Minimum fraction of the quoted total a guest must pay on the Book &
-    | Pay flow (website + mobile app), enforced server-side. Replaces the
-    | old Partial/Full toggle with a single amount field the guest can pay
-    | anywhere between this minimum and the full total - simpler, and
-    | avoids a second payment-type concept the Billing/Payment modules
-    | would otherwise need to understand downstream.
+    | A guest can never pay the full quoted total upfront - discounts
+    | aren't applied until a receptionist verifies them at billing, and
+    | the final amount (extra guest fees, amenities, additional charges)
+    | isn't known until checkout. The initial deposit (website Pay Now/
+    | Pay Later amount, mobile app payment screen) is capped to a small
+    | range of the undiscounted room total instead: 10% minimum,
+    | 20% maximum. Enforced server-side (Guest\ReservationController,
+    | Api\PaymentController) so it can't be bypassed by either client.
     |
     */
 
-    'minimum_payment_ratio' => 0.5,
+    'minimum_payment_ratio' => 0.10,
+    'maximum_payment_ratio' => 0.20,
 ];

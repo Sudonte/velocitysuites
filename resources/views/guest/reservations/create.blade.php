@@ -23,6 +23,13 @@
 <div class="container-fluid py-4">
     <x-page-header icon="fas fa-calendar-alt" title="Request a Reservation" />
 
+    @if (session('error'))
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            <i class="fas fa-exclamation-circle"></i> {{ session('error') }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    @endif
+
     <div class="row">
         <!-- Room Type Details -->
         <div class="col-lg-8">
@@ -160,10 +167,12 @@
                     <!-- Cash amount (only for Pay Later + Cash) -->
                     <div class="form-group mb-4" id="cashAmountGroup">
                         <label for="cash_amount">Amount you intend to pay <span class="text-muted">(optional)</span></label>
-                        <input type="number" step="0.01" min="0" class="form-control @error('cash_amount') is-invalid @enderror"
+                        <input type="number" step="0.01" min="{{ $depositRange['min'] }}" max="{{ $depositRange['max'] }}"
+                               class="form-control @error('cash_amount') is-invalid @enderror"
                                id="cash_amount" name="cash_amount" value="{{ old('cash_amount') }}">
+                        <small class="text-muted">If provided, must be between ₱{{ number_format($depositRange['min'], 2) }} and ₱{{ number_format($depositRange['max'], 2) }} (10%-20% of the total). The rest is settled at checkout.</small>
                         @error('cash_amount')
-                            <div class="invalid-feedback">{{ $message }}</div>
+                            <div class="invalid-feedback d-block">{{ $message }}</div>
                         @enderror
                     </div>
 
@@ -173,6 +182,15 @@
                             <div class="card-body text-center">
                                 <img src="{{ asset('images/gcash-qr.png') }}" alt="GCash QR" class="img-fluid mb-3" style="max-width: 220px;" onerror="this.style.display='none'">
                                 <div class="text-start">
+                                    <label for="gcash_amount" class="form-label">Deposit Amount *</label>
+                                    <input type="number" step="0.01" min="{{ $depositRange['min'] }}" max="{{ $depositRange['max'] }}"
+                                           class="form-control mb-1 @error('gcash_amount') is-invalid @enderror"
+                                           id="gcash_amount" name="gcash_amount" value="{{ old('gcash_amount', $depositRange['min']) }}">
+                                    <small class="text-muted d-block mb-3">Between ₱{{ number_format($depositRange['min'], 2) }} and ₱{{ number_format($depositRange['max'], 2) }} (10%-20% of the total). The rest is settled at checkout.</small>
+                                    @error('gcash_amount')
+                                        <div class="invalid-feedback d-block mb-3">{{ $message }}</div>
+                                    @enderror
+
                                     <label for="gcash_receipt" class="form-label">Payment Receipt *</label>
                                     <input type="file" class="form-control mb-3 @error('gcash_receipt') is-invalid @enderror"
                                            id="gcash_receipt" name="gcash_receipt" accept="image/*">
