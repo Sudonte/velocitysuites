@@ -5,22 +5,13 @@
 @section('content')
 <div class="container-fluid py-4">
     <x-page-header icon="fas fa-calendar-check" title="Bookings"
-        subtitle="Confirmed bookings, view-only. Room assignment happens in the Check-In Module." />
+        subtitle="Bookings awaiting check-in, view-only. Room assignment and check-in happen in the Check-In Module - once a guest checks in, they move there instead of showing here." />
 
-    <!-- Search and Filter -->
+    <!-- Search -->
     <x-card bodyClass="card-body" class="mb-4">
         <form method="GET" action="{{ route('receptionist.bookings.index') }}" class="row g-3">
-            <div class="col-md-4">
+            <div class="col-md-8">
                 <input type="text" name="search" class="form-control" placeholder="Search guest email" value="{{ request('search') }}">
-            </div>
-            <div class="col-md-4">
-                <select name="status" class="form-control">
-                    <option value="">All Status</option>
-                    <option value="confirmed" {{ request('status') === 'confirmed' ? 'selected' : '' }}>Confirmed</option>
-                    <option value="checked_in" {{ request('status') === 'checked_in' ? 'selected' : '' }}>Checked-In</option>
-                    <option value="checked_out" {{ request('status') === 'checked_out' ? 'selected' : '' }}>Checked-Out</option>
-                    <option value="cancelled" {{ request('status') === 'cancelled' ? 'selected' : '' }}>Cancelled</option>
-                </select>
             </div>
             <div class="col-md-4">
                 <button type="submit" class="btn btn-primary w-100">
@@ -30,7 +21,7 @@
         </form>
     </x-card>
 
-    <x-card title="All Bookings" icon="fas fa-list" bodyClass="table-responsive">
+    <x-card title="Bookings Awaiting Check-In" icon="fas fa-list" bodyClass="table-responsive">
         <table class="table table-hover mb-0">
             <thead>
                 <tr>
@@ -60,7 +51,7 @@
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="7"><x-empty-state icon="fas fa-calendar-check" message="No bookings found." /></td>
+                        <td colspan="7"><x-empty-state icon="fas fa-calendar-check" message="No bookings awaiting check-in." /></td>
                     </tr>
                 @endforelse
             </tbody>
