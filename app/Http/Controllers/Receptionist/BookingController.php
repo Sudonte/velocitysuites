@@ -30,7 +30,9 @@ class BookingController extends Controller
             });
         }
 
-        $bookings = $query->latest('confirmed_at')->paginate(15)->withQueryString();
+        // Closest check-in date first - whoever is arriving soonest is the
+        // receptionist's priority, not whoever was most recently confirmed.
+        $bookings = $query->orderBy('check_in')->paginate(15)->withQueryString();
 
         return view('receptionist.bookings.index', compact('bookings'));
     }

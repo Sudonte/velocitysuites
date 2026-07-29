@@ -38,9 +38,11 @@ class ReservationController extends Controller
             $tab = 'pending_review';
         }
 
+        // Closest check-in date first - whoever is arriving soonest is the
+        // priority to review/convert, not whoever requested first.
         $reservations = Reservation::with(['guest.user', 'roomType'])
             ->where('status', $tab)
-            ->orderBy('created_at')
+            ->orderBy('check_in')
             ->paginate(15)
             ->withQueryString();
 

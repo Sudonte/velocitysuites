@@ -37,7 +37,9 @@ class ReservationViewController extends Controller
             $query->whereDate('check_in', '<=', $request->to);
         }
 
-        $reservations = $query->latest('check_in')->paginate(15)->withQueryString();
+        // Closest check-in date first, same priority ordering as the
+        // receptionist's own reservation/booking lists.
+        $reservations = $query->orderBy('check_in')->paginate(15)->withQueryString();
 
         return view('manager.reservations.index', compact('reservations'));
     }
