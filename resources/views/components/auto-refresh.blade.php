@@ -21,6 +21,10 @@
             const current = document.querySelector('main');
             if (fresh && current) {
                 current.innerHTML = fresh.innerHTML;
+                // Anything stateful bound to the old DOM (e.g. a Chart.js
+                // canvas) needs to know its nodes just got replaced, since
+                // this swap doesn't re-run <script> tags inside main.
+                window.dispatchEvent(new Event('auto-refresh:swapped'));
             }
         } catch (e) {
             // offline or transient error - just try again next tick

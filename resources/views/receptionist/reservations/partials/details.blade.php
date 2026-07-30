@@ -1,45 +1,69 @@
 @php
     $depositPayment = $reservation->payments->firstWhere('payment_stage', 'deposit');
+    $nights = $reservation->number_of_nights;
+    $roomCharge = (float) ($reservation->roomType->rate ?? 0) * max(1, $nights);
 @endphp
 
+<!-- Header: reservation #, guest, room type, dates, current status -->
+<div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3 pb-3 border-bottom">
+    <div>
+        <h5 class="mb-1">Reservation #{{ $reservation->id }}</h5>
+        <p class="text-muted mb-0">
+            {{ $reservation->guest->user->full_name ?? 'N/A' }}
+            &bull; {{ $reservation->roomType->name ?? 'N/A' }}
+            &bull; {{ $reservation->check_in->format('M d') }} - {{ $reservation->check_out->format('M d, Y') }}
+        </p>
+    </div>
+    <x-status-badge :status="$reservation->status" domain="reservation" />
+</div>
+
 <div class="row mb-3">
+    <!-- Guest Information + Stay Details -->
     <div class="col-md-6">
-        <h6 class="text-brand">Guest Details</h6>
+        <h6 class="text-brand"><i class="fas fa-user"></i> Guest Information</h6>
         <p class="mb-1"><strong>Name:</strong> {{ $reservation->guest->user->full_name ?? 'N/A' }}</p>
         <p class="mb-1"><strong>Email:</strong> {{ $reservation->guest->user->email ?? 'N/A' }}</p>
-        <p class="mb-1"><strong>Phone:</strong> {{ $reservation->guest->mobile_number ?: 'Not provided' }}</p>
-        <p class="mb-0"><strong>Address:</strong> {{ $reservation->guest->address ?: 'Not provided' }}</p>
-    </div>
-    <div class="col-md-6">
-        <h6 class="text-brand">Reservation Information</h6>
-        <p class="mb-1"><strong>Reservation #:</strong> {{ $reservation->id }}</p>
+        <p class="mb-1"><strong>Mobile:</strong> {{ $reservation->guest->mobile_number ?: 'Not provided' }}</p>
+        <p class="mb-3"><strong>Address:</strong> {{ $reservation->guest->address ?: 'Not provided' }}</p>
+
+        <h6 class="text-brand"><i class="fas fa-bed"></i> Stay Details</h6>
         <p class="mb-1"><strong>Room Type:</strong> {{ $reservation->roomType->name ?? 'N/A' }}</p>
+        <p class="mb-1"><strong>Assigned Room:</strong> <span class="text-muted">Not yet assigned - happens at check-in</span></p>
         <p class="mb-1"><strong>Check-In:</strong> {{ $reservation->check_in->format('M d, Y') }}</p>
         <p class="mb-1"><strong>Check-Out:</strong> {{ $reservation->check_out->format('M d, Y') }}</p>
         <p class="mb-0"><strong>Guests:</strong> {{ $reservation->adults }} adult{{ $reservation->adults == 1 ? '' : 's' }}@if($reservation->children > 0), {{ $reservation->children }} child{{ $reservation->children == 1 ? '' : 'ren' }}@endif</p>
     </div>
-</div>
 
-<hr>
-
-<div class="row mb-3">
+    <!-- Payment Information + Deposit + Discount -->
     <div class="col-md-6">
-        <h6 class="text-brand">Payment Preference</h6>
+        <h6 class="text-brand"><i class="fas fa-receipt"></i> Payment Information</h6>
+        <table class="table table-sm table-borderless mb-2">
+            <tr>
+                <td>Room Charge ({{ $nights }} night{{ $nights === 1 ? '' : 's' }})</td>
+                <td class="text-end">₱{{ number_format($roomCharge, 2) }}</td>
+            </tr>
+            <tr class="fw-bold">
+                <td>Estimated Total</td>
+                <td class="text-end text-brand">₱{{ number_format($roomCharge, 2) }}</td>
+            </tr>
+        </table>
+        <p class="text-muted small mb-3">
+            <i class="fas fa-info-circle"></i> Final charges (extra-guest fees, amenities, additional charges, and
+            any verified discount) are settled at checkout, not here.
+        </p>
+
         <p class="mb-1">
             <strong>{{ $reservation->payment_preference === 'pay_now' ? 'Pay Now' : 'Pay Later' }}</strong>
             via {{ $reservation->payment_method === 'gcash' ? 'GCash QR' : 'Cash' }}
         </p>
         @if($depositPayment)
             <p class="mb-1"><strong>Deposit Status:</strong> <x-status-badge :status="$depositPayment->payment_status" domain="payment" /></p>
-            @if($reservation->payment_method === 'cash')
-                <p class="mb-0"><strong>Intended Amount:</strong> ₱{{ number_format($depositPayment->amount_paid, 2) }}</p>
-            @endif
+            <p class="mb-3"><strong>Deposit Amount:</strong> ₱{{ number_format($depositPayment->amount_paid, 2) }}</p>
         @else
-            <p class="text-muted mb-0">No deposit submitted yet.</p>
+            <p class="text-muted mb-3">No deposit submitted yet.</p>
         @endif
-    </div>
-    <div class="col-md-6">
-        <h6 class="text-brand">Discount Request</h6>
+
+        <h6 class="text-brand"><i class="fas fa-id-card"></i> Discount Request</h6>
         @if($reservation->discount_requested)
             <p class="mb-1"><strong>Status:</strong> <x-status-badge :status="$reservation->discount_verification_status" domain="discount_verification" /></p>
             @if($reservation->id_document_path)
@@ -63,7 +87,7 @@
 
 @if($depositPayment && $depositPayment->payment_method === 'gcash')
     <hr>
-    <h6 class="text-brand">GCash Payment Receipt</h6>
+    <h6 class="text-brand"><i class="fas fa-qrcode"></i> GCash Payment Receipt</h6>
     <div class="row">
         <div class="col-md-6">
             @if($depositPayment->receipt_path)

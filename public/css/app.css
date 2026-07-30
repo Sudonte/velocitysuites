@@ -321,6 +321,22 @@ textarea {
     flex-shrink: 0;
 }
 
+.stat-card .stat-change {
+    font-size: 0.75rem;
+    font-weight: 600;
+    margin-bottom: 0;
+    margin-top: 0.35rem;
+}
+
+.stat-card .stat-change-up { color: var(--success-color); }
+.stat-card .stat-change-down { color: var(--danger-color); }
+.stat-card .stat-change-flat { color: var(--text-light); }
+
+.stat-card .stat-change-sub {
+    color: var(--text-light);
+    font-weight: 400;
+}
+
 /* Brand-color text utilities - Bootstrap's own .text-primary is Bootstrap
    blue, not our brand red, hence these instead of inline color styles. */
 .text-brand { color: var(--primary-color) !important; }

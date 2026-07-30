@@ -22,14 +22,24 @@ class DashboardStatsService
         $todayRevenue = (float) Payment::where('payment_status', 'completed')
             ->whereDate('payment_date', today())
             ->sum('amount_paid');
+        $yesterdayRevenue = (float) Payment::where('payment_status', 'completed')
+            ->whereDate('payment_date', today()->subDay())
+            ->sum('amount_paid');
 
         $monthlyRevenue = (float) Payment::where('payment_status', 'completed')
             ->whereMonth('payment_date', now()->month)
             ->whereYear('payment_date', now()->year)
             ->sum('amount_paid');
+        $lastMonthRevenue = (float) Payment::where('payment_status', 'completed')
+            ->whereMonth('payment_date', now()->subMonth()->month)
+            ->whereYear('payment_date', now()->subMonth()->year)
+            ->sum('amount_paid');
 
         $yearlyRevenue = (float) Payment::where('payment_status', 'completed')
             ->whereYear('payment_date', now()->year)
+            ->sum('amount_paid');
+        $lastYearRevenue = (float) Payment::where('payment_status', 'completed')
+            ->whereYear('payment_date', now()->subYear()->year)
             ->sum('amount_paid');
 
         // "Active" and "completed" live on Booking (the operational record
@@ -39,12 +49,27 @@ class DashboardStatsService
         $activeReservations = Booking::whereIn('booking_status', ['confirmed', 'checked_in'])->count();
         $completedReservations = Booking::where('booking_status', 'checked_out')->count();
 
+        $totalReservations = Reservation::count();
+        $totalReservationsLastMonth = Reservation::where('created_at', '<=', now()->subMonth())->count();
+
         $totalBookings = Reservation::whereHas('booking')->count();
+        $totalBookingsLastMonth = Reservation::whereHas('booking', fn ($q) => $q->where('confirmed_at', '<=', now()->subMonth()))->count();
+
         $pendingPaymentVerifications = Payment::where('payment_status', 'pending')->count();
 
+        $totalUsers = User::count();
+        $totalUsersLastMonth = User::where('created_at', '<=', now()->subMonth())->count();
+
+        $totalRooms = Room::count();
+        $totalRoomsLastMonth = Room::where('created_at', '<=', now()->subMonth())->count();
+
         return [
-            // User stats
-            'totalUsers' => User::count(),
+            // User stats - only Total Users gets a growth badge; Active/
+            // Suspended are current status snapshots, not a running count,
+            // so a "vs last month" comparison wouldn't reflect anything
+            // real (a user can flip between them any day).
+            'totalUsers' => $totalUsers,
+            'totalUsersChange' => $this->percentChange($totalUsers, $totalUsersLastMonth),
             'activeUsers' => User::where('status', 'active')->count(),
             'suspendedUsers' => User::where('status', 'suspended')->count(),
             'totalGuests' => User::where('role', 'guest')->count(),
@@ -56,24 +81,37 @@ class DashboardStatsService
             // "Reserved" is no longer a state any code path writes (room
             // assignment now only happens at check-in, straight to
             // "occupied"), so Maintenance replaces it as the fourth card.
-            'totalRooms' => Room::count(),
+            // Available/Occupied/Maintenance change by the hour as guests
+            // check in and out, so (like Active/Suspended Users) they don't
+            // get a growth badge - only Total Rooms (actual inventory
+            // added) does.
+            'totalRooms' => $totalRooms,
+            'totalRoomsChange' => $this->percentChange($totalRooms, $totalRoomsLastMonth),
             'availableRooms' => Room::where('status', 'available')->count(),
             'occupiedRooms' => Room::where('status', 'occupied')->count(),
             'maintenanceRooms' => Room::where('status', 'maintenance')->count(),
 
-            // Revenue
+            // Revenue - each compared against the equivalent prior period.
             'todayRevenue' => $todayRevenue,
+            'todayRevenueChange' => $this->percentChange($todayRevenue, $yesterdayRevenue),
             'monthlyRevenue' => $monthlyRevenue,
+            'monthlyRevenueChange' => $this->percentChange($monthlyRevenue, $lastMonthRevenue),
             'yearlyRevenue' => $yearlyRevenue,
+            'yearlyRevenueChange' => $this->percentChange($yearlyRevenue, $lastYearRevenue),
 
-            // Reservation stats
-            'totalReservations' => Reservation::count(),
+            // Reservation stats - Total Reservations/Bookings are running
+            // counts (only grow), so they get a growth badge; Pending/
+            // Active/Completed/Pending Verifications are queue depths that
+            // rise and fall daily, not meaningful to compare to a month ago.
+            'totalReservations' => $totalReservations,
+            'totalReservationsChange' => $this->percentChange($totalReservations, $totalReservationsLastMonth),
             'pendingReservations' => $pendingReservations,
             'activeReservations' => $activeReservations,
             'completedReservations' => $completedReservations,
 
             // Booking / payment stats
             'totalBookings' => $totalBookings,
+            'totalBookingsChange' => $this->percentChange($totalBookings, $totalBookingsLastMonth),
             'pendingPaymentVerifications' => $pendingPaymentVerifications,
 
             // Other
@@ -86,7 +124,43 @@ class DashboardStatsService
                 ->latest()
                 ->limit(5)
                 ->get(),
+
+            // Last-7-days trend lines for the overview charts.
+            'usersTrend' => $this->dailySeries(fn ($date) => User::whereDate('created_at', '<=', $date)->count()),
+            'reservationsTrend' => $this->dailySeries(fn ($date) => Reservation::whereDate('created_at', $date)->count()),
+            'revenueTrend' => $this->dailySeries(fn ($date) => (float) Payment::where('payment_status', 'completed')->whereDate('payment_date', $date)->sum('amount_paid')),
         ];
+    }
+
+    /**
+     * Percent change from $previous to $current, guarding the zero-baseline
+     * case (nothing to compare against yet, e.g. a brand-new hotel).
+     */
+    private function percentChange(float $current, float $previous): float
+    {
+        if ($previous <= 0) {
+            return $current > 0 ? 100.0 : 0.0;
+        }
+
+        return round((($current - $previous) / $previous) * 100, 1);
+    }
+
+    /**
+     * One value per day for the last 7 days (oldest first), labeled with
+     * short weekday-friendly dates for the trend charts.
+     */
+    private function dailySeries(callable $valueForDate): array
+    {
+        $labels = [];
+        $values = [];
+
+        for ($i = 6; $i >= 0; $i--) {
+            $date = today()->subDays($i);
+            $labels[] = $date->format('M d');
+            $values[] = $valueForDate($date);
+        }
+
+        return ['labels' => $labels, 'values' => $values];
     }
 
     public function managerStats(): array

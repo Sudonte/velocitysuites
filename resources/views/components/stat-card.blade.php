@@ -1,4 +1,4 @@
-@props(['icon', 'label', 'value', 'color' => 'primary', 'href' => null])
+@props(['icon', 'label', 'value', 'color' => 'primary', 'href' => null, 'change' => null])
 
 @php
 $colorMap = [
@@ -17,6 +17,12 @@ $c = $colorMap[$color] ?? $colorMap['primary'];
     <div>
         <p class="stat-label">{{ $label }}</p>
         <p class="stat-value">{{ $value }}</p>
+        @if($change !== null)
+            <p class="stat-change {{ $change > 0 ? 'stat-change-up' : ($change < 0 ? 'stat-change-down' : 'stat-change-flat') }}">
+                <i class="fas fa-{{ $change > 0 ? 'arrow-up' : ($change < 0 ? 'arrow-down' : 'minus') }}"></i>
+                {{ $change > 0 ? '+' : '' }}{{ $change }}% <span class="stat-change-sub">vs last period</span>
+            </p>
+        @endif
     </div>
     <div class="stat-icon" style="background-color: {{ $c['bg'] }}; color: {{ $c['fg'] }};">
         <i class="{{ $icon }}"></i>
