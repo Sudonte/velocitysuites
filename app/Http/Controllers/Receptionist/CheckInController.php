@@ -6,7 +6,6 @@ use App\Http\Controllers\Controller;
 use App\Models\Booking;
 use App\Services\NotificationService;
 use App\Services\RoomAvailabilityService;
-use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
@@ -38,30 +37,41 @@ class CheckInController extends Controller
             ->paginate(15)
             ->withQueryString();
 
-        // Room assignment happens on the Expected tab only.
-        $assignableRooms = collect();
-        if ($tab === 'expected') {
-            $assignableRooms = $bookings->getCollection()
-                ->filter(fn (Booking $booking) => !$booking->room)
-                ->mapWithKeys(fn (Booking $booking) => [$booking->id => $this->availability->assignableRooms($booking)]);
-        }
-
         $expectedCount = Booking::where('booking_status', 'confirmed')->count();
         $checkedInCount = Booking::where('booking_status', 'checked_in')->count();
 
-        return view('receptionist.check-in.index', compact('bookings', 'tab', 'assignableRooms', 'expectedCount', 'checkedInCount'));
+        return view('receptionist.check-in.index', compact('bookings', 'tab', 'expectedCount', 'checkedInCount'));
     }
 
     /**
-     * Assign a room to an unassigned confirmed booking. The room must
-     * actually be free for the booking's dates (not just "available"
-     * status) - reuses the same assignableRooms() query, so a stale/
-     * concurrent selection can't double-book a room.
+     * AJAX popup content: full booking/guest details plus the room-
+     * assignment picker, pre-filtered to rooms that actually match the
+     * booked room type and are free for the reservation period. Assign
+     * Room and Check In are a single action from here - there's no
+     * separate "assign, then check in" step anymore.
      */
-    public function assignRoom(Request $request, Booking $booking): RedirectResponse
+    public function panel(Booking $booking)
     {
         if ($booking->booking_status !== 'confirmed') {
-            return back()->with('error', 'Only confirmed bookings can have a room assigned.');
+            abort(422, 'Only confirmed bookings can be checked in.');
+        }
+
+        $booking->load(['reservation.guest.user', 'roomType']);
+        $assignableRooms = $this->availability->assignableRooms($booking);
+
+        return view('receptionist.check-in.partials.panel', compact('booking', 'assignableRooms'));
+    }
+
+    /**
+     * Assign the room and check the guest in as one step. Re-validates the
+     * room against a fresh assignableRooms() query (not just the list the
+     * popup was opened with) so a stale/concurrent selection can't
+     * double-book a room.
+     */
+    public function store(Request $request, Booking $booking)
+    {
+        if ($booking->booking_status !== 'confirmed') {
+            return response()->json(['message' => 'Only confirmed bookings can be checked in.'], 422);
         }
 
         $validated = $request->validate(['room_id' => 'required|exists:rooms,id']);
@@ -69,46 +79,21 @@ class CheckInController extends Controller
         $room = $this->availability->assignableRooms($booking)->firstWhere('id', (int) $validated['room_id']);
 
         if (!$room) {
-            return back()->with('error', 'That room cannot be assigned: it is not an available ' . $booking->roomType->name . ' room for these dates.');
+            return response()->json([
+                'message' => 'That room cannot be assigned: it is not an available ' . $booking->roomType->name . ' room for these dates.',
+            ], 422);
         }
 
-        $booking->update(['room_id' => $room->id]);
-
-        return back()->with('success', 'Room ' . $room->room_number . ' assigned.');
-    }
-
-    /**
-     * Mark booking as checked in. Date is not a gate - the room's actual
-     * status is: a room still occupied by the previous guest or under
-     * maintenance can't receive a new check-in. Moves the booking from
-     * "Expected Check-ins" to "Checked-in Guests" automatically.
-     */
-    public function checkIn(Booking $booking): RedirectResponse
-    {
-        if ($booking->booking_status !== 'confirmed') {
-            return back()->with('error', 'Only confirmed bookings can be checked in.');
-        }
-
-        if (!$booking->room) {
-            return back()->with('error', 'Assign a room to this booking before checking in.');
-        }
-
-        if (in_array($booking->room->status, ['occupied', 'maintenance'])) {
-            return back()->with('error',
-                'Room ' . $booking->room->room_number . ' is not ready (' . $booking->room->status . '). ' .
-                'Free it up first or assign a different room.');
-        }
-
-        DB::transaction(function () use ($booking) {
-            $booking->update(['booking_status' => 'checked_in']);
-            $booking->room->update(['status' => 'occupied']);
+        DB::transaction(function () use ($booking, $room) {
+            $booking->update(['room_id' => $room->id, 'booking_status' => 'checked_in']);
+            $room->update(['status' => 'occupied']);
 
             $this->notificationService->notifyCheckIn(
                 $booking->reservation->guest->user,
-                $booking->room->room_name
+                $room->room_name
             );
         });
 
-        return redirect()->route('receptionist.check-in.index', ['tab' => 'checked_in'])->with('success', 'Guest checked in successfully!');
+        return response()->json(['message' => 'Guest checked in to Room ' . $room->room_number . '!']);
     }
 }

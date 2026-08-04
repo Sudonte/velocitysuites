@@ -10,7 +10,6 @@ use App\Models\Reservation;
 use App\Services\NotificationService;
 use App\Services\ReservationWorkflowService;
 use App\Services\RoomAvailabilityService;
-use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
@@ -69,13 +68,19 @@ class ReservationController extends Controller
     /**
      * AJAX popup content: guest details, reservation info, room type,
      * payment preference, uploaded ID (if discount requested), uploaded
-     * receipt + reference number (if GCash).
+     * receipt + reference number (if GCash) - plus Accept/Reject/Convert
+     * actions live in this same popup, so the receptionist never has to
+     * leave it or click a separate row action.
      */
     public function details(Reservation $reservation)
     {
         $reservation->load(['guest.user', 'roomType', 'payments']);
 
-        return view('receptionist.reservations.partials.details', compact('reservation'));
+        $available = $reservation->status === 'ready_for_booking'
+            ? $this->availability->availableCount($reservation->roomType, $reservation->check_in, $reservation->check_out)
+            : null;
+
+        return view('receptionist.reservations.partials.details', compact('reservation', 'available'));
     }
 
     /**
@@ -97,14 +102,16 @@ class ReservationController extends Controller
 
     /**
      * Accept a Pay Later / Cash reservation still awaiting review - moves
-     * it to "To Be Converted to Booking".
+     * it to "To Be Converted to Booking". Called from inside the details
+     * popup via AJAX - no page navigation, the row is just removed from
+     * the current tab on success.
      */
-    public function accept(Reservation $reservation): RedirectResponse
+    public function accept(Reservation $reservation)
     {
         try {
             $this->workflow->accept($reservation);
         } catch (HttpExceptionInterface $e) {
-            return back()->with('error', $e->getMessage());
+            return response()->json(['message' => $e->getMessage()], $e->getStatusCode());
         }
 
         $this->notificationService->toUser(
@@ -114,21 +121,22 @@ class ReservationController extends Controller
             'booking'
         );
 
-        return back()->with('success', 'Reservation accepted - ready for booking conversion.');
+        return response()->json(['message' => 'Reservation accepted - ready for booking conversion.']);
     }
 
     /**
      * Reject a reservation from either tab (e.g. ineligible, or the room
-     * type is fully booked for the requested dates).
+     * type is fully booked for the requested dates). Called from the same
+     * details popup via AJAX.
      */
-    public function reject(Request $request, Reservation $reservation): RedirectResponse
+    public function reject(Request $request, Reservation $reservation)
     {
         $request->validate(['reason' => 'required|string|max:500']);
 
         try {
             $this->workflow->reject($reservation, $request->reason, auth()->user());
         } catch (HttpExceptionInterface $e) {
-            return back()->with('error', $e->getMessage());
+            return response()->json(['message' => $e->getMessage()], $e->getStatusCode());
         }
 
         $this->notificationService->toUser(
@@ -138,21 +146,22 @@ class ReservationController extends Controller
             'booking'
         );
 
-        return back()->with('success', 'Reservation rejected.');
+        return response()->json(['message' => 'Reservation rejected.']);
     }
 
     /**
      * Convert a ready_for_booking reservation into a confirmed Booking -
      * gated on room-type inventory actually being available for the
      * requested dates. Once converted, it disappears from both tabs and
-     * only shows up in the Booking Module.
+     * only shows up in the Booking Module. Called from the details popup
+     * via AJAX.
      */
-    public function convert(Reservation $reservation): RedirectResponse
+    public function convert(Reservation $reservation)
     {
         try {
             $booking = $this->workflow->convertToBooking($reservation, auth()->user());
         } catch (HttpExceptionInterface $e) {
-            return back()->with('error', $e->getMessage());
+            return response()->json(['message' => $e->getMessage()], $e->getStatusCode());
         }
 
         $this->grantPromoAmenities($reservation, $booking);
@@ -162,8 +171,10 @@ class ReservationController extends Controller
             $reservation->roomType->name
         );
 
-        return redirect()->route('receptionist.bookings.show', $booking)
-            ->with('success', 'Reservation converted to a confirmed booking!');
+        return response()->json([
+            'message' => 'Reservation converted to a confirmed booking!',
+            'booking_url' => route('receptionist.bookings.show', $booking),
+        ]);
     }
 
     /**

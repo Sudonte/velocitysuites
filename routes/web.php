@@ -187,8 +187,8 @@ Route::middleware(['auth', 'account.status', 'log.activity'])->group(function ()
         // Check-in Module: two tabs - "Expected Check-ins" (confirmed
         // bookings, where room assignment happens) and "Checked-in Guests".
         Route::get('/check-in', [ReceptionistCheckInController::class, 'index'])->name('check-in.index');
-        Route::post('/check-in/{booking}/assign-room', [ReceptionistCheckInController::class, 'assignRoom'])->name('check-in.assign-room');
-        Route::post('/check-in/{booking}', [ReceptionistCheckInController::class, 'checkIn'])->name('check-in.store');
+        Route::get('/check-in/{booking}/panel', [ReceptionistCheckInController::class, 'panel'])->name('check-in.panel');
+        Route::post('/check-in/{booking}', [ReceptionistCheckInController::class, 'store'])->name('check-in.store');
 
         // Check-out Module: two tabs - "Expected Check-outs" (checked-in
         // guests; Check Out starts the Billing/Payment AJAX flow) and

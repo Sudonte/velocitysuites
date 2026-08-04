@@ -45,32 +45,16 @@
                     <th class="text-nowrap">Actions</th>
                 </tr>
             </thead>
-            <tbody>
+            <tbody id="checkInTableBody">
                 @forelse($bookings as $booking)
-                    <tr>
+                    <tr data-booking-row="{{ $booking->id }}">
                         <td>{{ $booking->reservation->guest->user->full_name ?? 'N/A' }}</td>
-                        <td style="min-width: 220px;">
+                        <td>
                             @if($booking->room)
                                 {{ $booking->room->room_number }} ({{ $booking->roomType->name ?? '' }})
                                 <x-status-badge :status="$booking->room->status" domain="room" />
-                            @elseif($tab === 'expected')
-                                @php $rooms = $assignableRooms[$booking->id] ?? collect(); @endphp
-                                <form action="{{ route('receptionist.check-in.assign-room', $booking) }}" method="POST" class="d-flex gap-1">
-                                    @csrf
-                                    @if($rooms->isEmpty())
-                                        <span class="text-danger small"><i class="fas fa-exclamation-triangle"></i> No {{ $booking->roomType->name ?? '' }} room free</span>
-                                    @else
-                                        <select name="room_id" class="form-select form-select-sm" required>
-                                            <option value="">-- Select room --</option>
-                                            @foreach($rooms as $room)
-                                                <option value="{{ $room->id }}">Room {{ $room->room_number }}</option>
-                                            @endforeach
-                                        </select>
-                                        <button type="submit" class="btn btn-sm btn-outline-primary text-nowrap">Assign</button>
-                                    @endif
-                                </form>
                             @else
-                                <span class="text-muted">N/A</span>
+                                <span class="text-muted">Not yet assigned</span>
                             @endif
                         </td>
                         <td>
@@ -83,14 +67,9 @@
                         <td>{{ $booking->number_of_guests }}</td>
                         <td class="text-nowrap">
                             @if($tab === 'expected')
-                                <form action="{{ route('receptionist.check-in.store', $booking) }}" method="POST" class="d-inline">
-                                    @csrf
-                                    <button type="submit" class="btn btn-sm btn-success"
-                                            {{ !$booking->room || in_array($booking->room->status, ['occupied', 'maintenance']) ? 'disabled' : '' }}
-                                            onclick="return confirm('Check in this guest{{ $booking->check_in->isAfter(today()) ? ' ahead of their scheduled date' : '' }}?')">
-                                        <i class="fas fa-check"></i> Check In
-                                    </button>
-                                </form>
+                                <button type="button" class="btn btn-sm btn-success btn-open-checkin" data-booking-id="{{ $booking->id }}">
+                                    <i class="fas fa-sign-in-alt"></i> Check In
+                                </button>
                             @else
                                 <a href="{{ route('receptionist.amenities.create', $booking->reservation) }}" class="btn btn-sm btn-outline-primary">
                                     <i class="fas fa-spa"></i> Add Amenity
@@ -99,7 +78,7 @@
                         </td>
                     </tr>
                 @empty
-                    <tr>
+                    <tr id="noBookingsRow">
                         <td colspan="6">
                             <x-empty-state icon="fas fa-sign-in-alt" :message="$tab === 'expected' ? 'No expected check-ins.' : 'No checked-in guests.'" />
                         </td>
@@ -112,4 +91,99 @@
         </x-slot:footer>
     </x-card>
 </div>
+
+<!-- Check-In Modal (AJAX-loaded: full booking details + room assignment, one step) -->
+<div class="modal fade" id="checkInModal" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog modal-dialog-scrollable">
+        <div class="modal-content" id="checkInModalContent">
+            <!-- Injected via AJAX -->
+        </div>
+    </div>
+</div>
+
+@push('scripts')
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
+    const modalEl = document.getElementById('checkInModal');
+    const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+    const content = document.getElementById('checkInModalContent');
+
+    let activeBookingId = null;
+
+    const urls = {
+        panel: @json(route('receptionist.check-in.panel', ['booking' => '__ID__'])),
+        store: @json(route('receptionist.check-in.store', ['booking' => '__ID__'])),
+    };
+
+    function buildUrl(template, id) {
+        return template.replace('__ID__', id);
+    }
+
+    function showError(message) {
+        const alertBox = content.querySelector('#checkInErrorAlert');
+        if (alertBox) {
+            alertBox.textContent = message;
+            alertBox.classList.remove('d-none');
+        } else {
+            alert(message);
+        }
+    }
+
+    document.getElementById('checkInTableBody').addEventListener('click', async function (e) {
+        const btn = e.target.closest('.btn-open-checkin');
+        if (!btn) return;
+
+        activeBookingId = btn.dataset.bookingId;
+        content.innerHTML = '<div class="modal-body text-center py-5"><i class="fas fa-spinner fa-spin fa-2x"></i></div>';
+        modal.show();
+
+        try {
+            const response = await fetch(buildUrl(urls.panel, activeBookingId), {
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            });
+            if (!response.ok) {
+                const data = await response.json().catch(() => ({}));
+                throw new Error(data.message || 'Failed to load check-in panel.');
+            }
+            content.innerHTML = await response.text();
+        } catch (err) {
+            content.innerHTML = '<div class="modal-body"><div class="alert alert-danger mb-0">' + err.message + '</div></div>';
+        }
+    });
+
+    content.addEventListener('submit', async function (e) {
+        if (e.target.id !== 'checkInForm') return;
+        e.preventDefault();
+
+        const payload = Object.fromEntries(new FormData(e.target).entries());
+        try {
+            const response = await fetch(buildUrl(urls.store, activeBookingId), {
+                method: 'POST',
+                headers: {
+                    'X-CSRF-TOKEN': csrfToken,
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(payload),
+            });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(data.message || 'Something went wrong.');
+
+            modal.hide();
+            const row = document.querySelector('tr[data-booking-row="' + activeBookingId + '"]');
+            if (row) row.remove();
+            const tbody = document.getElementById('checkInTableBody');
+            if (tbody && !tbody.querySelector('tr')) {
+                tbody.innerHTML = '<tr id="noBookingsRow"><td colspan="6" class="text-center text-muted py-4">No expected check-ins.</td></tr>';
+            }
+            alert(data.message);
+            activeBookingId = null;
+        } catch (err) {
+            showError(err.message);
+        }
+    });
+});
+</script>
+@endpush
 @endsection
