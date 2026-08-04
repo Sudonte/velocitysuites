@@ -80,10 +80,25 @@ class Room extends Model
     }
 
     /**
-     * Get the bookings assigned to this physical room (set at check-in).
+     * Get the bookings assigned to this physical room via the legacy
+     * single-room column (set at check-in). Vestigial now that
+     * assignedBookings() (the booking_rooms pivot) is the real multi-room
+     * assignment list, but harmless to leave since room_id is kept in sync
+     * as the first assigned room.
      */
     public function bookings()
     {
         return $this->hasMany(Booking::class);
+    }
+
+    /**
+     * Bookings this room is assigned to via the booking_rooms pivot - the
+     * real multi-room-aware assignment list, used by
+     * RoomAvailabilityService to check whether a room is already claimed
+     * by another overlapping checked-in booking.
+     */
+    public function assignedBookings()
+    {
+        return $this->belongsToMany(Booking::class, 'booking_rooms')->withTimestamps();
     }
 }

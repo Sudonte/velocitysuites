@@ -38,7 +38,7 @@ class PaymentController extends Controller
 
         $reservation->loadMissing('roomType');
         $nights = abs($reservation->check_out->diffInDays($reservation->check_in));
-        $range = $this->workflow->depositRange($reservation->roomType, $nights);
+        $range = $this->workflow->depositRange($reservation->roomType, $nights, $reservation->rooms_requested);
 
         $validated = $request->validate([
             'payment_method' => 'required|in:cash,gcash',

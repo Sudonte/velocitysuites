@@ -39,12 +39,15 @@
                     <div class="col-md-8">
                         <h4 class="mb-2">{{ $reservation->roomType->name }} Room</h4>
                         <p class="mb-2">
-                            <strong>Room Number:</strong>
-                            @if($booking && $booking->room)
-                                {{ $booking->room->room_number }}
+                            <strong>Rooms Requested:</strong> {{ $reservation->rooms_requested }}
+                        </p>
+                        <p class="mb-2">
+                            <strong>Room Number{{ $reservation->rooms_requested > 1 ? 's' : '' }}:</strong>
+                            @if($booking && $booking->rooms->isNotEmpty())
+                                {{ $booking->rooms->pluck('room_number')->implode(', ') }}
                             @else
                                 <span class="badge bg-warning text-dark">To be assigned</span>
-                                <small class="text-muted d-block mt-1">Your specific room is assigned by our staff at check-in.</small>
+                                <small class="text-muted d-block mt-1">Your specific room{{ $reservation->rooms_requested > 1 ? 's are' : ' is' }} assigned by our staff at check-in.</small>
                             @endif
                         </p>
                         <p class="mb-2">

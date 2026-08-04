@@ -55,7 +55,12 @@
                             {{ $reservation->guest->user->full_name ?? 'N/A' }}<br>
                             <small class="text-muted">{{ $reservation->guest->user->email ?? '' }}</small>
                         </td>
-                        <td><span class="badge badge-brand">{{ $reservation->roomType->name ?? 'N/A' }}</span></td>
+                        <td>
+                            <span class="badge badge-brand">{{ $reservation->roomType->name ?? 'N/A' }}</span>
+                            @if($reservation->rooms_requested > 1)
+                                <span class="badge bg-secondary">&times;{{ $reservation->rooms_requested }} rooms</span>
+                            @endif
+                        </td>
                         <td>
                             {{ $reservation->check_in->format('M d') }} &ndash; {{ $reservation->check_out->format('M d, Y') }}<br>
                             <small class="text-muted">{{ $reservation->number_of_nights }} night{{ $reservation->number_of_nights === 1 ? '' : 's' }}</small>
@@ -68,10 +73,10 @@
                         @if($tab === 'ready_for_booking')
                             @php $available = $availableCounts[$reservation->id] ?? 0; @endphp
                             <td>
-                                @if($available > 0)
+                                @if($available >= $reservation->rooms_requested)
                                     <span class="text-success"><i class="fas fa-check-circle"></i> {{ $available }} room(s) free</span>
                                 @else
-                                    <span class="text-danger"><i class="fas fa-exclamation-triangle"></i> Fully booked</span>
+                                    <span class="text-danger"><i class="fas fa-exclamation-triangle"></i> Only {{ $available }} free (needs {{ $reservation->rooms_requested }})</span>
                                 @endif
                             </td>
                         @endif

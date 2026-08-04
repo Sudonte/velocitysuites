@@ -36,7 +36,7 @@ class ReservationController extends Controller
 
         $reservation->loadMissing('roomType');
         $nights = abs($reservation->check_out->diffInDays($reservation->check_in));
-        $depositRange = $this->workflow->depositRange($reservation->roomType, $nights);
+        $depositRange = $this->workflow->depositRange($reservation->roomType, $nights, $reservation->rooms_requested);
 
         return view('guest.reservations.show', compact('reservation', 'depositRange'));
     }
@@ -56,6 +56,7 @@ class ReservationController extends Controller
         $checkIn = \Carbon\Carbon::parse($request->check_in);
         $checkOut = \Carbon\Carbon::parse($request->check_out);
         $nights = $checkOut->diff($checkIn)->days;
+        $roomsAvailable = max(1, $this->availability->availableCount($roomType, $checkIn, $checkOut));
         $totalRate = $roomType->rate * $nights;
 
         // Promotions are package/amenity-only - shown as free inclusions,
@@ -86,6 +87,7 @@ class ReservationController extends Controller
             'checkIn',
             'checkOut',
             'nights',
+            'roomsAvailable',
             'totalRate',
             'finalRate',
             'applicablePromos',
@@ -107,6 +109,7 @@ class ReservationController extends Controller
             'room_type_id' => 'required|exists:room_types,id',
             'check_in' => 'required|date|after:today',
             'check_out' => 'required|date|after:check_in',
+            'rooms_requested' => 'required|integer|min:1|max:50',
             'adults' => 'required|integer|min:1',
             'children' => 'nullable|integer|min:0',
             'discount_requested' => 'nullable|boolean',
@@ -143,7 +146,7 @@ class ReservationController extends Controller
         // Discounts aren't applied until billing and the final bill isn't
         // known until checkout, so nothing paid upfront can be "full."
         $nights = abs(\Carbon\Carbon::parse($validated['check_out'])->diffInDays(\Carbon\Carbon::parse($validated['check_in'])));
-        $range = $this->workflow->depositRange($roomType, $nights);
+        $range = $this->workflow->depositRange($roomType, $nights, $validated['rooms_requested']);
         $declaredAmount = $paymentMethod === 'gcash' ? ($validated['gcash_amount'] ?? null) : ($validated['cash_amount'] ?? null);
         if ($declaredAmount !== null && ((float) $declaredAmount < $range['min'] || (float) $declaredAmount > $range['max'])) {
             return back()->withInput()->with('error',
@@ -161,6 +164,7 @@ class ReservationController extends Controller
             $reservation = Reservation::create([
                 'guest_id' => $guest->id,
                 'room_type_id' => $roomType->id,
+                'rooms_requested' => $validated['rooms_requested'],
                 'check_in' => $validated['check_in'],
                 'check_out' => $validated['check_out'],
                 'adults' => $validated['adults'],
@@ -215,7 +219,7 @@ class ReservationController extends Controller
 
         $reservation->loadMissing('roomType');
         $nights = abs($reservation->check_out->diffInDays($reservation->check_in));
-        $range = $this->workflow->depositRange($reservation->roomType, $nights);
+        $range = $this->workflow->depositRange($reservation->roomType, $nights, $reservation->rooms_requested);
 
         $validated = $request->validate([
             'gcash_receipt' => 'required|image|mimes:jpeg,png,jpg,gif|max:2048',

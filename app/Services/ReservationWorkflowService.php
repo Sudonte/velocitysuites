@@ -40,14 +40,15 @@ class ReservationWorkflowService
     /**
      * The deposit range a guest can pay upfront for a stay - a config-
      * driven percentage of the undiscounted quoted total (room rate x
-     * nights), never the full total. A discount is never applied until a
-     * receptionist verifies it at billing, and the final amount (extra
-     * guest fees, amenities, additional charges) isn't known until
-     * checkout, so nothing upfront can legitimately be "the full amount."
+     * nights x rooms requested), never the full total. A discount is never
+     * applied until a receptionist verifies it at billing, and the final
+     * amount (extra guest fees, amenities, additional charges) isn't known
+     * until checkout, so nothing upfront can legitimately be "the full
+     * amount."
      */
-    public function depositRange(RoomType $roomType, int $nights): array
+    public function depositRange(RoomType $roomType, int $nights, int $roomsRequested = 1): array
     {
-        $total = (float) $roomType->rate * max(1, $nights);
+        $total = (float) $roomType->rate * max(1, $nights) * max(1, $roomsRequested);
 
         return [
             'total' => round($total, 2),
@@ -152,14 +153,18 @@ class ReservationWorkflowService
     {
         abort_unless($reservation->status === 'ready_for_booking', 422, 'Only a reservation ready for booking can be converted.');
 
-        if ($this->availability->isFullyBooked($reservation->roomType, $reservation->check_in, $reservation->check_out)) {
-            abort(422, 'This room type is fully booked for the requested dates.');
+        $available = $this->availability->availableCount($reservation->roomType, $reservation->check_in, $reservation->check_out);
+        if ($available < $reservation->rooms_requested) {
+            abort(422, $reservation->rooms_requested > 1
+                ? "Not enough {$reservation->roomType->name} rooms available for the requested dates (needs {$reservation->rooms_requested}, only {$available} free)."
+                : "This room type is fully booked for the requested dates.");
         }
 
         return DB::transaction(function () use ($reservation, $staff) {
             $booking = Booking::create([
                 'reservation_id' => $reservation->id,
                 'room_type_id' => $reservation->room_type_id,
+                'rooms_requested' => $reservation->rooms_requested,
                 'check_in' => $reservation->check_in,
                 'check_out' => $reservation->check_out,
                 'adults' => $reservation->adults,

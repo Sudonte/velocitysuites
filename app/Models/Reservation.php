@@ -16,6 +16,7 @@ class Reservation extends Model
         'guest_last_name',
         'room_type_id',
         'room_id',
+        'rooms_requested',
         'check_in',
         'check_out',
         'number_of_guests',

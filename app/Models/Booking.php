@@ -13,6 +13,7 @@ class Booking extends Model
         'reservation_id',
         'room_type_id',
         'room_id',
+        'rooms_requested',
         'check_in',
         'check_out',
         'adults',
@@ -47,11 +48,22 @@ class Booking extends Model
 
     /**
      * Get the physical room. Null until the receptionist assigns one at
-     * check-in.
+     * check-in. For a multi-room booking this is just the first assigned
+     * room (see rooms()) - kept for the many display-only call sites that
+     * only need "the room" as a reasonable simplification.
      */
     public function room()
     {
         return $this->belongsTo(Room::class);
+    }
+
+    /**
+     * All rooms assigned to this booking (set at check-in - may be more
+     * than one when rooms_requested > 1). Empty until check-in.
+     */
+    public function rooms()
+    {
+        return $this->belongsToMany(Room::class, 'booking_rooms')->withTimestamps();
     }
 
     /**

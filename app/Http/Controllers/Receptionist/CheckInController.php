@@ -31,7 +31,7 @@ class CheckInController extends Controller
             $tab = 'expected';
         }
 
-        $bookings = Booking::with(['reservation.guest.user', 'room', 'roomType'])
+        $bookings = Booking::with(['reservation.guest.user', 'rooms', 'roomType'])
             ->where('booking_status', $tab === 'expected' ? 'confirmed' : 'checked_in')
             ->orderBy($tab === 'expected' ? 'check_in' : 'check_out')
             ->paginate(15)
@@ -63,10 +63,12 @@ class CheckInController extends Controller
     }
 
     /**
-     * Assign the room and check the guest in as one step. Re-validates the
-     * room against a fresh assignableRooms() query (not just the list the
-     * popup was opened with) so a stale/concurrent selection can't
-     * double-book a room.
+     * Assign the room(s) and check the guest in as one step. A booking may
+     * request more than one room (rooms_requested) - the receptionist must
+     * pick exactly that many distinct rooms in the popup. Re-validates
+     * every room against a fresh assignableRooms() query (not just the
+     * list the popup was opened with) so a stale/concurrent selection
+     * can't double-book a room.
      */
     public function store(Request $request, Booking $booking)
     {
@@ -74,26 +76,39 @@ class CheckInController extends Controller
             return response()->json(['message' => 'Only confirmed bookings can be checked in.'], 422);
         }
 
-        $validated = $request->validate(['room_id' => 'required|exists:rooms,id']);
+        $validated = $request->validate([
+            'room_ids' => 'required|array|size:' . $booking->rooms_requested,
+            'room_ids.*' => 'required|integer|distinct',
+        ], [
+            'room_ids.size' => 'This booking needs exactly ' . $booking->rooms_requested . ' room(s) assigned - select ' . $booking->rooms_requested . '.',
+            'room_ids.*.distinct' => 'The same room was selected more than once.',
+        ]);
 
-        $room = $this->availability->assignableRooms($booking)->firstWhere('id', (int) $validated['room_id']);
+        $assignable = $this->availability->assignableRooms($booking)->keyBy('id');
+        $rooms = collect($validated['room_ids'])->map(fn ($id) => $assignable->get((int) $id));
 
-        if (!$room) {
+        if ($rooms->contains(null)) {
             return response()->json([
-                'message' => 'That room cannot be assigned: it is not an available ' . $booking->roomType->name . ' room for these dates.',
+                'message' => 'One or more selected rooms are no longer available: they are not a free ' . $booking->roomType->name . ' room for these dates. Please re-open this panel and try again.',
             ], 422);
         }
 
-        DB::transaction(function () use ($booking, $room) {
-            $booking->update(['room_id' => $room->id, 'booking_status' => 'checked_in']);
-            $room->update(['status' => 'occupied']);
+        DB::transaction(function () use ($booking, $rooms) {
+            $booking->rooms()->sync($rooms->pluck('id'));
+            $booking->update(['room_id' => $rooms->first()->id, 'booking_status' => 'checked_in']);
+
+            foreach ($rooms as $room) {
+                $room->update(['status' => 'occupied']);
+            }
 
             $this->notificationService->notifyCheckIn(
                 $booking->reservation->guest->user,
-                $room->room_name
+                $rooms->pluck('room_name')->implode(', ')
             );
         });
 
-        return response()->json(['message' => 'Guest checked in to Room ' . $room->room_number . '!']);
+        $roomLabel = $rooms->count() > 1 ? 'Rooms ' . $rooms->pluck('room_number')->implode(', ') : 'Room ' . $rooms->first()->room_number;
+
+        return response()->json(['message' => 'Guest checked in to ' . $roomLabel . '!']);
     }
 }

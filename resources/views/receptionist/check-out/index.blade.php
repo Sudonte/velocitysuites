@@ -52,7 +52,7 @@
                     @forelse($bookings as $booking)
                         <tr data-booking-id="{{ $booking->id }}">
                             <td>{{ $booking->reservation->guest->user->full_name ?? 'N/A' }}</td>
-                            <td>{{ $booking->room->room_number ?? 'N/A' }} ({{ $booking->roomType->name ?? '' }})</td>
+                            <td>{{ $booking->rooms->pluck('room_number')->implode(', ') ?: 'N/A' }} ({{ $booking->roomType->name ?? '' }})</td>
                             <td>
                                 {{ $booking->check_out->format('M d, Y') }}
                                 @if($tab === 'expected' && $booking->check_out->isAfter(today()))
@@ -79,7 +79,7 @@
                                     <button type="button" class="btn btn-sm btn-primary btn-start-checkout"
                                         data-booking-id="{{ $booking->id }}"
                                         data-guest-name="{{ $booking->reservation->guest->user->full_name ?? 'N/A' }}"
-                                        data-room-number="{{ $booking->room->room_number ?? 'N/A' }}">
+                                        data-room-number="{{ $booking->rooms->pluck('room_number')->implode(', ') ?: 'N/A' }}">
                                         <i class="fas fa-sign-out-alt"></i> Check Out
                                     </button>
                                 </td>

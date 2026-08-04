@@ -34,7 +34,7 @@ class CheckOutController extends Controller
             $tab = 'expected';
         }
 
-        $bookings = Booking::with(['reservation.guest.user', 'room', 'roomType', 'billing'])
+        $bookings = Booking::with(['reservation.guest.user', 'rooms', 'roomType', 'billing'])
             ->where('booking_status', $tab === 'expected' ? 'checked_in' : 'checked_out')
             ->orderBy('check_out', $tab === 'expected' ? 'asc' : 'desc')
             ->paginate(15)
@@ -59,7 +59,7 @@ class CheckOutController extends Controller
 
         $billing = $booking->billing ?? $this->generateBilling($booking);
 
-        $booking->load(['reservation.guest.user', 'room']);
+        $booking->load(['reservation.guest.user', 'rooms']);
         $billing->load(['additionalCharges', 'discountApplied']);
 
         $amenityRequests = AmenityRequest::with('amenity')
@@ -95,7 +95,7 @@ class CheckOutController extends Controller
      */
     public function checkOutPaymentPanel(Billing $billing)
     {
-        $billing->load(['booking.reservation.guest.user', 'booking.room', 'payments', 'additionalCharges', 'discountApplied']);
+        $billing->load(['booking.reservation.guest.user', 'booking.rooms', 'payments', 'additionalCharges', 'discountApplied']);
 
         $balance = $billing->balance;
         $amountPaidSoFar = (float) $billing->payments()
@@ -149,7 +149,8 @@ class CheckOutController extends Controller
             $billing->update(['billing_status' => $completed ? 'paid' : 'partial']);
 
             $guest = $booking->reservation->guest->user;
-            $roomName = $booking->room->room_name;
+            $rooms = $booking->rooms->isNotEmpty() ? $booking->rooms : collect([$booking->room])->filter();
+            $roomName = $rooms->pluck('room_name')->implode(', ');
 
             $this->notificationService->notifyPaymentReceived(
                 $guest,
@@ -159,7 +160,9 @@ class CheckOutController extends Controller
 
             if ($completed) {
                 $booking->update(['booking_status' => 'checked_out']);
-                $booking->room->update(['status' => 'available']);
+                foreach ($rooms as $room) {
+                    $room->update(['status' => 'available']);
+                }
 
                 $this->notificationService->notifyCheckOut($guest, $roomName);
                 $this->notificationService->notifyPaymentComplete($guest);
@@ -335,12 +338,19 @@ class CheckOutController extends Controller
         $reservation = $booking->reservation;
         $nights = max(1, abs($booking->check_out->diffInDays($booking->check_in)));
 
-        $roomCharge = (float) $booking->room->room_rate * $nights;
+        // A multi-room booking's rooms may each have their own rate
+        // override, so this sums per-room rather than multiplying a single
+        // rate by rooms_requested. Falls back to the legacy single room()
+        // relation for the rare pre-migration booking with no pivot rows.
+        $rooms = $booking->rooms->isNotEmpty() ? $booking->rooms : collect([$booking->room])->filter();
+        $roomCharge = $rooms->sum(fn ($room) => (float) $room->room_rate) * $nights;
 
         // Children under 12 stay free - only adults count toward the
-        // extra-guest fee, even though both occupy the room's capacity.
+        // extra-guest fee, measured against the combined capacity of every
+        // assigned room, not just one.
         $adults = $booking->adults ?? $booking->number_of_guests;
-        $extraGuests = max(0, $adults - $booking->room->room_capacity);
+        $totalCapacity = $rooms->sum('room_capacity');
+        $extraGuests = max(0, $adults - $totalCapacity);
         $extraGuestFee = $extraGuests * (float) config('hotel.extra_guest_fee_rate', 0);
 
         $amenityCharge = (float) AmenityRequest::where('reservation_id', $booking->reservation_id)

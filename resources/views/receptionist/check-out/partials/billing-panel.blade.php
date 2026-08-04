@@ -9,7 +9,7 @@
         <div class="col-md-6">
             <strong>Guest:</strong> {{ $booking->reservation->guest->user->full_name ?? 'N/A' }}<br>
             <strong>Booking:</strong> #{{ $booking->id }}<br>
-            <strong>Room:</strong> {{ $booking->room->room_number ?? 'N/A' }} ({{ $booking->room->room_name ?? '' }})
+            <strong>Room{{ $booking->rooms->count() > 1 ? 's' : '' }}:</strong> {{ $booking->rooms->pluck('room_number')->implode(', ') ?: 'N/A' }}
         </div>
         <div class="col-md-6 text-md-end">
             <strong>Check-In:</strong> {{ $booking->check_in->format('M d, Y') }}<br>

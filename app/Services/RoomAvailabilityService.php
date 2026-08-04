@@ -35,7 +35,11 @@ class RoomAvailabilityService
      * How many rooms of this type are free for the given date range: total
      * inventory, minus rooms under maintenance (unusable regardless of
      * dates), minus rooms already consumed by an overlapping confirmed or
-     * checked-in Booking of this type.
+     * checked-in Booking of this type. Each overlapping booking consumes
+     * its full rooms_requested count, not just 1 - this is what reserves
+     * the right amount of inventory for a multi-room booking from the
+     * moment it's confirmed, not just after check-in assigns specific
+     * rooms.
      */
     public function availableCount(RoomType $roomType, Carbon $checkIn, Carbon $checkOut, ?int $excludingBookingId = null): int
     {
@@ -43,7 +47,7 @@ class RoomAvailabilityService
             ->where('status', 'maintenance')
             ->count();
 
-        $bookedCount = $this->overlappingBookings($roomType->id, $checkIn, $checkOut, $excludingBookingId)->count();
+        $bookedCount = (int) $this->overlappingBookings($roomType->id, $checkIn, $checkOut, $excludingBookingId)->sum('rooms_requested');
 
         return max(0, $this->totalInventory($roomType) - $maintenanceCount - $bookedCount);
     }
@@ -55,24 +59,26 @@ class RoomAvailabilityService
 
     /**
      * Rooms of the booking's type that are physically available (not under
-     * maintenance) and not already assigned to another overlapping
-     * confirmed/checked-in booking - the pool the receptionist picks from
-     * at check-in.
+     * maintenance) and not already assigned (via the booking_rooms pivot -
+     * specific rooms are only ever claimed at check-in) to another
+     * overlapping checked-in booking - the pool the receptionist picks
+     * from at check-in. A booking can request more than one room
+     * (rooms_requested); the caller is responsible for having the
+     * receptionist pick that many distinct rooms from this list.
      */
     public function assignableRooms(Booking $booking): Collection
     {
         return Room::where('room_type_id', $booking->room_type_id)
             ->where('status', '!=', 'maintenance')
-            ->whereDoesntHave('bookings', function ($q) use ($booking) {
-                $q->whereIn('booking_status', ['confirmed', 'checked_in'])
-                  ->where('id', '!=', $booking->id)
-                  ->whereNotNull('room_id')
+            ->whereDoesntHave('assignedBookings', function ($q) use ($booking) {
+                $q->where('bookings.booking_status', 'checked_in')
+                  ->where('bookings.id', '!=', $booking->id)
                   ->where(function ($dates) use ($booking) {
-                      $dates->whereBetween('check_in', [$booking->check_in, $booking->check_out])
-                            ->orWhereBetween('check_out', [$booking->check_in, $booking->check_out])
+                      $dates->whereBetween('bookings.check_in', [$booking->check_in, $booking->check_out])
+                            ->orWhereBetween('bookings.check_out', [$booking->check_in, $booking->check_out])
                             ->orWhere(function ($spanning) use ($booking) {
-                                $spanning->where('check_in', '<=', $booking->check_in)
-                                         ->where('check_out', '>=', $booking->check_out);
+                                $spanning->where('bookings.check_in', '<=', $booking->check_in)
+                                         ->where('bookings.check_out', '>=', $booking->check_out);
                             });
                   });
             })

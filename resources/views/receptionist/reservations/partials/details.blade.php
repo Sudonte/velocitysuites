@@ -1,7 +1,7 @@
 @php
     $depositPayment = $reservation->payments->firstWhere('payment_stage', 'deposit');
     $nights = $reservation->number_of_nights;
-    $roomCharge = (float) ($reservation->roomType->rate ?? 0) * max(1, $nights);
+    $roomCharge = (float) ($reservation->roomType->rate ?? 0) * max(1, $nights) * $reservation->rooms_requested;
 @endphp
 
 <!-- Header: reservation #, guest, room type, dates, current status -->
@@ -28,7 +28,8 @@
 
         <h6 class="text-brand"><i class="fas fa-bed"></i> Stay Details</h6>
         <p class="mb-1"><strong>Room Type:</strong> {{ $reservation->roomType->name ?? 'N/A' }}</p>
-        <p class="mb-1"><strong>Assigned Room:</strong> <span class="text-muted">Not yet assigned - happens at check-in</span></p>
+        <p class="mb-1"><strong>Rooms Requested:</strong> {{ $reservation->rooms_requested }}</p>
+        <p class="mb-1"><strong>Assigned Room{{ $reservation->rooms_requested > 1 ? 's' : '' }}:</strong> <span class="text-muted">Not yet assigned - happens at check-in</span></p>
         <p class="mb-1"><strong>Check-In:</strong> {{ $reservation->check_in->format('M d, Y') }}</p>
         <p class="mb-1"><strong>Check-Out:</strong> {{ $reservation->check_out->format('M d, Y') }}</p>
         <p class="mb-0"><strong>Guests:</strong> {{ $reservation->adults }} adult{{ $reservation->adults == 1 ? '' : 's' }}@if($reservation->children > 0), {{ $reservation->children }} child{{ $reservation->children == 1 ? '' : 'ren' }}@endif</p>
@@ -114,7 +115,7 @@
         <div class="mb-2">
             <label class="form-label">Reason <span class="text-danger">*</span></label>
             <textarea id="detailsRejectReason" class="form-control" rows="3" maxlength="500" required
-                      placeholder="This will be sent to the guest.">{{ $reservation->status === 'ready_for_booking' && ($available ?? 1) <= 0 ? 'The ' . ($reservation->roomType->name ?? '') . ' room type is fully booked for your requested dates.' : '' }}</textarea>
+                      placeholder="This will be sent to the guest.">{{ $reservation->status === 'ready_for_booking' && ($available ?? 0) < $reservation->rooms_requested ? 'The ' . ($reservation->roomType->name ?? '') . ' room type does not have enough rooms available for your requested dates.' : '' }}</textarea>
         </div>
         <div class="d-flex gap-2 justify-content-end">
             <button type="button" class="btn btn-secondary" id="detailsCancelRejectBtn">Cancel</button>
@@ -131,9 +132,9 @@
                 <i class="fas fa-check"></i> Accept
             </button>
         @else
-            @php $isFullyBooked = ($available ?? 0) <= 0; @endphp
-            <button type="button" class="btn btn-success" id="detailsConvertBtn" {{ $isFullyBooked ? 'disabled' : '' }}
-                    title="{{ $isFullyBooked ? 'This room type is fully booked for the requested dates.' : '' }}">
+            @php $notEnoughRooms = ($available ?? 0) < $reservation->rooms_requested; @endphp
+            <button type="button" class="btn btn-success" id="detailsConvertBtn" {{ $notEnoughRooms ? 'disabled' : '' }}
+                    title="{{ $notEnoughRooms ? 'Not enough rooms of this type available for the requested dates.' : '' }}">
                 <i class="fas fa-calendar-check"></i> Convert to Booking
             </button>
         @endif

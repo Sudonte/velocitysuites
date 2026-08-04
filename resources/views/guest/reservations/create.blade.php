@@ -87,6 +87,21 @@
                     <div class="row">
                         <div class="col-md-6">
                             <div class="form-group mb-3">
+                                <label for="rooms_requested"><strong>Number of Rooms *</strong></label>
+                                <input type="number" class="form-control @error('rooms_requested') is-invalid @enderror"
+                                       id="rooms_requested" name="rooms_requested" min="1" max="{{ $roomsAvailable }}"
+                                       value="{{ old('rooms_requested', 1) }}" onchange="updatePriceSummary()" required>
+                                @error('rooms_requested')
+                                    <div class="invalid-feedback">{{ $message }}</div>
+                                @enderror
+                                <small class="text-muted">Need more than one {{ $roomType->name }} room for your stay? Request them together here - up to {{ $roomsAvailable }} currently free for these dates.</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group mb-3">
                                 <label for="adults"><strong>Adults *</strong></label>
                                 <input type="number" class="form-control @error('adults') is-invalid @enderror"
                                        id="adults" name="adults" min="1" max="{{ $roomType->capacity }}"
@@ -170,7 +185,7 @@
                         <input type="number" step="0.01" min="{{ $depositRange['min'] }}" max="{{ $depositRange['max'] }}"
                                class="form-control @error('cash_amount') is-invalid @enderror"
                                id="cash_amount" name="cash_amount" value="{{ old('cash_amount') }}">
-                        <small class="text-muted">If provided, must be between ₱{{ number_format($depositRange['min'], 2) }} and ₱{{ number_format($depositRange['max'], 2) }} (10%-20% of the total). The rest is settled at checkout.</small>
+                        <small class="text-muted">If provided, must be between <span id="cashMinLabel">₱{{ number_format($depositRange['min'], 2) }}</span> and <span id="cashMaxLabel">₱{{ number_format($depositRange['max'], 2) }}</span> (10%-20% of the total). The rest is settled at checkout.</small>
                         @error('cash_amount')
                             <div class="invalid-feedback d-block">{{ $message }}</div>
                         @enderror
@@ -186,7 +201,7 @@
                                     <input type="number" step="0.01" min="{{ $depositRange['min'] }}" max="{{ $depositRange['max'] }}"
                                            class="form-control mb-1 @error('gcash_amount') is-invalid @enderror"
                                            id="gcash_amount" name="gcash_amount" value="{{ old('gcash_amount', $depositRange['min']) }}">
-                                    <small class="text-muted d-block mb-3">Between ₱{{ number_format($depositRange['min'], 2) }} and ₱{{ number_format($depositRange['max'], 2) }} (10%-20% of the total). The rest is settled at checkout.</small>
+                                    <small class="text-muted d-block mb-3">Between <span id="gcashMinLabel">₱{{ number_format($depositRange['min'], 2) }}</span> and <span id="gcashMaxLabel">₱{{ number_format($depositRange['max'], 2) }}</span> (10%-20% of the total). The rest is settled at checkout.</small>
                                     @error('gcash_amount')
                                         <div class="invalid-feedback d-block mb-3">{{ $message }}</div>
                                     @enderror
@@ -227,16 +242,20 @@
                     <span>Number of Nights:</span>
                     <strong>{{ $nights }}</strong>
                 </div>
+                <div class="d-flex justify-content-between mb-2">
+                    <span>Number of Rooms:</span>
+                    <strong id="summaryRoomCount">1</strong>
+                </div>
                 <hr>
                 <div class="d-flex justify-content-between mb-2">
                     <span>Subtotal:</span>
-                    <strong>₱{{ number_format($totalRate, 2) }}</strong>
+                    <strong id="summarySubtotal">₱{{ number_format($totalRate, 2) }}</strong>
                 </div>
 
                 <hr>
                 <div class="d-flex justify-content-between">
                     <strong>Estimated Total:</strong>
-                    <strong class="text-brand" style="font-size: 1.5rem;">₱{{ number_format($finalRate, 2) }}</strong>
+                    <strong class="text-brand" style="font-size: 1.5rem;" id="summaryTotal">₱{{ number_format($finalRate, 2) }}</strong>
                 </div>
                 <p class="text-muted small mt-2 mb-0">Final amount is confirmed at billing after check-out. Any deposit paid now is deducted from your final bill.</p>
             </x-card>
@@ -270,6 +289,45 @@ function updatePaymentPanels() {
     document.getElementById('gcashPanel').classList.toggle('d-none', choice !== 'pay_now_gcash');
 }
 document.addEventListener('DOMContentLoaded', updatePaymentPanels);
+
+// Per-room baseline (qty=1), computed server-side - everything else here
+// just scales linearly with the room-quantity selector.
+const perRoomSubtotal = {{ $totalRate }};
+const perRoomDepositMin = {{ $depositRange['min'] }};
+const perRoomDepositMax = {{ $depositRange['max'] }};
+
+function peso(amount) {
+    return '₱' + Number(amount).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function updatePriceSummary() {
+    const qty = Math.max(1, parseInt(document.getElementById('rooms_requested').value, 10) || 1);
+    const subtotal = perRoomSubtotal * qty;
+    const depositMin = perRoomDepositMin * qty;
+    const depositMax = perRoomDepositMax * qty;
+
+    document.getElementById('summaryRoomCount').textContent = qty;
+    document.getElementById('summarySubtotal').textContent = peso(subtotal);
+    document.getElementById('summaryTotal').textContent = peso(subtotal);
+
+    const cashAmount = document.getElementById('cash_amount');
+    cashAmount.min = depositMin;
+    cashAmount.max = depositMax;
+    document.getElementById('cashMinLabel').textContent = peso(depositMin);
+    document.getElementById('cashMaxLabel').textContent = peso(depositMax);
+
+    const gcashAmount = document.getElementById('gcash_amount');
+    const previousMin = parseFloat(gcashAmount.min);
+    gcashAmount.min = depositMin;
+    gcashAmount.max = depositMax;
+    // Only follow the minimum if the guest hasn't typed a custom amount.
+    if (!gcashAmount.value || parseFloat(gcashAmount.value) === previousMin) {
+        gcashAmount.value = depositMin;
+    }
+    document.getElementById('gcashMinLabel').textContent = peso(depositMin);
+    document.getElementById('gcashMaxLabel').textContent = peso(depositMax);
+}
+document.addEventListener('DOMContentLoaded', updatePriceSummary);
 </script>
 @endpush
 @endsection

@@ -50,11 +50,13 @@
                     <tr data-booking-row="{{ $booking->id }}">
                         <td>{{ $booking->reservation->guest->user->full_name ?? 'N/A' }}</td>
                         <td>
-                            @if($booking->room)
-                                {{ $booking->room->room_number }} ({{ $booking->roomType->name ?? '' }})
-                                <x-status-badge :status="$booking->room->status" domain="room" />
+                            @if($booking->rooms->isNotEmpty())
+                                {{ $booking->rooms->pluck('room_number')->implode(', ') }} ({{ $booking->roomType->name ?? '' }})
                             @else
                                 <span class="text-muted">Not yet assigned</span>
+                                @if($booking->rooms_requested > 1)
+                                    <span class="badge bg-secondary">needs {{ $booking->rooms_requested }}</span>
+                                @endif
                             @endif
                         </td>
                         <td>
@@ -152,11 +154,28 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     });
 
+    // Prevent picking the same room in two different rows: whenever any
+    // select changes, disable that room's <option> in every other row.
+    content.addEventListener('change', function (e) {
+        if (!e.target.classList.contains('room-select')) return;
+
+        const allSelects = content.querySelectorAll('.room-select');
+        const chosen = Array.from(allSelects).map(s => s.value).filter(Boolean);
+
+        allSelects.forEach(select => {
+            Array.from(select.options).forEach(option => {
+                if (!option.value) return;
+                const chosenElsewhere = chosen.includes(option.value) && select.value !== option.value;
+                option.disabled = chosenElsewhere;
+            });
+        });
+    });
+
     content.addEventListener('submit', async function (e) {
         if (e.target.id !== 'checkInForm') return;
         e.preventDefault();
 
-        const payload = Object.fromEntries(new FormData(e.target).entries());
+        const roomIds = Array.from(e.target.querySelectorAll('select[name="room_ids[]"]')).map(s => s.value);
         try {
             const response = await fetch(buildUrl(urls.store, activeBookingId), {
                 method: 'POST',
@@ -165,7 +184,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     'Accept': 'application/json',
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify(payload),
+                body: JSON.stringify({ room_ids: roomIds }),
             });
             const data = await response.json().catch(() => ({}));
             if (!response.ok) throw new Error(data.message || 'Something went wrong.');
