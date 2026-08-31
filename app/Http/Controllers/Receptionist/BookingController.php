@@ -81,10 +81,9 @@ class BookingController extends Controller
         $pendingCount = Booking::where('booking_status', 'confirmed')->whereNull('verified_at')->count();
         $verifiedCount = Booking::where('booking_status', 'confirmed')->whereNotNull('verified_at')->whereNull('hidden_at')->count();
         $rejectedCount = Booking::where('booking_status', 'cancelled')->whereNull('hidden_at')->count();
-        $archivedCount = Booking::whereNotNull('hidden_at')->count();
 
         return view('receptionist.bookings.index', compact(
-            'bookings', 'tab', 'pendingCount', 'verifiedCount', 'rejectedCount', 'archivedCount'
+            'bookings', 'tab', 'pendingCount', 'verifiedCount', 'rejectedCount'
         ));
     }
 

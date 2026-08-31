@@ -40,6 +40,11 @@
                         @endif
                     </a>
                 </li>
+                <li class="nav-item">
+                    <a class="nav-link navbar-icon-link" href="{{ route('settings.index') }}" title="Settings" aria-label="Settings">
+                        <i class="fas fa-gear fs-5"></i>
+                    </a>
+                </li>
                 {{-- Logout now lives at the bottom of the sidebar (components/sidebar-logout.blade.php)
                      instead of here - this is the sole entry point into My Profile: guests use
                      their dedicated guest.profile.show (matches the richer guest-editing flow

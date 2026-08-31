@@ -19,6 +19,7 @@ use App\Http\Controllers\Receptionist\CheckOutController as ReceptionistCheckOut
 use App\Http\Controllers\Guest\GuestController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\SettingsController;
 use Illuminate\Support\Facades\Route;
 
 // Landing page - shown to all users (guests can browse, auth users can see featured rooms)
@@ -381,6 +382,9 @@ Route::middleware(['auth', 'account.status', 'log.activity', 'no.cache'])->group
 
     // Global Settings (all authenticated users)
     Route::middleware('auth')->group(function () {
+        Route::get('/settings', [SettingsController::class, 'index'])->name('settings.index');
+        Route::put('/settings/theme', [SettingsController::class, 'updateTheme'])->name('settings.theme');
+
         Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications.index');
         Route::put('/notifications/{notification}/read', [NotificationController::class, 'markAsRead'])->name('notifications.markAsRead');
         Route::put('/notifications/read-all', [NotificationController::class, 'markAllAsRead'])->name('notifications.markAllAsRead');

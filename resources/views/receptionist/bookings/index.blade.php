@@ -37,11 +37,9 @@
                 Rejected / Failed <span class="badge bg-danger">{{ $rejectedCount }}</span>
             </a>
         </li>
-        <li class="nav-item">
-            <a class="nav-link text-nowrap {{ $tab === 'archived' ? 'active' : '' }}" href="{{ route('receptionist.bookings.index', ['tab' => 'archived']) }}">
-                Archived <span class="badge bg-secondary">{{ $archivedCount }}</span>
-            </a>
-        </li>
+        {{-- No "Archived" tab here anymore - reach it from Settings
+             (settings.index) instead; this page still renders tab=archived
+             fully (see @elseif below), just isn't linked to from this bar. --}}
     </ul>
 
     @if($tab === 'rejected')

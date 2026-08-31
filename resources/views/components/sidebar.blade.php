@@ -20,7 +20,7 @@
         flex-shrink: 0;
         flex-direction: column;
         padding: 0;
-        background-color: var(--secondary-color);
+        background-color: var(--surface-color);
         border-right: 1px solid var(--border-color);
         /* Normally .sidebar-scroll-wrap alone handles scrolling (it's the flex-
            shrinking child), but this is a fallback so nothing ever becomes
@@ -71,13 +71,13 @@
        so a sibling after .offcanvas-body (which keeps its own default
        overflow-y: auto) naturally sits pinned below it without scrolling away -
        no extra flex rules needed for that part, just the shared footer/link
-       styling below. Explicitly white (matching Bootstrap's own default, but
-       stated here so it stays correct even if that default ever changes) -
-       the sidebar's white-with-red-accents theme means dark text on this
-       white surface is legible without any extra per-device override, unlike
-       an earlier version of this theme (solid red fill) which needed one. */
+       styling below. Matches the desktop rail's surface color (white in
+       light mode, dark in dark mode - see --surface-color) - the
+       white-or-dark-with-red-accents theme means --text-dark is legible on
+       it either way without any extra per-mode override, unlike an earlier
+       version of this theme (solid red fill) which needed one. */
     #mobileSidebar {
-        background-color: var(--secondary-color);
+        background-color: var(--surface-color);
         color: var(--text-dark);
     }
 
@@ -211,7 +211,7 @@
         justify-content: center;
         border-radius: 50%;
         border: 1px solid var(--border-color);
-        background-color: #fff;
+        background-color: var(--surface-color);
         color: var(--primary-color);
         font-size: 0.75rem;
         transition: background-color 0.2s ease;

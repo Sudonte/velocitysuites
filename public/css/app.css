@@ -22,11 +22,62 @@
     --gold-color: #D4AF37;
     --silver-color: #C0C0C0;
 
+    /* Card/sidebar/table surface background - was folded into
+       --secondary-color until dark mode needed to tell "white as a surface
+       fill" apart from "white as text/icon color on top of a saturated
+       brand-color background" (buttons, card-header, thead - those stay
+       --secondary-color, always white, in both themes). Only this one
+       flips dark; --secondary-color itself is deliberately never
+       overridden below. */
+    --surface-color: #FFFFFF;
+
     --radius-card: 12px;
     --radius-btn: 8px;
     --radius-pill: 999px;
     --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.06);
     --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.10);
+}
+
+/* Dark mode - toggled by data-bs-theme="dark" on <html> (see Settings ->
+   Appearance, SettingsController::updateTheme()). Only the light/dark-
+   sensitive surface, text, and border tokens are redefined here;
+   --primary-color/--accent-color (brand red) and the semantic status
+   colors stay constant across both themes. */
+[data-bs-theme="dark"] {
+    --bg-color: #14161b;
+    --surface-color: #1e2128;
+    --text-dark: #EDEDED;
+    --text-light: #C6C6C6;
+    --border-color: #34383f;
+}
+
+[data-bs-theme="dark"] .form-subsection {
+    background: #23262d;
+}
+
+[data-bs-theme="dark"] .alert-success {
+    background-color: rgba(40, 167, 69, 0.15);
+    color: #6fd68a;
+    border-color: #28a745;
+}
+
+[data-bs-theme="dark"] .alert-error,
+[data-bs-theme="dark"] .alert-danger {
+    background-color: rgba(220, 53, 69, 0.15);
+    color: #f18b96;
+    border-color: #dc3545;
+}
+
+[data-bs-theme="dark"] .alert-warning {
+    background-color: rgba(255, 193, 7, 0.15);
+    color: #ffd966;
+    border-color: #ffc107;
+}
+
+[data-bs-theme="dark"] .alert-info {
+    background-color: rgba(23, 162, 184, 0.15);
+    color: #7fd4e3;
+    border-color: #17a2b8;
 }
 
 /* Shared red rounded-square logo container, used everywhere the Velocity
@@ -187,7 +238,7 @@ a:hover {
 }
 
 .btn-secondary {
-    background-color: var(--secondary-color);
+    background-color: var(--surface-color);
     color: var(--primary-color);
     border: 2px solid var(--primary-color);
 }
@@ -272,7 +323,7 @@ textarea {
 
 /* Cards */
 .card {
-    background-color: var(--secondary-color);
+    background-color: var(--surface-color);
     border: 1px solid var(--border-color);
     border-radius: var(--radius-card);
     padding: 1.5rem;
@@ -443,7 +494,7 @@ textarea {
    browsing rooms keeps their sidebar, but the room cards themselves
    should look identical either way). */
 .room-card {
-    background: white;
+    background: var(--surface-color);
     border-radius: var(--radius-card);
     overflow: hidden;
     box-shadow: var(--shadow-sm);
@@ -796,7 +847,7 @@ textarea {
 table {
     width: 100%;
     border-collapse: collapse;
-    background-color: var(--secondary-color);
+    background-color: var(--surface-color);
     border-radius: 0.5rem;
     overflow: hidden;
 }
@@ -929,7 +980,7 @@ tbody tr:hover {
 }
 
 .toast {
-    background-color: var(--secondary-color);
+    background-color: var(--surface-color);
     padding: 1rem;
     border-radius: 0.5rem;
     margin-bottom: 10px;
@@ -975,7 +1026,7 @@ tbody tr:hover {
    with the page title on the left and notification bell + avatar on the
    right. */
 .app-header {
-    background-color: var(--secondary-color);
+    background-color: var(--surface-color);
     border-bottom: 1px solid var(--border-color);
     box-shadow: var(--shadow-sm);
     /* Stays pinned to the top of the content column while only the page
@@ -1024,7 +1075,7 @@ tbody tr:hover {
     font-weight: 700;
     line-height: 1.1rem;
     text-align: center;
-    box-shadow: 0 0 0 2px var(--secondary-color);
+    box-shadow: 0 0 0 2px var(--surface-color);
 }
 
 /* Profile picture / initials badge - components/user-avatar.blade.php, reused
@@ -1088,7 +1139,7 @@ tbody tr:hover {
    used for the "by category" doughnut charts on the admin/manager
    dashboards via the x-chart-card component. */
 .chart-card .card-header {
-    background-color: var(--secondary-color);
+    background-color: var(--surface-color);
     color: var(--text-dark);
     border-bottom: 1px solid var(--border-color);
     margin: 0;
@@ -1284,7 +1335,7 @@ tbody tr:hover {
     border-radius: var(--radius-card);
     padding: 1rem;
     margin-bottom: 0.85rem;
-    background-color: var(--secondary-color);
+    background-color: var(--surface-color);
 }
 
 .monitoring-item-card:last-child {

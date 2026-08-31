@@ -45,6 +45,7 @@ class User extends Authenticatable
         'street',
         'zip_code',
         'timezone',
+        'theme',
         'profile_picture',
         'profile_picture_changed_at',
     ];
