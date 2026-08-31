@@ -97,8 +97,8 @@
     </x-card>
 </div>
 
-<!-- Check In Modal (AJAX-loaded: room assignment + check-in are one
-     action - see CheckInController::panel()/store()) -->
+<!-- Check In Modal (AJAX-loaded: Guest Details, room assignment, and
+     check-in are one action - see CheckInController::panel()/store()) -->
 <div class="modal fade" id="checkInModal" tabindex="-1" data-bs-backdrop="static">
     <div class="modal-dialog modal-dialog-scrollable">
         <div class="modal-content" id="checkInModalContent">
@@ -174,11 +174,69 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     });
 
+    // "Same as permanent address": copies the value across and stops
+    // asking the receptionist to type it twice, since it no longer needs
+    // typing - the field is just re-enabled if the box is unchecked again.
+    content.addEventListener('change', function (e) {
+        if (e.target.id !== 'checkinSameAsPermanent') return;
+
+        const form = e.target.closest('form');
+        const permanent = form.querySelector('[name="checkin_permanent_address"]');
+        const current = form.querySelector('[name="checkin_current_address"]');
+
+        if (e.target.checked) {
+            current.value = permanent.value;
+            current.readOnly = true;
+            current.required = false;
+        } else {
+            current.readOnly = false;
+            current.required = true;
+        }
+    });
+
+    // Step 1 (Guest Details) -> Step 2 (Assign Room): client-side only,
+    // both steps submit together as one request - see store()'s docblock
+    // for why. Hidden required fields (the other step) are skipped by
+    // native constraint validation, so reportValidity() here only checks
+    // whatever step is currently visible.
+    content.addEventListener('click', function (e) {
+        if (e.target.closest('#checkInNextBtn')) {
+            const form = document.getElementById('checkInForm');
+            if (!form.reportValidity()) return;
+
+            document.getElementById('checkInStepDetails').classList.add('d-none');
+            document.getElementById('checkInStepRooms').classList.remove('d-none');
+            document.getElementById('checkInNextBtn').classList.add('d-none');
+            document.getElementById('checkInBackBtn').classList.remove('d-none');
+            document.getElementById('checkInSubmitBtn').classList.remove('d-none');
+        } else if (e.target.closest('#checkInBackBtn')) {
+            document.getElementById('checkInStepRooms').classList.add('d-none');
+            document.getElementById('checkInStepDetails').classList.remove('d-none');
+            document.getElementById('checkInBackBtn').classList.add('d-none');
+            document.getElementById('checkInSubmitBtn').classList.add('d-none');
+            document.getElementById('checkInNextBtn').classList.remove('d-none');
+        }
+    });
+
     content.addEventListener('submit', async function (e) {
         if (e.target.id !== 'checkInForm') return;
         e.preventDefault();
 
-        const roomIds = Array.from(e.target.querySelectorAll('select[name="room_ids[]"]')).map(s => s.value);
+        const form = e.target;
+        const roomIds = Array.from(form.querySelectorAll('select[name="room_ids[]"]')).map(s => s.value);
+        const payload = {
+            guest_first_name: form.querySelector('[name="guest_first_name"]').value,
+            guest_middle_name: form.querySelector('[name="guest_middle_name"]').value,
+            guest_last_name: form.querySelector('[name="guest_last_name"]').value,
+            checkin_permanent_address: form.querySelector('[name="checkin_permanent_address"]').value,
+            checkin_current_address: form.querySelector('[name="checkin_current_address"]').value,
+            current_address_same_as_permanent: form.querySelector('[name="current_address_same_as_permanent"]').checked,
+            checkin_contact_number: form.querySelector('[name="checkin_contact_number"]').value,
+            adults: form.querySelector('[name="adults"]').value,
+            children: form.querySelector('[name="children"]').value,
+            room_ids: roomIds,
+        };
+
         try {
             const response = await fetch(buildUrl(urls.store, activeBookingId), {
                 method: 'POST',
@@ -187,7 +245,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     'Accept': 'application/json',
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ room_ids: roomIds }),
+                body: JSON.stringify(payload),
             });
             const data = await response.json().catch(() => ({}));
             if (!response.ok) throw new Error(data.message || 'Something went wrong.');

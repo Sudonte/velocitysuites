@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Receptionist;
 
 use App\Http\Controllers\Controller;
 use App\Models\Booking;
+use App\Rules\ValidPhoneNumber;
 use App\Services\NotificationService;
 use App\Services\RoomAvailabilityService;
 use App\Support\Activity;
@@ -46,15 +47,15 @@ class CheckInController extends Controller
     }
 
     /**
-     * AJAX popup content: full booking/guest details plus the room-
-     * assignment picker, pre-filtered to rooms that actually match the
-     * booked room type and are free for the reservation period. Assign
-     * Room and Check In are a single action from here - there's no
-     * separate "assign, then check in" step anymore. If the receptionist
-     * already pre-assigned room(s) ahead of arrival (Receptionist\
-     * BookingController's Assign Rooms action), those are pre-selected
-     * here rather than making the receptionist pick again - Check In just
-     * confirms them (still re-validated fresh at submit time either way).
+     * AJAX popup content: a Guest Details registration step (full name,
+     * permanent/current address, contact number, actual adult/child count -
+     * pre-filled from whatever's on file but editable, since whoever is
+     * actually at the counter, and how many of them there are, can differ
+     * from what was booked) followed by the room-assignment picker,
+     * pre-filtered to rooms that actually match the booked room type and
+     * are free for the reservation period. Both steps live in one form -
+     * Guest Details, Assign Room, and Check In are a single action from
+     * here, submitted together by store() below.
      */
     public function panel(Booking $booking)
     {
@@ -65,19 +66,28 @@ class CheckInController extends Controller
         $booking->load(['reservation.guest.user', 'guest.user', 'roomType', 'rooms']);
         $assignableRooms = $this->availability->assignableRooms($booking);
         $assignedRoomIds = $booking->rooms->pluck('id')->all();
+        $accountGuest = $booking->account_guest;
 
-        return view('receptionist.check-in.partials.panel', compact('booking', 'assignableRooms', 'assignedRoomIds'));
+        return view('receptionist.check-in.partials.panel', compact(
+            'booking', 'assignableRooms', 'assignedRoomIds', 'accountGuest'
+        ));
     }
 
     /**
-     * Assign the room(s) and check the guest in as one step. A booking may
-     * request more than one room (rooms_requested) - the receptionist must
-     * pick exactly that many distinct rooms in the popup. Delegates the
-     * "pick N rooms, make sure they're really free" step to
-     * RoomAvailabilityService::assignRooms() (shared with early assignment
-     * in Receptionist\BookingController) - re-validates every room against
-     * a fresh query, not just the list the popup was opened with, so a
-     * stale/concurrent selection can't double-book a room.
+     * Record the Guest Details registration step, assign the room(s), and
+     * check the guest in - all as one step. A booking may request more
+     * than one room (rooms_requested) - the receptionist must pick exactly
+     * that many distinct rooms in the popup. Delegates the "pick N rooms,
+     * make sure they're really free" step to
+     * RoomAvailabilityService::assignRooms() - re-validates every room
+     * against a fresh query, not just the list the popup was opened with,
+     * so a stale/concurrent selection can't double-book a room.
+     *
+     * adults/children are overwritten with whatever the receptionist
+     * confirms here (not just whatever the booking originally requested) -
+     * CheckOutController::generateBilling() computes the extra-guest fee
+     * straight off these columns, so correcting the headcount here is what
+     * makes that fee accurate for walk-up additions.
      */
     public function store(Request $request, Booking $booking)
     {
@@ -95,23 +105,52 @@ class CheckInController extends Controller
         }
 
         $validated = $request->validate([
+            'guest_first_name' => 'required|string|max:100',
+            'guest_middle_name' => 'nullable|string|max:100',
+            'guest_last_name' => 'required|string|max:100',
+            'checkin_permanent_address' => 'required|string|max:255',
+            'current_address_same_as_permanent' => 'nullable|boolean',
+            'checkin_current_address' => 'required_if:current_address_same_as_permanent,false|nullable|string|max:255',
+            'checkin_contact_number' => [
+                'required', 'string', 'max:20',
+                new ValidPhoneNumber($booking->account_guest?->country ?? 'Philippines'),
+            ],
+            'adults' => 'required|integer|min:1',
+            'children' => 'nullable|integer|min:0',
             'room_ids' => 'required|array|size:' . $booking->rooms_requested,
             'room_ids.*' => 'required|integer|distinct',
         ], [
             'room_ids.size' => 'This booking needs exactly ' . $booking->rooms_requested . ' room(s) assigned - select ' . $booking->rooms_requested . '.',
             'room_ids.*.distinct' => 'The same room was selected more than once.',
+            'checkin_current_address.required_if' => 'Enter the guest\'s current address, or check "Same as permanent address".',
         ]);
+
+        $children = (int) ($validated['children'] ?? 0);
+        $currentAddress = ($validated['current_address_same_as_permanent'] ?? false)
+            ? $validated['checkin_permanent_address']
+            : $validated['checkin_current_address'];
 
         try {
             $rooms = null;
-            DB::transaction(function () use ($booking, $validated, &$rooms) {
+            DB::transaction(function () use ($booking, $validated, $children, $currentAddress, &$rooms) {
                 $rooms = $this->availability->assignRooms($booking, $validated['room_ids']);
 
                 foreach ($rooms as $room) {
                     $room->update(['status' => 'occupied']);
                 }
 
-                $booking->update(['booking_status' => 'checked_in']);
+                $booking->update([
+                    'guest_first_name' => $validated['guest_first_name'],
+                    'guest_middle_name' => $validated['guest_middle_name'] ?? null,
+                    'guest_last_name' => $validated['guest_last_name'],
+                    'checkin_permanent_address' => $validated['checkin_permanent_address'],
+                    'checkin_current_address' => $currentAddress,
+                    'checkin_contact_number' => $validated['checkin_contact_number'],
+                    'adults' => $validated['adults'],
+                    'children' => $children,
+                    'number_of_guests' => $validated['adults'] + $children,
+                    'booking_status' => 'checked_in',
+                ]);
             });
         } catch (HttpExceptionInterface $e) {
             return response()->json(['message' => $e->getMessage()], $e->getStatusCode());

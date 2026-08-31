@@ -243,10 +243,8 @@ Route::middleware(['auth', 'account.status', 'log.activity', 'no.cache'])->group
         Route::post('/reservations/{reservation}/confirm-cash-payment', [ReceptionistReservationController::class, 'confirmCashPayment'])->name('reservations.confirm-cash-payment');
         Route::put('/reservations/{reservation}/verify', [ReceptionistReservationController::class, 'verify'])->name('reservations.verify');
 
-        // Booking Module: registry of confirmed bookings, plus the ability
-        // to review and assign the guest's room(s) ahead of arrival (see
-        // BookingController::assignRoomsPanel()/assignRooms()) - actual
-        // check-in still happens only in the Check-in Module.
+        // Booking Module: view-only registry of confirmed bookings - room
+        // assignment and check-in still happen only in the Check-in Module.
         Route::get('/bookings', [ReceptionistBookingController::class, 'index'])->name('bookings.index');
         Route::get('/bookings/{booking}', [ReceptionistBookingController::class, 'show'])->name('bookings.show');
         // Streams a direct-booking guest's uploaded Senior/PWD ID for staff
@@ -261,12 +259,6 @@ Route::middleware(['auth', 'account.status', 'log.activity', 'no.cache'])->group
         // this exists separately from /billing/{billing}/payment (that one
         // needs a Billing row, which doesn't exist until checkout).
         Route::post('/bookings/{booking}/record-payment', [ReceptionistBookingController::class, 'recordPayment'])->name('bookings.record-payment');
-        Route::get('/bookings/{booking}/assign-rooms/panel', [ReceptionistBookingController::class, 'assignRoomsPanel'])->name('bookings.assign-rooms.panel');
-        // POST (not PUT) to match the AJAX-fetch-driven convention already
-        // used by check-in.store/reservations.accept-reject-convert, as
-        // opposed to the plain-HTML-form + @method('PUT') convention used
-        // by verify/archive elsewhere in this file.
-        Route::post('/bookings/{booking}/assign-rooms', [ReceptionistBookingController::class, 'assignRooms'])->name('bookings.assign-rooms');
         // Archive/Delete: only ever offered for a rejected/failed (cancelled)
         // booking - see BookingController::archive()/destroy(). Delete is a
         // soft delete (bookings.deleted_at), never a hard DELETE.

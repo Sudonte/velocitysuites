@@ -61,14 +61,12 @@ class RoomAvailabilityService
      * Rooms of the booking's type that are physically available (not under
      * maintenance) and not already assigned (via the booking_rooms pivot)
      * to another overlapping booking that's still confirmed or already
-     * checked_in - the pool the receptionist picks from, whether assigning
-     * ahead of arrival (Receptionist\BookingController, any time after
-     * confirmation) or at check-in (Receptionist\CheckInController).
-     * Confirmed (not just checked_in) bookings are excluded here too -
-     * once early/pre-arrival assignment exists, two different confirmed
-     * bookings for overlapping dates must not be able to claim the same
-     * physical room just because neither guest has arrived yet. The
-     * booking's own already-assigned room(s) stay selectable (excluded
+     * checked_in - the pool the receptionist picks from at check-in
+     * (Receptionist\CheckInController). Confirmed (not just checked_in)
+     * bookings are excluded too, defensively: room assignment now only
+     * happens atomically with check-in, but this still guards against any
+     * booking left with a pre-assigned room from before that was the case.
+     * The booking's own already-assigned room(s) stay selectable (excluded
      * from the exclusion) so re-opening its own panel doesn't show its
      * current room as unavailable. A booking can request more than one
      * room (rooms_requested); the caller is responsible for having the
@@ -99,11 +97,9 @@ class RoomAvailabilityService
      * assignableRooms() query (never trusting a possibly-stale list the
      * caller's form was rendered with) and ties them to the booking via
      * the booking_rooms pivot, keeping bookings.room_id in sync as the
-     * first assigned room. Shared by early assignment
-     * (Receptionist\BookingController - confirmed, pre-arrival) and
-     * check-in (Receptionist\CheckInController - the same operation, plus
-     * its own booking_status/room-status/notification side effects the
-     * caller applies afterward). Throws a 422 HttpException with a
+     * first assigned room. Used by check-in (Receptionist\CheckInController
+     * - its own booking_status/room-status/notification side effects are
+     * applied by the caller afterward). Throws a 422 HttpException with a
      * guest-safe message if any pick is no longer available - callers
      * don't need their own availability re-check on top of this.
      */

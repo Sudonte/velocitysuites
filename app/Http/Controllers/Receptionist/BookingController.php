@@ -8,14 +8,12 @@ use App\Models\Booking;
 use App\Models\Payment;
 use App\Services\NotificationService;
 use App\Services\ReservationWorkflowService;
-use App\Services\RoomAvailabilityService;
 use App\Support\Activity;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
-use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 
 /**
  * The Booking Module: a view-only registry of bookings still awaiting
@@ -35,7 +33,6 @@ class BookingController extends Controller
 {
     public function __construct(
         private ReservationWorkflowService $workflow,
-        private RoomAvailabilityService $availability,
         private NotificationService $notifications,
     ) {
     }
@@ -198,70 +195,6 @@ class BookingController extends Controller
         }
 
         return back()->with('success', 'Payment recorded. Remaining balance: ₱' . number_format($newRemaining, 2) . '.');
-    }
-
-    /**
-     * AJAX popup content: the room-assignment picker, pre-filtered to
-     * rooms that match the booked room type and are free for the stay
-     * (RoomAvailabilityService::assignableRooms(), which now also blocks
-     * against other confirmed-but-not-yet-checked-in bookings, not just
-     * checked-in ones - see that method's docblock). Lets a receptionist
-     * assign the guest's room(s) any time after confirmation, ahead of
-     * actual arrival - Receptionist\CheckInController's own panel still
-     * exists for walk-up check-in and will show whatever was assigned
-     * here as a pre-filled confirmation instead of a blank pick.
-     */
-    public function assignRoomsPanel(Booking $booking): View
-    {
-        abort_unless($booking->booking_status === 'confirmed', 422, 'Only a confirmed booking can have rooms assigned.');
-
-        $booking->load(['reservation.guest.user', 'guest.user', 'roomType', 'rooms']);
-        $assignableRooms = $this->availability->assignableRooms($booking);
-        $assignedRoomIds = $booking->rooms->pluck('id')->all();
-
-        return view('receptionist.bookings.partials.assign-rooms', compact('booking', 'assignableRooms', 'assignedRoomIds'));
-    }
-
-    /**
-     * Assigns (or reassigns) the booking's room(s) without touching
-     * booking_status or flipping room status to occupied - those only
-     * happen at actual check-in (Receptionist\CheckInController::store()).
-     * The guest's original room TYPE and rooms_requested count are never
-     * changed here, only which specific physical room(s) fill that
-     * request. Delegates validation/assignment to the same
-     * RoomAvailabilityService::assignRooms() the Check-in Module uses, so
-     * a stale/concurrent pick can't double-book a room here either.
-     */
-    public function assignRooms(Request $request, Booking $booking)
-    {
-        if ($booking->booking_status !== 'confirmed') {
-            return response()->json(['message' => 'Only a confirmed booking can have rooms assigned.'], 422);
-        }
-
-        $validated = $request->validate([
-            'room_ids' => 'required|array|size:' . $booking->rooms_requested,
-            'room_ids.*' => 'required|integer|distinct',
-        ], [
-            'room_ids.size' => 'This booking needs exactly ' . $booking->rooms_requested . ' room(s) assigned - select ' . $booking->rooms_requested . '.',
-            'room_ids.*.distinct' => 'The same room was selected more than once.',
-        ]);
-
-        try {
-            $rooms = $this->availability->assignRooms($booking, $validated['room_ids']);
-        } catch (HttpExceptionInterface $e) {
-            return response()->json(['message' => $e->getMessage()], $e->getStatusCode());
-        }
-
-        $booking->loadMissing(['reservation.guest.user', 'guest.user']);
-        Activity::log(
-            'Assigned room(s)',
-            "Booking #{$booking->id} - {$booking->account_guest_full_name} to " . $rooms->pluck('room_number')->implode(', '),
-            $booking
-        );
-
-        $roomLabel = $rooms->count() > 1 ? 'Rooms ' . $rooms->pluck('room_number')->implode(', ') : 'Room ' . $rooms->first()->room_number;
-
-        return response()->json(['message' => $roomLabel . ' assigned to this booking.']);
     }
 
     /**

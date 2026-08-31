@@ -113,21 +113,6 @@
                         <span class="text-muted">Room Type</span>
                         <span>{{ $booking->roomType->name ?? 'N/A' }}{{ $booking->rooms_requested > 1 ? ' ×'.$booking->rooms_requested : '' }}</span>
                     </div>
-                    @if(in_array($tab, ['pending', 'verified']))
-                        <div class="monitoring-item-row">
-                            <span class="text-muted">Assigned</span>
-                            <span>
-                                @if($booking->rooms->isNotEmpty())
-                                    {{ $booking->rooms->pluck('room_number')->implode(', ') }}
-                                    @if($booking->rooms->count() < $booking->rooms_requested)
-                                        <span class="badge bg-warning text-dark">{{ $booking->rooms_requested - $booking->rooms->count() }} more</span>
-                                    @endif
-                                @else
-                                    <span class="text-muted">Not yet assigned</span>
-                                @endif
-                            </span>
-                        </div>
-                    @endif
                     <div class="monitoring-item-row">
                         <span class="text-muted">Stay</span>
                         <span>{{ $booking->check_in->format('M d') }}&ndash;{{ $booking->check_out->format('M d, Y') }}</span>
@@ -176,11 +161,6 @@
                         <a href="{{ route('receptionist.bookings.show', $booking) }}" class="btn btn-sm btn-primary flex-fill">
                             <i class="fas fa-eye"></i> View
                         </a>
-                        @if(in_array($tab, ['pending', 'verified']))
-                            <button type="button" class="btn btn-sm btn-outline-primary flex-fill btn-open-assign-rooms" data-booking-id="{{ $booking->id }}">
-                                <i class="fas fa-door-open"></i> {{ $booking->rooms->isNotEmpty() ? 'Reassign' : 'Assign' }}
-                            </button>
-                        @endif
                         @if($tab === 'pending')
                             @if($booking->gcashPaymentNeedsVerification())
                                 <span class="badge bg-secondary align-self-center">Review payment first</span>
@@ -230,9 +210,6 @@
                     <th>Booking #</th>
                     <th>Guest</th>
                     <th class="d-none d-md-table-cell">Room Type</th>
-                    @if(in_array($tab, ['pending', 'verified']))
-                        <th class="d-none d-lg-table-cell">Assigned Room(s)</th>
-                    @endif
                     <th>Check-In</th>
                     <th>Check-Out</th>
                     <th class="d-none d-md-table-cell">Total</th>
@@ -276,18 +253,6 @@
                                 <span class="badge bg-secondary">&times;{{ $booking->rooms_requested }} rooms</span>
                             @endif
                         </td>
-                        @if(in_array($tab, ['pending', 'verified']))
-                            <td class="d-none d-lg-table-cell">
-                                @if($booking->rooms->isNotEmpty())
-                                    {{ $booking->rooms->pluck('room_number')->implode(', ') }}
-                                    @if($booking->rooms->count() < $booking->rooms_requested)
-                                        <span class="badge bg-warning text-dark">{{ $booking->rooms_requested - $booking->rooms->count() }} more needed</span>
-                                    @endif
-                                @else
-                                    <span class="text-muted">Not yet assigned</span>
-                                @endif
-                            </td>
-                        @endif
                         <td>{{ $booking->check_in->format('M d, Y') }}</td>
                         <td>{{ $booking->check_out->format('M d, Y') }}</td>
                         <td class="d-none d-md-table-cell">{{ $bookingTotal !== null ? '₱' . number_format($bookingTotal, 2) : 'N/A' }}</td>
@@ -330,11 +295,6 @@
                             <a href="{{ route('receptionist.bookings.show', $booking) }}" class="btn btn-sm btn-primary">
                                 <i class="fas fa-eye"></i> View
                             </a>
-                            @if(in_array($tab, ['pending', 'verified']))
-                                <button type="button" class="btn btn-sm btn-outline-primary btn-open-assign-rooms" data-booking-id="{{ $booking->id }}">
-                                    <i class="fas fa-door-open"></i> {{ $booking->rooms->isNotEmpty() ? 'Reassign' : 'Assign' }} Room{{ $booking->rooms_requested > 1 ? 's' : '' }}
-                                </button>
-                            @endif
                             @if($tab === 'pending')
                                 @if($booking->gcashPaymentNeedsVerification())
                                     <span class="badge bg-secondary" title="Open the booking to review the GCash number and receipt before it can be verified.">
@@ -411,111 +371,6 @@
     </x-card>
 </div>
 
-<!-- Assign Rooms Modal (AJAX-loaded: room type/quantity are read-only,
-     only the specific physical room(s) are picked here) -->
-<div class="modal fade" id="assignRoomsModal" tabindex="-1" data-bs-backdrop="static">
-    <div class="modal-dialog modal-dialog-scrollable">
-        <div class="modal-content" id="assignRoomsModalContent">
-            <!-- Injected via AJAX -->
-        </div>
-    </div>
-</div>
-
-@push('scripts')
-<script>
-document.addEventListener('DOMContentLoaded', function () {
-    const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
-    const modalEl = document.getElementById('assignRoomsModal');
-    const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
-    const content = document.getElementById('assignRoomsModalContent');
-
-    let activeBookingId = null;
-
-    const urls = {
-        panel: @json(route('receptionist.bookings.assign-rooms.panel', ['booking' => '__ID__'])),
-        store: @json(route('receptionist.bookings.assign-rooms', ['booking' => '__ID__'])),
-    };
-
-    function buildUrl(template, id) {
-        return template.replace('__ID__', id);
-    }
-
-    function showError(message) {
-        const alertBox = content.querySelector('#assignRoomsErrorAlert');
-        if (alertBox) {
-            alertBox.textContent = message;
-            alertBox.classList.remove('d-none');
-        } else {
-            alert(message);
-        }
-    }
-
-    document.querySelectorAll('.btn-open-assign-rooms').forEach(function (btn) {
-        btn.addEventListener('click', async function () {
-            activeBookingId = btn.dataset.bookingId;
-            content.innerHTML = '<div class="modal-body text-center py-5"><i class="fas fa-spinner fa-spin fa-2x"></i></div>';
-            modal.show();
-
-            try {
-                const response = await fetch(buildUrl(urls.panel, activeBookingId), {
-                    headers: { 'X-Requested-With': 'XMLHttpRequest' },
-                });
-                if (!response.ok) {
-                    const data = await response.json().catch(() => ({}));
-                    throw new Error(data.message || 'Failed to load the room assignment panel.');
-                }
-                content.innerHTML = await response.text();
-            } catch (err) {
-                content.innerHTML = '<div class="modal-body"><div class="alert alert-danger mb-0">' + err.message + '</div></div>';
-            }
-        });
-    });
-
-    // Prevent picking the same room in two different rows: whenever any
-    // select changes, disable that room's <option> in every other row.
-    content.addEventListener('change', function (e) {
-        if (!e.target.classList.contains('room-select')) return;
-
-        const allSelects = content.querySelectorAll('.room-select');
-        const chosen = Array.from(allSelects).map(s => s.value).filter(Boolean);
-
-        allSelects.forEach(select => {
-            Array.from(select.options).forEach(option => {
-                if (!option.value) return;
-                const chosenElsewhere = chosen.includes(option.value) && select.value !== option.value;
-                option.disabled = chosenElsewhere;
-            });
-        });
-    });
-
-    content.addEventListener('submit', async function (e) {
-        if (e.target.id !== 'assignRoomsForm') return;
-        e.preventDefault();
-
-        const roomIds = Array.from(e.target.querySelectorAll('select[name="room_ids[]"]')).map(s => s.value);
-        try {
-            const response = await fetch(buildUrl(urls.store, activeBookingId), {
-                method: 'POST',
-                headers: {
-                    'X-CSRF-TOKEN': csrfToken,
-                    'Accept': 'application/json',
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ room_ids: roomIds }),
-            });
-            const data = await response.json().catch(() => ({}));
-            if (!response.ok) throw new Error(data.message || 'Something went wrong.');
-
-            // Room assignment doesn't move the booking to a different tab -
-            // reload so the Assigned Room(s) column reflects the new pick.
-            window.location.reload();
-        } catch (err) {
-            showError(err.message);
-        }
-    });
-});
-</script>
-@endpush
 @endsection
 
 
