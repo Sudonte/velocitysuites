@@ -17,6 +17,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'account.status' => \App\Http\Middleware\CheckAccountStatus::class,
             'log.activity' => \App\Http\Middleware\LogActivity::class,
             'auth.api' => \App\Http\Middleware\AuthenticateApiToken::class,
+            'no.cache' => \App\Http\Middleware\PreventCachedResponse::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

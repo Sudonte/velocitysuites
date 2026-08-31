@@ -4,41 +4,38 @@
 
 @section('content')
 <div class="container-fluid py-4">
-    <x-page-header icon="fas fa-home" title="Welcome, {{ auth()->user()->first_name }}!">
+    <x-page-header icon="fas fa-home" title="Welcome, {{ auth()->user()->first_name }}!" :showClock="true">
         <x-slot:actions>
             <a href="{{ route('public.rooms.index') }}" class="btn btn-primary">
                 <i class="fas fa-search"></i> Search Rooms
-            </a>
-            <a href="{{ route('guest.profile.show') }}" class="btn btn-outline-secondary">
-                <i class="fas fa-user"></i> Profile
             </a>
         </x-slot:actions>
     </x-page-header>
 
     <!-- Quick Stats -->
     <div class="row mb-4">
-        <div class="col-md-3 mb-3">
+        <div class="col-md-6 col-lg-3 mb-3">
             <x-stat-card
                 icon="fas fa-bed"
                 label="Current Stay"
                 :value="$currentReservation ? ($currentReservation->booking->room->room_name ?? $currentReservation->roomType->name) : 'None'"
                 color="primary" />
         </div>
-        <div class="col-md-3 mb-3">
+        <div class="col-md-6 col-lg-3 mb-3">
             <x-stat-card
                 icon="fas fa-calendar-alt"
                 label="Upcoming Trips"
                 :value="$upcomingReservations->count()"
                 color="warning" />
         </div>
-        <div class="col-md-3 mb-3">
+        <div class="col-md-6 col-lg-3 mb-3">
             <x-stat-card
                 icon="fas fa-credit-card"
                 label="Pending Payments"
                 value="₱{{ number_format($totalPendingAmount, 2) }}"
                 color="danger" />
         </div>
-        <div class="col-md-3 mb-3">
+        <div class="col-md-6 col-lg-3 mb-3">
             <x-stat-card
                 icon="fas fa-bell"
                 label="Notifications"
@@ -91,6 +88,59 @@
         </div>
     @endif
 
+    <!-- Dashboard Overview - Recent Bookings + Notifications (mirrors the mobile app dashboard's
+         same-named sections, both of which this page previously omitted). -->
+    <div class="row mb-4">
+        <div class="col-lg-6 mb-3 mb-lg-0">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-header card-header-primary d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0"><i class="fas fa-bookmark"></i> Recent Bookings</h5>
+                    <a href="{{ route('guest.reservations.index') }}" class="btn btn-sm btn-light">See All</a>
+                </div>
+                <div class="card-body">
+                    @forelse($recentBookings as $booking)
+                        <a href="{{ route('guest.reservations.show', $booking) }}"
+                           class="d-flex align-items-center justify-content-between text-decoration-none text-reset py-2 {{ !$loop->last ? 'border-bottom' : '' }}">
+                            <div>
+                                <div class="fw-bold">Booking ID: VS-{{ str_pad($booking->id, 4, '0', STR_PAD_LEFT) }}</div>
+                                <small class="text-muted">{{ $booking->roomType->name ?? 'N/A' }} &bull; {{ $booking->check_in->format('M d, Y') }}</small>
+                            </div>
+                            <i class="fas fa-chevron-right text-muted"></i>
+                        </a>
+                    @empty
+                        <p class="text-muted text-center mb-0 py-3">No bookings yet.</p>
+                    @endforelse
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-6">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-header card-header-primary d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0"><i class="fas fa-bell"></i> Notifications</h5>
+                    <a href="{{ route('notifications.index') }}" class="btn btn-sm btn-light">See All</a>
+                </div>
+                <div class="card-body">
+                    @forelse($recentNotifications as $notification)
+                        <a href="{{ route('notifications.index') }}"
+                           class="d-flex align-items-start gap-2 text-decoration-none text-reset py-2 {{ !$loop->last ? 'border-bottom' : '' }}">
+                            @unless($notification->is_read)
+                                <span class="badge bg-danger rounded-circle p-1 mt-1" style="width:8px;height:8px;"></span>
+                            @else
+                                <span style="width:8px;display:inline-block;"></span>
+                            @endunless
+                            <div class="flex-grow-1">
+                                <div class="{{ $notification->is_read ? '' : 'fw-bold' }}">{{ $notification->title }}</div>
+                                <small class="text-muted">{{ $notification->created_at->diffForHumans() }}</small>
+                            </div>
+                        </a>
+                    @empty
+                        <p class="text-muted text-center mb-0 py-3">No notifications yet.</p>
+                    @endforelse
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Pending Payments Alert -->
     @if($pendingPayments->count() > 0)
         <div class="card border-0 shadow-sm mb-4" style="border-left: 4px solid var(--danger-color);">
@@ -115,14 +165,13 @@
                     <tbody>
                         @foreach($pendingPayments as $billing)
                             @php
-                                $reservation = $billing->booking->reservation;
                                 $paid = $billing->payments()->where('payment_status', 'completed')->sum('amount_paid');
                                 $balance = max(0, (float) $billing->total_amount - (float) $paid);
                             @endphp
                             <tr>
-                                <td>{{ $billing->booking->room->room_name ?? $reservation->roomType->name }}</td>
-                                <td>{{ $reservation->check_in->format('M d, Y') }}</td>
-                                <td>{{ $reservation->check_out->format('M d, Y') }}</td>
+                                <td>{{ $billing->booking->room->room_name ?? $billing->booking->roomType->name }}</td>
+                                <td>{{ $billing->booking->check_in->format('M d, Y') }}</td>
+                                <td>{{ $billing->booking->check_out->format('M d, Y') }}</td>
                                 <td>₱{{ number_format($billing->total_amount, 2) }}</td>
                                 <td>₱{{ number_format($paid, 2) }}</td>
                                 <td><span class="text-danger">₱{{ number_format($balance, 2) }}</span></td>
@@ -212,9 +261,10 @@
                                 <td>{{ ($payment->payment_date ?? $payment->created_at)->format('M d, Y H:i') }}</td>
                                 <td>
                                     @if($payment->billing)
-                                        {{ $payment->billing->booking->room->room_name ?? $payment->billing->booking->reservation->roomType->name }}
+                                        {{ $payment->billing->booking->room->room_name ?? $payment->billing->booking->roomType->name }}
                                     @else
-                                        {{ $payment->reservation->roomType->name }} <small class="text-muted">(deposit)</small>
+                                        {{ ($payment->reservation ?? $payment->booking)?->roomType->name }}
+                                        @if($payment->reservation)<small class="text-muted">(deposit)</small>@endif
                                     @endif
                                 </td>
                                 <td>₱{{ number_format($payment->amount_paid, 2) }}</td>

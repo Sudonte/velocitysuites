@@ -35,4 +35,24 @@ return [
         ],
     ],
 
+    'semaphore' => [
+        'key' => env('SEMAPHORE_API_KEY'),
+        'sender_name' => env('SEMAPHORE_SENDER_NAME'),
+    ],
+
+    'google_maps' => [
+        'key' => env('GOOGLE_MAPS_API_KEY'),
+    ],
+
+    /*
+    | Official Velocity Suites mobile app download destination (Play
+    | Store listing, direct APK, etc). Left unset until a real link
+    | exists - the Home page's Mobile App Promotion section checks this
+    | and hides itself entirely rather than showing a placeholder/dead
+    | download button when it's empty.
+    */
+    'mobile_app' => [
+        'download_url' => env('MOBILE_APP_DOWNLOAD_URL'),
+    ],
+
 ];

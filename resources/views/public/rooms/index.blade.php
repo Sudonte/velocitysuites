@@ -8,10 +8,11 @@
             <x-page-header icon="fas fa-door-open" title="Book a Room" subtitle="Find the perfect room type for your stay" />
     @else
         <!-- Page Banner -->
-        <section class="page-banner text-center">
-            <div class="container">
-                <h1 class="display-4 fw-bold mb-2" style="text-shadow: 2px 2px 4px rgba(0,0,0,0.7);">Our <span class="gold-text">Rooms</span></h1>
-                <p class="lead mb-0" style="text-shadow: 1px 1px 3px rgba(0,0,0,0.7);">Find the perfect room type for your stay</p>
+        <section class="py-5 bg-light">
+            <div class="container text-center">
+                <span class="section-badge mb-3"><i class="fas fa-bed"></i> Our Rooms</span>
+                <h1 class="mt-3">Room Types <span class="text-brand">for Every Guest</span></h1>
+                <p class="text-muted mx-auto mb-0" style="max-width: 560px;">Find the perfect room type for your stay.</p>
             </div>
         </section>
 
@@ -90,7 +91,7 @@
                                     @if($roomType->is_fully_booked)
                                         <span class="badge bg-danger position-absolute m-2" style="z-index: 2;">Fully Booked</span>
                                     @endif
-                                    <img src="{{ $roomType->representative_image ? asset('storage/' . $roomType->representative_image) : 'https://via.placeholder.com/400x300?text=No+Image' }}"
+                                    <img src="{{ $roomType->image_url }}"
                                          alt="{{ $roomType->name }}" class="img-fluid" style="height: 200px; width: 100%; object-fit: cover; {{ $roomType->is_fully_booked ? 'opacity: 0.6;' : '' }}">
                                     <div class="p-4">
                                         <h5 class="fw-bold">{{ $roomType->name }}</h5>
@@ -100,6 +101,19 @@
                                         <p class="small text-muted">
                                             {{ Str::limit($roomType->description, 100) }}
                                         </p>
+                                        @if($roomType->amenities)
+                                            <p class="small mb-2">
+                                                <i class="fas fa-concierge-bell text-brand me-1"></i>
+                                                @foreach(array_slice($roomType->amenities, 0, 3) as $amenity)
+                                                    {{ $amenity['name'] }}{{ !$loop->last ? ',' : '' }}
+                                                @endforeach
+                                                @if(count($roomType->amenities) > 3)
+                                                    <span class="text-muted">+{{ count($roomType->amenities) - 3 }} more</span>
+                                                @endif
+                                            </p>
+                                        @else
+                                            <p class="small text-muted mb-2">No Available Amenities.</p>
+                                        @endif
                                         <p class="room-price mb-3">₱{{ number_format($roomType->rate, 2) }} <small class="text-muted">/night</small></p>
                                         <a href="{{ route('public.rooms.show', array_merge(['roomType' => $roomType], request()->only('check_in', 'check_out'))) }}"
                                            class="btn btn-outline-danger w-100">View Details</a>
@@ -118,3 +132,4 @@
         </div>
     </div>
 @endsection
+

@@ -18,7 +18,11 @@ class LogActivity
     {
         $response = $next($request);
 
-        if (auth()->check()) {
+        // GET/HEAD requests are page views, not activity - and anything
+        // that already called Support\Activity::log() itself has written
+        // a more meaningful row than this generic fallback ever could, so
+        // skip both to keep the dashboard activity feeds signal, not noise.
+        if (auth()->check() && ! $request->isMethod('GET') && ! $request->isMethod('HEAD') && ! $request->attributes->get('activity_logged')) {
             ActivityLog::create([
                 'user_id' => auth()->id(),
                 'action' => $request->method() . ' ' . $request->path(),

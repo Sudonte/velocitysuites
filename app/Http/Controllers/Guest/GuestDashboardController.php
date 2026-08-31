@@ -41,7 +41,10 @@ class GuestDashboardController extends Controller
             ->orderBy('check_in')
             ->get();
 
-        // Past: checked out, rejected, or cancelled.
+        // Past: checked out, rejected, or cancelled. Excludes anything the
+        // guest has explicitly hidden (see Guest\ReservationController::hide()) -
+        // this is exactly the terminal-state bucket hide() operates on, so
+        // without this a "removed" transaction would silently resurface here.
         $pastReservations = $guest->reservations()
             ->where(function ($q) {
                 $q->whereIn('status', ['rejected', 'cancelled'])
@@ -50,30 +53,40 @@ class GuestDashboardController extends Controller
                          ->whereHas('booking', fn ($b) => $b->where('booking_status', 'checked_out'));
                   });
             })
+            ->whereNull('hidden_at')
             ->with(['roomType', 'booking.billing.payments'])
             ->latest('check_out')
             ->limit(10)
             ->get();
 
-        // Pending payments (billing status pending or partial)
+        // Pending payments (billing status pending or partial) - covers both
+        // a converted-reservation booking (booking.reservation.guest_id) and
+        // a direct "New Booking" transaction (booking.guest_id set directly,
+        // no reservation ever created).
         $pendingPayments = Billing::whereHas('booking', function ($query) use ($guest) {
             $query->whereHas('reservation', function ($q) use ($guest) {
                 $q->where('guest_id', $guest->id);
-            });
+            })->orWhere('guest_id', $guest->id);
         })
         ->whereIn('billing_status', ['pending', 'partial'])
-        ->with(['booking.reservation.roomType', 'booking.room'])
+        ->with(['booking.reservation.roomType', 'booking.roomType', 'booking.room'])
         ->get();
 
-        // Recent payments (both deposit and final)
+        // Recent payments (both deposit and final) - same reservation-or-
+        // direct-booking coverage as $pendingPayments above.
         $reservationIds = $guest->reservations()->pluck('id');
-        $recentPayments = Payment::where(function ($q) use ($reservationIds) {
+        $directBookingIds = \App\Models\Booking::where('guest_id', $guest->id)->whereNull('reservation_id')->pluck('id');
+        $recentPayments = Payment::where(function ($q) use ($reservationIds, $directBookingIds) {
             $q->whereIn('reservation_id', $reservationIds)
+              ->orWhereIn('booking_id', $directBookingIds)
               ->orWhereHas('billing.booking.reservation', function ($q2) use ($reservationIds) {
                   $q2->whereIn('id', $reservationIds);
+              })
+              ->orWhereHas('billing.booking', function ($q3) use ($directBookingIds) {
+                  $q3->whereIn('id', $directBookingIds);
               });
         })
-        ->with(['billing.booking.reservation.roomType', 'billing.booking.room', 'reservation.roomType'])
+        ->with(['billing.booking.reservation.roomType', 'billing.booking.roomType', 'billing.booking.room', 'reservation.roomType', 'booking.roomType'])
         ->latest('created_at')
         ->limit(5)
         ->get();
@@ -82,6 +95,21 @@ class GuestDashboardController extends Controller
         $unreadNotifications = $user->notifications()
             ->where('is_read', false)
             ->count();
+
+        // Recent notifications preview - mirrors the mobile app dashboard's Notifications
+        // section (top few, most recent first), which this page previously omitted entirely
+        // (only the unread count above was shown, no actual list).
+        $recentNotifications = $user->notifications()->latest()->limit(5)->get();
+
+        // Recent Bookings - reservations already converted into a paid Booking, most recent
+        // first - mirrors the mobile app's Recent Bookings section (isHasBooking() == true).
+        $recentBookings = $guest->reservations()
+            ->whereHas('booking')
+            ->whereNull('hidden_at')
+            ->with(['roomType', 'booking'])
+            ->latest('check_in')
+            ->limit(5)
+            ->get();
 
         // Active promotions
         $activePromotions = Promotion::with('amenities')->where('status', 'active')
@@ -105,6 +133,8 @@ class GuestDashboardController extends Controller
             'pendingPayments' => $pendingPayments,
             'recentPayments' => $recentPayments,
             'unreadNotifications' => $unreadNotifications,
+            'recentNotifications' => $recentNotifications,
+            'recentBookings' => $recentBookings,
             'activePromotions' => $activePromotions,
             'totalPendingAmount' => $totalPendingAmount,
         ];

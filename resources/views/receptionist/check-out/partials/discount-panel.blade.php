@@ -1,19 +1,23 @@
 @php
-    $reservation = $billing->booking->reservation;
+    $discountTarget = $billing->booking->reservation ?? $billing->booking;
     $editable = $billing->billing_status !== 'paid';
 @endphp
 <div id="discountPanelContainer">
-    @if($reservation->discount_requested)
+    @if($discountTarget->discount_requested)
         <h6><i class="fas fa-percentage"></i> Discount</h6>
         <div class="mb-3">
-            @if($reservation->id_document_path)
-                <a href="{{ asset('storage/' . $reservation->id_document_path) }}" target="_blank" class="btn btn-sm btn-outline-secondary mb-2">
-                    <i class="fas fa-id-card"></i> View Uploaded ID
-                </a>
-            @elseif($reservation->id_card_image_path)
-                <a href="{{ route('receptionist.reservations.id-card', $reservation) }}" target="_blank" class="btn btn-sm btn-outline-secondary mb-2">
-                    <i class="fas fa-id-card"></i> View Uploaded ID ({{ $reservation->id_card_type }}, via mobile)
-                </a>
+            @if($billing->booking->reservation)
+                @if($discountTarget->id_document_path)
+                    <a href="{{ asset('storage/' . $discountTarget->id_document_path) }}" target="_blank" class="btn btn-sm btn-outline-secondary mb-2">
+                        <i class="fas fa-id-card"></i> View Uploaded ID
+                    </a>
+                @elseif($discountTarget->id_card_image_path)
+                    <a href="{{ route('receptionist.reservations.id-card', $discountTarget) }}" target="_blank" class="btn btn-sm btn-outline-secondary mb-2">
+                        <i class="fas fa-id-card"></i> View Uploaded ID{{ $discountTarget->id_card_type ? " ({$discountTarget->id_card_type})" : '' }}
+                    </a>
+                @endif
+            @elseif($discountTarget->id_card_image_path)
+                <span class="badge bg-light text-dark border mb-2"><i class="fas fa-id-card"></i> ID uploaded{{ $discountTarget->id_card_type ? " ({$discountTarget->id_card_type})" : '' }}</span>
             @endif
 
             @if($billing->discount_id)

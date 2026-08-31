@@ -7,6 +7,9 @@
     <x-page-header icon="fas fa-door-open" title="Rooms"
         subtitle="Pick a room type to manage its rooms. Rate, capacity, and numbering format are defined per type.">
         <x-slot:actions>
+            <a href="{{ route('admin.amenities.index') }}" class="btn btn-outline-secondary">
+                <i class="fas fa-concierge-bell"></i> Amenities
+            </a>
             <a href="{{ route('admin.room-types.create') }}" class="btn btn-primary">
                 <i class="fas fa-plus"></i> Add Room Type
             </a>
@@ -27,35 +30,45 @@
         </div>
     @endif
 
+    <!-- Search and Filter -->
+    <x-card bodyClass="card-body" class="mb-4">
+        <form method="GET" action="{{ route('admin.room-types.index') }}" class="row g-3">
+            <div class="col-md-6">
+                <input type="text" name="search" class="form-control"
+                       placeholder="Search by room type name" value="{{ request('search') }}">
+            </div>
+            <div class="col-md-3">
+                <select name="status" class="form-control">
+                    <option value="">All Status</option>
+                    <option value="active" {{ request('status') === 'active' ? 'selected' : '' }}>Active</option>
+                    <option value="inactive" {{ request('status') === 'inactive' ? 'selected' : '' }}>Inactive</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <button type="submit" class="btn btn-primary w-100">
+                    <i class="fas fa-search"></i> Search
+                </button>
+            </div>
+        </form>
+    </x-card>
+
     <div class="row g-4">
         @forelse($roomTypes as $roomType)
             <div class="col-md-6 col-lg-4">
                 <div class="card border-0 shadow-sm h-100 position-relative room-card">
+                    <img src="{{ $roomType->image_url }}" alt="{{ $roomType->name }}" class="card-img-top" style="height: 160px; object-fit: cover;">
                     <div class="card-header d-flex justify-content-between align-items-center">
                         <h5 class="mb-0"><i class="fas fa-layer-group"></i> {{ $roomType->name }}</h5>
                         <x-status-badge :status="$roomType->status" domain="active_flag" />
                     </div>
                     <div class="card-body">
-                        <p class="text-muted mb-3">{{ Str::limit($roomType->description, 120) ?: 'No description yet.' }}</p>
-                        <div class="d-flex justify-content-between mb-1">
-                            <span class="text-muted">Rate</span>
-                            <strong>₱{{ number_format($roomType->rate, 2) }}/night</strong>
-                        </div>
-                        <div class="d-flex justify-content-between mb-1">
-                            <span class="text-muted">Baseline capacity</span>
-                            <strong>{{ $roomType->capacity }} guests (default)</strong>
-                        </div>
-                        <div class="d-flex justify-content-between mb-1">
-                            <span class="text-muted">Numbering</span>
-                            <strong>{{ $roomType->number_format ?? '—' }}</strong>
-                        </div>
-                        <div class="d-flex justify-content-between">
-                            <span class="text-muted">Rooms</span>
-                            <strong>{{ $roomType->rooms_count }}</strong>
-                        </div>
+                        <p class="text-muted mb-2">{{ Str::limit($roomType->description, 130) ?: 'No description yet.' }}</p>
+                        <p class="room-price mb-0">₱{{ number_format($roomType->rate, 2) }} <small class="text-muted">/night</small></p>
                     </div>
                     <div class="card-footer d-flex justify-content-between align-items-center">
-                        <span class="text-brand fw-bold">Manage rooms <i class="fas fa-arrow-right"></i></span>
+                        <a href="{{ route('admin.room-types.show', $roomType) }}" class="btn btn-primary btn-sm position-relative" style="z-index: 2;">
+                            <i class="fas fa-door-open"></i> Manage Room
+                        </a>
                         <span>
                             {{-- position-relative + own z-index keeps these clickable above the stretched-link --}}
                             <a href="{{ route('admin.room-types.edit', $roomType) }}" class="btn btn-sm btn-outline-primary position-relative" style="z-index: 2;">
@@ -65,7 +78,7 @@
                                 <form action="{{ route('admin.room-types.reactivate', $roomType) }}" method="POST" class="d-inline position-relative" style="z-index: 2;">
                                     @csrf
                                     @method('PUT')
-                                    <button type="submit" class="btn btn-sm btn-outline-success">
+                                    <button type="submit" class="btn btn-sm btn-outline-success" onclick="return confirm('Reactivate this room type? Guests will be able to browse and book it again.')">
                                         <i class="fas fa-undo"></i>
                                     </button>
                                 </form>

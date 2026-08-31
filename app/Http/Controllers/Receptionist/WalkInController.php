@@ -116,7 +116,7 @@ class WalkInController extends Controller
             ], staffRecorded: true);
         }
 
-        $this->notificationService->notifyNewBooking($guest->user, $roomType->name);
+        $this->notificationService->notifyNewBooking($guest->user, $roomType->name, $reservation->id);
 
         // Detail is a modal on the relevant index now, not a standalone
         // page - land on whichever list this record actually belongs to.

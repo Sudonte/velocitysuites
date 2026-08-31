@@ -3,7 +3,6 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\Room;
 use App\Models\RoomType;
 use App\Services\RoomAvailabilityService;
 use Carbon\Carbon;
@@ -47,8 +46,6 @@ class RoomController extends Controller
         $roomTypes->getCollection()->transform(function (RoomType $roomType) use ($checkIn, $checkOut) {
             $roomType->available_count = $this->availability->availableCount($roomType, $checkIn, $checkOut);
             $roomType->is_fully_booked = $roomType->available_count <= 0;
-            $roomType->representative_image = Room::where('room_type_id', $roomType->id)
-                ->whereNotNull('image')->value('image');
 
             return $roomType;
         });
@@ -72,10 +69,6 @@ class RoomController extends Controller
         $roomType->available_count = $availableCount;
         $roomType->is_fully_booked = $availableCount <= 0;
         $roomType->total_inventory = $this->availability->totalInventory($roomType);
-
-        $roomType->load(['rooms' => function ($q) {
-            $q->whereNotNull('image')->limit(1);
-        }]);
 
         $otherTypes = RoomType::where('status', 'active')
             ->where('id', '!=', $roomType->id)
@@ -116,3 +109,4 @@ class RoomController extends Controller
         return [$checkIn, $checkOut];
     }
 }
+

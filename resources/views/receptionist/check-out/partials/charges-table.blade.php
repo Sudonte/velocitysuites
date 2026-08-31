@@ -29,6 +29,7 @@
     </form>
 @endif
 
+<div class="table-responsive">
 <table class="table table-sm table-hover mb-2">
     <thead>
         <tr>
@@ -80,3 +81,4 @@
         @endforelse
     </tbody>
 </table>
+</div>

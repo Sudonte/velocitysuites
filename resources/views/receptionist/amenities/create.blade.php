@@ -13,7 +13,7 @@
                 <i class="fas fa-spa"></i> Add Amenity Request
             </h1>
             <p class="text-muted">
-                Reservation #{{ $reservation->id }} —
+                Booking #{{ $reservation->booking->id }} —
                 Guest: {{ $reservation->guest->user->full_name ?? 'N/A' }} —
                 Room: {{ $reservation->booking->room->room_number ?? 'N/A' }}
             </p>
@@ -36,12 +36,17 @@
                 <label class="form-label">Amenity <span class="text-danger">*</span></label>
                 <select name="amenity_id" class="form-control" required>
                     <option value="">-- Select Amenity --</option>
-                    @foreach($amenities as $amenity)
-                        <option value="{{ $amenity->id }}">
-                            {{ $amenity->amenity_name }} — ₱{{ number_format($amenity->charge, 2) }} ({{ $amenity->quantity }} available)
-                        </option>
+                    @foreach($amenities->groupBy('category') as $category => $group)
+                        <optgroup label="{{ $category ?: 'Uncategorized' }}">
+                            @foreach($group as $amenity)
+                                <option value="{{ $amenity->id }}">
+                                    {{ $amenity->amenity_name }} — ₱{{ number_format($amenity->charge, 2) }} ({{ $amenity->quantity }} available)
+                                </option>
+                            @endforeach
+                        </optgroup>
                     @endforeach
                 </select>
+                <small class="text-muted">Only Paid/Additional amenities can be requested here - Free/Included amenities never generate a charge.</small>
             </div>
 
             <div class="mb-3">
@@ -54,6 +59,8 @@
                 <select name="status" class="form-control" required>
                     <option value="pending">Pending</option>
                     <option value="approved">Approved</option>
+                    <option value="in_progress">In Progress</option>
+                    <option value="completed">Completed</option>
                     <option value="rejected">Rejected</option>
                 </select>
             </div>

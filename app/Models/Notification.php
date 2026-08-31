@@ -14,11 +14,14 @@ class Notification extends Model
         'title',
         'message',
         'category',
+        'reference_id',
+        'target_audience',
         'is_read',
     ];
 
     protected $casts = [
         'is_read' => 'boolean',
+        'target_audience' => 'array',
     ];
 
     /**

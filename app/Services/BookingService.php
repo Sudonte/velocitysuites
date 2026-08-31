@@ -24,8 +24,8 @@ use Illuminate\Support\Str;
 class BookingService
 {
     /**
-     * Room charge for the full stay (room type rate x nights) minus the
-     * best applicable active discount promotion, minus the senior-
+     * Room charge for the full stay (room type rate x nights x
+     * rooms_requested) minus the best applicable active discount promotion, minus the senior-
      * citizen/PWD statutory 20% discount if the reservation has one
      * (id_card_type, mobile-app-only field - see Api\ReservationController
      * @store). The two are additive, capped at the room charge - they
@@ -41,7 +41,13 @@ class BookingService
     {
         $roomType = $reservation->roomType;
         $nights = max(1, abs($reservation->check_out->diffInDays($reservation->check_in)));
-        $roomCharge = (float) $roomType->rate * $nights;
+        // rate x nights x rooms_requested - matches DirectBookingService::
+        // totalAmountDue()'s formula exactly (found missing the
+        // rooms_requested factor here while wiring up the mobile app's
+        // pre-payment bill preview; a multi-room reservation's real Billing
+        // total, once converted, was undercharging by a factor of
+        // rooms_requested until this fix).
+        $roomCharge = (float) $roomType->rate * $nights * max(1, $reservation->rooms_requested);
 
         $promo = Promotion::where('status', 'active')
             ->where('promo_type', 'discount')

@@ -29,6 +29,13 @@ Route::get('/', [\App\Http\Controllers\LandingPageController::class, 'index'])->
 Route::get('/rooms', [\App\Http\Controllers\PublicRoomController::class, 'index'])->name('public.rooms.index');
 Route::get('/rooms/{roomType}', [\App\Http\Controllers\PublicRoomController::class, 'show'])->name('public.rooms.show');
 
+// Public marketing pages (accessible without login) - previously anchor
+// sections on the single landing page (#about/#amenities/#contact), now
+// dedicated pages so the nav can link/redirect to them directly.
+Route::get('/about-us', [\App\Http\Controllers\PublicPageController::class, 'about'])->name('public.about');
+Route::get('/amenities', [\App\Http\Controllers\PublicAmenityController::class, 'index'])->name('public.amenities.index');
+Route::get('/contact-us', [\App\Http\Controllers\PublicPageController::class, 'contact'])->name('public.contact');
+
 // Store booking intent in session before redirecting to login
 Route::post('/booking/intent', [\App\Http\Controllers\BookingIntentController::class, 'store'])->name('booking.intent');
 
@@ -73,8 +80,16 @@ Route::middleware('guest')->group(function () {
     // Password Reset
     Route::get('/forgot-password', [ForgotPasswordController::class, 'showLinkRequestForm'])->name('password.request');
     Route::post('/forgot-password', [ForgotPasswordController::class, 'sendResetLink'])->name('password.email');
-    Route::get('/reset-password/{token}', [ForgotPasswordController::class, 'showResetForm'])->name('password.reset');
+    Route::get('/reset-password/verify-otp', [ForgotPasswordController::class, 'showOtpForm'])->name('password.otp.form');
+    Route::post('/reset-password/verify-otp', [ForgotPasswordController::class, 'verifyOtp'])->name('password.otp.verify');
+    Route::post('/reset-password/resend-otp', [ForgotPasswordController::class, 'resendOtp'])->name('password.otp.resend');
+    Route::get('/reset-password', [ForgotPasswordController::class, 'showResetForm'])->name('password.reset');
     Route::post('/reset-password', [ForgotPasswordController::class, 'reset'])->name('password.update');
+
+    // Manager/Receptionist password-reset request status page - reached
+    // from sendResetLink()'s staff branch (no OTP; admin-approval flow
+    // instead, see Admin\PasswordResetRequestController).
+    Route::get('/password-reset-request/status', [ForgotPasswordController::class, 'showStaffRequestStatus'])->name('password.staff-request.status');
 
     // OTP Verification
     Route::get('/verify-otp', [RegisterController::class, 'showOtpForm'])->name('verify-otp');
@@ -83,8 +98,14 @@ Route::middleware('guest')->group(function () {
 });
 
 // Authenticated Routes
-Route::middleware(['auth', 'account.status', 'log.activity'])->group(function () {
+Route::middleware(['auth', 'account.status', 'log.activity', 'no.cache'])->group(function () {
     Route::post('/logout', [LoginController::class, 'logout'])->name('logout');
+
+    // Forced password change - LoginController::login() redirects here
+    // instead of the normal dashboard whenever the account is still on
+    // UserManagementController::DEFAULT_STAFF_PASSWORD.
+    Route::get('/force-change-password', [\App\Http\Controllers\Auth\ForcePasswordChangeController::class, 'show'])->name('force-password-change.show');
+    Route::post('/force-change-password', [\App\Http\Controllers\Auth\ForcePasswordChangeController::class, 'update'])->name('force-password-change.update');
 
     // Admin Routes
     Route::middleware('role:admin')->prefix('admin')->name('admin.')->group(function () {
@@ -97,6 +118,11 @@ Route::middleware(['auth', 'account.status', 'log.activity'])->group(function ()
         Route::put('/users/{user}/deactivate', [\App\Http\Controllers\Admin\UserManagementController::class, 'deactivate'])->name('users.deactivate');
         Route::put('/users/{user}/reactivate', [\App\Http\Controllers\Admin\UserManagementController::class, 'reactivate'])->name('users.reactivate');
         Route::put('/users/{user}/reset-password', [\App\Http\Controllers\Admin\UserManagementController::class, 'resetPassword'])->name('users.resetPassword');
+
+        // Manager/Receptionist password-reset request queue.
+        Route::get('/password-reset-requests', [\App\Http\Controllers\Admin\PasswordResetRequestController::class, 'index'])->name('users.password-requests.index');
+        Route::put('/password-reset-requests/{staffPasswordResetRequest}/approve', [\App\Http\Controllers\Admin\PasswordResetRequestController::class, 'approve'])->name('users.password-requests.approve');
+        Route::put('/password-reset-requests/{staffPasswordResetRequest}/reject', [\App\Http\Controllers\Admin\PasswordResetRequestController::class, 'reject'])->name('users.password-requests.reject');
 
         // Room Management
         // No hard delete: rooms/reservations/bookings.room_type_id all
@@ -112,10 +138,21 @@ Route::middleware(['auth', 'account.status', 'log.activity'])->group(function ()
         // deprecated reservations.room_id. Deactivate (-> maintenance) is
         // the only removal path.
         Route::resource('rooms', \App\Http\Controllers\Admin\RoomManagementController::class)->except(['destroy']);
+        // Room/room-type amenity assignment reuses the single pre-existing
+        // Amenities module (admin.amenities.* below, Admin\AmenityManagementController)
+        // as its catalog - there is no separate room-amenities catalog/CRUD.
+        // Assignment to a whole room type happens exclusively on that
+        // type's Edit Type form (RoomTypeManagementController::update()).
+        Route::delete('/room-types/{room_type}/image', [\App\Http\Controllers\Admin\RoomTypeManagementController::class, 'removeImage'])->name('room-types.image.remove');
         Route::put('/rooms/{room}/deactivate', [\App\Http\Controllers\Admin\RoomManagementController::class, 'deactivate'])->name('rooms.deactivate');
         Route::put('/rooms/{room}/reactivate', [\App\Http\Controllers\Admin\RoomManagementController::class, 'reactivate'])->name('rooms.reactivate');
-        Route::post('/room-images/{room}/upload', [\App\Http\Controllers\Admin\RoomManagementController::class, 'uploadImages'])->name('room-images.upload');
-        Route::delete('/room-images/{roomImage}', [\App\Http\Controllers\Admin\RoomManagementController::class, 'deleteImage'])->name('room-images.destroy');
+        // Gallery images belong to the individual Room (see Room::images()),
+        // not the Room Type - managed from each room's own Edit page. The
+        // Room Type's merged gallery (RoomType::mergedGalleryWithLabels())
+        // is read-only, pooled from these.
+        Route::post('/room-images/{room}/upload', [\App\Http\Controllers\Admin\RoomManagementController::class, 'uploadImages'])->name('rooms.gallery.upload');
+        Route::put('/room-images/{roomImage}/replace', [\App\Http\Controllers\Admin\RoomManagementController::class, 'replaceImage'])->name('rooms.gallery.replace');
+        Route::delete('/room-images/{roomImage}', [\App\Http\Controllers\Admin\RoomManagementController::class, 'deleteImage'])->name('rooms.gallery.destroy');
 
         // Promotion Management
         Route::resource('promotions', PromotionManagementController::class);
@@ -126,15 +163,40 @@ Route::middleware(['auth', 'account.status', 'log.activity'])->group(function ()
         Route::put('discounts/{discount}/toggle', [DiscountManagementController::class, 'toggle'])->name('discounts.toggle');
 
         // Amenity Management
-        // No hard delete: amenity_requests.amenity_id cascades on delete,
-        // so removing an amenity would silently wipe out historical
-        // amenity request/billing records tied to it. Toggle active/
-        // inactive is the only removal path.
-        Route::resource('amenities', AmenityManagementController::class)->except(['destroy']);
+        // destroy() soft-deletes (Amenity uses SoftDeletes) rather than a
+        // hard delete - amenity_requests.amenity_id still cascades on a
+        // real delete, which would silently wipe out historical amenity
+        // request records; soft-delete never triggers that cascade.
+        // "show" is excluded on purpose - View Details is an in-page modal
+        // on the index list, not a separate full-page route, and the
+        // controller has no show() method to serve one.
+        Route::resource('amenities', AmenityManagementController::class)->except(['show']);
         Route::put('amenities/{amenity}/toggle', [AmenityManagementController::class, 'toggle'])->name('amenities.toggle');
+
+        // Announcement Management - role-targeted announcements shown via
+        // Notifications on the Guest/Manager/Receptionist dashboards and the
+        // mobile app, and via the public Home page's own Announcements
+        // section (for the guest audience). Publish/unpublish (via status)
+        // is the normal removal-from-public-view path; destroy() is a real
+        // hard delete for cleaning up mistakes, kept separate from that.
+        Route::resource('announcements', \App\Http\Controllers\Admin\AnnouncementManagementController::class)->except(['show']);
+        Route::put('announcements/{announcement}/publish', [\App\Http\Controllers\Admin\AnnouncementManagementController::class, 'publish'])->name('announcements.publish');
+        Route::put('announcements/{announcement}/unpublish', [\App\Http\Controllers\Admin\AnnouncementManagementController::class, 'unpublish'])->name('announcements.unpublish');
 
         // Reports
         Route::get('/reports', [AdminReportController::class, 'index'])->name('reports.index');
+
+        // Booking & Reservation Monitoring - read-only, scoped to the
+        // System Administrator role (separate from Manager's own
+        // manager.reservations.* routes below, so an admin never lands on
+        // a page branded for a different role).
+        Route::get('/reservations', [\App\Http\Controllers\Admin\ReservationMonitoringController::class, 'index'])->name('reservations.index');
+        Route::get('/reservations/{reservation}', [\App\Http\Controllers\Admin\ReservationMonitoringController::class, 'show'])->name('reservations.show');
+        // Direct bookings (reservation_id null, the mobile pay-first "New
+        // Booking" path) have no Reservation row to route-model-bind
+        // through reservations.show above - separate route/view, see
+        // ReservationMonitoringController::showBooking().
+        Route::get('/direct-bookings/{booking}', [\App\Http\Controllers\Admin\ReservationMonitoringController::class, 'showBooking'])->name('bookings.show');
     });
 
     // Manager Routes
@@ -156,6 +218,10 @@ Route::middleware(['auth', 'account.status', 'log.activity'])->group(function ()
     Route::middleware('role:manager,admin')->prefix('manager')->name('manager.')->group(function () {
         Route::get('/reservations', [ReservationViewController::class, 'index'])->name('reservations.index');
         Route::get('/reservations/{reservation}', [ReservationViewController::class, 'show'])->name('reservations.show');
+        // Direct bookings (reservation_id null) have no Reservation row to
+        // route-model-bind through reservations.show above - see
+        // ReservationViewController::showBooking().
+        Route::get('/direct-bookings/{booking}', [ReservationViewController::class, 'showBooking'])->name('bookings.show');
     });
 
     // Receptionist Routes
@@ -170,11 +236,49 @@ Route::middleware(['auth', 'account.status', 'log.activity'])->group(function ()
         Route::post('/reservations/{reservation}/accept', [ReceptionistReservationController::class, 'accept'])->name('reservations.accept');
         Route::post('/reservations/{reservation}/reject', [ReceptionistReservationController::class, 'reject'])->name('reservations.reject');
         Route::post('/reservations/{reservation}/convert', [ReceptionistReservationController::class, 'convert'])->name('reservations.convert');
+        // Cash-only: confirms the walk-in amount received and converts to a
+        // Booking in one action - see ReceptionistReservationController::
+        // confirmCashPayment()'s docblock for why this differs from the
+        // plain accept/convert pair GCash reservations already use.
+        Route::post('/reservations/{reservation}/confirm-cash-payment', [ReceptionistReservationController::class, 'confirmCashPayment'])->name('reservations.confirm-cash-payment');
+        Route::put('/reservations/{reservation}/verify', [ReceptionistReservationController::class, 'verify'])->name('reservations.verify');
 
-        // Booking Module: view-only registry of confirmed bookings. No
-        // check-in or room-assignment action lives here.
+        // Booking Module: registry of confirmed bookings, plus the ability
+        // to review and assign the guest's room(s) ahead of arrival (see
+        // BookingController::assignRoomsPanel()/assignRooms()) - actual
+        // check-in still happens only in the Check-in Module.
         Route::get('/bookings', [ReceptionistBookingController::class, 'index'])->name('bookings.index');
         Route::get('/bookings/{booking}', [ReceptionistBookingController::class, 'show'])->name('bookings.show');
+        // Streams a direct-booking guest's uploaded Senior/PWD ID for staff
+        // verification - same private-disk pattern as reservations.id-card
+        // (see ReceptionistBookingController::idCard()).
+        Route::get('/bookings/{booking}/id-card', [ReceptionistBookingController::class, 'idCard'])->name('bookings.id-card');
+        Route::put('/bookings/{booking}/verify', [ReceptionistBookingController::class, 'verify'])->name('bookings.verify');
+        Route::put('/bookings/{booking}/reject', [ReceptionistBookingController::class, 'reject'])->name('bookings.reject');
+        // Walk-in top-up payment against an active booking's remaining
+        // balance, reachable any time during the stay - see
+        // ReceptionistBookingController::recordPayment()'s docblock for why
+        // this exists separately from /billing/{billing}/payment (that one
+        // needs a Billing row, which doesn't exist until checkout).
+        Route::post('/bookings/{booking}/record-payment', [ReceptionistBookingController::class, 'recordPayment'])->name('bookings.record-payment');
+        Route::get('/bookings/{booking}/assign-rooms/panel', [ReceptionistBookingController::class, 'assignRoomsPanel'])->name('bookings.assign-rooms.panel');
+        // POST (not PUT) to match the AJAX-fetch-driven convention already
+        // used by check-in.store/reservations.accept-reject-convert, as
+        // opposed to the plain-HTML-form + @method('PUT') convention used
+        // by verify/archive elsewhere in this file.
+        Route::post('/bookings/{booking}/assign-rooms', [ReceptionistBookingController::class, 'assignRooms'])->name('bookings.assign-rooms');
+        // Archive/Delete: only ever offered for a rejected/failed (cancelled)
+        // booking - see BookingController::archive()/destroy(). Delete is a
+        // soft delete (bookings.deleted_at), never a hard DELETE.
+        Route::put('/bookings/{booking}/archive', [ReceptionistBookingController::class, 'archive'])->name('bookings.archive');
+        Route::delete('/bookings/{booking}', [ReceptionistBookingController::class, 'destroy'])->name('bookings.destroy');
+
+        // Payment Module: payment-level verify/reject (separate from the
+        // reservation-level/booking-level verified_at gates above) - acts
+        // on an individual GCash payment/receipt without touching the
+        // parent Reservation/Booking status.
+        Route::put('/payments/{payment}/verify', [\App\Http\Controllers\Receptionist\PaymentController::class, 'verify'])->name('payments.verify');
+        Route::put('/payments/{payment}/reject', [\App\Http\Controllers\Receptionist\PaymentController::class, 'reject'])->name('payments.reject');
 
         // NOTE: an earlier session (merged into this branch) also built a
         // walk-in guest registration flow (Receptionist\WalkInController)
@@ -187,8 +291,8 @@ Route::middleware(['auth', 'account.status', 'log.activity'])->group(function ()
         // Check-in Module: two tabs - "Expected Check-ins" (confirmed
         // bookings, where room assignment happens) and "Checked-in Guests".
         Route::get('/check-in', [ReceptionistCheckInController::class, 'index'])->name('check-in.index');
-        Route::post('/check-in/{booking}/assign-room', [ReceptionistCheckInController::class, 'assignRoom'])->name('check-in.assign-room');
-        Route::post('/check-in/{booking}', [ReceptionistCheckInController::class, 'checkIn'])->name('check-in.store');
+        Route::get('/check-in/{booking}/panel', [ReceptionistCheckInController::class, 'panel'])->name('check-in.panel');
+        Route::post('/check-in/{booking}', [ReceptionistCheckInController::class, 'store'])->name('check-in.store');
 
         // Check-out Module: two tabs - "Expected Check-outs" (checked-in
         // guests; Check Out starts the Billing/Payment AJAX flow) and
@@ -198,16 +302,25 @@ Route::middleware(['auth', 'account.status', 'log.activity'])->group(function ()
         Route::delete('/check-out/billing/{billing}', [ReceptionistCheckOutController::class, 'checkOutCancelBilling'])->name('check-out.billing.cancel');
         Route::get('/check-out/billing/{billing}/payment', [ReceptionistCheckOutController::class, 'checkOutPaymentPanel'])->name('check-out.payment');
 
-        // Rooms browse (read-only: type cards -> rooms of type with status)
+        // Rooms browse (read-only: type cards -> rooms of type with status
+        // -> full details + gallery for one room). No upload/replace/
+        // remove route exists anywhere under this receptionist group -
+        // view-only is enforced by what routes exist, not just hidden UI.
         Route::get('/rooms', [ReceptionistController::class, 'roomsIndex'])->name('rooms.index');
         Route::get('/rooms/{roomType}', [ReceptionistController::class, 'roomsShow'])->name('rooms.show');
+        Route::get('/rooms/{roomType}/rooms/{room}', [ReceptionistController::class, 'roomDetails'])->name('rooms.room-details');
 
         // Amenity Requests - creation is only reachable for checked-in
         // guests (linked from the Check-in Module's "Checked-in Guests" tab).
+        // No update route: status is entirely system-controlled, synced
+        // from the parent reservation's verify()/reject() action
+        // (Receptionist\ReservationController::verify(),
+        // ReservationWorkflowService::reject()) - the receptionist has no
+        // way to manually change an amenity request's status at all.
         Route::get('/amenities', [ReceptionistController::class, 'amenitiesIndex'])->name('amenities.index');
+        Route::get('/amenities/archived', [ReceptionistController::class, 'amenitiesArchived'])->name('amenities.archived');
         Route::get('/amenities/{reservation}/create', [ReceptionistController::class, 'amenitiesCreate'])->name('amenities.create');
         Route::post('/amenities/{reservation}', [ReceptionistController::class, 'amenitiesStore'])->name('amenities.store');
-        Route::put('/amenities/{amenityRequest}', [ReceptionistController::class, 'amenitiesUpdate'])->name('amenities.update');
 
         // Billing (used from the Check-Out workflow's Billing Panel, plus a read-only receipt)
         Route::get('/billing/{billing}/receipt', [\App\Http\Controllers\BillingController::class, 'receipt'])->name('billing.receipt');
@@ -228,30 +341,50 @@ Route::middleware(['auth', 'account.status', 'log.activity'])->group(function ()
 
         // Reservations Management
         Route::get('/reservations', [GuestController::class, 'bookings'])->name('reservations.index');
+        // Export routes registered before the {reservation} wildcard for clarity, though the
+        // extra path segment already keeps them from ever matching it.
+        Route::get('/reservations/export/csv', [GuestController::class, 'exportReservationsCsv'])->name('reservations.export.csv');
+        Route::get('/reservations/export/pdf', [GuestController::class, 'exportReservationsPdf'])->name('reservations.export.pdf');
         Route::get('/reservations/create', [\App\Http\Controllers\Guest\ReservationController::class, 'create'])->name('reservations.create');
         Route::post('/reservations', [\App\Http\Controllers\Guest\ReservationController::class, 'store'])->name('reservations.store');
         Route::get('/reservations/{reservation}', [\App\Http\Controllers\Guest\ReservationController::class, 'show'])->name('reservations.show');
         Route::put('/reservations/{reservation}', [\App\Http\Controllers\Guest\ReservationController::class, 'update'])->name('reservations.update');
         Route::put('/reservations/{reservation}/cancel', [\App\Http\Controllers\Guest\ReservationController::class, 'cancel'])->name('reservations.cancel');
+        Route::put('/reservations/{reservation}/switch-to-gcash', [\App\Http\Controllers\Guest\ReservationController::class, 'switchToGcash'])->name('reservations.switch-to-gcash');
         Route::post('/reservations/{reservation}/pay-deposit', [\App\Http\Controllers\Guest\ReservationController::class, 'payDeposit'])->name('reservations.pay-deposit');
-
-        // NOTE: an earlier session (merged into this branch) also built a
-        // separate Guest\BookingController "Book & Pay" flow - it still
-        // exists in the codebase but wrote the pre-redesign status values
-        // directly ('pending' etc, no longer valid enum members) and isn't
-        // wired up here until it's updated against the new Reservation/
-        // Booking status model. Guests pay a deposit via reservations.
-        // pay-deposit above instead.
+        Route::get('/reservations/{reservation}/receipt', [GuestController::class, 'downloadReceipt'])->name('reservations.receipt');
+        // Guest deletes a Completed/Cancelled transaction from their own list -
+        // same ReservationWorkflowService::hide() rule the mobile API uses.
+        Route::put('/reservations/{reservation}/hide', [\App\Http\Controllers\Guest\ReservationController::class, 'hide'])->name('reservations.hide');
 
         // Billing - guest's own receipt (ownership-checked in BillingController)
         Route::get('/billing/{billing}/receipt', [\App\Http\Controllers\BillingController::class, 'receipt'])->name('billing.receipt');
 
         // Payments - view payment history and pending bills
         Route::get('/payments', [GuestController::class, 'payments'])->name('payments.index');
+        Route::get('/payments/export/csv', [GuestController::class, 'exportPaymentsCsv'])->name('payments.export.csv');
+        Route::get('/payments/export/pdf', [GuestController::class, 'exportPaymentsPdf'])->name('payments.export.pdf');
+        // Guest self-service on their own in-flight GCash payment attempt -
+        // mirrors Api\PaymentController::cancel()/void().
+        Route::put('/payments/{payment}/cancel', [\App\Http\Controllers\Guest\PaymentController::class, 'cancel'])->name('payments.cancel');
+        Route::put('/payments/{payment}/void', [\App\Http\Controllers\Guest\PaymentController::class, 'void'])->name('payments.void');
 
         // Profile Management
         Route::get('/profile', [GuestController::class, 'profile'])->name('profile.show');
         Route::put('/profile', [GuestController::class, 'updateProfile'])->name('profile.update');
+        Route::post('/profile/picture', [GuestController::class, 'updateProfilePicture'])->name('profile.picture.update');
+        Route::delete('/profile/picture', [GuestController::class, 'removeProfilePicture'])->name('profile.picture.remove');
+        Route::post('/profile/password/otp', [GuestController::class, 'requestPasswordOtp'])->name('profile.password.otp');
+        Route::put('/profile/password', [GuestController::class, 'changePassword'])->name('profile.changePassword');
+
+        // Account deletion (30-day soft-delete/restore) - mirrors
+        // Api\ProfileController::deleteAccount()/restoreAccount(). The
+        // restore-prompt/restore routes are reachable even while the account
+        // is pending deletion (see Middleware\CheckAccountStatus, which
+        // redirects a still-restorable guest here on every other request).
+        Route::post('/account/delete', [GuestController::class, 'deleteAccount'])->name('account.delete');
+        Route::get('/account/restore-prompt', [GuestController::class, 'restorePrompt'])->name('account.restore-prompt');
+        Route::post('/account/restore', [GuestController::class, 'restoreAccount'])->name('account.restore');
     });
 
     // Global Settings (all authenticated users)
@@ -262,6 +395,9 @@ Route::middleware(['auth', 'account.status', 'log.activity'])->group(function ()
 
         Route::get('/profile', [ProfileController::class, 'show'])->name('profile.show');
         Route::put('/profile', [ProfileController::class, 'update'])->name('profile.update');
+        Route::post('/profile/picture', [ProfileController::class, 'updateProfilePicture'])->name('profile.picture.update');
+        Route::delete('/profile/picture', [ProfileController::class, 'removeProfilePicture'])->name('profile.picture.remove');
+        Route::post('/profile/password/otp', [ProfileController::class, 'requestPasswordOtp'])->name('profile.password.otp');
         Route::put('/profile/password', [ProfileController::class, 'changePassword'])->name('profile.changePassword');
     });
 });

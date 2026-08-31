@@ -3,18 +3,23 @@
 namespace App\Http\Controllers\Receptionist;
 
 use App\Http\Controllers\Controller;
+use App\Models\ActivityLog;
 use App\Models\AmenityRequest;
 use App\Models\Booking;
+use App\Models\Payment;
 use App\Models\Promotion;
 use App\Models\Reservation;
 use App\Services\NotificationService;
 use App\Services\ReservationWorkflowService;
 use App\Services\RoomAvailabilityService;
-use Illuminate\Http\RedirectResponse;
+use App\Support\Activity;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
+use Illuminate\Http\RedirectResponse;
 
 /**
  * The Reservation Module: two tabs - "To Be Confirmed Reservations"
@@ -34,20 +39,28 @@ class ReservationController extends Controller
     public function index(Request $request): View
     {
         $tab = $request->get('tab', 'pending_review');
-        if (!in_array($tab, ['pending_review', 'ready_for_booking'])) {
+        if (!in_array($tab, ['pending_review', 'ready_for_booking', 'verified'])) {
             $tab = 'pending_review';
+        }
+
+        // "verified" is the Complete Reservation List - any non-converted,
+        // non-rejected, non-cancelled reservation the receptionist has
+        // marked Verified (independent of pending_review/ready_for_booking,
+        // which remain the accept/convert workflow's own tabs).
+        $query = Reservation::with(['guest.user', 'roomType']);
+        if ($tab === 'verified') {
+            $query->whereIn('status', ['pending_review', 'ready_for_booking'])->whereNotNull('verified_at');
+        } else {
+            $query->where('status', $tab)->whereNull('verified_at');
         }
 
         // Closest check-in date first - whoever is arriving soonest is the
         // priority to review/convert, not whoever requested first.
-        $reservations = Reservation::with(['guest.user', 'roomType'])
-            ->where('status', $tab)
-            ->orderBy('check_in')
-            ->paginate(15)
-            ->withQueryString();
+        $reservations = $query->orderBy('check_in')->paginate(15)->withQueryString();
 
-        $pendingCount = Reservation::where('status', 'pending_review')->count();
-        $readyCount = Reservation::where('status', 'ready_for_booking')->count();
+        $pendingCount = Reservation::where('status', 'pending_review')->whereNull('verified_at')->count();
+        $readyCount = Reservation::where('status', 'ready_for_booking')->whereNull('verified_at')->count();
+        $verifiedCount = Reservation::whereIn('status', ['pending_review', 'ready_for_booking'])->whereNotNull('verified_at')->count();
 
         // For "ready for booking" rows, show whether the room type still
         // has inventory left for the requested dates - the Convert action
@@ -63,19 +76,31 @@ class ReservationController extends Controller
             }
         }
 
-        return view('receptionist.reservations.index', compact('reservations', 'tab', 'pendingCount', 'readyCount', 'availableCounts'));
+        return view('receptionist.reservations.index', compact('reservations', 'tab', 'pendingCount', 'readyCount', 'verifiedCount', 'availableCounts'));
     }
 
     /**
      * AJAX popup content: guest details, reservation info, room type,
      * payment preference, uploaded ID (if discount requested), uploaded
-     * receipt + reference number (if GCash).
+     * receipt + reference number (if GCash) - plus Accept/Reject/Convert
+     * actions live in this same popup, so the receptionist never has to
+     * leave it or click a separate row action.
      */
     public function details(Reservation $reservation)
     {
         $reservation->load(['guest.user', 'roomType', 'payments']);
 
-        return view('receptionist.reservations.partials.details', compact('reservation'));
+        $available = $reservation->status === 'ready_for_booking'
+            ? $this->availability->availableCount($reservation->roomType, $reservation->check_in, $reservation->check_out)
+            : null;
+
+        $history = ActivityLog::with('user')
+            ->where('subject_type', 'reservation')
+            ->where('subject_id', $reservation->id)
+            ->orderByDesc('created_at')
+            ->get();
+
+        return view('receptionist.reservations.partials.details', compact('reservation', 'available', 'history'));
     }
 
     /**
@@ -97,14 +122,16 @@ class ReservationController extends Controller
 
     /**
      * Accept a Pay Later / Cash reservation still awaiting review - moves
-     * it to "To Be Converted to Booking".
+     * it to "To Be Converted to Booking". Called from inside the details
+     * popup via AJAX - no page navigation, the row is just removed from
+     * the current tab on success.
      */
-    public function accept(Reservation $reservation): RedirectResponse
+    public function accept(Reservation $reservation)
     {
         try {
             $this->workflow->accept($reservation);
         } catch (HttpExceptionInterface $e) {
-            return back()->with('error', $e->getMessage());
+            return response()->json(['message' => $e->getMessage()], $e->getStatusCode());
         }
 
         $this->notificationService->toUser(
@@ -114,21 +141,22 @@ class ReservationController extends Controller
             'booking'
         );
 
-        return back()->with('success', 'Reservation accepted - ready for booking conversion.');
+        return response()->json(['message' => 'Reservation accepted - ready for booking conversion.']);
     }
 
     /**
      * Reject a reservation from either tab (e.g. ineligible, or the room
-     * type is fully booked for the requested dates).
+     * type is fully booked for the requested dates). Called from the same
+     * details popup via AJAX.
      */
-    public function reject(Request $request, Reservation $reservation): RedirectResponse
+    public function reject(Request $request, Reservation $reservation)
     {
         $request->validate(['reason' => 'required|string|max:500']);
 
         try {
             $this->workflow->reject($reservation, $request->reason, auth()->user());
         } catch (HttpExceptionInterface $e) {
-            return back()->with('error', $e->getMessage());
+            return response()->json(['message' => $e->getMessage()], $e->getStatusCode());
         }
 
         $this->notificationService->toUser(
@@ -138,32 +166,172 @@ class ReservationController extends Controller
             'booking'
         );
 
-        return back()->with('success', 'Reservation rejected.');
+        return response()->json(['message' => 'Reservation rejected.']);
     }
 
     /**
      * Convert a ready_for_booking reservation into a confirmed Booking -
      * gated on room-type inventory actually being available for the
      * requested dates. Once converted, it disappears from both tabs and
-     * only shows up in the Booking Module.
+     * only shows up in the Booking Module. Called from the details popup
+     * via AJAX.
      */
-    public function convert(Reservation $reservation): RedirectResponse
+    public function convert(Reservation $reservation)
     {
         try {
             $booking = $this->workflow->convertToBooking($reservation, auth()->user());
         } catch (HttpExceptionInterface $e) {
-            return back()->with('error', $e->getMessage());
+            return response()->json(['message' => $e->getMessage()], $e->getStatusCode());
         }
 
         $this->grantPromoAmenities($reservation, $booking);
 
         $this->notificationService->notifyReservationConfirmed(
             $reservation->guest->user,
-            $reservation->roomType->name
+            $reservation->roomType->name,
+            $reservation->id
         );
 
-        return redirect()->route('receptionist.bookings.show', $booking)
-            ->with('success', 'Reservation converted to a confirmed booking!');
+        return response()->json([
+            'message' => 'Reservation converted to a confirmed booking!',
+            'booking_url' => route('receptionist.bookings.show', $booking),
+        ]);
+    }
+
+    /**
+     * Confirm a Cash reservation's walk-in payment and convert it to a
+     * Booking in one action - the receptionist counterpart of the mobile/
+     * web GCash flow's auto-conversion. Cash can never be verified online
+     * (recordCashIntent() only ever creates an unconfirmed, pending Payment
+     * row from whatever the guest declared at reservation time, which may
+     * be $0 or absent entirely), so nothing previously marked a cash
+     * payment completed - this is the single missing step. Reachable from
+     * either tab (pending_review or ready_for_booking): accepts the
+     * reservation first if it hasn't been already, same rule Accept/Convert
+     * already enforce separately, then converts - all in one click, one
+     * DB transaction.
+     */
+    public function confirmCashPayment(Request $request, Reservation $reservation): JsonResponse
+    {
+        if ($reservation->payment_method !== 'cash') {
+            return response()->json(['message' => 'This action only applies to a Cash reservation.'], 422);
+        }
+        if (!in_array($reservation->status, ['pending_review', 'ready_for_booking'], true)) {
+            return response()->json(['message' => 'Only an active reservation can have its cash payment confirmed.'], 422);
+        }
+
+        $validated = $request->validate([
+            'amount_received' => ['required', 'numeric', 'min:0.01'],
+        ]);
+        $amount = (float) $validated['amount_received'];
+
+        $reservation->loadMissing('roomType');
+        $nights = abs($reservation->check_out->diffInDays($reservation->check_in));
+        $range = $this->workflow->depositRange($reservation->roomType, $nights, $reservation->rooms_requested);
+
+        $isFull = abs($amount - $range['total']) <= 0.01;
+        if (!$isFull && ($amount < $range['min'] || $amount > $range['max'])) {
+            return response()->json([
+                'message' => "The amount received must be between ₱{$range['min']} and ₱{$range['max']} (20%-50% of the total), or the full ₱{$range['total']}.",
+            ], 422);
+        }
+
+        try {
+            $booking = DB::transaction(function () use ($reservation, $amount, $isFull) {
+                if ($reservation->status === 'pending_review') {
+                    $this->workflow->accept($reservation);
+                }
+
+                // Reuse the pending "cash intent" Payment row if the guest
+                // already declared one at reservation time (recordCashIntent());
+                // otherwise this is the first record of any amount at all -
+                // create it fresh. Either way it lands completed + verified
+                // immediately, since a receptionist confirming cash in person
+                // IS the verification (unlike GCash, which needs a separate
+                // later review of a guest-submitted receipt).
+                $payment = $reservation->payments()
+                    ->where('payment_method', 'cash')
+                    ->where('payment_status', 'pending')
+                    ->latest()
+                    ->first();
+
+                if ($payment) {
+                    $payment->update([
+                        'amount_paid' => $amount,
+                        'payment_status' => 'completed',
+                        'verified_by' => auth()->id(),
+                        'verified_at' => now(),
+                    ]);
+                } else {
+                    Payment::create([
+                        'reservation_id' => $reservation->id,
+                        'payment_method' => 'cash',
+                        'amount_paid' => $amount,
+                        'payment_stage' => $isFull ? 'final' : 'deposit',
+                        'payment_status' => 'completed',
+                        'payment_date' => now(),
+                        'verified_by' => auth()->id(),
+                        'verified_at' => now(),
+                    ]);
+                }
+
+                return $this->workflow->convertToBooking($reservation->fresh(), auth()->user());
+            });
+        } catch (HttpExceptionInterface $e) {
+            return response()->json(['message' => $e->getMessage()], $e->getStatusCode());
+        }
+
+        $reservation->refresh()->loadMissing(['guest.user', 'roomType']);
+        $this->grantPromoAmenities($reservation, $booking);
+
+        Activity::log(
+            'Confirmed cash payment',
+            "Reservation #{$reservation->id} for {$reservation->roomType->name} ({$reservation->guest->user->full_name}) - ₱"
+                . number_format($amount, 2) . ' received and confirmed by staff',
+            $booking
+        );
+
+        $this->notificationService->notifyPaymentReceived($reservation->guest->user, $amount, $reservation->roomType->name, $reservation->id);
+        $this->notificationService->notifyReservationConfirmed($reservation->guest->user, $reservation->roomType->name, $reservation->id);
+
+        return response()->json([
+            'message' => 'Cash payment confirmed - reservation converted to a confirmed booking!',
+            'booking_url' => route('receptionist.bookings.show', $booking),
+        ]);
+    }
+
+    /**
+     * Marks a reservation Verified - moves it from the Active
+     * Reservation List to the Complete Reservation List. Doesn't touch
+     * status at all (pending_review/ready_for_booking, and the accept/
+     * reject/convert actions, all keep working exactly as before) - this
+     * is a separate, additive gate, same pattern as
+     * BookingController::verify().
+     */
+    public function verify(Reservation $reservation): RedirectResponse
+    {
+        abort_if($reservation->verified_at !== null, 422, 'This reservation is already verified.');
+        abort_unless(in_array($reservation->status, ['pending_review', 'ready_for_booking']), 422, 'Only an active reservation can be verified.');
+
+        $reservation->update(['verified_at' => now(), 'verified_by' => auth()->id()]);
+
+        // Keep this reservation's booking-time amenity requests (created
+        // pending by ReservationAmenityService::snapshot()) in lockstep
+        // with the reservation's own verification - this does not touch
+        // requests the receptionist has already progressed further
+        // (approved/in_progress/completed) or manually created ones.
+        AmenityRequest::where('reservation_id', $reservation->id)
+            ->where('status', 'pending')
+            ->update(['status' => 'approved']);
+
+        $reservation->loadMissing('guest.user');
+        Activity::log(
+            'Verified reservation',
+            "Reservation #{$reservation->id} - {$reservation->guest->user->full_name}",
+            $reservation
+        );
+
+        return back()->with('success', 'Reservation verified.');
     }
 
     /**
@@ -196,7 +364,13 @@ class ReservationController extends Controller
                     AmenityRequest::create([
                         'guest_id' => $reservation->guest_id,
                         'reservation_id' => $reservation->id,
+                        'room_type_id' => $reservation->room_type_id,
                         'amenity_id' => $amenity->id,
+                        // Snapshot name/category same as every other
+                        // AmenityRequest creation path - amenity_name is a
+                        // required column.
+                        'amenity_name' => $amenity->amenity_name,
+                        'category' => $amenity->category,
                         'quantity' => $amenity->pivot->quantity,
                         'charge' => 0, // included free by the promotion
                         'status' => 'approved',
@@ -206,3 +380,5 @@ class ReservationController extends Controller
         }
     }
 }
+
+

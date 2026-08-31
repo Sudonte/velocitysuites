@@ -4,6 +4,7 @@
 </div>
 <div class="modal-body" data-billing-id="{{ $billing->id }}">
     <h6>Bill Summary</h6>
+    <div class="table-responsive">
     <table class="table table-sm table-borderless mb-3">
         <tr>
             <td>Room Charge</td>
@@ -48,6 +49,7 @@
             <td class="text-end text-brand" id="balanceDueDisplay">₱{{ number_format($balance, 2) }}</td>
         </tr>
     </table>
+    </div>
 
     <div class="alert alert-danger d-none" id="paymentErrorAlert"></div>
 

@@ -2,9 +2,25 @@
 
 @section('title', 'Reports - Admin')
 
+@push('styles')
+<style>
+    /* Hide the filter form and non-report chrome when printing, so
+       "Print Report" produces a clean report-only page. */
+    @media print {
+        .no-print, nav, .app-sidebar, .app-footer, .page-header form { display: none !important; }
+    }
+</style>
+@endpush
+
 @section('content')
 <div class="container-fluid py-4">
-    <x-page-header icon="fas fa-file-pdf" title="System Reports" subtitle="Overview of activity, users, rooms, and revenue." />
+    <x-page-header icon="fas fa-file-pdf" title="System Reports" subtitle="Overview of activity, users, rooms, and revenue.">
+        <x-slot:actions>
+            <button type="button" class="btn btn-outline-secondary no-print" onclick="window.print()">
+                <i class="fas fa-print"></i> Print Report
+            </button>
+        </x-slot:actions>
+    </x-page-header>
 
     @if (session('success'))
         <div class="alert alert-success alert-dismissible fade show" role="alert">
@@ -13,30 +29,66 @@
         </div>
     @endif
 
+    <!-- Date-range filter - scopes Revenue, Reservations, Bookings, and
+         Activity Logs below; User/Room summaries and Recent Logins stay
+         as live "right now" snapshots regardless of this filter. -->
+    <x-card class="mb-4 no-print" bodyClass="card-body">
+        <form method="GET" action="{{ route('admin.reports.index') }}" class="row g-3 align-items-end">
+            <div class="col-sm-6 col-md-4">
+                <label for="start_date" class="form-label small text-muted mb-1">From</label>
+                <input type="date" id="start_date" name="start_date" class="form-control" value="{{ $startDateInput }}" max="{{ now()->toDateString() }}">
+            </div>
+            <div class="col-sm-6 col-md-4">
+                <label for="end_date" class="form-label small text-muted mb-1">To</label>
+                <input type="date" id="end_date" name="end_date" class="form-control" value="{{ $endDateInput }}" max="{{ now()->toDateString() }}">
+            </div>
+            <div class="col-md-4 d-flex gap-2">
+                <button type="submit" class="btn btn-velocity">
+                    <i class="fas fa-filter"></i> Apply Filter
+                </button>
+                @if($isFiltered)
+                    <a href="{{ route('admin.reports.index') }}" class="btn btn-outline-secondary">
+                        <i class="fas fa-times"></i> Clear
+                    </a>
+                @endif
+            </div>
+        </form>
+        @if($isFiltered)
+            <p class="text-muted small mt-3 mb-0">
+                <i class="fas fa-info-circle"></i>
+                Revenue, Reservations, Bookings, and Activity Logs below are scoped to
+                <strong>{{ $startDateInput ? \Carbon\Carbon::parse($startDateInput)->format('M d, Y') : 'the beginning' }}</strong>
+                &ndash;
+                <strong>{{ $endDateInput ? \Carbon\Carbon::parse($endDateInput)->format('M d, Y') : 'today' }}</strong>.
+                User and Room summaries always reflect current totals.
+            </p>
+        @endif
+    </x-card>
+
     <!-- Summary Cards -->
     <div class="row mb-4">
-        <div class="col-md-3 mb-3">
+        <div class="col-md-6 col-lg-3 mb-3">
             <x-stat-card
                 icon="fas fa-users"
                 label="Total Users"
                 :value="$userReports['total']"
                 color="primary" />
         </div>
-        <div class="col-md-3 mb-3">
+        <div class="col-md-6 col-lg-3 mb-3">
             <x-stat-card
                 icon="fas fa-door-open"
                 label="Total Rooms"
                 :value="$roomReports['total']"
                 color="success" />
         </div>
-        <div class="col-md-3 mb-3">
+        <div class="col-md-6 col-lg-3 mb-3">
             <x-stat-card
                 icon="fas fa-calendar-alt"
                 label="Total Reservations"
                 :value="$reservationsCount"
                 color="info" />
         </div>
-        <div class="col-md-3 mb-3">
+        <div class="col-md-6 col-lg-3 mb-3">
             <x-stat-card
                 icon="fas fa-peso-sign"
                 label="Total Revenue"
@@ -84,7 +136,6 @@
             <tbody>
                 <tr><td>Available</td><td class="text-end">{{ $roomReports['available'] }}</td></tr>
                 <tr><td>Occupied</td><td class="text-end">{{ $roomReports['occupied'] }}</td></tr>
-                <tr><td>Reserved</td><td class="text-end">{{ $roomReports['reserved'] }}</td></tr>
                 <tr><td>Maintenance</td><td class="text-end">{{ $roomReports['maintenance'] }}</td></tr>
                 <tr class="fw-bold"><td>Total</td><td class="text-end">{{ $roomReports['total'] }}</td></tr>
             </tbody>

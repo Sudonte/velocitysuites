@@ -1,4 +1,4 @@
-@props(['icon' => null, 'title', 'subtitle' => null])
+@props(['icon' => null, 'title', 'subtitle' => null, 'showClock' => false])
 
 <div class="page-header">
     <div>
@@ -9,6 +9,12 @@
             <p class="page-subtitle">{{ $subtitle }}</p>
         @endif
     </div>
+    @if($showClock)
+        <div class="page-header-clock text-end" data-page-header-clock>
+            <div class="page-header-clock-time" data-clock-time>&nbsp;</div>
+            <div class="page-header-clock-date" data-clock-date>&nbsp;</div>
+        </div>
+    @endif
     @isset($actions)
         <div class="d-flex gap-2 flex-wrap">
             {{ $actions }}

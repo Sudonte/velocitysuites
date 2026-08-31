@@ -1,10 +1,19 @@
 :root {
-    --primary-color: #C1121F;
+    /* Soft/light red brand palette (was a deep #C1121F/#780000 pair) -
+       same hue family, lighter and less saturated so white-on-primary
+       buttons/badges/nav stay comfortable and modern rather than harsh,
+       while keeping enough contrast for white text/icons on top of it. */
+    --primary-color: #D6414B;
     --secondary-color: #FFFFFF;
-    --accent-color: #780000;
+    --accent-color: #A62B34;
     --bg-color: #F8F9FA;
-    --text-dark: #333333;
-    --text-light: #666666;
+    /* Darkened from the original #333333/#666666 grays per an explicit
+       readability request - both now read as black. Kept as two distinct
+       (if very close) values instead of collapsing them into one, so the
+       semantic "primary vs secondary text" seam in the CSS still exists for
+       future adjustments, without anything currently looking gray. */
+    --text-dark: #000000;
+    --text-light: #1a1a1a;
     --border-color: #E0E0E0;
     --success-color: #28a745;
     --warning-color: #ffc107;
@@ -20,6 +29,33 @@
     --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.10);
 }
 
+/* Shared red rounded-square logo container, used everywhere the Velocity
+   Suites logo is displayed (public header, mobile offcanvas header, auth
+   pages). Percentage border-radius so the same class stays proportionally
+   correct at any size set via inline width/height on the individual usage.
+   The sidebar brand logo keeps its own .sidebar-brand-logo rule (it already
+   had a collapsed-state size override to preserve) but uses matching
+   border color/thickness/radius values so it looks identical in practice. */
+.logo-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    background-color: #fff;
+    border: 2px solid var(--primary-color);
+    border-radius: 18%;
+    overflow: hidden;
+    box-sizing: border-box;
+}
+
+.logo-badge img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    padding: 8% 10%;
+    box-sizing: border-box;
+}
+
 * {
     margin: 0;
     padding: 0;
@@ -31,6 +67,10 @@ html, body {
     background-color: var(--bg-color);
     color: var(--text-dark);
     line-height: 1.6;
+    /* Safety net, not a fix for a known overflow - if any element ever misses a
+       responsive wrapper on a narrow device, this keeps it from forcing a
+       whole-page horizontal scrollbar instead of just clipping in place. */
+    overflow-x: hidden;
 }
 
 /* Typography */
@@ -90,6 +130,28 @@ a:hover {
     transform: none;
 }
 
+/* The base .btn rule above sets border: none for the solid-fill custom
+   buttons (.btn-primary/.btn-velocity/etc., which never had their own
+   border), but since it loads after bootstrap.min.css and shares the same
+   .btn specificity, it was also silently zeroing out the border-width on
+   every Bootstrap .btn-outline-* variant site-wide (they only set
+   color/border-color, relying on Bootstrap's own .btn for the 1px width -
+   which this rule overrode). Restoring just the width/style here so every
+   outline button (View Details, Get Directions, and 47 other usages across
+   the app) actually shows its border again; border-color is left alone so
+   each outline-* variant's own color still applies. */
+.btn-outline-primary,
+.btn-outline-secondary,
+.btn-outline-success,
+.btn-outline-danger,
+.btn-outline-warning,
+.btn-outline-info,
+.btn-outline-dark,
+.btn-outline-light {
+    border-width: 1px;
+    border-style: solid;
+}
+
 .btn-loading {
     position: relative;
     color: transparent !important;
@@ -121,7 +183,7 @@ a:hover {
 
 .btn-primary:hover:not(:disabled) {
     background-color: var(--accent-color);
-    box-shadow: 0 4px 8px rgba(193, 18, 31, 0.3);
+    box-shadow: 0 4px 8px rgba(214, 65, 75, 0.3);
 }
 
 .btn-secondary {
@@ -200,7 +262,7 @@ input, textarea, select {
 input:focus, textarea:focus, select:focus {
     outline: none;
     border-color: var(--primary-color);
-    box-shadow: 0 0 0 3px rgba(193, 18, 31, 0.1);
+    box-shadow: 0 0 0 3px rgba(214, 65, 75, 0.1);
 }
 
 textarea {
@@ -233,6 +295,8 @@ textarea {
 
 /* Color variants for card headers - use these instead of inline
    style="background-color: ..." so the palette stays centralized. */
+.card-header-primary { background-color: var(--primary-color); color: #fff; }
+
 .card-header-success { background-color: var(--success-color); color: #fff; }
 .card-header-warning { background-color: var(--warning-color); color: var(--text-dark); }
 .card-header-info { background-color: var(--info-color); color: #fff; }
@@ -250,6 +314,28 @@ textarea {
     padding: 1rem;
     margin: 1rem -1.5rem -1.5rem -1.5rem;
     border-radius: 0 0 var(--radius-card) var(--radius-card);
+}
+
+/* Collapsible dashboard sections (components/collapsible-card.blade.php) -
+   the header is clickable (Bootstrap's data-bs-toggle="collapse" handles
+   the actual show/hide; public/js/app.js just keeps the chevron and
+   localStorage state in sync). */
+.collapsible-card-header {
+    cursor: pointer;
+}
+
+.collapsible-card-chevron {
+    /* .card-header (which this sits inside) is a solid brand-color fill
+       with light text - match that instead of --text-light, which is
+       tuned for dark text on a light background and would be nearly
+       invisible here. */
+    transition: transform 0.2s ease;
+    color: var(--secondary-color);
+    opacity: 0.85;
+}
+
+.collapsible-card-chevron.rotated {
+    transform: rotate(-90deg);
 }
 
 /* Page header - icon + title + subtitle + actions, used at the top of
@@ -273,47 +359,46 @@ textarea {
     margin-bottom: 0;
 }
 
-/* Stat card - icon + value + label, used on every dashboard via the
-   x-stat-card component. */
-.stat-card {
-    background-color: var(--secondary-color);
-    border: 1px solid var(--border-color);
+/* Stat card - solid color fill, icon badge, value, optional %change, and a
+   "View Details" footer link, used on every dashboard via the x-stat-card
+   component. Whole card is a stretched-link when $href is set. */
+.stat-card-fill {
+    border: none;
     border-radius: var(--radius-card);
     box-shadow: var(--shadow-sm);
     padding: 1.25rem 1.5rem;
     display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 1rem;
+    flex-direction: column;
     transition: box-shadow 0.3s ease, transform 0.2s ease;
     height: 100%;
 }
 
-.stat-card:hover {
+/* Only cards that actually render a stretched-link (href set) get the
+   lift/shadow hover treatment - otherwise a card with no destination
+   visually implies it's clickable and then does nothing on click. */
+.stat-card-fill.has-link:hover {
     box-shadow: var(--shadow-md);
     transform: translateY(-2px);
 }
 
-.stat-card .stat-label {
-    color: var(--text-light);
+.stat-fill-label {
     font-size: 0.85rem;
-    margin-bottom: 0.25rem;
+    font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.03em;
+    opacity: 0.9;
 }
 
-.stat-card .stat-value {
-    font-size: 1.75rem;
-    font-weight: 700;
-    color: var(--text-dark);
-    margin-bottom: 0;
-}
-
-.stat-card .stat-icon {
+.stat-fill-value {
     font-size: 2rem;
-    opacity: 0.85;
-    width: 3rem;
-    height: 3rem;
+    font-weight: 700;
+    margin-top: 0.5rem;
+}
+
+.stat-fill-icon {
+    font-size: 1.1rem;
+    width: 2.5rem;
+    height: 2.5rem;
     border-radius: var(--radius-pill);
     display: flex;
     align-items: center;
@@ -321,26 +406,33 @@ textarea {
     flex-shrink: 0;
 }
 
-.stat-card .stat-change {
-    font-size: 0.75rem;
+.stat-fill-change {
+    font-size: 0.78rem;
     font-weight: 600;
-    margin-bottom: 0;
-    margin-top: 0.35rem;
+    margin-top: 0.5rem;
+    opacity: 0.9;
 }
 
-.stat-card .stat-change-up { color: var(--success-color); }
-.stat-card .stat-change-down { color: var(--danger-color); }
-.stat-card .stat-change-flat { color: var(--text-light); }
-
-.stat-card .stat-change-sub {
-    color: var(--text-light);
-    font-weight: 400;
+.stat-fill-footer {
+    margin-top: auto;
+    padding-top: 0.75rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+    opacity: 0.9;
 }
 
 /* Brand-color text utilities - Bootstrap's own .text-primary is Bootstrap
    blue, not our brand red, hence these instead of inline color styles. */
 .text-brand { color: var(--primary-color) !important; }
 .text-gold { color: var(--gold-color) !important; }
+
+/* Bootstrap's own .text-muted ships as a mid-gray with !important - overridden
+   here (also !important, and this file loads after bootstrap.min.css so it
+   wins either way) to match the same near-black used for --text-light above.
+   This one rule covers every `class="text-muted"` usage across all 4 roles
+   (captions, timestamps, helper text, subtitles) without having to hunt down
+   each of the ~186 individual usages across the view files. */
+.text-muted { color: var(--text-light) !important; }
 
 /* Brand-color badge, e.g. a role badge, where none of Bootstrap's bg-*
    status colors (success/warning/danger/info) apply. */
@@ -362,6 +454,301 @@ textarea {
 .room-card:hover {
     transform: translateY(-5px);
     box-shadow: var(--shadow-md);
+}
+
+/* Compact icon+value stat chips - System Administrator/Receptionist Room
+   Type cards (admin.room-types.index, receptionist.rooms.index), summarizing
+   rate/capacity/rooms-available at a glance instead of stacked label:value
+   rows. */
+.room-type-stats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin: 0.75rem 0;
+}
+
+.room-type-stat-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    background-color: var(--bg-color);
+    border-radius: var(--radius-pill);
+    padding: 0.35rem 0.75rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-dark);
+    white-space: nowrap;
+}
+
+.room-type-stat-chip i {
+    color: var(--primary-color);
+}
+
+/* Small room-photo thumbnail shown in the Individual Rooms table (admin and
+   Receptionist Room Type workspace pages) - a quick visual reference next
+   to each room row without opening it. */
+.room-row-thumb {
+    width: 56px;
+    height: 56px;
+    object-fit: cover;
+    border-radius: var(--radius-btn);
+    border: 1px solid var(--border-color);
+}
+
+.room-row-thumb-placeholder {
+    width: 56px;
+    height: 56px;
+    border-radius: var(--radius-btn);
+    background-color: var(--bg-color);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-light);
+}
+
+/* Gallery Images management grid (System Administrator's Room Type main
+   image and individual Room edit pages) - a photo tile with Replace/Delete
+   surfaced on hover instead of always-on buttons crowding every thumbnail. */
+.gallery-tile {
+    position: relative;
+    border-radius: var(--radius-btn);
+    overflow: hidden;
+    border: 1px solid var(--border-color);
+    box-shadow: var(--shadow-sm);
+}
+
+.gallery-tile img {
+    width: 100%;
+    height: 150px;
+    object-fit: cover;
+    display: block;
+}
+
+.gallery-tile-actions {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(to top, rgba(0, 0, 0, 0.65), transparent 55%);
+    display: flex;
+    align-items: flex-end;
+    justify-content: flex-end;
+    gap: 0.35rem;
+    padding: 0.5rem;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.gallery-tile:hover .gallery-tile-actions,
+.gallery-tile:focus-within .gallery-tile-actions {
+    opacity: 1;
+}
+
+/* Touch devices have no hover state - keep the actions visible so the
+   controls stay reachable on tablets/phones instead of only appearing on
+   desktop mouse-hover. */
+@media (hover: none) {
+    .gallery-tile-actions {
+        opacity: 1;
+        background: linear-gradient(to top, rgba(0, 0, 0, 0.55), transparent 70%);
+    }
+}
+
+/* Vacant gallery slot (admin Room edit page only) - the Velocity Suites
+   logo dimmed and letterboxed (not cropped like a real photo) so it never
+   reads as an actual guest-facing room photograph, plus an explicit
+   "Vacant slot" badge. Guests/Receptionist never receive this - their
+   galleries only ever contain real uploaded photos. */
+.gallery-tile-vacant {
+    background-color: var(--bg-color);
+    border: 1px dashed var(--border-color);
+}
+
+.gallery-tile-vacant img {
+    object-fit: contain;
+    opacity: 0.45;
+    padding: 2rem;
+    background-color: var(--bg-color);
+}
+
+.gallery-tile-vacant-label {
+    position: absolute;
+    bottom: 0.5rem;
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+/* Room Type Details page (admin.room-types.show / receptionist.rooms.show)
+   labeled field list - bold label, normal-weight value, per an explicit
+   System Administrator requirement that only the labels be bold. */
+.room-type-detail-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
+}
+
+.room-type-detail-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem 0.5rem;
+    align-items: baseline;
+}
+
+.room-type-detail-label {
+    font-weight: 700;
+    color: var(--text-dark);
+    flex-shrink: 0;
+}
+
+.room-type-detail-value {
+    font-weight: 400;
+    color: var(--text-dark);
+}
+
+/* 3x2 gallery grid (admin Room edit page's 4-5 image slots) - explicit
+   column counts per breakpoint instead of Bootstrap's default col sizing,
+   so 5 slots always read as a clean 3-then-2 card grid on desktop rather
+   than an uneven 1/2/3-per-row wrap. */
+.room-gallery-grid {
+    display: grid;
+    grid-template-columns: repeat(1, 1fr);
+    gap: 1rem;
+}
+
+@media (min-width: 576px) {
+    .room-gallery-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (min-width: 992px) {
+    .room-gallery-grid {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+
+/* Subsection headings inside the Add/Edit Room Type forms - groups a long
+   single-column form into scannable chunks (Identity, Pricing & Capacity,
+   Numbering, Amenities, Status) without changing any field/validation. */
+.form-section-heading {
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--primary-color);
+    margin: 1.75rem 0 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border-color);
+}
+
+.form-section-heading:first-child {
+    margin-top: 0;
+    padding-top: 0;
+    border-top: none;
+}
+
+/* Card-within-card wrapper for the same Add/Edit Room Type subsections
+   above - a bordered box per subsection reads more clearly than a bare
+   heading+rule on a long single-column form. Replaces .form-section-heading
+   as the active convention on those two forms; the rule above is left in
+   place since other forms may still reference it. */
+.form-subsection {
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-card);
+    background: #fbfbfb;
+    padding: 1.25rem 1.25rem 0.25rem;
+    margin-bottom: 1.5rem;
+}
+
+.form-subsection-title {
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--primary-color);
+    margin-bottom: 1rem;
+}
+
+/* Groups the Room Type amenity-picker checkboxes by category (Room
+   Amenities, Food & Beverage, etc.) instead of one flat undifferentiated
+   chip grid. */
+.amenity-picker-category {
+    margin-bottom: 1rem;
+}
+
+.amenity-picker-category:last-child {
+    margin-bottom: 0;
+}
+
+.amenity-picker-category-title {
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--text-light);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    margin-bottom: 0.5rem;
+}
+
+/* Main Profile Image manager on Edit Room Type - centered preview with
+   Upload/Replace and Remove Photo stacked directly below it, per an
+   explicit requirement that Remove Photo sits below the image rather
+   than beside it. */
+.room-type-image-manager {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 0.75rem;
+}
+
+.room-type-image-preview {
+    width: 100%;
+    max-width: 260px;
+    height: 180px;
+    object-fit: cover;
+    border-radius: var(--radius-card);
+    border: 1px solid var(--border-color);
+    box-shadow: var(--shadow-sm);
+}
+
+.room-type-image-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+}
+
+.room-type-image-filename {
+    font-size: 0.82rem;
+    max-width: 180px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.room-type-image-help {
+    max-width: 480px;
+}
+
+/* Manage Room / room type details hero image (admin.room-types.show,
+   receptionist.rooms.show). The card is a flex row (Bootstrap's row g-0
+   already stretches columns to match the tallest sibling), so the image
+   fills exactly the same height as the Room Type Name -> Add Room button
+   info column beside it, at any content length - no fixed max-height
+   cap that could leave it shorter than the text column. Below md the
+   columns stack, where flex-stretch no longer applies, so a fixed height
+   takes over instead. */
+.room-type-hero-image {
+    width: 100%;
+    height: 100%;
+    min-height: 240px;
+    object-fit: cover;
+    display: block;
+}
+
+@media (max-width: 767.98px) {
+    .room-type-hero-image {
+        height: 240px;
+    }
 }
 
 .room-price {
@@ -388,19 +775,7 @@ textarea {
 .btn-velocity:hover {
     background-color: var(--accent-color);
     color: white;
-    box-shadow: 0 4px 8px rgba(193, 18, 31, 0.3);
-}
-
-/* Page header banner - the public rooms pages' hero-style header,
-   shown only to logged-out visitors (logged-in users get the standard
-   x-page-header instead, to match every other authenticated page). */
-.page-banner {
-    background: linear-gradient(rgba(0, 0, 0, 0.55), rgba(0, 0, 0, 0.55)),
-                url('https://images.unsplash.com/photo-1566073771259-6a8506099945?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&q=80');
-    background-size: cover;
-    background-position: center;
-    padding: 140px 0 60px;
-    color: white;
+    box-shadow: 0 4px 8px rgba(214, 65, 75, 0.3);
 }
 
 /* Empty state - the "No X yet." row/block repeated across every table. */
@@ -595,7 +970,365 @@ tbody tr:hover {
     to { transform: translateX(0); opacity: 1; }
 }
 
+/* Header (components/navbar.blade.php) - white/light, sits only to the
+   right of the sidebar (see .content-column in components/sidebar.blade.php)
+   with the page title on the left and notification bell + avatar on the
+   right. */
+.app-header {
+    background-color: var(--secondary-color);
+    border-bottom: 1px solid var(--border-color);
+    box-shadow: var(--shadow-sm);
+    /* Stays pinned to the top of the content column while only the page
+       scrolls underneath it - same sticky mechanism as nav.sidebar (see
+       components/sidebar.blade.php), so both stay visible together.
+       !important guards against Bootstrap's own .navbar { position: relative }
+       base rule - same specificity (single class), so load order alone would
+       decide the winner otherwise; this makes it unconditional. */
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 1020;
+}
+
+.app-header-title {
+    font-size: 1.15rem;
+    color: var(--text-dark);
+}
+
+.navbar-icon-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.25rem;
+    height: 2.25rem;
+    border-radius: var(--radius-pill);
+    color: var(--text-dark);
+    transition: background-color 0.2s ease;
+}
+
+.navbar-icon-link:hover {
+    background-color: var(--bg-color);
+    color: var(--primary-color);
+}
+
+.navbar-notif-badge {
+    position: absolute;
+    top: 0.1rem;
+    right: 0.1rem;
+    min-width: 1.1rem;
+    height: 1.1rem;
+    padding: 0 0.25rem;
+    border-radius: var(--radius-pill);
+    background-color: var(--primary-color);
+    color: #fff;
+    font-size: 0.65rem;
+    font-weight: 700;
+    line-height: 1.1rem;
+    text-align: center;
+    box-shadow: 0 0 0 2px var(--secondary-color);
+}
+
+/* Profile picture / initials badge - components/user-avatar.blade.php, reused
+   by the header, System Administrator profile page, and guest profile page. */
+.user-avatar-img {
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid var(--border-color);
+    flex-shrink: 0;
+}
+
+.user-avatar-initials {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background-color: rgba(214, 65, 75, 0.12);
+    color: var(--primary-color);
+    font-weight: 700;
+    flex-shrink: 0;
+}
+
+.navbar-role-text {
+    font-size: 0.68rem;
+    letter-spacing: 0.4px;
+    color: var(--text-light);
+}
+
+/* Header account block (avatar + name + role) - now a link straight to My
+   Profile, matching .navbar-icon-link's pill-hover language but sized for
+   its wider avatar+text content instead of a single square icon. */
+.navbar-account-link {
+    border-radius: var(--radius-pill);
+    padding: 0.3rem 0.65rem 0.3rem 0.3rem;
+    transition: background-color 0.2s ease;
+}
+
+.navbar-account-link:hover,
+.navbar-account-link:focus-visible {
+    background-color: var(--bg-color);
+}
+
+.navbar-account-link:hover .text-dark,
+.navbar-account-link:focus-visible .text-dark {
+    color: var(--primary-color) !important;
+}
+
+/* Welcome-row live clock (x-page-header's showClock prop) */
+.page-header-clock-time {
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: var(--text-dark);
+}
+
+.page-header-clock-date {
+    font-size: 0.8rem;
+    color: var(--text-light);
+}
+
+/* Chart card - icon+title header, canvas, and a dot/label/count legend,
+   used for the "by category" doughnut charts on the admin/manager
+   dashboards via the x-chart-card component. */
+.chart-card .card-header {
+    background-color: var(--secondary-color);
+    color: var(--text-dark);
+    border-bottom: 1px solid var(--border-color);
+    margin: 0;
+    border-radius: var(--radius-card) var(--radius-card) 0 0;
+}
+
+.chart-card-icon {
+    width: 2rem;
+    height: 2rem;
+    border-radius: var(--radius-pill);
+    background-color: rgba(214, 65, 75, 0.1);
+    color: var(--primary-color);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.chart-card-canvas-wrap {
+    position: relative;
+    height: 180px;
+}
+
+.chart-card-legend li {
+    padding: 0.4rem 0;
+    font-size: 0.85rem;
+    border-bottom: 1px solid var(--bg-color);
+}
+
+.chart-card-legend li:last-child {
+    border-bottom: none;
+}
+
+.chart-legend-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    display: inline-block;
+    flex-shrink: 0;
+}
+
+.chart-card-view-details {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--primary-color);
+    text-decoration: none;
+}
+
+.chart-card-view-details:hover {
+    text-decoration: underline;
+}
+
+/* Page footer - confined to the content column, to the right of and never
+   underneath the sidebar (see .content-column in components/sidebar.blade.php). */
+.app-footer {
+    text-align: center;
+    padding: 1rem;
+    color: var(--text-light);
+    font-size: 0.8rem;
+    border-top: 1px solid var(--border-color);
+}
+
+/* Password field with an inline eye icon - the icon sits inside the input's
+   own right edge with no button box/background/border, instead of the old
+   Bootstrap input-group-appended-button look. Login, Register, and every
+   password-change form (profile pages, reset/force-change password) share
+   this one pattern. The existing delegated .toggle-password click handler in
+   app.js already supports this out of the box (its `.closest('.input-group')
+   || toggle.parentElement` fallback resolves to .password-input-wrapper here)
+   - no JS changes needed. */
+.password-input-wrapper {
+    position: relative;
+}
+
+.password-input-wrapper .form-control {
+    padding-right: 2.75rem;
+}
+
+.password-toggle-icon {
+    position: absolute;
+    top: 50%;
+    right: 0.65rem;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    padding: 0.25rem;
+    margin: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-light);
+    font-size: 1rem;
+    cursor: pointer;
+    line-height: 1;
+    z-index: 5;
+}
+
+.password-toggle-icon:hover,
+.password-toggle-icon:focus {
+    color: var(--primary-color);
+}
+
+.password-toggle-icon:focus-visible {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 2px;
+    border-radius: 4px;
+}
+
+/* Booking/Reservation Monitoring - guest-initial avatar circle (Admin,
+   Manager, and Receptionist bookings/reservations list + detail pages),
+   the Quick Summary sidebar card on detail pages, and the GCash payment
+   entry divider used when a reservation has more than one GCash payment
+   (deposit + final stage) on the same page. */
+.monitoring-avatar {
+    width: 2.75rem;
+    height: 2.75rem;
+    border-radius: 50%;
+    background-color: var(--primary-color);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 1.1rem;
+    flex-shrink: 0;
+}
+
+.monitoring-avatar-sm {
+    width: 2rem;
+    height: 2rem;
+    font-size: 0.85rem;
+}
+
+.monitoring-summary-card {
+    position: sticky;
+    top: 1rem;
+}
+
+.monitoring-summary-list li {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid var(--bg-color);
+    font-size: 0.9rem;
+    text-align: right;
+}
+
+.monitoring-summary-list li:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+}
+
+.monitoring-summary-list li > span:first-child {
+    text-align: left;
+}
+
+.gcash-payment-entry:last-child {
+    margin-bottom: 0 !important;
+    padding-bottom: 0 !important;
+    border-bottom: none !important;
+}
+
+/* Bookings/reservations tables (Admin & Manager Monitoring, Receptionist
+   Bookings/Reservations) share the same wide, many-column shape - a bit
+   more breathing room between cells than Bootstrap's tight default, and
+   nowrap on the Action column so its buttons never wrap onto two lines. */
+.monitoring-table > :not(caption) > * > * {
+    vertical-align: middle;
+    padding-top: 0.85rem;
+    padding-bottom: 0.85rem;
+}
+
+.monitoring-table td.text-nowrap,
+.monitoring-table th:last-child,
+.monitoring-table td:last-child {
+    white-space: nowrap;
+}
+
+/* Wraps both the mobile card list and the desktop table inside the
+   Bookings/Reservations x-card - just breathing room around whichever
+   one is actually visible at the current breakpoint. */
+.monitoring-table-wrap {
+    padding: 1rem 1.25rem 1.25rem;
+}
+
+/* Mobile card list (below md) - the same monitoring rows the desktop
+   table shows, reflowed into stacked cards instead of hidden columns,
+   so nothing is lost on a phone-sized screen. */
+.monitoring-item-card {
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-card);
+    padding: 1rem;
+    margin-bottom: 0.85rem;
+    background-color: var(--secondary-color);
+}
+
+.monitoring-item-card:last-child {
+    margin-bottom: 0;
+}
+
+.monitoring-item-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.4rem 0;
+    font-size: 0.88rem;
+    border-bottom: 1px solid var(--bg-color);
+}
+
+.monitoring-item-row:last-of-type {
+    border-bottom: none;
+}
+
 /* Responsive */
+
+/* Between Bootstrap's lg breakpoint (992px, where dashboard stat rows go
+   from 4-up to 2-up) and the 768px tier below - without this, cards right
+   at that transition stay full desktop size while occupying half the
+   width, cramming the value text. */
+@media (max-width: 991.98px) {
+    .stat-card-fill {
+        padding: 1.1rem 1.35rem;
+    }
+
+    .stat-fill-value {
+        font-size: 1.75rem;
+    }
+
+    /* The Quick Summary sidebar stacks below the main column at this
+       breakpoint (Bootstrap's col-lg-4/col-lg-8 default) - sticky
+       positioning only makes sense when it's genuinely a side-by-side
+       column, so drop it once it's just another stacked block. */
+    .monitoring-summary-card {
+        position: static;
+    }
+}
+
 @media (max-width: 768px) {
     h1 { font-size: 1.5rem; }
     h2 { font-size: 1.25rem; }
@@ -610,6 +1343,15 @@ tbody tr:hover {
         font-size: 0.875rem;
     }
 
+    .app-header-title {
+        font-size: 1rem;
+    }
+
+    .navbar-icon-link {
+        width: 2rem;
+        height: 2rem;
+    }
+
     th, td {
         padding: 0.75rem;
     }
@@ -620,17 +1362,33 @@ tbody tr:hover {
         align-items: stretch;
     }
 
-    .stat-card {
+    .page-header-clock {
+        text-align: left !important;
+    }
+
+    .stat-card-fill {
         padding: 1rem 1.25rem;
     }
 
-    .stat-card .stat-value {
-        font-size: 1.4rem;
+    .stat-fill-value {
+        font-size: 1.5rem;
     }
 
-    .stat-card .stat-icon {
-        width: 2.5rem;
-        height: 2.5rem;
-        font-size: 1.5rem;
+    .stat-fill-icon {
+        width: 2.25rem;
+        height: 2.25rem;
+        font-size: 1rem;
+    }
+
+    .monitoring-avatar {
+        width: 2.25rem;
+        height: 2.25rem;
+        font-size: 0.95rem;
+    }
+
+    .monitoring-avatar-sm {
+        width: 1.75rem;
+        height: 1.75rem;
+        font-size: 0.75rem;
     }
 }

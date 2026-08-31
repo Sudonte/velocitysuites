@@ -5,8 +5,10 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Promotion;
 use App\Models\RoomType;
+use App\Support\Activity;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
 
 class PromotionManagementController extends Controller
@@ -18,10 +20,16 @@ class PromotionManagementController extends Controller
     {
         $query = Promotion::query();
 
-        // Search
+        // Search - grouped so a later ->where('status', ...) ANDs against the
+        // whole name-or-description match, not just the last OR branch (an
+        // ungrouped orWhere() lets SQL's AND-before-OR precedence silently
+        // leak rows past the status filter).
         if ($request->has('search') && $request->search) {
-            $query->where('promo_name', 'like', '%' . $request->search . '%')
-                  ->orWhere('description', 'like', '%' . $request->search . '%');
+            $search = $request->search;
+            $query->where(function ($q) use ($search) {
+                $q->where('promo_name', 'like', "%{$search}%")
+                  ->orWhere('description', 'like', "%{$search}%");
+            });
         }
 
         // Filter by status
@@ -91,14 +99,35 @@ class PromotionManagementController extends Controller
     }
 
     /**
+     * Stores the uploaded promo image (same validation convention as
+     * Admin\AnnouncementManagementController::storeImages()) and returns
+     * the stored path, or null if none was uploaded this request.
+     */
+    private function storeImage(Request $request): ?string
+    {
+        if (! $request->hasFile('image')) {
+            return null;
+        }
+
+        $request->validate([
+            'image' => 'image|mimes:jpeg,png,jpg|max:5120',
+        ]);
+
+        return $request->file('image')->store('promotion-images', 'public');
+    }
+
+    /**
      * Store a new promotion.
      */
     public function store(Request $request): RedirectResponse
     {
         $validated = $this->validatePromotion($request);
+        $validated['image'] = $this->storeImage($request);
 
         $promotion = Promotion::create($validated);
         $this->syncAmenities($promotion, $validated);
+
+        Activity::log('Created promotion', $promotion->promo_name, $promotion);
 
         return redirect()->route('admin.promotions.index')->with('success', 'Promotion created successfully!');
     }
@@ -122,8 +151,18 @@ class PromotionManagementController extends Controller
     {
         $validated = $this->validatePromotion($request);
 
+        $newImage = $this->storeImage($request);
+        if ($newImage !== null) {
+            if ($promotion->image) {
+                Storage::disk('public')->delete($promotion->image);
+            }
+            $validated['image'] = $newImage;
+        }
+
         $promotion->update($validated);
         $this->syncAmenities($promotion, $validated);
+
+        Activity::log('Updated promotion', $promotion->promo_name, $promotion);
 
         return redirect()->route('admin.promotions.index')->with('success', 'Promotion updated successfully!');
     }
@@ -135,6 +174,8 @@ class PromotionManagementController extends Controller
     {
         $newStatus = $promotion->status === 'active' ? 'inactive' : 'active';
         $promotion->update(['status' => $newStatus]);
+
+        Activity::log("Set promotion to {$newStatus}", $promotion->promo_name, $promotion);
 
         return redirect()->route('admin.promotions.index')
             ->with('success', "Promotion {$newStatus}d successfully!");

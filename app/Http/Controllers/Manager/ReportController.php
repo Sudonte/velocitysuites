@@ -5,7 +5,7 @@ namespace App\Http\Controllers\Manager;
 use App\Http\Controllers\Controller;
 use App\Models\Payment;
 use App\Models\Reservation;
-use App\Models\Room;
+use App\Models\RoomType;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -40,8 +40,12 @@ class ReportController extends Controller
             ->selectRaw('AVG(DATEDIFF(check_out, check_in)) as avg_nights')
             ->value('avg_nights');
 
-        // Top room types
-        $topRoomTypes = Room::withCount(['reservations' => function ($q) use ($from, $to) {
+        // Top room types - counted via RoomType's own reservations() relation
+        // (Reservation.room_type_id, set at request time), not Room's - a
+        // room is only ever assigned to a specific reservation at check-in,
+        // so Room::reservations() no longer gets populated and always
+        // returned zero here.
+        $topRoomTypes = RoomType::withCount(['reservations' => function ($q) use ($from, $to) {
             $q->whereBetween('check_in', [$from, $to]);
         }])
             ->orderByDesc('reservations_count')

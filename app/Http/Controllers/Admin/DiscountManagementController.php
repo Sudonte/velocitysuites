@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Discount;
+use App\Support\Activity;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -50,7 +51,9 @@ class DiscountManagementController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
-        Discount::create($this->validateDiscount($request));
+        $discount = Discount::create($this->validateDiscount($request));
+
+        Activity::log('Created discount', $discount->name, $discount);
 
         return redirect()->route('admin.discounts.index')->with('success', 'Discount created successfully!');
     }
@@ -64,6 +67,8 @@ class DiscountManagementController extends Controller
     {
         $discount->update($this->validateDiscount($request));
 
+        Activity::log('Updated discount', $discount->name, $discount);
+
         return redirect()->route('admin.discounts.index')->with('success', 'Discount updated successfully!');
     }
 
@@ -71,6 +76,8 @@ class DiscountManagementController extends Controller
     {
         $newStatus = $discount->status === 'active' ? 'inactive' : 'active';
         $discount->update(['status' => $newStatus]);
+
+        Activity::log("Set discount to {$newStatus}", $discount->name, $discount);
 
         return redirect()->route('admin.discounts.index')->with('success', "Discount {$newStatus}d successfully!");
     }

@@ -1,12 +1,14 @@
 @extends('layouts.guest')
 
-@section('title', 'Verify OTP - Hotel Booking System')
+@section('title', 'Verify OTP - Velocity Suites')
 
 @section('content')
 <div class="auth-card">
     <div class="logo">
-        <h1><i class="fas fa-lock"></i></h1>
-        <p class="text-muted">Verify Your Email</p>
+        <span class="logo-badge" style="width: 84px; height: 72px;">
+            <img src="{{ asset('images/logo.jpg') }}" alt="Velocity Suites">
+        </span>
+        <p class="text-muted mt-2">Verify Your Email</p>
     </div>
 
     @if (session('error'))

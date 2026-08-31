@@ -35,11 +35,26 @@
                     </div>
 
                     <div class="form-group mb-3">
-                        <label for="description">Description</label>
-                        <textarea class="form-control @error('description') is-invalid @enderror"
-                                  id="description" name="description" rows="3">{{ old('description', $amenity->description) }}</textarea>
-                        @error('description')
+                        <label for="category">Category *</label>
+                        <select class="form-control @error('category') is-invalid @enderror" id="category" name="category" required>
+                            <option value="">-- Select a category --</option>
+                            @foreach($categories as $option)
+                                <option value="{{ $option }}" {{ old('category', $amenity->category) === $option ? 'selected' : '' }}>{{ $option }}</option>
+                            @endforeach
+                        </select>
+                        @error('category')
                             <div class="invalid-feedback">{{ $message }}</div>
+                        @enderror
+                    </div>
+
+                    <div class="form-group mb-3">
+                        <label for="description">Description *</label>
+                        <textarea class="form-control @error('description') is-invalid @enderror"
+                                  id="description" name="description" rows="4"
+                                  placeholder="Explain what this amenity provides, what the guest can expect, and any conditions or limitations.">{{ old('description', $amenity->description) }}</textarea>
+                        <small class="text-muted">Required - at least 2-3 complete sentences. Placeholder or single-word text won't be accepted.</small>
+                        @error('description')
+                            <div class="invalid-feedback d-block">{{ $message }}</div>
                         @enderror
                     </div>
 

@@ -50,26 +50,18 @@
     <div class="row">
         <!-- Images & Details -->
         <div class="col-lg-8">
-            <!-- Main Image -->
+            <!-- Main Profile Image -->
             <div class="card mb-4 position-relative">
                 @if($isFullyBooked)
                     <span class="badge bg-danger position-absolute m-3" style="z-index: 2;">Fully Booked for selected dates</span>
                 @endif
-                <img src="{{ $gallery->first() ? asset('storage/' . $gallery->first()) : 'https://via.placeholder.com/800x500?text=No+Image' }}"
+                <img src="{{ $roomType->image_url }}"
                      alt="{{ $roomType->name }}" class="card-img-top" style="height: 400px; object-fit: cover;">
             </div>
 
-            <!-- Image Gallery -->
-            @if($gallery->count() > 1)
-                <div class="row mb-4">
-                    @foreach($gallery->skip(1) as $imagePath)
-                        <div class="col-4">
-                            <img src="{{ asset('storage/' . $imagePath) }}" alt="Room Image"
-                                 class="img-thumbnail" style="height: 100px; object-fit: cover;">
-                        </div>
-                    @endforeach
-                </div>
-            @endif
+            <!-- Room Gallery: full-screen viewer, next/previous, 5s auto-advance, loop, pause/play -->
+            <h5 class="mb-3"><i class="fas fa-images text-brand me-2"></i>Room Gallery</h5>
+            <x-room-gallery :images="$gallery" :title="$roomType->name" id="roomTypeGallery" />
 
             <!-- Room Type Description -->
             <div class="card mb-4">
@@ -105,26 +97,39 @@
                     <h4 class="mb-0">Amenities</h4>
                 </div>
                 <div class="card-body">
-                    <div class="row">
-                        <div class="col-6 col-md-4 mb-2">
-                            <i class="fas fa-wifi text-brand me-2"></i> Free WiFi
+                    {{-- Sourced from RoomType::amenities - the union across every physical room
+                         of this type (amenities are assigned per individual room within the
+                         Rooms module, Admin\RoomManagementController) - shown as-is regardless
+                         of availability, matching the mobile app's Room.getAmenities(). --}}
+                    @if($roomType->amenities)
+                        <div class="d-flex flex-wrap gap-2">
+                            @foreach($roomType->amenities as $amenity)
+                                <span class="badge bg-light text-dark border px-3 py-2"
+                                      style="cursor: pointer;"
+                                      data-amenity-detail
+                                      data-amenity-name="{{ $amenity['name'] }}"
+                                      data-amenity-category="{{ $amenity['category'] }}"
+                                      data-amenity-description="{{ $amenity['description'] }}"
+                                      data-amenity-pricing="{{ $amenity['pricing_type'] === 'paid' ? 'paid' : 'complimentary' }}"
+                                      data-amenity-charge="{{ number_format((float) ($amenity['fee'] ?? 0), 2) }}"
+                                      data-amenity-stock="{{ $amenity['quantity'] }}"
+                                      role="button" tabindex="0">
+                                    <i class="fas fa-circle-check text-brand me-1"></i>{{ $amenity['name'] }}
+                                    @if($amenity['pricing_type'] === 'paid')
+                                        <span class="text-brand">(+₱{{ number_format($amenity['fee'], 2) }})</span>
+                                    @else
+                                        <span class="text-success">(Included)</span>
+                                    @endif
+                                </span>
+                            @endforeach
                         </div>
-                        <div class="col-6 col-md-4 mb-2">
-                            <i class="fas fa-tv text-brand me-2"></i> Smart TV
-                        </div>
-                        <div class="col-6 col-md-4 mb-2">
-                            <i class="fas fa-snowflake text-brand me-2"></i> Air Conditioning
-                        </div>
-                        <div class="col-6 col-md-4 mb-2">
-                            <i class="fas fa-coffee text-brand me-2"></i> Coffee Maker
-                        </div>
-                        <div class="col-6 col-md-4 mb-2">
-                            <i class="fas fa-bath text-brand me-2"></i> Private Bathroom
-                        </div>
-                        <div class="col-6 col-md-4 mb-2">
-                            <i class="fas fa-phone text-brand me-2"></i> Direct Phone
-                        </div>
-                    </div>
+                        <small class="text-muted d-block mt-2">Complimentary amenities are included at no extra charge. Paid amenities can be requested as optional extras when you book. Tap an amenity to view its full details.</small>
+                    @else
+                        <p class="text-muted mb-0">
+                            <i class="fas fa-concierge-bell text-brand me-2"></i>
+                            No Available Amenities.
+                        </p>
+                    @endif
                 </div>
             </div>
         </div>
@@ -233,6 +238,8 @@
                 @foreach($relatedRoomTypes as $relatedRoomType)
                     <div class="col-md-4">
                         <div class="room-card">
+                            <img src="{{ $relatedRoomType->image_url }}" alt="{{ $relatedRoomType->name }}"
+                                 class="img-fluid" style="height: 160px; width: 100%; object-fit: cover;">
                             <div class="p-4">
                                 <h5 class="fw-bold">{{ $relatedRoomType->name }}</h5>
                                 <p class="mb-2 text-muted">
@@ -250,4 +257,6 @@
         </div>
     @endif
 </div>
+
+<x-amenity-detail-modal />
 @endsection

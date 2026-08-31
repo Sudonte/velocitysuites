@@ -17,6 +17,13 @@ class AdminDashboardController extends Controller
      */
     public function index(): View
     {
-        return view('admin.dashboard', $this->stats->adminStats());
+        // No cap - per-admin-user notifications are naturally small, so
+        // "Expand" can show every one of this admin's own notifications.
+        $systemNotifications = auth()->user()->notifications()->latest()->get();
+
+        return view('admin.dashboard', array_merge(
+            $this->stats->adminStats(),
+            compact('systemNotifications')
+        ));
     }
 }

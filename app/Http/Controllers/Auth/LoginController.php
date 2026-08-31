@@ -35,9 +35,16 @@ class LoginController extends Controller
             return back()->with('error', 'Account suspended or credentials invalid.');
         }
 
-        // Check account lockout after 3 failed attempts
+        // Check account lockout after 3 failed attempts - every role takes
+        // the same path to Forgot Password now. Auth\ForgotPasswordController::
+        // sendResetLink() branches internally from there: Guest/Admin get the
+        // existing OTP-email flow, Manager/Receptionist get a
+        // StaffPasswordResetRequest routed to the System Administrator for
+        // approval (see Admin\PasswordResetRequestController).
         if ($user->failed_login_attempts >= 3) {
-            return back()->with('error', 'Account locked due to multiple failed login attempts.');
+            return redirect()->route('password.request')
+                ->with('error', 'Too many failed login attempts. Please reset your password to continue.')
+                ->withInput(['email' => $credentials['email']]);
         }
 
         // Attempt authentication
@@ -52,6 +59,16 @@ class LoginController extends Controller
 
             // Get the user's role
             $role = auth()->user()->role;
+
+            // Still on the shared default password (set at account creation
+            // or by an admin's reset) - make them choose a permanent one
+            // before they can reach any dashboard.
+            if (\Illuminate\Support\Facades\Hash::check(
+                \App\Http\Controllers\Admin\UserManagementController::DEFAULT_STAFF_PASSWORD,
+                auth()->user()->password
+            )) {
+                return redirect()->route('force-password-change.show');
+            }
 
             // PRIORITY: Role-based redirect always takes precedence
             // Admin, Manager, and Receptionist should go to their dashboards

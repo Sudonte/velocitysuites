@@ -12,7 +12,7 @@
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Custom CSS -->
-    <link rel="stylesheet" href="{{ asset('css/app.css') }}">
+    <link rel="stylesheet" href="{{ asset('css/app.css') }}?v={{ filemtime(public_path('css/app.css')) }}">
     <style>
         .auth-container {
             min-height: 100vh;
@@ -55,6 +55,11 @@
 
     <!-- Scripts -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- app.js's delegated .toggle-password click handler is what actually makes the
+         password show/hide eye icon on every auth form (login, register, forgot/reset
+         password) work - this layout never loaded it before, so the icon was always
+         visually present but inert. -->
+    <script src="{{ asset('js/app.js') }}?v={{ filemtime(public_path('js/app.js')) }}"></script>
     @stack('scripts')
 </body>
 </html>

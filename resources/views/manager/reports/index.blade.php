@@ -2,9 +2,23 @@
 
 @section('title', 'Reports - Manager')
 
+@push('styles')
+<style>
+    @media print {
+        .no-print, nav, .app-sidebar, .app-footer, .page-header form { display: none !important; }
+    }
+</style>
+@endpush
+
 @section('content')
 <div class="container-fluid py-4">
-    <x-page-header icon="fas fa-file-pdf" title="Manager Reports" />
+    <x-page-header icon="fas fa-file-pdf" title="Manager Reports">
+        <x-slot:actions>
+            <button type="button" class="btn btn-outline-secondary no-print" onclick="window.print()">
+                <i class="fas fa-print"></i> Print Report
+            </button>
+        </x-slot:actions>
+    </x-page-header>
 
     <!-- Date Range Filter -->
     <x-card bodyClass="card-body" class="mb-4">
@@ -27,16 +41,16 @@
 
     <!-- Summary Cards -->
     <div class="row mb-4">
-        <div class="col-md-3 mb-3">
+        <div class="col-md-6 col-lg-3 mb-3">
             <x-stat-card icon="fas fa-money-bill-wave" label="Total Revenue" value="₱{{ number_format($totalRevenue, 2) }}" color="success" />
         </div>
-        <div class="col-md-3 mb-3">
+        <div class="col-md-6 col-lg-3 mb-3">
             <x-stat-card icon="fas fa-calendar-alt" label="Total Reservations" :value="$totalReservations" color="primary" />
         </div>
-        <div class="col-md-3 mb-3">
+        <div class="col-md-6 col-lg-3 mb-3">
             <x-stat-card icon="fas fa-credit-card" label="Total Bookings" :value="$totalBookings" color="secondary" />
         </div>
-        <div class="col-md-3 mb-3">
+        <div class="col-md-6 col-lg-3 mb-3">
             <x-stat-card icon="fas fa-moon" label="Average Stay" value="{{ number_format($averageStay, 1) }} nights" color="info" />
         </div>
     </div>
@@ -68,20 +82,18 @@
         <table class="table table-hover mb-0">
             <thead>
                 <tr>
-                    <th>Room</th>
-                    <th>Type</th>
+                    <th>Room Type</th>
                     <th class="text-end">Reservations</th>
                 </tr>
             </thead>
             <tbody>
-                @forelse($topRoomTypes as $room)
+                @forelse($topRoomTypes as $roomType)
                     <tr>
-                        <td>{{ $room->room_name }}</td>
-                        <td>{{ $room->roomType->name }}</td>
-                        <td class="text-end">{{ $room->reservations_count }}</td>
+                        <td>{{ $roomType->name }}</td>
+                        <td class="text-end">{{ $roomType->reservations_count }}</td>
                     </tr>
                 @empty
-                    <tr><td colspan="3"><x-empty-state icon="fas fa-star" message="No data." /></td></tr>
+                    <tr><td colspan="2"><x-empty-state icon="fas fa-star" message="No data." /></td></tr>
                 @endforelse
             </tbody>
         </table>

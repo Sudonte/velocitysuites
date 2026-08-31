@@ -17,9 +17,9 @@
             @if($billing->booking)
                 <p class="text-muted">
                     Booking #{{ $billing->booking->id }} —
-                    Guest: {{ $billing->booking->reservation->stay_guest_full_name ?? $billing->booking->reservation->guest->user->full_name ?? 'N/A' }} —
+                    Guest: {{ $billing->booking->stay_guest_full_name ?? $billing->booking->account_guest_full_name ?? 'N/A' }} —
                     Room: {{ $billing->booking->room->room_number ?? 'N/A' }}
-                    ({{ $billing->booking->room->room_name ?? $billing->booking->reservation->roomType->name }})
+                    ({{ $billing->booking->room->room_name ?? $billing->booking->roomType->name }})
                 </p>
             @endif
             @if($billing->billing_status !== 'paid' && $billing->payments->where('payment_status', 'pending')->isNotEmpty())

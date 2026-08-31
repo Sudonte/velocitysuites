@@ -7,9 +7,9 @@
 
     <div class="row mb-3">
         <div class="col-md-6">
-            <strong>Guest:</strong> {{ $booking->reservation->guest->user->full_name ?? 'N/A' }}<br>
+            <strong>Guest:</strong> {{ $booking->account_guest_full_name ?? 'N/A' }}<br>
             <strong>Booking:</strong> #{{ $booking->id }}<br>
-            <strong>Room:</strong> {{ $booking->room->room_number ?? 'N/A' }} ({{ $booking->room->room_name ?? '' }})
+            <strong>Room{{ $booking->rooms->count() > 1 ? 's' : '' }}:</strong> {{ $booking->rooms->pluck('room_number')->implode(', ') ?: 'N/A' }}
         </div>
         <div class="col-md-6 text-md-end">
             <strong>Check-In:</strong> {{ $booking->check_in->format('M d, Y') }}<br>
@@ -19,6 +19,7 @@
     </div>
 
     <h6><i class="fas fa-calculator"></i> Charges</h6>
+    <div class="table-responsive">
     <table class="table table-sm table-borderless mb-3">
         <tr>
             <td>Room Charge ({{ $booking->number_of_nights }} night{{ $booking->number_of_nights === 1 ? '' : 's' }})</td>
@@ -31,8 +32,10 @@
             </tr>
         @endif
     </table>
+    </div>
 
     <h6><i class="fas fa-spa"></i> Amenities & Services</h6>
+    <div class="table-responsive">
     <table class="table table-sm mb-3">
         <thead>
             <tr>
@@ -53,6 +56,7 @@
             @endforelse
         </tbody>
     </table>
+    </div>
 
     <div id="chargesTableContainer">
         @include('receptionist.check-out.partials.charges-table', ['billing' => $billing])
@@ -60,6 +64,7 @@
 
     @include('receptionist.check-out.partials.discount-panel', ['billing' => $billing, 'discounts' => $discounts])
 
+    <div class="table-responsive">
     <table class="table table-sm mb-0 mt-3">
         @if($billing->discount > 0)
             <tr>
@@ -72,6 +77,7 @@
             <td class="text-end text-brand" id="runningTotalDisplay">₱{{ number_format($billing->running_total, 2) }}</td>
         </tr>
     </table>
+    </div>
 </div>
 <div class="modal-footer">
     <button type="button" class="btn btn-secondary" id="cancelBillingBtn">Cancel Billing</button>

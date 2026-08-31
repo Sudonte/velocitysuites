@@ -17,6 +17,14 @@ class Guest extends Model
         'date_of_birth',
         'mobile_number',
         'address',
+        'country',
+        'region',
+        'province',
+        'city',
+        'barangay',
+        'street',
+        'zip_code',
+        'timezone',
         'profile_picture',
     ];
 

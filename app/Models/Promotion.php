@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Storage;
 
 class Promotion extends Model
 {
@@ -15,6 +16,7 @@ class Promotion extends Model
         'discount_type',
         'discount_value',
         'description',
+        'image',
         'room_type_id',
         'start_date',
         'end_date',
@@ -26,6 +28,18 @@ class Promotion extends Model
         'end_date' => 'date',
         'discount_value' => 'decimal:2',
     ];
+
+    /**
+     * Auto-included in JSON (Api\CatalogController::promotions() serializes
+     * the model directly, unlike Announcement's hand-built array) so the
+     * mobile app never has to resolve a bare storage-relative path itself.
+     */
+    protected $appends = ['image_url'];
+
+    public function getImageUrlAttribute(): ?string
+    {
+        return $this->image ? Storage::disk('public')->url($this->image) : null;
+    }
 
     /**
      * Get the room type this promotion targets (null = all types).

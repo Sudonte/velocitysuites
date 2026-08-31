@@ -6,8 +6,14 @@
 <div class="container-fluid py-4">
     <x-page-header icon="fas fa-users" title="User Management">
         <x-slot:actions>
+            <a href="{{ route('admin.users.password-requests.index') }}" class="btn btn-outline-primary position-relative">
+                <i class="fas fa-key"></i> Password Reset Requests
+                @if($pendingResetRequestsCount > 0)
+                    <span class="badge rounded-pill bg-danger ms-1">{{ $pendingResetRequestsCount }}</span>
+                @endif
+            </a>
             <a href="{{ route('admin.users.create') }}" class="btn btn-primary">
-                <i class="fas fa-user-plus"></i> Add User
+                <i class="fas fa-user-plus"></i> Add Staff Account
             </a>
         </x-slot:actions>
     </x-page-header>
@@ -16,6 +22,12 @@
     @if (session('success'))
         <div class="alert alert-success alert-dismissible fade show" role="alert">
             <i class="fas fa-check-circle"></i> {{ session('success') }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    @endif
+    @if (session('error'))
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            <i class="fas fa-exclamation-circle"></i> {{ session('error') }}
             <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
         </div>
     @endif
@@ -53,13 +65,14 @@
 
     <!-- Users Table -->
     <x-card bodyClass="table-responsive">
-        <table class="table table-hover mb-0">
+        <table class="table table-hover align-middle mb-0">
             <thead>
                 <tr>
                     <th>Name</th>
                     <th>Email</th>
                     <th>Role</th>
                     <th>Status</th>
+                    <th>Registered</th>
                     <th>Last Login</th>
                     <th>Actions</th>
                 </tr>
@@ -67,7 +80,12 @@
             <tbody>
                 @forelse($users as $user)
                     <tr>
-                        <td><strong>{{ $user->full_name }}</strong></td>
+                        <td>
+                            <div class="d-flex align-items-center gap-2">
+                                <x-user-avatar :user="$user" :size="40" class="flex-shrink-0" />
+                                <strong>{{ $user->full_name }}</strong>
+                            </div>
+                        </td>
                         <td>{{ $user->email }}</td>
                         <td>
                             <span class="badge badge-brand">{{ ucfirst($user->role) }}</span>
@@ -75,46 +93,72 @@
                         <td>
                             <x-status-badge :status="$user->status" domain="user" />
                         </td>
+                        <td>{{ $user->created_at->timezone('Asia/Manila')->format('M d, Y • g:i A') }}</td>
                         <td>
-                            {{ $user->last_login_at ? $user->last_login_at->format('M d, Y h:i A') : 'Never' }}
+                            {{ $user->last_login_at ? $user->last_login_at->timezone('Asia/Manila')->format('M d, Y h:i A') : 'Never' }}
                         </td>
                         <td>
-                            <a href="{{ route('admin.users.edit', $user) }}" class="btn btn-sm btn-info">
-                                <i class="fas fa-edit"></i>
-                            </a>
-
-                            @if($user->status === 'active')
-                                <form action="{{ route('admin.users.deactivate', $user) }}" method="POST" class="d-inline">
-                                    @csrf
-                                    @method('PUT')
-                                    <button type="submit" class="btn btn-sm btn-warning"
-                                            onclick="return confirm('Deactivate this user?')">
-                                        <i class="fas fa-ban"></i>
-                                    </button>
-                                </form>
-                            @else
-                                <form action="{{ route('admin.users.reactivate', $user) }}" method="POST" class="d-inline">
-                                    @csrf
-                                    @method('PUT')
-                                    <button type="submit" class="btn btn-sm btn-success">
-                                        <i class="fas fa-undo"></i>
-                                    </button>
-                                </form>
-                            @endif
-
-                            <form action="{{ route('admin.users.resetPassword', $user) }}" method="POST" class="d-inline">
-                                @csrf
-                                @method('PUT')
-                                <button type="submit" class="btn btn-sm btn-secondary"
-                                        onclick="return confirm('Reset password for this user?')">
-                                    <i class="fas fa-key"></i>
+                            {{-- Single uniform-width dropdown per row (instead of a variable number of
+                                 separate buttons) so the Actions column stays aligned regardless of how
+                                 many actions a role has - guest/admin rows get just View, staff rows get
+                                 the full set, but the toggle button itself is always the same size. --}}
+                            <div class="dropdown">
+                                <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button"
+                                        data-bs-toggle="dropdown" aria-expanded="false">
+                                    <i class="fas fa-ellipsis-v"></i> Actions
                                 </button>
-                            </form>
+                                <ul class="dropdown-menu dropdown-menu-end">
+                                    <li>
+                                        <a class="dropdown-item" href="{{ route('admin.users.show', $user) }}">
+                                            <i class="fas fa-eye me-2"></i> View
+                                        </a>
+                                    </li>
+
+                                    @if(in_array($user->role, ['manager', 'receptionist']))
+                                        <li>
+                                            <a class="dropdown-item" href="{{ route('admin.users.edit', $user) }}">
+                                                <i class="fas fa-edit me-2"></i> Edit
+                                            </a>
+                                        </li>
+                                        <li>
+                                            @if($user->status === 'active')
+                                                <form action="{{ route('admin.users.deactivate', $user) }}" method="POST"
+                                                      onsubmit="return confirm('Deactivate this user?')">
+                                                    @csrf
+                                                    @method('PUT')
+                                                    <button type="submit" class="dropdown-item text-warning">
+                                                        <i class="fas fa-ban me-2"></i> Deactivate
+                                                    </button>
+                                                </form>
+                                            @else
+                                                <form action="{{ route('admin.users.reactivate', $user) }}" method="POST"
+                                                      onsubmit="return confirm('Reactivate this user?')">
+                                                    @csrf
+                                                    @method('PUT')
+                                                    <button type="submit" class="dropdown-item text-success">
+                                                        <i class="fas fa-undo me-2"></i> Reactivate
+                                                    </button>
+                                                </form>
+                                            @endif
+                                        </li>
+                                        <li>
+                                            <form action="{{ route('admin.users.resetPassword', $user) }}" method="POST"
+                                                  onsubmit="return confirm('Reset password to the default (velocitysuites123)?')">
+                                                @csrf
+                                                @method('PUT')
+                                                <button type="submit" class="dropdown-item">
+                                                    <i class="fas fa-key me-2"></i> Reset Password
+                                                </button>
+                                            </form>
+                                        </li>
+                                    @endif
+                                </ul>
+                            </div>
                         </td>
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="6">
+                        <td colspan="7">
                             <x-empty-state icon="fas fa-users" message="No users found." />
                         </td>
                     </tr>

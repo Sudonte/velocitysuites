@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Room;
 use App\Models\RoomType;
 use App\Services\RoomAvailabilityService;
 use Carbon\Carbon;
@@ -46,8 +45,6 @@ class PublicRoomController extends Controller
         $roomTypes->getCollection()->transform(function (RoomType $roomType) use ($checkIn, $checkOut) {
             $roomType->available_count = $this->availability->availableCount($roomType, $checkIn, $checkOut);
             $roomType->is_fully_booked = $roomType->available_count <= 0;
-            $roomType->representative_image = Room::where('room_type_id', $roomType->id)
-                ->whereNotNull('image')->value('image');
 
             return $roomType;
         });
@@ -73,15 +70,13 @@ class PublicRoomController extends Controller
         $availableCount = $this->availability->availableCount($roomType, $checkIn, $checkOut);
         $isFullyBooked = $availableCount <= 0;
 
-        $rooms = Room::where('room_type_id', $roomType->id)->with('images')->get();
-        $gallery = $rooms->flatMap(function (Room $room) {
-            $paths = $room->images->pluck('image_path')->all();
-            if ($room->image) {
-                array_unshift($paths, $room->image);
-            }
-
-            return $paths;
-        })->unique()->values();
+        // RoomType::gallery (one representative room's own 4-5-image
+        // gallery, sort_order-ordered) rather than merging every room's
+        // images together - a type can have several physical rooms, each
+        // with its own gallery, so merging them would balloon past the
+        // intended 4-5-image, ordered-1st-to-5th contract. Wrapped in a
+        // Collection since the view uses Collection methods.
+        $gallery = collect($roomType->gallery);
 
         $relatedRoomTypes = RoomType::where('status', 'active')
             ->where('id', '!=', $roomType->id)
@@ -118,3 +113,4 @@ class PublicRoomController extends Controller
         return [$checkIn, $checkOut];
     }
 }
+

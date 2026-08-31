@@ -1,14 +1,14 @@
 @extends('layouts.app')
 
-@section('title', 'Create User - Admin')
+@section('title', 'Add Staff Account - Admin')
 
 @section('content')
 <div class="container-fluid py-4">
-    <x-page-header icon="fas fa-user-plus" title="Create New User" />
+    <x-page-header icon="fas fa-user-plus" title="Add Staff Account" />
 
     <div class="row">
         <div class="col-lg-8">
-            <x-card title="User Information" bodyClass="card-body">
+            <x-card title="Staff Details" bodyClass="card-body">
                 @if ($errors->any())
                     <div class="alert alert-danger alert-dismissible fade show" role="alert">
                         <strong>Validation Errors:</strong>
@@ -25,6 +25,16 @@
                     @csrf
 
                     <div class="row">
+                        <div class="col-md-4">
+                            <div class="form-group mb-3">
+                                <label for="last_name">Last Name *</label>
+                                <input type="text" class="form-control @error('last_name') is-invalid @enderror"
+                                       id="last_name" name="last_name" value="{{ old('last_name') }}" required>
+                                @error('last_name')
+                                    <div class="invalid-feedback">{{ $message }}</div>
+                                @enderror
+                            </div>
+                        </div>
                         <div class="col-md-4">
                             <div class="form-group mb-3">
                                 <label for="first_name">First Name *</label>
@@ -45,82 +55,29 @@
                                 @enderror
                             </div>
                         </div>
-                        <div class="col-md-4">
-                            <div class="form-group mb-3">
-                                <label for="last_name">Last Name *</label>
-                                <input type="text" class="form-control @error('last_name') is-invalid @enderror"
-                                       id="last_name" name="last_name" value="{{ old('last_name') }}" required>
-                                @error('last_name')
-                                    <div class="invalid-feedback">{{ $message }}</div>
-                                @enderror
-                            </div>
-                        </div>
                     </div>
 
                     <div class="form-group mb-3">
-                        <label for="email">Email Address *</label>
-                        <input type="email" class="form-control @error('email') is-invalid @enderror"
-                               id="email" name="email" value="{{ old('email') }}" required>
-                        @error('email')
+                        <label for="role">Role *</label>
+                        <select class="form-control @error('role') is-invalid @enderror"
+                                id="role" name="role" required>
+                            <option value="">Select Role</option>
+                            <option value="manager" {{ old('role') === 'manager' ? 'selected' : '' }}>Manager</option>
+                            <option value="receptionist" {{ old('role') === 'receptionist' ? 'selected' : '' }}>Receptionist</option>
+                        </select>
+                        @error('role')
                             <div class="invalid-feedback">{{ $message }}</div>
                         @enderror
                     </div>
 
-                    <div class="row">
-                        <div class="col-md-6">
-                            <div class="form-group mb-3">
-                                <label for="password">Password *</label>
-                                <input type="password" class="form-control @error('password') is-invalid @enderror"
-                                       id="password" name="password" required>
-                                @error('password')
-                                    <div class="invalid-feedback">{{ $message }}</div>
-                                @enderror
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="form-group mb-3">
-                                <label for="password_confirmation">Confirm Password *</label>
-                                <input type="password" class="form-control"
-                                       id="password_confirmation" name="password_confirmation" required>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="row">
-                        <div class="col-md-6">
-                            <div class="form-group mb-3">
-                                <label for="role">Role *</label>
-                                <select class="form-control @error('role') is-invalid @enderror"
-                                        id="role" name="role" required>
-                                    <option value="">Select Role</option>
-                                    <option value="admin" {{ old('role') === 'admin' ? 'selected' : '' }}>Admin</option>
-                                    <option value="manager" {{ old('role') === 'manager' ? 'selected' : '' }}>Manager</option>
-                                    <option value="receptionist" {{ old('role') === 'receptionist' ? 'selected' : '' }}>Receptionist</option>
-                                    <option value="guest" {{ old('role') === 'guest' ? 'selected' : '' }}>Guest</option>
-                                </select>
-                                @error('role')
-                                    <div class="invalid-feedback">{{ $message }}</div>
-                                @enderror
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="form-group mb-3">
-                                <label for="status">Status *</label>
-                                <select class="form-control @error('status') is-invalid @enderror"
-                                        id="status" name="status" required>
-                                    <option value="active" {{ old('status', 'active') === 'active' ? 'selected' : '' }}>Active</option>
-                                    <option value="suspended" {{ old('status') === 'suspended' ? 'selected' : '' }}>Suspended</option>
-                                </select>
-                                @error('status')
-                                    <div class="invalid-feedback">{{ $message }}</div>
-                                @enderror
-                            </div>
-                        </div>
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i>
+                        The login email and password are generated automatically - see "How this works" for details.
                     </div>
 
                     <div class="form-group">
                         <button type="submit" class="btn btn-primary">
-                            <i class="fas fa-save"></i> Create User
+                            <i class="fas fa-save"></i> Create Account
                         </button>
                         <a href="{{ route('admin.users.index') }}" class="btn btn-secondary">
                             <i class="fas fa-times"></i> Cancel
@@ -131,23 +88,25 @@
         </div>
 
         <div class="col-lg-4">
-            <x-card title="Tips" bodyClass="card-body">
+            <x-card title="How this works" bodyClass="card-body">
                 <ul class="list-unstyled">
                     <li class="mb-2">
-                        <i class="fas fa-info-circle text-brand"></i>
-                        <strong>Roles:</strong>
+                        <i class="fas fa-envelope text-brand"></i>
+                        <strong>Login email:</strong>
                     </li>
-                    <li class="ms-4 mb-2">Admin - Full system access</li>
-                    <li class="ms-4 mb-2">Manager - View reports & analytics</li>
-                    <li class="ms-4 mb-2">Receptionist - Manage check-in/out</li>
-                    <li class="ms-4 mb-3">Guest - Book rooms and manage reservations</li>
+                    <li class="ms-4 mb-3">Generated as <code>lastname.role@hotel.com</code> (e.g. <code>nogas.manager@hotel.com</code>).</li>
 
                     <li class="mb-2">
                         <i class="fas fa-lock text-brand"></i>
-                        <strong>Password:</strong>
+                        <strong>Default password:</strong>
                     </li>
-                    <li class="ms-4 mb-2">Minimum 8 characters</li>
-                    <li class="ms-4">Should be strong</li>
+                    <li class="ms-4 mb-3">Every new account starts on <code>velocitysuites123</code>. They'll be asked to set their own permanent password the first time they log in.</li>
+
+                    <li class="mb-2">
+                        <i class="fas fa-key text-brand"></i>
+                        <strong>Lost password:</strong>
+                    </li>
+                    <li class="ms-4">Managers and receptionists don't self-reset - if they forget their password, reset it back to the default from the user list.</li>
                 </ul>
             </x-card>
         </div>

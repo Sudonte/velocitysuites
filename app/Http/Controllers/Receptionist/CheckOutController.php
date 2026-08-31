@@ -10,6 +10,7 @@ use App\Models\Booking;
 use App\Models\Discount;
 use App\Models\Payment;
 use App\Services\NotificationService;
+use App\Support\Activity;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -34,7 +35,7 @@ class CheckOutController extends Controller
             $tab = 'expected';
         }
 
-        $bookings = Booking::with(['reservation.guest.user', 'room', 'roomType', 'billing'])
+        $bookings = Booking::with(['reservation.guest.user', 'guest.user', 'rooms', 'roomType', 'billing'])
             ->where('booking_status', $tab === 'expected' ? 'checked_in' : 'checked_out')
             ->orderBy('check_out', $tab === 'expected' ? 'asc' : 'desc')
             ->paginate(15)
@@ -59,11 +60,11 @@ class CheckOutController extends Controller
 
         $billing = $booking->billing ?? $this->generateBilling($booking);
 
-        $booking->load(['reservation.guest.user', 'room']);
+        $booking->load(['reservation.guest.user', 'guest.user', 'rooms']);
         $billing->load(['additionalCharges', 'discountApplied']);
 
         $amenityRequests = AmenityRequest::with('amenity')
-            ->where('reservation_id', $booking->reservation_id)
+            ->where($booking->reservation_id ? 'reservation_id' : 'booking_id', $booking->reservation_id ?? $booking->id)
             ->where('status', 'approved')
             ->get();
 
@@ -95,7 +96,7 @@ class CheckOutController extends Controller
      */
     public function checkOutPaymentPanel(Billing $billing)
     {
-        $billing->load(['booking.reservation.guest.user', 'booking.room', 'payments', 'additionalCharges', 'discountApplied']);
+        $billing->load(['booking.reservation.guest.user', 'booking.rooms', 'payments', 'additionalCharges', 'discountApplied']);
 
         $balance = $billing->balance;
         $amountPaidSoFar = (float) $billing->payments()
@@ -148,28 +149,51 @@ class CheckOutController extends Controller
             $completed = $paid >= (float) $billing->total_amount;
             $billing->update(['billing_status' => $completed ? 'paid' : 'partial']);
 
-            $guest = $booking->reservation->guest->user;
-            $roomName = $booking->room->room_name;
+            $guest = $booking->account_guest?->user;
+            $rooms = $booking->rooms->isNotEmpty() ? $booking->rooms : collect([$booking->room])->filter();
+            $roomName = $rooms->pluck('room_name')->implode(', ');
 
-            $this->notificationService->notifyPaymentReceived(
-                $guest,
-                (float) $validated['amount_paid'],
-                $roomName
+            if ($guest) {
+                $this->notificationService->notifyPaymentReceived(
+                    $guest,
+                    (float) $validated['amount_paid'],
+                    $roomName,
+                    $booking->reservation_id ?? $booking->id
+                );
+            }
+
+            Activity::log(
+                'Recorded payment',
+                "Booking #{$booking->id} - ₱" . number_format((float) $validated['amount_paid'], 2) . " ({$validated['payment_method']}) from " . ($guest->full_name ?? $booking->stay_guest_full_name ?? 'guest'),
+                $booking
             );
 
             if ($completed) {
                 $booking->update(['booking_status' => 'checked_out']);
-                $booking->room->update(['status' => 'available']);
+                foreach ($rooms as $room) {
+                    $room->update(['status' => 'available']);
+                }
 
-                $this->notificationService->notifyCheckOut($guest, $roomName);
-                $this->notificationService->notifyPaymentComplete($guest);
-            } else {
-                $this->notificationService->notifyManagerPayment(
-                    $guest,
-                    (float) $validated['amount_paid'],
-                    $billing->billing_status,
-                    $roomName
+                if ($guest) {
+                    $this->notificationService->notifyCheckOut($guest, $roomName, $booking->reservation_id ?? $booking->id);
+                    $this->notificationService->notifyPaymentComplete($guest, $booking->reservation_id ?? $booking->id);
+                }
+
+                Activity::log(
+                    'Checked out guest',
+                    "Booking #{$booking->id} - " . ($guest->full_name ?? $booking->stay_guest_full_name ?? 'guest') . " from {$roomName}",
+                    $booking
                 );
+            } else {
+                if ($guest) {
+                    $this->notificationService->notifyManagerPayment(
+                        $guest,
+                        (float) $validated['amount_paid'],
+                        $billing->billing_status,
+                        $roomName,
+                        $booking->reservation_id ?? $booking->id
+                    );
+                }
             }
         });
 
@@ -197,8 +221,14 @@ class CheckOutController extends Controller
             return response()->json(['message' => 'Cannot change the discount on a paid bill.'], 422);
         }
 
-        $reservation = $billing->booking->reservation;
-        if (!$reservation->discount_requested) {
+        // A reservation-derived booking's discount request lives on its
+        // Reservation; a direct "New Booking" transaction (no reservation
+        // at all) carries the exact same fields directly on the Booking
+        // itself instead (see the discount_requested/discount_verification_status
+        // migration mirroring reservations' equivalent columns).
+        $booking = $billing->booking;
+        $discountTarget = $booking->reservation ?? $booking;
+        if (!$discountTarget->discount_requested) {
             return response()->json(['message' => 'This guest did not request a discount.'], 422);
         }
 
@@ -208,7 +238,7 @@ class CheckOutController extends Controller
 
         $discount = Discount::where('status', 'active')->findOrFail($validated['discount_id']);
 
-        DB::transaction(function () use ($billing, $discount, $reservation) {
+        DB::transaction(function () use ($billing, $discount, $discountTarget) {
             $subtotal = (float) $billing->room_charge
                 + (float) $billing->additional_guest_fee
                 + (float) $billing->amenity_charge
@@ -226,8 +256,8 @@ class CheckOutController extends Controller
             ]);
             $billing->recalculateTotal();
 
-            if ($reservation->discount_verification_status !== 'approved') {
-                $reservation->update(['discount_verification_status' => 'approved']);
+            if ($discountTarget->discount_verification_status !== 'approved') {
+                $discountTarget->update(['discount_verification_status' => 'approved']);
             }
         });
 
@@ -268,6 +298,22 @@ class CheckOutController extends Controller
             $billing->recalculateTotal();
         });
 
+        $billing->refresh()->loadMissing('booking.account_guest.user');
+        Activity::log(
+            'Recorded additional charge',
+            "Billing #{$billing->id} - {$validated['description']} (₱" . number_format((float) $validated['amount'], 2) . ')',
+            $billing->booking ?? $billing
+        );
+        if ($guest = $billing->booking?->account_guest?->user) {
+            $this->notificationService->notifyAdditionalCharge(
+                $guest,
+                $validated['description'],
+                (float) $validated['amount'],
+                $billing->balance,
+                $billing->booking->id
+            );
+        }
+
         return $this->chargesTableResponse($billing);
     }
 
@@ -300,6 +346,12 @@ class CheckOutController extends Controller
             $billing->recalculateTotal();
         });
 
+        Activity::log(
+            'Updated additional charge',
+            "Billing #{$billing->id} - {$validated['description']} (₱" . number_format((float) $validated['amount'], 2) . ')',
+            $billing->booking ?? $billing
+        );
+
         return $this->chargesTableResponse($billing);
     }
 
@@ -314,11 +366,20 @@ class CheckOutController extends Controller
             return response()->json(['message' => 'Cannot remove charges from a paid bill.'], 422);
         }
 
+        $description = $additionalCharge->description;
+        $amount = (float) $additionalCharge->amount;
+
         DB::transaction(function () use ($additionalCharge, $billing) {
             $additionalCharge->delete();
 
             $billing->recalculateTotal();
         });
+
+        Activity::log(
+            'Removed additional charge',
+            "Billing #{$billing->id} - {$description} (₱" . number_format($amount, 2) . ')',
+            $billing->booking ?? $billing
+        );
 
         return $this->chargesTableResponse($billing);
     }
@@ -332,18 +393,35 @@ class CheckOutController extends Controller
      */
     private function generateBilling(Booking $booking): Billing
     {
-        $reservation = $booking->reservation;
+        $reservation = $booking->reservation; // null for a direct "New Booking" transaction
         $nights = max(1, abs($booking->check_out->diffInDays($booking->check_in)));
 
-        $roomCharge = (float) $booking->room->room_rate * $nights;
+        // A multi-room booking's rooms may each have their own rate
+        // override, so this sums per-room rather than multiplying a single
+        // rate by rooms_requested. Falls back to the legacy single room()
+        // relation for the rare pre-migration booking with no pivot rows.
+        $rooms = $booking->rooms->isNotEmpty() ? $booking->rooms : collect([$booking->room])->filter();
+        $roomCharge = $rooms->sum(fn ($room) => (float) $room->room_rate) * $nights;
 
         // Children under 12 stay free - only adults count toward the
-        // extra-guest fee, even though both occupy the room's capacity.
+        // extra-guest fee, measured against the combined capacity of every
+        // assigned room, not just one.
         $adults = $booking->adults ?? $booking->number_of_guests;
-        $extraGuests = max(0, $adults - $booking->room->room_capacity);
+        $totalCapacity = $rooms->sum('room_capacity');
+        $extraGuests = max(0, $adults - $totalCapacity);
         $extraGuestFee = $extraGuests * (float) config('hotel.extra_guest_fee_rate', 0);
 
-        $amenityCharge = (float) AmenityRequest::where('reservation_id', $booking->reservation_id)
+        // Covers both a reservation-derived booking's amenity requests
+        // (reservation_id) and a direct booking's own (booking_id) -
+        // whichever applies. Branched explicitly rather than relying on
+        // where('reservation_id', null) matching semantics.
+        $amenityCharge = (float) AmenityRequest::where(function ($q) use ($booking) {
+                if ($booking->reservation_id) {
+                    $q->where('reservation_id', $booking->reservation_id);
+                } else {
+                    $q->where('booking_id', $booking->id);
+                }
+            })
             ->where('status', 'approved')
             ->sum(DB::raw('charge * quantity'));
 
@@ -367,11 +445,25 @@ class CheckOutController extends Controller
             'billing_status' => 'pending',
         ]);
 
-        $reservation->payments()
-            ->where('payment_stage', 'deposit')
-            ->where('payment_status', 'completed')
-            ->whereNull('billing_id')
-            ->update(['billing_id' => $billing->id]);
+        // Re-parent any already-completed pre-checkout payment onto this
+        // billing so it counts toward the balance immediately. A
+        // reservation-derived booking's payment was a "deposit" stage
+        // (paid at reservation time); a direct booking's was already
+        // "final" stage (paid in full at booking time, see
+        // DirectBookingService::create()) - there's no deposit concept for
+        // that transaction type, so no stage filter is needed there.
+        if ($reservation) {
+            $reservation->payments()
+                ->where('payment_stage', 'deposit')
+                ->where('payment_status', 'completed')
+                ->whereNull('billing_id')
+                ->update(['billing_id' => $billing->id]);
+        } else {
+            $booking->payments()
+                ->where('payment_status', 'completed')
+                ->whereNull('billing_id')
+                ->update(['billing_id' => $billing->id]);
+        }
 
         $paid = (float) $billing->payments()->where('payment_status', 'completed')->sum('amount_paid');
         if ($paid > 0) {

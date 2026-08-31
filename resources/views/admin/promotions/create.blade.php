@@ -21,7 +21,7 @@
                     </div>
                 @endif
 
-                <form action="{{ route('admin.promotions.store') }}" method="POST">
+                <form action="{{ route('admin.promotions.store') }}" method="POST" enctype="multipart/form-data">
                     @csrf
 
                     <div class="form-group mb-3">
@@ -30,6 +30,16 @@
                                id="promo_name" name="promo_name" value="{{ old('promo_name') }}" required>
                         @error('promo_name')
                             <div class="invalid-feedback">{{ $message }}</div>
+                        @enderror
+                    </div>
+
+                    <div class="form-group mb-3">
+                        <label for="image">Promotional Image</label>
+                        <input type="file" class="form-control @error('image') is-invalid @enderror"
+                               id="image" name="image" accept="image/jpeg,image/png,image/jpg">
+                        <small class="text-muted">Optional. Shown on the public Home page and the mobile app. JPG, JPEG, or PNG. Max 5MB.</small>
+                        @error('image')
+                            <div class="invalid-feedback d-block">{{ $message }}</div>
                         @enderror
                     </div>
 

@@ -1,12 +1,14 @@
 @extends('layouts.guest')
 
-@section('title', 'Reset Password - Hotel Booking System')
+@section('title', 'Reset Password - Velocity Suites')
 
 @section('content')
 <div class="auth-card">
     <div class="logo">
-        <h1><i class="fas fa-lock"></i></h1>
-        <p class="text-muted">Create New Password</p>
+        <span class="logo-badge" style="width: 84px; height: 72px;">
+            <img src="{{ asset('images/logo.jpg') }}" alt="Velocity Suites">
+        </span>
+        <p class="text-muted mt-2">Enter Verification Code</p>
     </div>
 
     @if (session('error'))
@@ -32,35 +34,34 @@
         </div>
     @endif
 
+    <p class="text-muted mb-3">
+        Your verification code has been confirmed. Enter your new password below.
+    </p>
+
     <form method="POST" action="{{ route('password.update') }}">
         @csrf
-        <input type="hidden" name="token" value="{{ $token }}">
 
-        <div class="form-group">
-            <label for="email">Email Address</label>
-            <input type="email" class="form-control @error('email') is-invalid @enderror" 
-                   id="email" name="email" value="{{ $email ?? old('email') }}" required autofocus>
-            @error('email')
-                <div class="invalid-feedback">{{ $message }}</div>
-            @enderror
-        </div>
+        <input type="hidden" name="email" value="{{ $email ?? old('email') }}">
+        <input type="hidden" name="otp" value="{{ $otp ?? old('otp') }}">
 
         <div class="form-group">
             <label for="password">New Password</label>
-            <input type="password" class="form-control @error('password') is-invalid @enderror" 
-                   id="password" name="password" required>
+            <div class="password-input-wrapper">
+                <input type="password" class="form-control @error('password') is-invalid @enderror"
+                       id="password" name="password" minlength="8" required>
+                <button type="button" class="password-toggle-icon toggle-password" aria-label="Show password" title="Show password"><i class="fas fa-eye-slash"></i></button>
+            </div>
             @error('password')
-                <div class="invalid-feedback">{{ $message }}</div>
+                <div class="invalid-feedback d-block">{{ $message }}</div>
             @enderror
         </div>
 
         <div class="form-group">
             <label for="password_confirmation">Confirm Password</label>
-            <input type="password" class="form-control @error('password_confirmation') is-invalid @enderror" 
-                   id="password_confirmation" name="password_confirmation" required>
-            @error('password_confirmation')
-                <div class="invalid-feedback">{{ $message }}</div>
-            @enderror
+            <div class="password-input-wrapper">
+                <input type="password" class="form-control" id="password_confirmation" name="password_confirmation" minlength="8" required>
+                <button type="button" class="password-toggle-icon toggle-password" aria-label="Show password" title="Show password"><i class="fas fa-eye-slash"></i></button>
+            </div>
         </div>
 
         <button type="submit" class="btn btn-primary w-100 mb-2">

@@ -14,28 +14,33 @@ class RoomType extends Model
         'name',
         'rate',
         'capacity',
+        'bed_type',
         'description',
+        'image',
+        'image_changed_at',
         'number_format',
         'status',
     ];
 
     protected $casts = [
         'rate' => 'decimal:2',
+        'image_changed_at' => 'datetime',
     ];
 
     protected $appends = [
         'image_url',
+        'amenities',
+        'gallery',
     ];
 
     /**
-     * `rooms` gets eager-loaded (constrained to one image-bearing row) by
-     * PublicRoomController/Api\RoomController purely so getImageUrlAttribute()
-     * can avoid an N+1 query - it must never actually serialize into a
-     * response, or individual room data (room_number etc.) would leak to
-     * guests who are only supposed to see the grouped type. Blade views
-     * that need real per-room listings (e.g. admin/room-types/show) pass
-     * rooms as their own separate variable, not via this relation, so
-     * hiding it here doesn't affect them.
+     * Defensive default: if some future call site eager-loads `rooms` onto
+     * a RoomType that then gets JSON-serialized to a guest-facing
+     * response, individual room data (room_number etc.) shouldn't leak -
+     * guests only ever see the grouped type. Blade views that need real
+     * per-room listings (e.g. admin/room-types/show) pass rooms as their
+     * own separate variable, not via this relation, so hiding it here
+     * doesn't affect them.
      */
     protected $hidden = [
         'rooms',
@@ -50,20 +55,116 @@ class RoomType extends Model
     }
 
     /**
-     * A room type has no image of its own (there's no per-type upload UI -
-     * guests never see individual rooms, so one representative photo from
-     * any of the type's physical rooms stands in). If the `rooms` relation
-     * is already eager-loaded (see PublicRoomController/Api\RoomController,
-     * which constrain it to whereNotNull('image')->limit(1) to avoid
-     * N+1s), this reads from that; otherwise it queries directly.
+     * Amenities assigned to this room type - the single source of truth for
+     * every room of this type (System Administrator requirement: amenities
+     * are managed only at the Room Type level, never per individual room -
+     * see Room::getAmenitiesAttribute(), a pure passthrough to this list).
+     * Managed from this type's own Edit/Rooms pages, within the Rooms
+     * module.
      */
-    public function getImageUrlAttribute(): ?string
+    public function assignedAmenities()
     {
-        $room = $this->relationLoaded('rooms')
-            ? $this->rooms->first(fn ($r) => $r->image !== null)
-            : $this->rooms()->whereNotNull('image')->first();
+        return $this->belongsToMany(Amenity::class, 'room_type_amenity')->withTimestamps();
+    }
 
-        return $room && $room->image ? Storage::disk('public')->url($room->image) : null;
+    /**
+     * The room type's amenities for guest display - active-only. Shape:
+     * ['name','category','description','pricing_type','fee']; empty array
+     * drives "No Available Amenities" everywhere it's shown.
+     */
+    public function getAmenitiesAttribute(): array
+    {
+        return $this->assignedAmenities()
+            ->where('status', 'active')
+            ->get()
+            ->map(function (Amenity $amenity) {
+                return [
+                    'name' => $amenity->amenity_name,
+                    'category' => $amenity->category,
+                    'description' => $amenity->description,
+                    'pricing_type' => $amenity->isPaid() ? 'paid' : 'complimentary',
+                    'fee' => $amenity->isPaid() ? (string) $amenity->charge : null,
+                    'quantity' => $amenity->quantity,
+                ];
+            })->values()->all();
+    }
+
+    /**
+     * The room type's main image - a real, authoritative field (see the
+     * add_image_to_room_types_table migration), managed only via
+     * Admin\RoomTypeManagementController's Edit/Create Type forms. Every
+     * individual room of this type displays this same image throughout
+     * the system (guest browsing, booking/reservation interfaces, the
+     * Rooms module, mobile app, etc.). Falls back to the Velocity Suites
+     * logo when no image has ever been uploaded or one was removed - this
+     * is a universal branding default (unlike the per-room gallery, which
+     * must never show the logo as if it were a real guest-facing photo),
+     * so image_url is never null and every consumer can just render it.
+     */
+    public function getImageUrlAttribute(): string
+    {
+        return $this->image ? Storage::disk('public')->url($this->image) : asset('images/logo.jpg');
+    }
+
+    /**
+     * This room type's photo gallery: every individual room of this type
+     * owns its own 4-5 photo gallery (Room::images()); this pools all of
+     * them together, each photo labeled with the room it came from, for
+     * every audience that browses by type - guest web (Landing Page, Rooms
+     * Page), the mobile app, and the System Administrator/Receptionist
+     * Rooms module (Admin\RoomTypeManagementController::show(),
+     * Receptionist\ReceptionistController::roomsShow()). Ordered by
+     * room_number so photos naturally group by room. Only ever maps real
+     * RoomImage rows - never synthesizes a logo/placeholder entry, so a
+     * room with zero photos simply contributes nothing here (the gallery
+     * component's own empty state handles that, never the logo). Shape:
+     * [{'id','url','room_label'}, ...].
+     */
+    public function getGalleryAttribute(): array
+    {
+        return $this->rooms()->with('images')->orderBy('room_number')->get()
+            ->flatMap(function (Room $room) {
+                return $room->images->map(function (RoomImage $image) use ($room) {
+                    return [
+                        'id' => $image->id,
+                        'url' => Storage::disk('public')->url($image->image_path),
+                        'room_label' => 'Room ' . $room->room_number,
+                    ];
+                });
+            })->values()->all();
+    }
+
+    /**
+     * Once-per-24-hours cooldown on the type's main image - mirrors
+     * User::canChangeProfilePicture(), just with a 1-day window instead
+     * of 1-month. Only gates replacing/removing an image that already
+     * exists; the very first upload (no image yet) is never gated.
+     */
+    public function canChangeImage(): bool
+    {
+        return $this->image_changed_at === null
+            || $this->image_changed_at->addDay()->isPast();
+    }
+
+    /** Null once changeable again; otherwise the date the one-day cooldown lifts. */
+    public function nextImageChangeDate(): ?\Carbon\Carbon
+    {
+        if ($this->canChangeImage()) {
+            return null;
+        }
+
+        return $this->image_changed_at->copy()->addDay();
+    }
+
+    /**
+     * Get the converted bookings for this type - Booking carries its own
+     * room_type_id (set at reservation time), independent of whichever
+     * physical room ends up assigned at check-in, so this is the correct
+     * relation for "which room type gets booked the most" reporting.
+     */
+    public function bookings()
+    {
+        return $this->hasMany(Booking::class);
     }
 
     /**
