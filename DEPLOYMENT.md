@@ -126,6 +126,20 @@ setup for this project (**this is what's actually live**):
   `public_html/hotel_reservation/storage/app/public` (recreate with `ln -s`
   if it's ever missing - `php artisan storage:link` will fail on this host
   because both `symlink()` and `exec()` are disabled by CageFS).
+- **`public_html/css`, `public_html/js`, and `public_html/images` must all
+  be symlinks too** - to `public_html/hotel_reservation/public/{css,js,images}`
+  respectively. `asset('css/app.css')` etc. resolve to `public_html/css/...`
+  (the actual web root), not `hotel_reservation/public/css/...` (blocked by
+  the deny-all rule above and never served directly) - a plain copied
+  directory instead of a symlink here silently goes stale on every push
+  that touches CSS/JS, since git only updates the `hotel_reservation/`
+  clone. This exact bug shipped once already (2026-08-31: `public_html/css`
+  and `public_html/js` had been real copied directories dating back to
+  July/August, so every CSS/JS change since then had deployed successfully
+  but never actually gone live until the symlink was fixed by hand over
+  SSH) - if a CSS/JS change doesn't appear live after a push, check
+  `readlink public_html/css` and `readlink public_html/js` first, before
+  assuming the deploy itself failed.
 
 **One-time setup after connecting Git auto-deploy** (only needed once per
 fresh server, not on every subsequent push):
