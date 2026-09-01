@@ -1378,19 +1378,36 @@ tbody tr:hover {
 }
 
 /* Bookings/reservations tables (Admin & Manager Monitoring, Receptionist
-   Bookings/Reservations) share the same wide, many-column shape - a bit
-   more breathing room between cells than Bootstrap's tight default, and
-   nowrap on the Action column so its buttons never wrap onto two lines. */
+   Bookings/Reservations) share the same wide, many-column (often 8-10)
+   shape - Bootstrap's default 1rem all-around cell padding (see the base
+   th/td rule above) eats too much horizontal space across that many
+   columns, squeezing the actual content (guest names, room type names)
+   into a narrow enough box that ordinary content started wrapping onto
+   2-3 lines and reading as "smooshed" - tighter horizontal padding plus
+   a slightly smaller font-size fits the same data far more comfortably,
+   with nowrap on the Action column so its buttons never wrap onto two
+   lines either. */
+.monitoring-table {
+    font-size: 0.9rem;
+}
+
 .monitoring-table > :not(caption) > * > * {
     vertical-align: middle;
-    padding-top: 0.85rem;
-    padding-bottom: 0.85rem;
+    padding: 0.7rem 0.65rem;
 }
 
 .monitoring-table td.text-nowrap,
 .monitoring-table th:last-child,
 .monitoring-table td:last-child {
     white-space: nowrap;
+}
+
+/* Space out multiple actions (a View link plus a Verify/Archive/Delete
+   button or status badge) in the Action column - the underlying Blade
+   templates place them one after another with no gap class of their own,
+   relying on this instead so every such table gets it automatically. */
+.monitoring-table td:last-child > * + * {
+    margin-left: 0.4rem;
 }
 
 /* Wraps both the mobile card list and the desktop table inside the
