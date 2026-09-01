@@ -40,6 +40,25 @@ class ProfileController extends Controller
     }
 
     /**
+     * Light/dark appearance toggle in the navbar account dropdown (see
+     * components/navbar.blade.php) - deliberately role-agnostic (no
+     * guest/admin/etc branching, unlike update() below) since every role
+     * gets this same dropdown. AJAX-only (no page reload, matches the
+     * dropdown's own live-toggle feel), so this returns JSON rather than
+     * redirecting back.
+     */
+    public function updateTheme(Request $request): \Illuminate\Http\JsonResponse
+    {
+        $validated = $request->validate([
+            'theme' => 'required|in:light,dark',
+        ]);
+
+        auth()->user()->update(['theme' => $validated['theme']]);
+
+        return response()->json(['message' => 'Appearance updated.']);
+    }
+
+    /**
      * Update profile info - admin and guest only (managers/receptionists
      * view their full details here but never edit them; the System
      * Administrator manages their account info from User Management).

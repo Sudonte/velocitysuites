@@ -19,7 +19,6 @@ use App\Http\Controllers\Receptionist\CheckOutController as ReceptionistCheckOut
 use App\Http\Controllers\Guest\GuestController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\ProfileController;
-use App\Http\Controllers\SettingsController;
 use Illuminate\Support\Facades\Route;
 
 // Landing page - shown to all users (guests can browse, auth users can see featured rooms)
@@ -405,14 +404,14 @@ Route::middleware(['auth', 'account.status', 'log.activity', 'no.cache'])->group
 
     // Global Settings (all authenticated users)
     Route::middleware('auth')->group(function () {
-        Route::get('/settings', [SettingsController::class, 'index'])->name('settings.index');
-        Route::put('/settings/theme', [SettingsController::class, 'updateTheme'])->name('settings.theme');
-
         Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications.index');
         Route::put('/notifications/{notification}/read', [NotificationController::class, 'markAsRead'])->name('notifications.markAsRead');
         Route::put('/notifications/read-all', [NotificationController::class, 'markAllAsRead'])->name('notifications.markAllAsRead');
 
         Route::get('/profile', [ProfileController::class, 'show'])->name('profile.show');
+        // Light/dark toggle in the navbar account dropdown - role-agnostic,
+        // so this one route (not duplicated under guest.*) covers every role.
+        Route::put('/profile/theme', [ProfileController::class, 'updateTheme'])->name('profile.theme');
         Route::put('/profile', [ProfileController::class, 'update'])->name('profile.update');
         Route::post('/profile/picture', [ProfileController::class, 'updateProfilePicture'])->name('profile.picture.update');
         Route::delete('/profile/picture', [ProfileController::class, 'removeProfilePicture'])->name('profile.picture.remove');

@@ -5,10 +5,12 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * Per-user light/dark appearance preference, set from the new shared
- * Settings page (SettingsController) and applied via data-bs-theme on
- * <html> in layouts/app.blade.php. Defaults to 'light' rather than nullable
- * so every read site can trust the column instead of null-coalescing.
+ * Per-user light/dark appearance preference, set from the account dropdown
+ * in the navbar (components/navbar.blade.php, ProfileController::
+ * updateTheme() - originally a standalone Settings page, since folded into
+ * this dropdown) and applied via data-bs-theme on <html> in
+ * layouts/app.blade.php. Defaults to 'light' rather than nullable so every
+ * read site can trust the column instead of null-coalescing.
  */
 return new class extends Migration
 {

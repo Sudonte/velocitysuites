@@ -1123,6 +1123,42 @@ tbody tr:hover {
     color: var(--primary-color) !important;
 }
 
+/* Account dropdown (components/navbar.blade.php) - .navbar-account-toggle
+   deliberately has no Bootstrap .dropdown-toggle class, so it gets none of
+   that class's caret ::after styling - just the plain avatar+name trigger,
+   matching the reference design. */
+.navbar-account-menu {
+    width: 300px;
+    max-width: calc(100vw - 2rem);
+    background-color: var(--surface-color);
+    border: 1px solid var(--border-color);
+    box-shadow: var(--shadow-md);
+    overflow: hidden;
+}
+
+.navbar-account-menu-header {
+    padding: 1rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.navbar-account-menu .dropdown-item,
+.navbar-account-menu .dropdown-item-text {
+    color: var(--text-dark);
+    padding: 0.55rem 1rem;
+}
+
+.navbar-account-menu .dropdown-item:hover,
+.navbar-account-menu .dropdown-item:focus-visible {
+    background-color: var(--bg-color);
+    color: var(--primary-color);
+}
+
+.navbar-account-menu .dropdown-item i {
+    color: var(--primary-color);
+    width: 1.1rem;
+    text-align: center;
+}
+
 /* Welcome-row live clock (x-page-header's showClock prop) */
 .page-header-clock-time {
     font-size: 1.15rem;

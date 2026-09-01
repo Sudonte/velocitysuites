@@ -43,9 +43,10 @@
                 Rejected / Failed <span class="badge bg-danger">{{ $rejectedCount }}</span>
             </a>
         </li>
-        {{-- No "Archived" tab here anymore - reach it from Settings
-             (settings.index) instead; this page still renders tab=archived
-             fully (see @elseif below), just isn't linked to from this bar. --}}
+        {{-- No "Archived" tab here anymore - reach it from the account
+             dropdown's "Archived Bookings" link (components/navbar.blade.php)
+             instead; this page still renders tab=archived fully (see @elseif
+             below), just isn't linked to from this bar. --}}
     </ul>
 
     @if($tab === 'rejected')
