@@ -41,10 +41,15 @@ class CheckInController extends Controller
             $tab = 'expected';
         }
 
+        // simplePaginate (Previous/Next only, no numbered page links, no
+        // COUNT query) instead of paginate() - the numbered page-link
+        // boxes were rendering broken/oversized here for reasons that
+        // didn't trace back to anything in this app's own CSS; Previous/
+        // Next alone is enough to reach every booking regardless.
         $bookings = Booking::with(['reservation.guest.user', 'guest.user', 'rooms', 'roomType'])
             ->where('booking_status', $tab === 'expected' ? 'confirmed' : 'checked_in')
             ->orderBy($tab === 'expected' ? 'check_in' : 'check_out')
-            ->paginate(15)
+            ->simplePaginate(15)
             ->withQueryString();
 
         $expectedCount = Booking::where('booking_status', 'confirmed')->count();
