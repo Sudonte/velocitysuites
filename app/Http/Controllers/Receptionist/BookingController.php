@@ -6,9 +6,12 @@ use App\Http\Controllers\Controller;
 use App\Models\ActivityLog;
 use App\Models\Booking;
 use App\Models\Payment;
+use App\Models\RoomType;
 use App\Services\NotificationService;
 use App\Services\ReservationWorkflowService;
+use App\Services\RoomAvailabilityService;
 use App\Support\Activity;
+use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -16,12 +19,14 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
 
 /**
- * The Booking Module: a view-only registry of bookings still awaiting
- * check-in (booking_status = confirmed). Same single-stage-at-a-time rule
- * as every other module - once a guest checks in, the record disappears
- * from here and shows up in the Check-in Module's "Checked-in Guests" tab
- * (and later the Check-out Module) instead, not here as well. Room
- * assignment and check-in live in the Check-in Module.
+ * The Booking Module: a registry of bookings still awaiting check-in
+ * (booking_status = confirmed), plus (see create()/store()) creating one
+ * directly - everything else here stays view-only/status-transition-only,
+ * never touching room assignment or check-in, which still live in the
+ * Check-in Module. Same single-stage-at-a-time rule as every other module -
+ * once a guest checks in, the record disappears from here and shows up in
+ * the Check-in Module's "Checked-in Guests" tab (and later the Check-out
+ * Module) instead, not here as well.
  *
  * Two extra tabs beyond the original Active/Complete pair - "Rejected /
  * Failed" (booking_status = cancelled, not archived) and "Archived" (same,
@@ -34,6 +39,7 @@ class BookingController extends Controller
     public function __construct(
         private ReservationWorkflowService $workflow,
         private NotificationService $notifications,
+        private RoomAvailabilityService $availability,
     ) {
     }
 
@@ -85,6 +91,89 @@ class BookingController extends Controller
         return view('receptionist.bookings.index', compact(
             'bookings', 'tab', 'pendingCount', 'verifiedCount', 'rejectedCount'
         ));
+    }
+
+    /**
+     * "Create Booking" form - a receptionist creates an already-confirmed
+     * Booking directly (skips the Reservation stage entirely) on a guest's
+     * behalf, no User/Guest account created for them: the guest's name is
+     * just typed in directly (guest_first_name/middle/last_name). Only
+     * active room types are offered, matching every other room-type picker
+     * in the app.
+     */
+    public function create(): View
+    {
+        $roomTypes = RoomType::where('status', 'active')->orderBy('name')->get();
+
+        return view('receptionist.bookings.create', compact('roomTypes'));
+    }
+
+    /**
+     * Creates the Booking directly at booking_status = 'confirmed' -
+     * reservation_id and guest_id both left null (bookings.guest_id has
+     * been nullable since 2026_08_23_150000_make_bookings_independent_of_reservations.php;
+     * this is the first flow that actually exercises that). payment_method
+     * is left null - no payment is collected here; the receptionist
+     * records one later via the existing record-payment action once the
+     * guest actually pays, same as verified_at/verified_by staying null
+     * ("Pending Verification") until the existing verify() action.
+     */
+    public function store(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'guest_first_name' => 'required|string|max:100',
+            'guest_middle_name' => 'nullable|string|max:100',
+            'guest_last_name' => 'required|string|max:100',
+            'room_type_id' => 'required|exists:room_types,id',
+            'check_in' => 'required|date|after_or_equal:today',
+            'check_out' => 'required|date|after:check_in',
+            'rooms_requested' => 'required|integer|min:1|max:50',
+            'adults' => 'required|integer|min:1',
+            'children' => 'nullable|integer|min:0',
+        ]);
+
+        $roomType = RoomType::findOrFail($validated['room_type_id']);
+        abort_unless($roomType->status === 'active', 422, 'This room type is not currently available.');
+
+        $available = $this->availability->availableCount(
+            $roomType,
+            Carbon::parse($validated['check_in']),
+            Carbon::parse($validated['check_out'])
+        );
+        if ($available < $validated['rooms_requested']) {
+            return back()->withInput()->with('error', $validated['rooms_requested'] > 1
+                ? "Not enough {$roomType->name} rooms available for these dates (needs {$validated['rooms_requested']}, only {$available} free)."
+                : "This room type is fully booked for the requested dates.");
+        }
+
+        $children = (int) ($validated['children'] ?? 0);
+
+        $booking = Booking::create([
+            'reservation_id' => null,
+            'guest_id' => null,
+            'guest_first_name' => $validated['guest_first_name'],
+            'guest_middle_name' => $validated['guest_middle_name'] ?? null,
+            'guest_last_name' => $validated['guest_last_name'],
+            'room_type_id' => $roomType->id,
+            'rooms_requested' => $validated['rooms_requested'],
+            'check_in' => $validated['check_in'],
+            'check_out' => $validated['check_out'],
+            'adults' => $validated['adults'],
+            'children' => $children,
+            'number_of_guests' => $validated['adults'] + $children,
+            'confirmed_at' => now(),
+            'booking_status' => 'confirmed',
+        ]);
+
+        Activity::log(
+            'Created booking',
+            "Booking #{$booking->id} for {$roomType->name} ({$booking->guest_display_name}) - created directly by staff",
+            $booking
+        );
+
+        return redirect()
+            ->route('receptionist.bookings.show', $booking)
+            ->with('success', 'Booking created for ' . $booking->guest_display_name . '. Record their payment whenever they pay, and check them in from the Check-in Module when they arrive.');
     }
 
     /**
@@ -184,7 +273,7 @@ class BookingController extends Controller
         $booking->loadMissing(['reservation.guest.user', 'guest.user']);
         Activity::log(
             'Recorded walk-in payment',
-            "Booking #{$booking->id} - {$booking->account_guest_full_name} - ₱"
+            "Booking #{$booking->id} - {$booking->guest_display_name} - ₱"
                 . number_format((float) $validated['amount_paid'], 2) . " ({$validated['payment_method']}) - remaining balance now ₱" . number_format($newRemaining, 2),
             $booking
         );
@@ -225,7 +314,7 @@ class BookingController extends Controller
         $booking->loadMissing(['reservation.guest.user', 'guest.user']);
         Activity::log(
             'Verified booking',
-            "Booking #{$booking->id} - {$booking->account_guest_full_name}",
+            "Booking #{$booking->id} - {$booking->guest_display_name}",
             $booking
         );
 
@@ -262,7 +351,7 @@ class BookingController extends Controller
         $booking->loadMissing(['reservation.guest.user', 'guest.user']);
         Activity::log(
             'Rejected booking',
-            "Booking #{$booking->id} - {$booking->account_guest_full_name} - previous status: {$previousStatus}, new status: cancelled - {$validated['reason']}",
+            "Booking #{$booking->id} - {$booking->guest_display_name} - previous status: {$previousStatus}, new status: cancelled - {$validated['reason']}",
             $booking
         );
 
@@ -304,7 +393,7 @@ class BookingController extends Controller
         $booking->loadMissing(['reservation.guest.user', 'guest.user']);
         Activity::log(
             'Archived booking',
-            "Booking #{$booking->id} - {$booking->account_guest_full_name}",
+            "Booking #{$booking->id} - {$booking->guest_display_name}",
             $booking
         );
 
@@ -328,7 +417,7 @@ class BookingController extends Controller
         $booking->loadMissing(['reservation.guest.user', 'guest.user']);
         Activity::log(
             'Deleted booking',
-            "Booking #{$booking->id} - {$booking->account_guest_full_name}",
+            "Booking #{$booking->id} - {$booking->guest_display_name}",
             $booking
         );
 

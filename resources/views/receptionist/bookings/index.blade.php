@@ -5,7 +5,13 @@
 @section('content')
 <div class="container-fluid py-4">
     <x-page-header icon="fas fa-calendar-check" title="Bookings"
-        subtitle="Every booking needs verification before it's complete. Review the guest's requested room(s) and assign specific rooms any time before arrival - check-in itself still happens in the Check-In Module." />
+        subtitle="Every booking needs verification before it's complete. Room assignment and check-in itself both happen in the Check-In Module.">
+        <x-slot:actions>
+            <a href="{{ route('receptionist.bookings.create') }}" class="btn btn-primary">
+                <i class="fas fa-calendar-plus"></i> New Booking
+            </a>
+        </x-slot:actions>
+    </x-page-header>
 
     @if (session('success'))
         <div class="alert alert-success alert-dismissible fade show" role="alert">

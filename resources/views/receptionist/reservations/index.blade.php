@@ -5,7 +5,13 @@
 @section('content')
 <div class="container-fluid py-4">
     <x-page-header icon="fas fa-inbox" title="Reservations"
-        subtitle="Review guest requests, then convert eligible ones into confirmed bookings." />
+        subtitle="Review guest requests, then convert eligible ones into confirmed bookings.">
+        <x-slot:actions>
+            <a href="{{ route('receptionist.reservations.create') }}" class="btn btn-primary">
+                <i class="fas fa-calendar-plus"></i> New Reservation
+            </a>
+        </x-slot:actions>
+    </x-page-header>
 
     @if (session('success'))
         <div class="alert alert-success alert-dismissible fade show" role="alert">
@@ -45,10 +51,10 @@
                     <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
                         <div class="d-flex align-items-center gap-2">
                             <div class="monitoring-avatar monitoring-avatar-sm">
-                                {{ strtoupper(substr($reservation->guest->user->full_name ?? '?', 0, 1)) }}
+                                {{ strtoupper(substr($reservation->guest_display_name, 0, 1)) }}
                             </div>
                             <div>
-                                <div class="fw-bold">{{ $reservation->guest->user->full_name ?? 'N/A' }}</div>
+                                <div class="fw-bold">{{ $reservation->guest_display_name }}</div>
                                 <small class="text-muted">#{{ $reservation->id }}</small>
                             </div>
                         </div>
@@ -125,11 +131,11 @@
                         <td>
                             <div class="d-flex align-items-center gap-2">
                                 <div class="monitoring-avatar monitoring-avatar-sm">
-                                    {{ strtoupper(substr($reservation->guest->user->full_name ?? '?', 0, 1)) }}
+                                    {{ strtoupper(substr($reservation->guest_display_name, 0, 1)) }}
                                 </div>
                                 <div>
-                                    {{ $reservation->guest->user->full_name ?? 'N/A' }}
-                                    <small class="d-block text-muted">{{ $reservation->guest->user->email ?? '' }}</small>
+                                    {{ $reservation->guest_display_name }}
+                                    <small class="d-block text-muted">{{ $reservation->guest?->user?->email ?? '' }}</small>
                                 </div>
                             </div>
                         </td>

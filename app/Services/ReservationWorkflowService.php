@@ -194,7 +194,7 @@ class ReservationWorkflowService
 
         Activity::log(
             'Accepted reservation request',
-            "Reservation #{$reservation->id} for {$reservation->roomType->name} ({$reservation->guest->user->full_name})",
+            "Reservation #{$reservation->id} for {$reservation->roomType->name} ({$reservation->guest_display_name})",
             $reservation
         );
     }
@@ -235,7 +235,7 @@ class ReservationWorkflowService
 
         Activity::log(
             'Rejected reservation request',
-            "Reservation #{$reservation->id} for {$reservation->roomType->name} ({$reservation->guest->user->full_name}) - {$reason}",
+            "Reservation #{$reservation->id} for {$reservation->roomType->name} ({$reservation->guest_display_name}) - {$reason}",
             $reservation
         );
     }
@@ -440,7 +440,7 @@ class ReservationWorkflowService
 
         Activity::log(
             'Converted reservation to booking',
-            "Reservation #{$reservation->id} for {$reservation->roomType->name} ({$reservation->guest->user->full_name})",
+            "Reservation #{$reservation->id} for {$reservation->roomType->name} ({$reservation->guest_display_name})",
             $booking
         );
 
@@ -551,7 +551,7 @@ class ReservationWorkflowService
 
     private function logCancellation(Reservation $reservation): void
     {
-        $guestName = $reservation->guest->user->full_name;
+        $guestName = $reservation->guest_display_name;
 
         Activity::log(
             'Cancelled reservation',

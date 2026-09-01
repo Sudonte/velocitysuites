@@ -98,7 +98,7 @@ class PaymentController extends Controller
 
         Activity::log(
             'Verified booking',
-            "Booking #{$booking->id} - {$booking->account_guest_full_name} (auto-completed after payment verification)",
+            "Booking #{$booking->id} - {$booking->guest_display_name} (auto-completed after payment verification)",
             $booking
         );
     }

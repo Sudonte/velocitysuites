@@ -232,6 +232,13 @@ Route::middleware(['auth', 'account.status', 'log.activity', 'no.cache'])->group
         // Reservation Module: two tabs - "To Be Confirmed Reservations"
         // (pending_review) and "To Be Converted to Booking" (ready_for_booking).
         Route::get('/reservations', [ReceptionistReservationController::class, 'index'])->name('reservations.index');
+        // Create Reservation: a receptionist manually reserves on a guest's
+        // behalf, no account created - see ReceptionistReservationController::
+        // store()'s docblock. Registered before the {reservation}-bound
+        // routes below on general principle (no actual collision today,
+        // since none of them are a bare GET /reservations/{reservation}).
+        Route::get('/reservations/create', [ReceptionistReservationController::class, 'create'])->name('reservations.create');
+        Route::post('/reservations', [ReceptionistReservationController::class, 'store'])->name('reservations.store');
         Route::get('/reservations/{reservation}/details', [ReceptionistReservationController::class, 'details'])->name('reservations.details');
         Route::get('/reservations/{reservation}/id-card', [ReceptionistReservationController::class, 'idCard'])->name('reservations.id-card');
         Route::post('/reservations/{reservation}/accept', [ReceptionistReservationController::class, 'accept'])->name('reservations.accept');
@@ -244,9 +251,17 @@ Route::middleware(['auth', 'account.status', 'log.activity', 'no.cache'])->group
         Route::post('/reservations/{reservation}/confirm-cash-payment', [ReceptionistReservationController::class, 'confirmCashPayment'])->name('reservations.confirm-cash-payment');
         Route::put('/reservations/{reservation}/verify', [ReceptionistReservationController::class, 'verify'])->name('reservations.verify');
 
-        // Booking Module: view-only registry of confirmed bookings - room
-        // assignment and check-in still happen only in the Check-in Module.
+        // Booking Module: registry of confirmed bookings, plus creating one
+        // directly (see bookings.create/store below) - room assignment and
+        // check-in still happen only in the Check-in Module.
         Route::get('/bookings', [ReceptionistBookingController::class, 'index'])->name('bookings.index');
+        // Create Booking: a receptionist creates an already-confirmed
+        // booking directly (skips the reservation stage), no account
+        // created - see ReceptionistBookingController::store()'s docblock.
+        // Must be registered before the bare GET /bookings/{booking} below,
+        // or Laravel would try to route-model-bind "create" as a booking id.
+        Route::get('/bookings/create', [ReceptionistBookingController::class, 'create'])->name('bookings.create');
+        Route::post('/bookings', [ReceptionistBookingController::class, 'store'])->name('bookings.store');
         Route::get('/bookings/{booking}', [ReceptionistBookingController::class, 'show'])->name('bookings.show');
         // Streams a direct-booking guest's uploaded Senior/PWD ID for staff
         // verification - same private-disk pattern as reservations.id-card
@@ -284,6 +299,14 @@ Route::middleware(['auth', 'account.status', 'log.activity', 'no.cache'])->group
         // Check-in Module: two tabs - "Expected Check-ins" (confirmed
         // bookings, where room assignment happens) and "Checked-in Guests".
         Route::get('/check-in', [ReceptionistCheckInController::class, 'index'])->name('check-in.index');
+        // Walk-in Check-in: instantly creates a brand-new Booking (no
+        // account, no prior reservation) and hands straight off to the
+        // existing Guest Details + Assign Room flow below - see
+        // ReceptionistCheckInController::storeWalkIn()'s docblock. Must be
+        // registered before POST /check-in/{booking} below, since "walk-in"
+        // would otherwise route-model-bind as a booking id there.
+        Route::get('/check-in/walk-in/create', [ReceptionistCheckInController::class, 'createWalkIn'])->name('check-in.walk-in.create');
+        Route::post('/check-in/walk-in', [ReceptionistCheckInController::class, 'storeWalkIn'])->name('check-in.walk-in.store');
         Route::get('/check-in/{booking}/panel', [ReceptionistCheckInController::class, 'panel'])->name('check-in.panel');
         Route::post('/check-in/{booking}', [ReceptionistCheckInController::class, 'store'])->name('check-in.store');
 

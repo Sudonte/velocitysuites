@@ -5,7 +5,13 @@
 @section('content')
 <div class="container-fluid py-4">
     <x-page-header icon="fas fa-sign-in-alt" title="Check-In"
-        subtitle="Assign a room and check guests in - room assignment happens here, not at booking." />
+        subtitle="Assign a room and check guests in - room assignment happens here, not at booking.">
+        <x-slot:actions>
+            <a href="{{ route('receptionist.check-in.walk-in.create') }}" class="btn btn-primary">
+                <i class="fas fa-person-walking-arrow-right"></i> Walk-in Check-in
+            </a>
+        </x-slot:actions>
+    </x-page-header>
 
     @if (session('success'))
         <div class="alert alert-success alert-dismissible fade show" role="alert">
@@ -136,26 +142,43 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
-    document.querySelectorAll('.btn-open-check-in').forEach(function (btn) {
-        btn.addEventListener('click', async function () {
-            activeBookingId = btn.dataset.bookingId;
-            content.innerHTML = '<div class="modal-body text-center py-5"><i class="fas fa-spinner fa-spin fa-2x"></i></div>';
-            modal.show();
+    async function openCheckInPanel(bookingId) {
+        activeBookingId = bookingId;
+        content.innerHTML = '<div class="modal-body text-center py-5"><i class="fas fa-spinner fa-spin fa-2x"></i></div>';
+        modal.show();
 
-            try {
-                const response = await fetch(buildUrl(urls.panel, activeBookingId), {
-                    headers: { 'X-Requested-With': 'XMLHttpRequest' },
-                });
-                if (!response.ok) {
-                    const data = await response.json().catch(() => ({}));
-                    throw new Error(data.message || 'Failed to load the check-in panel.');
-                }
-                content.innerHTML = await response.text();
-            } catch (err) {
-                content.innerHTML = '<div class="modal-body"><div class="alert alert-danger mb-0">' + err.message + '</div></div>';
+        try {
+            const response = await fetch(buildUrl(urls.panel, activeBookingId), {
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            });
+            if (!response.ok) {
+                const data = await response.json().catch(() => ({}));
+                throw new Error(data.message || 'Failed to load the check-in panel.');
             }
+            content.innerHTML = await response.text();
+        } catch (err) {
+            content.innerHTML = '<div class="modal-body"><div class="alert alert-danger mb-0">' + err.message + '</div></div>';
+        }
+    }
+
+    document.querySelectorAll('.btn-open-check-in').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            openCheckInPanel(btn.dataset.bookingId);
         });
     });
+
+    // Walk-in Check-in redirects here with ?open={booking} so the Guest
+    // Details + Assign Room panel opens immediately - no need to hunt the
+    // new booking down in the list (it may not even be on this page once
+    // paginated). Not keyed off finding the row's own button, since it may
+    // not exist in the current DOM at all.
+    const openId = new URLSearchParams(window.location.search).get('open');
+    if (openId) {
+        openCheckInPanel(openId);
+        const url = new URL(window.location.href);
+        url.searchParams.delete('open');
+        window.history.replaceState({}, '', url);
+    }
 
     // Prevent picking the same room in two different rows: whenever any
     // select changes, disable that room's <option> in every other row.

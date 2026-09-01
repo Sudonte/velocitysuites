@@ -155,6 +155,22 @@ class Reservation extends Model
     }
 
     /**
+     * Guest name for display/logging - the typed Representative Name if
+     * this reservation carries one (always true for a receptionist-
+     * created, accountless reservation - see Receptionist\
+     * ReservationController::store() - and for any reservation converted
+     * from one), falling back to the account holder's name, then a
+     * literal fallback so a caller building an Activity::log() message or
+     * a notification never embeds an empty string. Every call site that
+     * used to read $reservation->guest->user->full_name directly should
+     * use this instead - guest_id is nullable now.
+     */
+    public function getGuestDisplayNameAttribute(): string
+    {
+        return $this->stay_guest_full_name ?? $this->guest?->user?->full_name ?? 'Guest';
+    }
+
+    /**
      * Title-case the stay guest's first name, matching User's convention.
      */
     public function setGuestFirstNameAttribute(?string $value): void

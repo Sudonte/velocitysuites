@@ -9,10 +9,12 @@ use App\Models\Booking;
 use App\Models\Payment;
 use App\Models\Promotion;
 use App\Models\Reservation;
+use App\Models\RoomType;
 use App\Services\NotificationService;
 use App\Services\ReservationWorkflowService;
 use App\Services\RoomAvailabilityService;
 use App\Support\Activity;
+use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -80,6 +82,91 @@ class ReservationController extends Controller
     }
 
     /**
+     * "Create Reservation" form - a receptionist manually reserves a room
+     * on a guest's behalf (e.g. a phone call) without creating a User/Guest
+     * account for them: the guest's name is just typed in directly
+     * (guest_first_name/middle/last_name), same as Booking's existing
+     * "New Booking" mobile flow already does. Only active room types are
+     * offered, matching every other room-type picker in the app.
+     */
+    public function create(): View
+    {
+        $roomTypes = RoomType::where('status', 'active')->orderBy('name')->get();
+
+        return view('receptionist.reservations.create', compact('roomTypes'));
+    }
+
+    /**
+     * Creates the Reservation directly at 'ready_for_booking' - skipping
+     * 'pending_review' entirely, since that status exists to let a
+     * receptionist review a guest-submitted request, and there's nothing
+     * to review here: the receptionist typing this in themselves already
+     * is the review. This means the existing Convert/Reject/Confirm Cash
+     * Payment actions on the "To Be Converted to Booking" tab work on it
+     * immediately, with no new code needed for those - only guest_id is
+     * left null, payment_preference is 'pay_later' (no payment is
+     * collected here; the receptionist records one later via the existing
+     * confirm-cash-payment action once the guest actually pays).
+     */
+    public function store(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'guest_first_name' => 'required|string|max:100',
+            'guest_middle_name' => 'nullable|string|max:100',
+            'guest_last_name' => 'required|string|max:100',
+            'room_type_id' => 'required|exists:room_types,id',
+            'check_in' => 'required|date|after_or_equal:today',
+            'check_out' => 'required|date|after:check_in',
+            'rooms_requested' => 'required|integer|min:1|max:50',
+            'adults' => 'required|integer|min:1',
+            'children' => 'nullable|integer|min:0',
+        ]);
+
+        $roomType = RoomType::findOrFail($validated['room_type_id']);
+        abort_unless($roomType->status === 'active', 422, 'This room type is not currently available.');
+
+        $available = $this->availability->availableCount(
+            $roomType,
+            Carbon::parse($validated['check_in']),
+            Carbon::parse($validated['check_out'])
+        );
+        if ($available < $validated['rooms_requested']) {
+            return back()->withInput()->with('error', $validated['rooms_requested'] > 1
+                ? "Not enough {$roomType->name} rooms available for these dates (needs {$validated['rooms_requested']}, only {$available} free)."
+                : "This room type is fully booked for the requested dates.");
+        }
+
+        $children = (int) ($validated['children'] ?? 0);
+
+        $reservation = Reservation::create([
+            'guest_id' => null,
+            'guest_first_name' => $validated['guest_first_name'],
+            'guest_middle_name' => $validated['guest_middle_name'] ?? null,
+            'guest_last_name' => $validated['guest_last_name'],
+            'room_type_id' => $roomType->id,
+            'rooms_requested' => $validated['rooms_requested'],
+            'check_in' => $validated['check_in'],
+            'check_out' => $validated['check_out'],
+            'adults' => $validated['adults'],
+            'children' => $children,
+            'number_of_guests' => $validated['adults'] + $children,
+            'status' => 'ready_for_booking',
+            'payment_preference' => 'pay_later',
+            'payment_method' => 'cash',
+        ]);
+
+        Activity::log(
+            'Created reservation',
+            "Reservation #{$reservation->id} for {$roomType->name} ({$reservation->guest_display_name}) - created directly by staff",
+            $reservation
+        );
+
+        return redirect()
+            ->route('receptionist.reservations.index', ['tab' => 'ready_for_booking'])
+            ->with('success', 'Reservation created for ' . $reservation->guest_display_name . '. Convert it to a booking whenever the guest is ready (or record their cash payment first).');
+    }
+
+    /**
      * AJAX popup content: guest details, reservation info, room type,
      * payment preference, uploaded ID (if discount requested), uploaded
      * receipt + reference number (if GCash) - plus Accept/Reject/Convert
@@ -134,12 +221,14 @@ class ReservationController extends Controller
             return response()->json(['message' => $e->getMessage()], $e->getStatusCode());
         }
 
-        $this->notificationService->toUser(
-            $reservation->guest->user,
-            'Reservation Accepted',
-            'Your ' . $reservation->roomType->name . ' room reservation request has been accepted and is ready for booking confirmation.',
-            'booking'
-        );
+        if ($guestUser = $reservation->guest?->user) {
+            $this->notificationService->toUser(
+                $guestUser,
+                'Reservation Accepted',
+                'Your ' . $reservation->roomType->name . ' room reservation request has been accepted and is ready for booking confirmation.',
+                'booking'
+            );
+        }
 
         return response()->json(['message' => 'Reservation accepted - ready for booking conversion.']);
     }
@@ -159,12 +248,14 @@ class ReservationController extends Controller
             return response()->json(['message' => $e->getMessage()], $e->getStatusCode());
         }
 
-        $this->notificationService->toUser(
-            $reservation->guest->user,
-            'Reservation Rejected',
-            'Your booking request for a ' . $reservation->roomType->name . ' room has been rejected. Reason: ' . $request->reason,
-            'booking'
-        );
+        if ($guestUser = $reservation->guest?->user) {
+            $this->notificationService->toUser(
+                $guestUser,
+                'Reservation Rejected',
+                'Your booking request for a ' . $reservation->roomType->name . ' room has been rejected. Reason: ' . $request->reason,
+                'booking'
+            );
+        }
 
         return response()->json(['message' => 'Reservation rejected.']);
     }
@@ -186,11 +277,13 @@ class ReservationController extends Controller
 
         $this->grantPromoAmenities($reservation, $booking);
 
-        $this->notificationService->notifyReservationConfirmed(
-            $reservation->guest->user,
-            $reservation->roomType->name,
-            $reservation->id
-        );
+        if ($guestUser = $reservation->guest?->user) {
+            $this->notificationService->notifyReservationConfirmed(
+                $guestUser,
+                $reservation->roomType->name,
+                $reservation->id
+            );
+        }
 
         return response()->json([
             'message' => 'Reservation converted to a confirmed booking!',
@@ -286,13 +379,15 @@ class ReservationController extends Controller
 
         Activity::log(
             'Confirmed cash payment',
-            "Reservation #{$reservation->id} for {$reservation->roomType->name} ({$reservation->guest->user->full_name}) - ₱"
+            "Reservation #{$reservation->id} for {$reservation->roomType->name} ({$reservation->guest_display_name}) - ₱"
                 . number_format($amount, 2) . ' received and confirmed by staff',
             $booking
         );
 
-        $this->notificationService->notifyPaymentReceived($reservation->guest->user, $amount, $reservation->roomType->name, $reservation->id);
-        $this->notificationService->notifyReservationConfirmed($reservation->guest->user, $reservation->roomType->name, $reservation->id);
+        if ($guestUser = $reservation->guest?->user) {
+            $this->notificationService->notifyPaymentReceived($guestUser, $amount, $reservation->roomType->name, $reservation->id);
+            $this->notificationService->notifyReservationConfirmed($guestUser, $reservation->roomType->name, $reservation->id);
+        }
 
         return response()->json([
             'message' => 'Cash payment confirmed - reservation converted to a confirmed booking!',
@@ -327,7 +422,7 @@ class ReservationController extends Controller
         $reservation->loadMissing('guest.user');
         Activity::log(
             'Verified reservation',
-            "Reservation #{$reservation->id} - {$reservation->guest->user->full_name}",
+            "Reservation #{$reservation->id} - {$reservation->guest_display_name}",
             $reservation
         );
 
@@ -342,6 +437,14 @@ class ReservationController extends Controller
      */
     private function grantPromoAmenities(Reservation $reservation, Booking $booking): void
     {
+        // amenity_requests.guest_id is required (not nullable) - a
+        // receptionist-created, accountless reservation (see store()
+        // below) has nothing to attach a free promo amenity to, so there's
+        // nothing meaningful to grant here. Skip rather than crash.
+        if (! $reservation->guest_id) {
+            return;
+        }
+
         $promos = Promotion::with('amenities')
             ->where('status', 'active')
             ->where('promo_type', 'amenity')

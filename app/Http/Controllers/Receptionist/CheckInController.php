@@ -4,10 +4,13 @@ namespace App\Http\Controllers\Receptionist;
 
 use App\Http\Controllers\Controller;
 use App\Models\Booking;
+use App\Models\RoomType;
 use App\Rules\ValidPhoneNumber;
 use App\Services\NotificationService;
 use App\Services\RoomAvailabilityService;
 use App\Support\Activity;
+use Carbon\Carbon;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
@@ -17,7 +20,11 @@ use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
  * The Check-in Module: two tabs - "Expected Check-ins" (confirmed bookings
  * awaiting arrival, where the receptionist assigns the actual room) and
  * "Checked-in Guests" (already checked in). Room assignment happens only
- * here, at check-in - never at reservation or booking time.
+ * here, at check-in - never at reservation or booking time. Walk-in
+ * Check-in (createWalkIn()/storeWalkIn()) is the exception to "never at
+ * booking time" in spirit only: it creates the Booking and immediately
+ * hands off to this same module's existing panel()/store() flow rather
+ * than assigning a room itself.
  */
 class CheckInController extends Controller
 {
@@ -44,6 +51,87 @@ class CheckInController extends Controller
         $checkedInCount = Booking::where('booking_status', 'checked_in')->count();
 
         return view('receptionist.check-in.index', compact('bookings', 'tab', 'expectedCount', 'checkedInCount'));
+    }
+
+    /**
+     * "Walk-in Check-in" form - the fast path for a guest who shows up with
+     * no prior reservation or booking at all: room type, check-out date
+     * (check-in is always today - there's nothing to walk in for otherwise),
+     * rooms/adults/children, and a name to identify who this is. No account
+     * created. Only active room types are offered, matching every other
+     * room-type picker in the app.
+     */
+    public function createWalkIn(): View
+    {
+        $roomTypes = RoomType::where('status', 'active')->orderBy('name')->get();
+
+        return view('receptionist.check-in.walk-in', compact('roomTypes'));
+    }
+
+    /**
+     * Creates a brand-new Booking - check_in = today, booking_status =
+     * 'confirmed' - then redirects straight back to the Check-in index with
+     * ?open={booking} so its own JS auto-opens the exact same Guest Details
+     * + Assign Room panel (panel()/store() above) an "Expected Check-ins"
+     * row would open, no separate walk-in-specific room-assignment code
+     * needed. reservation_id and guest_id both stay null; payment isn't
+     * addressed here at all, matching Create Reservation/Create Booking -
+     * see BookingController::store()'s docblock for why.
+     */
+    public function storeWalkIn(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'guest_first_name' => 'required|string|max:100',
+            'guest_middle_name' => 'nullable|string|max:100',
+            'guest_last_name' => 'required|string|max:100',
+            'room_type_id' => 'required|exists:room_types,id',
+            'check_out' => 'required|date|after:today',
+            'rooms_requested' => 'required|integer|min:1|max:50',
+            'adults' => 'required|integer|min:1',
+            'children' => 'nullable|integer|min:0',
+        ]);
+
+        $roomType = RoomType::findOrFail($validated['room_type_id']);
+        abort_unless($roomType->status === 'active', 422, 'This room type is not currently available.');
+
+        $checkIn = Carbon::today();
+        $checkOut = Carbon::parse($validated['check_out']);
+
+        $available = $this->availability->availableCount($roomType, $checkIn, $checkOut);
+        if ($available < $validated['rooms_requested']) {
+            return back()->withInput()->with('error', $validated['rooms_requested'] > 1
+                ? "Not enough {$roomType->name} rooms available for these dates (needs {$validated['rooms_requested']}, only {$available} free)."
+                : "This room type is fully booked for the requested dates.");
+        }
+
+        $children = (int) ($validated['children'] ?? 0);
+
+        $booking = Booking::create([
+            'reservation_id' => null,
+            'guest_id' => null,
+            'guest_first_name' => $validated['guest_first_name'],
+            'guest_middle_name' => $validated['guest_middle_name'] ?? null,
+            'guest_last_name' => $validated['guest_last_name'],
+            'room_type_id' => $roomType->id,
+            'rooms_requested' => $validated['rooms_requested'],
+            'check_in' => $checkIn,
+            'check_out' => $checkOut,
+            'adults' => $validated['adults'],
+            'children' => $children,
+            'number_of_guests' => $validated['adults'] + $children,
+            'confirmed_at' => now(),
+            'booking_status' => 'confirmed',
+        ]);
+
+        Activity::log(
+            'Created walk-in booking',
+            "Booking #{$booking->id} for {$roomType->name} ({$booking->guest_display_name}) - walk-in, ready for room assignment",
+            $booking
+        );
+
+        return redirect()
+            ->route('receptionist.check-in.index', ['open' => $booking->id])
+            ->with('success', 'Walk-in guest added - now assign their room to finish checking them in.');
     }
 
     /**
@@ -167,7 +255,7 @@ class CheckInController extends Controller
 
         Activity::log(
             'Checked in guest',
-            "Booking #{$booking->id} - {$booking->account_guest_full_name} to " . $rooms->pluck('room_number')->implode(', '),
+            "Booking #{$booking->id} - {$booking->guest_display_name} to " . $rooms->pluck('room_number')->implode(', '),
             $booking
         );
 

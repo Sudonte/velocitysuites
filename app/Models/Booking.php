@@ -245,6 +245,19 @@ class Booking extends Model
         return trim("{$this->guest_first_name} {$this->guest_last_name}");
     }
 
+    /**
+     * Guest name for display/logging with a guaranteed non-null result -
+     * prefers the typed Representative Name, falls back to the account
+     * holder, then a literal fallback so an Activity::log() message never
+     * embeds an empty string for a fully accountless booking (Receptionist\
+     * BookingController::store()'s "Create Booking" action, or a Walk-in
+     * Check-in). Mirrors Reservation::getGuestDisplayNameAttribute().
+     */
+    public function getGuestDisplayNameAttribute(): string
+    {
+        return $this->stay_guest_full_name ?? $this->account_guest_full_name ?? 'Guest';
+    }
+
     public function setGuestFirstNameAttribute(?string $value): void
     {
         $this->attributes['guest_first_name'] = $value ? ucwords(strtolower($value)) : $value;
