@@ -1410,6 +1410,24 @@ tbody tr:hover {
     margin-left: 0.4rem;
 }
 
+/* "New" (unread) indicator - a receptionist hasn't opened this row yet
+   (Reservation/Booking.viewed_at null). Placed directly before the
+   booking/reservation number wherever it's used (Reservations, Bookings,
+   Check-in, Check-out, both the desktop table and the mobile card list),
+   and those same rows sort to the top of their list until opened - see
+   each *Controller::index()'s viewed_at IS NULL ordering and each
+   details()/show()/panel()/checkOutBilling()'s mark-as-read. */
+.unread-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background-color: var(--danger-color);
+    margin-right: 0.35rem;
+    vertical-align: middle;
+    flex-shrink: 0;
+}
+
 /* Wraps both the mobile card list and the desktop table inside the
    Bookings/Reservations x-card - just breathing room around whichever
    one is actually visible at the current breakpoint. */

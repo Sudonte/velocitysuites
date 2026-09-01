@@ -56,9 +56,10 @@ class ReservationController extends Controller
             $query->where('status', $tab)->whereNull('verified_at');
         }
 
-        // Closest check-in date first - whoever is arriving soonest is the
+        // Unread first (viewed_at null - see details() below), then
+        // closest check-in date - whoever is arriving soonest is the
         // priority to review/convert, not whoever requested first.
-        $reservations = $query->orderBy('check_in')->paginate(15)->withQueryString();
+        $reservations = $query->orderByRaw('viewed_at IS NULL DESC')->orderBy('check_in')->paginate(15)->withQueryString();
 
         $pendingCount = Reservation::where('status', 'pending_review')->whereNull('verified_at')->count();
         $readyCount = Reservation::where('status', 'ready_for_booking')->whereNull('verified_at')->count();
@@ -153,6 +154,10 @@ class ReservationController extends Controller
             'status' => 'ready_for_booking',
             'payment_preference' => 'pay_later',
             'payment_method' => 'cash',
+            // Whoever creates it has obviously already seen it - shouldn't
+            // show up as "new" (see index()'s ordering / the red-dot
+            // indicator in the view) the moment it's created.
+            'viewed_at' => now(),
         ]);
 
         Activity::log(
@@ -176,6 +181,12 @@ class ReservationController extends Controller
     public function details(Reservation $reservation)
     {
         $reservation->load(['guest.user', 'roomType', 'payments']);
+
+        // First open marks it read - see index()'s ordering / the
+        // red-dot indicator in the view, both keyed off viewed_at.
+        if (! $reservation->viewed_at) {
+            $reservation->update(['viewed_at' => now()]);
+        }
 
         $available = $reservation->status === 'ready_for_booking'
             ? $this->availability->availableCount($reservation->roomType, $reservation->check_in, $reservation->check_out)

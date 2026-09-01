@@ -51,7 +51,7 @@
                 <tbody id="checkOutTableBody">
                     @forelse($bookings as $booking)
                         <tr data-booking-id="{{ $booking->id }}">
-                            <td>{{ $booking->guest_display_name }}</td>
+                            <td>@unless($booking->viewed_at)<span class="unread-dot" title="New"></span>@endunless{{ $booking->guest_display_name }}</td>
                             <td>{{ $booking->room->room_number ?? 'N/A' }} ({{ $booking->roomType->name ?? '' }})</td>
                             <td>
                                 {{ $booking->check_out->format('M d, Y') }}

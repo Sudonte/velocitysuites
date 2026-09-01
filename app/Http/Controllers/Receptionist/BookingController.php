@@ -80,9 +80,10 @@ class BookingController extends Controller
             });
         }
 
-        // Closest check-in date first - whoever is arriving soonest is the
+        // Unread first (viewed_at null - see show() below), then closest
+        // check-in date - whoever is arriving soonest is the
         // receptionist's priority, not whoever was most recently confirmed.
-        $bookings = $query->orderBy('check_in')->paginate(15)->withQueryString();
+        $bookings = $query->orderByRaw('viewed_at IS NULL DESC')->orderBy('check_in')->paginate(15)->withQueryString();
 
         $pendingCount = Booking::where('booking_status', 'confirmed')->whereNull('verified_at')->count();
         $verifiedCount = Booking::where('booking_status', 'confirmed')->whereNotNull('verified_at')->whereNull('hidden_at')->count();
@@ -163,6 +164,10 @@ class BookingController extends Controller
             'number_of_guests' => $validated['adults'] + $children,
             'confirmed_at' => now(),
             'booking_status' => 'confirmed',
+            // Whoever creates it has obviously already seen it - shouldn't
+            // show up as "new" (see index()'s ordering / the red-dot
+            // indicator in the view) the moment it's created.
+            'viewed_at' => now(),
         ]);
 
         Activity::log(
@@ -199,6 +204,14 @@ class BookingController extends Controller
         $booking->load(['reservation.guest.user', 'reservation.payments', 'guest.user', 'payments', 'roomType', 'room', 'rooms', 'billing']);
 
         $this->workflow->reconcileGcashBookingPayment($booking);
+
+        // First open marks it read - see index()'s ordering / the
+        // red-dot indicator in the view, both keyed off viewed_at. Shared
+        // across Bookings/Check-in/Check-out (all three operate on this
+        // same Booking row), not just this module.
+        if (! $booking->viewed_at) {
+            $booking->update(['viewed_at' => now()]);
+        }
 
         // Transaction history: every logged action against this booking
         // (confirmed, room assignment, verification, etc.), newest first -

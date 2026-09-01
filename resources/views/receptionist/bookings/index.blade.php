@@ -107,7 +107,7 @@
                             </div>
                             <div>
                                 <div class="fw-bold">{{ $booking->guest_display_name }}</div>
-                                <small class="text-muted">#{{ $booking->id }}</small>
+                                <small class="text-muted">@unless($booking->viewed_at)<span class="unread-dot" title="New"></span>@endunless#{{ $booking->id }}</small>
                             </div>
                         </div>
                         @if($tab === 'pending' || $tab === 'verified')
@@ -237,7 +237,7 @@
                         $bookingTotal = $booking->billing->total_amount ?? optional($booking->allPayments()->first())->amount_paid;
                     @endphp
                     <tr>
-                        <td class="fw-bold">#{{ $booking->id }}</td>
+                        <td class="fw-bold">@unless($booking->viewed_at)<span class="unread-dot" title="New"></span>@endunless#{{ $booking->id }}</td>
                         <td>
                             <div class="d-flex align-items-center gap-2">
                                 <div class="monitoring-avatar monitoring-avatar-sm">

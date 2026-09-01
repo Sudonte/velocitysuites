@@ -39,6 +39,7 @@ class Booking extends Model
         'verified_at',
         'verified_by',
         'hidden_at',
+        'viewed_at',
     ];
 
     protected $casts = [
@@ -47,6 +48,7 @@ class Booking extends Model
         'confirmed_at' => 'datetime',
         'verified_at' => 'datetime',
         'hidden_at' => 'datetime',
+        'viewed_at' => 'datetime',
         'checkin_reminder_sent_at' => 'datetime',
         'deleted_at' => 'datetime',
         'discount_requested' => 'boolean',

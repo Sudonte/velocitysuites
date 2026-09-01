@@ -55,7 +55,7 @@
                             </div>
                             <div>
                                 <div class="fw-bold">{{ $reservation->guest_display_name }}</div>
-                                <small class="text-muted">#{{ $reservation->id }}</small>
+                                <small class="text-muted">@unless($reservation->viewed_at)<span class="unread-dot" title="New"></span>@endunless#{{ $reservation->id }}</small>
                             </div>
                         </div>
                         <span class="badge badge-brand">{{ $reservation->roomType->name ?? 'N/A' }}{{ $reservation->rooms_requested > 1 ? ' ×'.$reservation->rooms_requested : '' }}</span>
@@ -127,7 +127,7 @@
             <tbody id="reservationsTableBody">
                 @forelse($reservations as $reservation)
                     <tr data-reservation-row="{{ $reservation->id }}">
-                        <td class="fw-bold">#{{ $reservation->id }}</td>
+                        <td class="fw-bold">@unless($reservation->viewed_at)<span class="unread-dot" title="New"></span>@endunless#{{ $reservation->id }}</td>
                         <td>
                             <div class="d-flex align-items-center gap-2">
                                 <div class="monitoring-avatar monitoring-avatar-sm">

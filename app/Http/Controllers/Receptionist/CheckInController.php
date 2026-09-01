@@ -46,8 +46,12 @@ class CheckInController extends Controller
         // boxes were rendering broken/oversized here for reasons that
         // didn't trace back to anything in this app's own CSS; Previous/
         // Next alone is enough to reach every booking regardless.
+        // Unread first (viewed_at null - see panel() below, shared with
+        // Bookings/Check-out since all three operate on this same Booking
+        // row), then the existing date order.
         $bookings = Booking::with(['reservation.guest.user', 'guest.user', 'rooms', 'roomType'])
             ->where('booking_status', $tab === 'expected' ? 'confirmed' : 'checked_in')
+            ->orderByRaw('viewed_at IS NULL DESC')
             ->orderBy($tab === 'expected' ? 'check_in' : 'check_out')
             ->simplePaginate(15)
             ->withQueryString();
@@ -126,6 +130,13 @@ class CheckInController extends Controller
             'number_of_guests' => $validated['adults'] + $children,
             'confirmed_at' => now(),
             'booking_status' => 'confirmed',
+            // Whoever creates it has obviously already seen it - shouldn't
+            // show up as "new" (see index()'s ordering / the red-dot
+            // indicator in the view) the moment it's created. Also
+            // immediately opened via the redirect below, which would mark
+            // it anyway - stated here just for clarity/consistency with
+            // Create Reservation/Create Booking.
+            'viewed_at' => now(),
         ]);
 
         Activity::log(
@@ -160,6 +171,14 @@ class CheckInController extends Controller
         $assignableRooms = $this->availability->assignableRooms($booking);
         $assignedRoomIds = $booking->rooms->pluck('id')->all();
         $accountGuest = $booking->account_guest;
+
+        // First open marks it read - see index()'s ordering / the
+        // red-dot indicator in the view, both keyed off viewed_at. Shared
+        // across Bookings/Check-in/Check-out (all three operate on this
+        // same Booking row), not just this module.
+        if (! $booking->viewed_at) {
+            $booking->update(['viewed_at' => now()]);
+        }
 
         return view('receptionist.check-in.partials.panel', compact(
             'booking', 'assignableRooms', 'assignedRoomIds', 'accountGuest'

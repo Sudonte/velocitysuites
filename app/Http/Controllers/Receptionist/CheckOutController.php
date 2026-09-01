@@ -35,8 +35,12 @@ class CheckOutController extends Controller
             $tab = 'expected';
         }
 
+        // Unread first (viewed_at null - see checkOutBilling() below,
+        // shared with Bookings/Check-in since all three operate on this
+        // same Booking row), then the existing date order.
         $bookings = Booking::with(['reservation.guest.user', 'guest.user', 'rooms', 'roomType', 'billing'])
             ->where('booking_status', $tab === 'expected' ? 'checked_in' : 'checked_out')
+            ->orderByRaw('viewed_at IS NULL DESC')
             ->orderBy('check_out', $tab === 'expected' ? 'asc' : 'desc')
             ->paginate(15)
             ->withQueryString();
@@ -62,6 +66,14 @@ class CheckOutController extends Controller
 
         $booking->load(['reservation.guest.user', 'guest.user', 'rooms']);
         $billing->load(['additionalCharges', 'discountApplied']);
+
+        // First open marks it read - see index()'s ordering / the
+        // red-dot indicator in the view, both keyed off viewed_at. Shared
+        // across Bookings/Check-in/Check-out (all three operate on this
+        // same Booking row), not just this module.
+        if (! $booking->viewed_at) {
+            $booking->update(['viewed_at' => now()]);
+        }
 
         $amenityRequests = AmenityRequest::with('amenity')
             ->where($booking->reservation_id ? 'reservation_id' : 'booking_id', $booking->reservation_id ?? $booking->id)

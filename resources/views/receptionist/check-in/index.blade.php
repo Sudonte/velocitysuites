@@ -54,7 +54,7 @@
             <tbody>
                 @forelse($bookings as $booking)
                     <tr>
-                        <td>{{ $booking->guest_display_name }}</td>
+                        <td>@unless($booking->viewed_at)<span class="unread-dot" title="New"></span>@endunless{{ $booking->guest_display_name }}</td>
                         <td style="min-width: 200px;">
                             @if($booking->rooms->isNotEmpty())
                                 {{ $booking->rooms->pluck('room_number')->implode(', ') }}

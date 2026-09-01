@@ -37,6 +37,7 @@ class Reservation extends Model
         'verified_at',
         'verified_by',
         'hidden_at',
+        'viewed_at',
     ];
 
     protected $casts = [
@@ -46,6 +47,7 @@ class Reservation extends Model
         'additional_guest_details' => 'array',
         'verified_at' => 'datetime',
         'hidden_at' => 'datetime',
+        'viewed_at' => 'datetime',
         'payment_method_locked_at' => 'datetime',
         'payment_reminder_sent_at' => 'datetime',
     ];
