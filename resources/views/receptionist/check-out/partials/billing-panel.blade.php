@@ -7,7 +7,7 @@
 
     <div class="row mb-3">
         <div class="col-md-6">
-            <strong>Guest:</strong> {{ $booking->account_guest_full_name ?? 'N/A' }}<br>
+            <strong>Guest:</strong> {{ $booking->guest_display_name }}<br>
             <strong>Booking:</strong> #{{ $booking->id }}<br>
             <strong>Room{{ $booking->rooms->count() > 1 ? 's' : '' }}:</strong> {{ $booking->rooms->pluck('room_number')->implode(', ') ?: 'N/A' }}
         </div>

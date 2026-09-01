@@ -54,7 +54,7 @@
             <tbody>
                 @forelse($bookings as $booking)
                     <tr>
-                        <td>{{ $booking->account_guest_full_name ?? 'N/A' }}</td>
+                        <td>{{ $booking->guest_display_name }}</td>
                         <td style="min-width: 200px;">
                             @if($booking->rooms->isNotEmpty())
                                 {{ $booking->rooms->pluck('room_number')->implode(', ') }}

@@ -38,7 +38,7 @@
                 <p class="mb-1"><strong>Account Holder:</strong> {{ $booking->account_guest_full_name ?? 'N/A' }}</p>
                 <p class="mb-1">
                     <strong>Representative Name:</strong>
-                    {{ $booking->stay_guest_full_name ?? ($booking->account_guest_full_name ?? 'N/A') }}
+                    {{ $booking->guest_display_name }}
                 </p>
                 <p class="mb-1"><strong>Email:</strong> {{ $booking->account_guest?->user?->email ?? 'N/A' }}</p>
                 <p class="mb-0"><strong>Phone:</strong> {{ $booking->account_guest?->mobile_number ?: 'Not provided' }}</p>
@@ -311,10 +311,10 @@
             <x-card title="Quick Summary" icon="fas fa-clipboard-list" bodyClass="card-body" class="mb-4 monitoring-summary-card">
                 <div class="d-flex align-items-center gap-3 mb-3">
                     <div class="monitoring-avatar">
-                        {{ strtoupper(substr($booking->account_guest_full_name ?? '?', 0, 1)) }}
+                        {{ strtoupper(substr($booking->guest_display_name, 0, 1)) }}
                     </div>
                     <div>
-                        <p class="mb-0 fw-bold">{{ $booking->account_guest_full_name ?? 'N/A' }}</p>
+                        <p class="mb-0 fw-bold">{{ $booking->guest_display_name }}</p>
                         <small class="text-muted">{{ $booking->account_guest?->user?->email ?? '' }}</small>
                     </div>
                 </div>

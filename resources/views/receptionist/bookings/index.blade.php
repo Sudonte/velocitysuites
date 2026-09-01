@@ -103,10 +103,10 @@
                     <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
                         <div class="d-flex align-items-center gap-2">
                             <div class="monitoring-avatar monitoring-avatar-sm">
-                                {{ strtoupper(substr($booking->account_guest_full_name ?? '?', 0, 1)) }}
+                                {{ strtoupper(substr($booking->guest_display_name, 0, 1)) }}
                             </div>
                             <div>
-                                <div class="fw-bold">{{ $booking->account_guest_full_name ?? 'N/A' }}</div>
+                                <div class="fw-bold">{{ $booking->guest_display_name }}</div>
                                 <small class="text-muted">#{{ $booking->id }}</small>
                             </div>
                         </div>
@@ -241,10 +241,10 @@
                         <td>
                             <div class="d-flex align-items-center gap-2">
                                 <div class="monitoring-avatar monitoring-avatar-sm">
-                                    {{ strtoupper(substr($booking->account_guest_full_name ?? '?', 0, 1)) }}
+                                    {{ strtoupper(substr($booking->guest_display_name, 0, 1)) }}
                                 </div>
                                 <div>
-                                    {{ $booking->account_guest_full_name ?? 'N/A' }}
+                                    {{ $booking->guest_display_name }}
                                     <small class="d-block text-muted d-md-none">
                                         {{ $booking->roomType->name ?? 'N/A' }}
                                         @if($booking->rooms_requested > 1)&times;{{ $booking->rooms_requested }}@endif

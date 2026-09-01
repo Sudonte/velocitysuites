@@ -7,7 +7,7 @@
 
     <div class="row mb-3">
         <div class="col-md-6">
-            <strong>Guest:</strong> {{ $booking->account_guest_full_name ?? 'N/A' }}<br>
+            <strong>Guest:</strong> {{ $booking->guest_display_name }}<br>
             <strong>Booking:</strong> #{{ $booking->id }}<br>
             <strong>Room Type:</strong> {{ $booking->roomType->name ?? 'N/A' }}
         </div>

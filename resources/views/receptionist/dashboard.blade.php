@@ -88,7 +88,7 @@
                     <tbody>
                         @forelse($pendingArrivals as $booking)
                             <tr>
-                                <td>{{ $booking->account_guest_full_name ?? 'N/A' }}</td>
+                                <td>{{ $booking->guest_display_name }}</td>
                                 <td>{{ $booking->room->room_number ?? $booking->roomType->name ?? 'N/A' }}</td>
                                 <td><x-status-badge :status="$booking->booking_status" domain="booking" /></td>
                             </tr>
@@ -114,7 +114,7 @@
                     <tbody>
                         @forelse($todayDepartures as $booking)
                             <tr>
-                                <td>{{ $booking->account_guest_full_name ?? 'N/A' }}</td>
+                                <td>{{ $booking->guest_display_name }}</td>
                                 <td>{{ $booking->room->room_number ?? 'N/A' }}</td>
                                 <td><x-status-badge :status="$booking->booking_status" domain="booking" /></td>
                             </tr>
