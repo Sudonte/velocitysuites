@@ -2,6 +2,7 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 /**
@@ -22,6 +23,12 @@ return new class extends Migration
         Schema::table('bookings', function (Blueprint $table) {
             $table->timestamp('viewed_at')->nullable()->after('hidden_at');
         });
+
+        // Every booking that already existed before this feature shipped
+        // is "already known", not new - without this, a fresh install (or
+        // any environment migrating from scratch) would show every single
+        // existing booking with a red dot the moment this column exists.
+        DB::table('bookings')->whereNull('viewed_at')->update(['viewed_at' => now()]);
     }
 
     public function down(): void
