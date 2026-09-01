@@ -1150,21 +1150,18 @@ tbody tr:hover {
    that class's caret ::after styling - just the plain avatar+name trigger,
    matching the reference design.
 
-   position/top/right/z-index are stated explicitly rather than relying on
-   Bootstrap's own .dropdown-menu { position: absolute } - opening this
-   menu was pushing the rest of the header/page down instead of floating
-   over it, so something in this app's own layout (.app-header's
-   position: sticky, or .navbar-nav's flex-row) was winning that fight.
-   Explicit position here, plus position: relative on the .dropdown
-   wrapper below (Bootstrap's own .dropdown class already sets this, but
-   this app apparently can't rely on that alone either), settles it
-   regardless of the exact cause. */
-.nav-item.dropdown {
-    position: relative;
-}
-
+   Root cause of the dropdown pushing the rest of the header down instead
+   of floating over it: Bootstrap's navbar.css sets `.navbar-nav
+   .dropdown-menu { position: static; }` as its base (mobile-first) rule,
+   only switching to `position: absolute` inside a `.navbar-expand-*`
+   breakpoint variant - this navbar deliberately has no .navbar-expand-*
+   class (see the "No navbar-toggler/collapse here on purpose" comment in
+   navbar.blade.php), so that compound two-class selector applies
+   unconditionally, at every width, and beats this rule's single-class
+   .navbar-account-menu on specificity alone regardless of source order.
+   !important is what actually wins that fight. */
 .navbar-account-menu {
-    position: absolute;
+    position: absolute !important;
     top: calc(100% + 0.5rem);
     right: 0;
     z-index: 1050;
