@@ -5,7 +5,7 @@
 @endphp
 
 <div class="card border-0 shadow-sm chart-card h-100">
-    <div class="card-header d-flex align-items-center gap-2 bg-white">
+    <div class="card-header d-flex align-items-center gap-2">
         <span class="chart-card-icon"><i class="{{ $icon }}"></i></span>
         <h6 class="mb-0 fw-bold">{{ $title }}</h6>
     </div>

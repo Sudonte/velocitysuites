@@ -80,6 +80,28 @@
     border-color: #17a2b8;
 }
 
+/* Bootstrap's own .bg-light/.bg-white/.text-dark utilities carry
+   !important (Bootstrap's utility API always does), which silently beats
+   any plain (non-!important) rule of ours regardless of selector
+   specificity or source order - e.g. nav.sidebar's own
+   background-color: var(--surface-color) was being overridden right back
+   to a light gray by a stray bg-light class on the same element,
+   independent of whether --surface-color itself was correctly dark.
+   Scattered across ~15 Blade files (badges, form-control read-only boxes,
+   avatar placeholder circles, card headers) - a global override here
+   covers all of them, present and future, instead of hunting down each
+   usage individually. !important to actually win that fight; scoped
+   under [data-bs-theme="dark"] so it does nothing in light mode or on the
+   public/guest layouts, which never set that attribute. */
+[data-bs-theme="dark"] .bg-light,
+[data-bs-theme="dark"] .bg-white {
+    background-color: var(--surface-color) !important;
+}
+
+[data-bs-theme="dark"] .text-dark {
+    color: var(--text-dark) !important;
+}
+
 /* Shared red rounded-square logo container, used everywhere the Velocity
    Suites logo is displayed (public header, mobile offcanvas header, auth
    pages). Percentage border-radius so the same class stays proportionally
@@ -1126,8 +1148,26 @@ tbody tr:hover {
 /* Account dropdown (components/navbar.blade.php) - .navbar-account-toggle
    deliberately has no Bootstrap .dropdown-toggle class, so it gets none of
    that class's caret ::after styling - just the plain avatar+name trigger,
-   matching the reference design. */
+   matching the reference design.
+
+   position/top/right/z-index are stated explicitly rather than relying on
+   Bootstrap's own .dropdown-menu { position: absolute } - opening this
+   menu was pushing the rest of the header/page down instead of floating
+   over it, so something in this app's own layout (.app-header's
+   position: sticky, or .navbar-nav's flex-row) was winning that fight.
+   Explicit position here, plus position: relative on the .dropdown
+   wrapper below (Bootstrap's own .dropdown class already sets this, but
+   this app apparently can't rely on that alone either), settles it
+   regardless of the exact cause. */
+.nav-item.dropdown {
+    position: relative;
+}
+
 .navbar-account-menu {
+    position: absolute;
+    top: calc(100% + 0.5rem);
+    right: 0;
+    z-index: 1050;
     width: 300px;
     max-width: calc(100vw - 2rem);
     background-color: var(--surface-color);

@@ -58,7 +58,7 @@
              incapable of moving, not just visually pinned during a page-level scroll.
              See components/sidebar.blade.php for the actual width/collapse rules. --}}
         <div class="app-shell">
-            <nav class="d-none d-md-flex bg-light sidebar">
+            <nav class="d-none d-md-flex sidebar">
                 {{-- Scrollable menu and the pinned Logout+collapse footer are separate
                      flex children of <nav> (see components/sidebar.blade.php's CSS) so
                      they always stay at the bottom of the rail, never pushed off by a
