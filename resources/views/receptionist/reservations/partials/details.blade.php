@@ -62,7 +62,7 @@
         <p class="mb-0"><strong>Guests:</strong> {{ $reservation->adults }} adult{{ $reservation->adults == 1 ? '' : 's' }}@if($reservation->children > 0), {{ $reservation->children }} child{{ $reservation->children == 1 ? '' : 'ren' }}@endif</p>
     </div>
 
-    <!-- Payment Information + Deposit + Discount -->
+    <!-- Amount to Pay + Deposit + Discount -->
     <div class="col-md-6">
         <h6 class="text-brand"><i class="fas fa-receipt"></i> Amount to Pay</h6>
         <div class="table-responsive">
