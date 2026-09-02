@@ -137,6 +137,11 @@ class CheckInController extends Controller
             // it anyway - stated here just for clarity/consistency with
             // Create Reservation/Create Booking.
             'viewed_at' => now(),
+            // No online (GCash) payment exists to verify here - a
+            // receptionist typed this in directly, same reasoning as
+            // Create Booking. Never lands in the "For Verification" tab.
+            'verified_at' => now(),
+            'verified_by' => auth()->id(),
         ]);
 
         Activity::log(

@@ -121,6 +121,16 @@ class DirectBookingService
                 'discount_requested' => $idCard !== null,
                 'discount_verification_status' => $idCard !== null ? 'pending' : 'not_requested',
                 'additional_guest_details' => $additionalGuests,
+                // No verified_by - no staff member actually verified
+                // anything here, the system is just recognizing there's
+                // nothing to verify (mirrors payment_status starting
+                // 'completed' for Cash below, and
+                // ReservationWorkflowService::convertToBooking()'s
+                // identical auto-verify for a Cash reservation) - a GCash
+                // booking still starts unverified, needing
+                // Receptionist\PaymentController::verify() before it
+                // leaves the Bookings module's "For Verification" tab.
+                'verified_at' => $paymentData['payment_method'] === 'gcash' ? null : now(),
             ]);
 
             $payment = Payment::create([

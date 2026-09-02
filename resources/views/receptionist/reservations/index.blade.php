@@ -5,7 +5,7 @@
 @section('content')
 <div class="container-fluid py-4">
     <x-page-header icon="fas fa-inbox" title="Reservations"
-        subtitle="Review guest requests, then convert eligible ones into confirmed bookings.">
+        subtitle="Everyone who wants to be reserved. Convert to a booking whenever they're ready - GCash still needs its payment verified in the Bookings module afterward, Cash doesn't.">
         <x-slot:actions>
             <a href="{{ route('receptionist.reservations.create') }}" class="btn btn-primary">
                 <i class="fas fa-calendar-plus"></i> New Reservation
@@ -28,13 +28,8 @@
 
     <ul class="nav nav-tabs mb-3 flex-nowrap overflow-auto">
         <li class="nav-item">
-            <a class="nav-link text-nowrap {{ $tab === 'pending_review' ? 'active' : '' }}" href="{{ route('receptionist.reservations.index', ['tab' => 'pending_review']) }}">
-                To Be Confirmed Reservations <span class="badge bg-warning text-dark">{{ $pendingCount }}</span>
-            </a>
-        </li>
-        <li class="nav-item">
-            <a class="nav-link text-nowrap {{ $tab === 'ready_for_booking' ? 'active' : '' }}" href="{{ route('receptionist.reservations.index', ['tab' => 'ready_for_booking']) }}">
-                To Be Converted to Booking <span class="badge bg-info">{{ $readyCount }}</span>
+            <a class="nav-link text-nowrap {{ $tab === 'active' ? 'active' : '' }}" href="{{ route('receptionist.reservations.index', ['tab' => 'active']) }}">
+                Reservations <span class="badge bg-warning text-dark">{{ $activeCount }}</span>
             </a>
         </li>
         <li class="nav-item">
@@ -44,7 +39,7 @@
         </li>
     </ul>
 
-    <x-card :title="match(true) { $tab === 'pending_review' => 'To Be Confirmed Reservations', $tab === 'ready_for_booking' => 'To Be Converted to Booking', default => 'Verified Reservations' }" icon="fas fa-list" bodyClass="monitoring-table-wrap">
+    <x-card :title="$tab === 'active' ? 'Reservations' : 'Verified Reservations'" icon="fas fa-list" bodyClass="monitoring-table-wrap">
         <div class="d-md-none monitoring-card-list" id="reservationsCardList">
             @forelse($reservations as $reservation)
                 <div class="monitoring-item-card" data-reservation-row="{{ $reservation->id }}">
@@ -72,7 +67,7 @@
                         <span class="text-muted">Payment</span>
                         <span>{{ $reservation->payment_preference === 'pay_now' ? 'Pay Now' : 'Pay Later' }} &middot; {{ $reservation->payment_method === 'gcash' ? 'GCash' : 'Cash' }}</span>
                     </div>
-                    @if($tab === 'ready_for_booking')
+                    @if($tab === 'active')
                         @php $available = $availableCounts[$reservation->id] ?? 0; @endphp
                         <div class="monitoring-item-row">
                             <span class="text-muted">Availability</span>
@@ -104,7 +99,7 @@
                     </div>
                 </div>
             @empty
-                <x-empty-state icon="fas fa-inbox" :message="match(true) { $tab === 'pending_review' => 'No reservations awaiting review.', $tab === 'ready_for_booking' => 'No reservations ready for booking conversion.', default => 'No verified reservations yet.' }" />
+                <x-empty-state icon="fas fa-inbox" :message="$tab === 'active' ? 'No reservations right now.' : 'No verified reservations yet.'" />
             @endforelse
         </div>
 
@@ -118,7 +113,7 @@
                     <th>Dates</th>
                     <th class="d-none d-lg-table-cell">Guests</th>
                     <th>Payment</th>
-                    @if($tab === 'ready_for_booking')
+                    @if($tab === 'active')
                         <th class="d-none d-md-table-cell">Availability</th>
                     @endif
                     <th class="text-nowrap">Actions</th>
@@ -154,7 +149,7 @@
                             {{ $reservation->payment_preference === 'pay_now' ? 'Pay Now' : 'Pay Later' }}<br>
                             <small class="text-muted">{{ $reservation->payment_method === 'gcash' ? 'GCash' : 'Cash' }}</small>
                         </td>
-                        @if($tab === 'ready_for_booking')
+                        @if($tab === 'active')
                             @php $available = $availableCounts[$reservation->id] ?? 0; @endphp
                             <td class="d-none d-md-table-cell">
                                 @if($available >= $reservation->rooms_requested)
@@ -185,7 +180,7 @@
                 @empty
                     <tr id="noReservationsRow">
                         <td colspan="8">
-                            <x-empty-state icon="fas fa-inbox" :message="match(true) { $tab === 'pending_review' => 'No reservations awaiting review.', $tab === 'ready_for_booking' => 'No reservations ready for booking conversion.', default => 'No verified reservations yet.' }" />
+                            <x-empty-state icon="fas fa-inbox" :message="$tab === 'active' ? 'No reservations right now.' : 'No verified reservations yet.'" />
                         </td>
                     </tr>
                 @endforelse
@@ -238,7 +233,6 @@ document.addEventListener('DOMContentLoaded', function () {
     let activeReservationId = null;
 
     const urls = {
-        accept: @json(route('receptionist.reservations.accept', ['reservation' => '__ID__'])),
         reject: @json(route('receptionist.reservations.reject', ['reservation' => '__ID__'])),
         convert: @json(route('receptionist.reservations.convert', ['reservation' => '__ID__'])),
         confirmCash: @json(route('receptionist.reservations.confirm-cash-payment', ['reservation' => '__ID__'])),
@@ -285,7 +279,7 @@ document.addEventListener('DOMContentLoaded', function () {
         });
         const tbody = document.getElementById('reservationsTableBody');
         if (tbody && !tbody.querySelector('tr')) {
-            const colspan = {{ $tab === 'ready_for_booking' ? 8 : 7 }};
+            const colspan = {{ $tab === 'active' ? 8 : 7 }};
             tbody.innerHTML = '<tr id="noReservationsRow"><td colspan="' + colspan + '" class="text-center text-muted py-4">Nothing here right now.</td></tr>';
         }
         const cardList = document.getElementById('reservationsCardList');
@@ -340,17 +334,6 @@ document.addEventListener('DOMContentLoaded', function () {
             }
             try {
                 const data = await postJson(buildUrl(urls.confirmCash, activeReservationId), { amount_received: amount });
-                removeRowAndClose(data.message);
-            } catch (err) {
-                showError(err.message);
-            }
-            return;
-        }
-
-        if (e.target.closest('#detailsAcceptBtn')) {
-            if (!confirm('Accept this reservation request?')) return;
-            try {
-                const data = await postJson(buildUrl(urls.accept, activeReservationId));
                 removeRowAndClose(data.message);
             } catch (err) {
                 showError(err.message);

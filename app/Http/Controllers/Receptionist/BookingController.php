@@ -44,12 +44,17 @@ class BookingController extends Controller
     }
 
     /**
-     * Active Booking List ('pending', verified_at null) by default; other
-     * tabs: 'verified' (Complete Booking List - verified but not yet
-     * archived), 'rejected' (cancelled, not archived - needs a
-     * receptionist decision), 'archived' (verified OR cancelled, archived
-     * - see isArchivable()). ?verified=1 is kept working as an alias for
-     * tab=verified for any old bookmarked links.
+     * "For Verification" ('pending', verified_at null) by default - in
+     * practice this is now GCash-only: convertToBooking() (Cash) and
+     * store()/CheckInController::storeWalkIn() (both always
+     * receptionist-created) all auto-verify at creation, so nothing but a
+     * GCash booking awaiting Receptionist\PaymentController::verify() (or
+     * a pre-existing Cash booking from before that auto-verify shipped)
+     * ever lands here. Other tabs: 'verified' (Complete Booking List -
+     * verified but not yet archived), 'rejected' (cancelled, not archived
+     * - needs a receptionist decision), 'archived' (verified OR
+     * cancelled, archived - see isArchivable()). ?verified=1 is kept
+     * working as an alias for tab=verified for any old bookmarked links.
      */
     public function index(Request $request): View
     {
@@ -168,6 +173,13 @@ class BookingController extends Controller
             // show up as "new" (see index()'s ordering / the red-dot
             // indicator in the view) the moment it's created.
             'viewed_at' => now(),
+            // No online (GCash) payment exists to verify here - a
+            // receptionist typed this in directly, same reasoning as a
+            // Cash reservation conversion (see ReservationWorkflowService::
+            // convertToBooking()'s identical auto-verify). Never lands in
+            // the "For Verification" tab.
+            'verified_at' => now(),
+            'verified_by' => auth()->id(),
         ]);
 
         Activity::log(

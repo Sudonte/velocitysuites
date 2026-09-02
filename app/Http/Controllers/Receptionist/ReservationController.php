@@ -24,10 +24,16 @@ use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 use Illuminate\Http\RedirectResponse;
 
 /**
- * The Reservation Module: two tabs - "To Be Confirmed Reservations"
- * (pending_review) and "To Be Converted to Booking" (ready_for_booking).
- * Once converted, a reservation disappears from both tabs and the
- * resulting Booking shows up only in the Booking Module (BookingController).
+ * The Reservation Module: just a list of people who want to be reserved -
+ * "Active" (any pending_review or ready_for_booking reservation, whatever
+ * internal stage it's at - see index()) and "Verified" (any active
+ * reservation additionally marked reviewed by staff). No separate "To Be
+ * Confirmed"/"To Be Converted" tabs to work through in order anymore -
+ * convert() does whichever of accept/convert is actually needed in one
+ * action. Once converted, a reservation disappears from both tabs and the
+ * resulting Booking shows up only in the Booking Module (BookingController) -
+ * already verified if it was Cash, in that module's own "For Verification"
+ * tab if it was GCash.
  */
 class ReservationController extends Controller
 {
@@ -40,20 +46,29 @@ class ReservationController extends Controller
 
     public function index(Request $request): View
     {
-        $tab = $request->get('tab', 'pending_review');
-        if (!in_array($tab, ['pending_review', 'ready_for_booking', 'verified'])) {
-            $tab = 'pending_review';
+        $tab = $request->get('tab', 'active');
+        if (!in_array($tab, ['active', 'verified'])) {
+            $tab = 'active';
         }
 
-        // "verified" is the Complete Reservation List - any non-converted,
-        // non-rejected, non-cancelled reservation the receptionist has
-        // marked Verified (independent of pending_review/ready_for_booking,
-        // which remain the accept/convert workflow's own tabs).
+        // "active" merges what used to be two separate tabs ("To Be
+        // Confirmed" = pending_review, "To Be Converted to Booking" =
+        // ready_for_booking) into one list - just people who want to be
+        // reserved, whatever stage they're internally at. That internal
+        // distinction still exists (it's still what unlocks the automatic
+        // GCash conversion path in ReservationWorkflowService::
+        // recordDepositPayment()/tryAutoConvert()), it's just no longer
+        // something a receptionist has to work through as separate tabs -
+        // Convert (see convert() above) now does whichever of accept/
+        // convert is actually needed in one action, for either payment
+        // method. "verified" stays a separate, orthogonal tab exactly as
+        // before - any active reservation the receptionist has additionally
+        // marked Verified.
         $query = Reservation::with(['guest.user', 'roomType']);
         if ($tab === 'verified') {
             $query->whereIn('status', ['pending_review', 'ready_for_booking'])->whereNotNull('verified_at');
         } else {
-            $query->where('status', $tab)->whereNull('verified_at');
+            $query->whereIn('status', ['pending_review', 'ready_for_booking'])->whereNull('verified_at');
         }
 
         // Unread first (viewed_at null - see details() below), then
@@ -61,15 +76,17 @@ class ReservationController extends Controller
         // priority to review/convert, not whoever requested first.
         $reservations = $query->orderByRaw('viewed_at IS NULL DESC')->orderBy('check_in')->paginate(15)->withQueryString();
 
-        $pendingCount = Reservation::where('status', 'pending_review')->whereNull('verified_at')->count();
-        $readyCount = Reservation::where('status', 'ready_for_booking')->whereNull('verified_at')->count();
+        $activeCount = Reservation::whereIn('status', ['pending_review', 'ready_for_booking'])->whereNull('verified_at')->count();
         $verifiedCount = Reservation::whereIn('status', ['pending_review', 'ready_for_booking'])->whereNotNull('verified_at')->count();
 
-        // For "ready for booking" rows, show whether the room type still
-        // has inventory left for the requested dates - the Convert action
-        // is disabled once it doesn't.
+        // Whether the room type still has inventory left for the
+        // requested dates - a GCash row's Convert action is disabled
+        // without it (a Cash row's isn't - convertToBooking() itself
+        // still blocks an actually-full room type either way, this is
+        // just what lets the button show a clear reason up front instead
+        // of a click-then-fail).
         $availableCounts = collect();
-        if ($tab === 'ready_for_booking') {
+        if ($tab === 'active') {
             foreach ($reservations as $reservation) {
                 $availableCounts[$reservation->id] = $this->availability->availableCount(
                     $reservation->roomType,
@@ -79,7 +96,7 @@ class ReservationController extends Controller
             }
         }
 
-        return view('receptionist.reservations.index', compact('reservations', 'tab', 'pendingCount', 'readyCount', 'verifiedCount', 'availableCounts'));
+        return view('receptionist.reservations.index', compact('reservations', 'tab', 'activeCount', 'verifiedCount', 'availableCounts'));
     }
 
     /**
@@ -174,9 +191,10 @@ class ReservationController extends Controller
     /**
      * AJAX popup content: guest details, reservation info, room type,
      * payment preference, uploaded ID (if discount requested), uploaded
-     * receipt + reference number (if GCash) - plus Accept/Reject/Convert
-     * actions live in this same popup, so the receptionist never has to
-     * leave it or click a separate row action.
+     * receipt + reference number (if GCash) - plus Reject/Convert/Confirm
+     * Cash Payment actions live in this same popup, so the receptionist
+     * never has to leave it or click a separate row action. No standalone
+     * Accept action here anymore - Convert handles that internally now.
      */
     public function details(Reservation $reservation)
     {
@@ -188,7 +206,10 @@ class ReservationController extends Controller
             $reservation->update(['viewed_at' => now()]);
         }
 
-        $available = $reservation->status === 'ready_for_booking'
+        // Shown/used for both statuses now that Convert works from either
+        // (see ReservationWorkflowService::convertToBooking()) - not just
+        // ready_for_booking.
+        $available = in_array($reservation->status, ['pending_review', 'ready_for_booking'], true)
             ? $this->availability->availableCount($reservation->roomType, $reservation->check_in, $reservation->check_out)
             : null;
 
@@ -272,11 +293,16 @@ class ReservationController extends Controller
     }
 
     /**
-     * Convert a ready_for_booking reservation into a confirmed Booking -
-     * gated on room-type inventory actually being available for the
-     * requested dates. Once converted, it disappears from both tabs and
-     * only shows up in the Booking Module. Called from the details popup
-     * via AJAX.
+     * Convert an active reservation into a confirmed Booking - gated on
+     * room-type inventory actually being available for the requested
+     * dates. Works straight from pending_review now, not just
+     * ready_for_booking (ReservationWorkflowService::convertToBooking()
+     * auto-accepts first if needed) - a Cash reservation no longer needs
+     * a separate Accept step before it can be converted. Once converted,
+     * it disappears from the Reservations list and only shows up in the
+     * Booking Module - straight into "For Verification" if it was GCash
+     * (Receptionist\BookingController::verify()'s gate), already
+     * verified if it was Cash. Called from the details popup via AJAX.
      */
     public function convert(Reservation $reservation)
     {

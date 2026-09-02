@@ -5,7 +5,7 @@
 @section('content')
 <div class="container-fluid py-4">
     <x-page-header icon="fas fa-calendar-check" title="Bookings"
-        subtitle="Every booking needs verification before it's complete. Room assignment and check-in itself both happen in the Check-In Module.">
+        subtitle="A GCash payment needs verification here before it's complete - Cash is confirmed as soon as it's converted or created. Room assignment and check-in itself both happen in the Check-In Module.">
         <x-slot:actions>
             <a href="{{ route('receptionist.bookings.create') }}" class="btn btn-primary">
                 <i class="fas fa-calendar-plus"></i> New Booking
@@ -30,7 +30,7 @@
     <ul class="nav nav-tabs mb-3 flex-nowrap overflow-auto">
         <li class="nav-item">
             <a class="nav-link text-nowrap {{ $tab === 'pending' ? 'active' : '' }}" href="{{ route('receptionist.bookings.index', ['tab' => 'pending']) }}">
-                Active Booking List <span class="badge bg-warning text-dark">{{ $pendingCount }}</span>
+                For Verification <span class="badge bg-warning text-dark">{{ $pendingCount }}</span>
             </a>
         </li>
         <li class="nav-item">

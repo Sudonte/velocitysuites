@@ -213,7 +213,7 @@
         <div class="mb-2">
             <label class="form-label">Reason <span class="text-danger">*</span></label>
             <textarea id="detailsRejectReason" class="form-control" rows="3" maxlength="500" required
-                      placeholder="This will be sent to the guest.">{{ $reservation->status === 'ready_for_booking' && ($available ?? 0) < $reservation->rooms_requested ? 'The ' . ($reservation->roomType->name ?? '') . ' room type does not have enough rooms available for your requested dates.' : '' }}</textarea>
+                      placeholder="This will be sent to the guest.">{{ ($available ?? 0) < $reservation->rooms_requested ? 'The ' . ($reservation->roomType->name ?? '') . ' room type does not have enough rooms available for your requested dates.' : '' }}</textarea>
         </div>
         <div class="d-flex gap-2 justify-content-end">
             <button type="button" class="btn btn-secondary" id="detailsCancelRejectBtn">Cancel</button>
@@ -254,20 +254,31 @@
             </button>
         </div>
     @else
+    @php $notEnoughRooms = ($available ?? 0) < $reservation->rooms_requested; @endphp
     <div id="detailsMainActions" class="d-flex gap-2 justify-content-end">
         <button type="button" class="btn btn-outline-danger" id="detailsShowRejectBtn">
             <i class="fas fa-times"></i> Reject
         </button>
         @if($reservation->payment_method === 'cash')
-            <button type="button" class="btn btn-success" id="detailsShowCashBtn">
+            {{-- Two ways to move a Cash reservation forward: a plain Convert
+                 (no accept step needed anymore - convertToBooking() does that
+                 internally either way) for a receptionist who'll record the
+                 payment separately later, or Confirm Cash Payment to do both
+                 in one step. Neither needs the reservation to already be
+                 ready_for_booking. --}}
+            <button type="button" class="btn btn-outline-success" id="detailsConvertBtn" {{ $notEnoughRooms ? 'disabled' : '' }}
+                    title="{{ $notEnoughRooms ? 'Not enough rooms of this type available for the requested dates.' : '' }}">
+                <i class="fas fa-calendar-check"></i> Convert to Booking
+            </button>
+            <button type="button" class="btn btn-success" id="detailsShowCashBtn" {{ $notEnoughRooms ? 'disabled' : '' }}>
                 <i class="fas fa-money-bill-wave"></i> Confirm Cash Payment
             </button>
-        @elseif($reservation->status === 'pending_review')
-            <button type="button" class="btn btn-success" id="detailsAcceptBtn">
-                <i class="fas fa-check"></i> Accept
-            </button>
         @else
-            @php $notEnoughRooms = ($available ?? 0) < $reservation->rooms_requested; @endphp
+            {{-- GCash, reached here only once a payment is actually on
+                 file (the "Waiting for Guest GCash Payment" branch above
+                 covers the unpaid case) - Convert works the same whether
+                 this reservation is still pending_review or already
+                 ready_for_booking, no separate Accept step either. --}}
             <button type="button" class="btn btn-success" id="detailsConvertBtn" {{ $notEnoughRooms ? 'disabled' : '' }}
                     title="{{ $notEnoughRooms ? 'Not enough rooms of this type available for the requested dates.' : '' }}">
                 <i class="fas fa-calendar-check"></i> Convert to Booking

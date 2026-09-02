@@ -393,24 +393,32 @@ class ReservationWorkflowService
     }
 
     /**
-     * Convert a ready_for_booking reservation into a Booking - gated on
-     * room-type inventory actually being available for the requested
-     * dates. Verifying the deposit (if any) happens implicitly here, since
-     * converting IS the verification act. This is the receptionist's
-     * manual path (walk-in Cash reservations); GCash payments usually
-     * never reach here, since recordDepositPayment() already auto-
-     * converted them via tryAutoConvert().
+     * Convert a reservation into a Booking - gated on room-type inventory
+     * actually being available for the requested dates. This is the
+     * receptionist's manual path; a GCash reservation usually never
+     * reaches here at all, since recordDepositPayment() already auto-
+     * converted it via tryAutoConvert() the moment payment came in.
+     *
+     * Callable from pending_review directly, not just ready_for_booking -
+     * auto-accepts first if needed. The Reservations module no longer
+     * exposes "To Be Confirmed"/"To Be Converted" as separate tabs a
+     * receptionist has to work through in order (see Receptionist\
+     * ReservationController::index()); Convert is the one action that
+     * does both, for either payment method - the accept()/ready_for_booking
+     * distinction still exists underneath (still what unlocks the
+     * automatic GCash conversion path), it's just no longer something a
+     * receptionist has to drive by hand for a Cash reservation.
      */
     public function convertToBooking(Reservation $reservation, User $staff): Booking
     {
-        abort_unless($reservation->status === 'ready_for_booking', 422, 'Only a reservation ready for booking can be converted.');
+        abort_unless(in_array($reservation->status, ['pending_review', 'ready_for_booking'], true), 422, 'Only an active reservation can be converted.');
 
         // Defense in depth: a GCash reservation should never reach here
         // without a payment attempt already on file - recordDepositPayment()
         // is the only path that ever moves a GCash reservation to
         // ready_for_booking, and it always creates a Payment first. This
         // backstops that invariant against a receptionist manually forcing
-        // Accept+Convert on a GCash reservation the guest never actually paid.
+        // Convert on a GCash reservation the guest never actually paid.
         if ($reservation->payment_method === 'gcash' && $reservation->payments()->doesntExist()) {
             abort(422, 'This reservation has not received a GCash payment submission yet.');
         }
@@ -423,6 +431,10 @@ class ReservationWorkflowService
         }
 
         $booking = DB::transaction(function () use ($reservation, $staff) {
+            if ($reservation->status === 'pending_review') {
+                $reservation->update(['status' => 'ready_for_booking']);
+            }
+
             $booking = $this->createBookingFromReservation($reservation);
 
             $reservation->payments()
@@ -434,6 +446,18 @@ class ReservationWorkflowService
                     'verified_by' => $staff->id,
                     'verified_at' => now(),
                 ]));
+
+            // A Cash conversion is the receptionist's own in-person
+            // confirmation - there's nothing left for anyone to verify
+            // afterward, unlike GCash (a guest-submitted receipt still
+            // needs review - see Booking::gcashPaymentNeedsVerification(),
+            // the gate Receptionist\BookingController::verify() checks,
+            // and the Bookings module's "For Verification" tab). Auto-
+            // verifying here means a Cash booking never has to wait in
+            // that tab for a second, redundant staff sign-off.
+            if ($reservation->payment_method !== 'gcash') {
+                $booking->update(['verified_at' => now(), 'verified_by' => $staff->id]);
+            }
 
             return $booking;
         });
@@ -450,10 +474,12 @@ class ReservationWorkflowService
     /**
      * Shared by the receptionist's manual convert and the automatic
      * GCash-payment conversion - just the Booking row + reservation
-     * status flip. The resulting Booking always starts with
-     * verified_at/verified_by null ("Pending Verification") regardless
-     * of how it was created - that's a separate, later receptionist
-     * action (see Receptionist\BookingController::verify()).
+     * status flip. Always starts with verified_at/verified_by null here -
+     * convertToBooking() (the only caller that ever has a Cash
+     * reservation to convert) sets those itself right after this returns,
+     * since GCash needs a later separate verification step
+     * (Receptionist\BookingController::verify(), gated on
+     * Booking::gcashPaymentNeedsVerification()) and Cash doesn't.
      *
      * Also copies the reservation's Representative Name (guest_first/
      * middle/last_name), children's ages (additional_guest_details), and
