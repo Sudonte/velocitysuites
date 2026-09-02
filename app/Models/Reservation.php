@@ -9,6 +9,39 @@ class Reservation extends Model
 {
     use HasFactory;
 
+    /**
+     * reservations.status is a real DB ENUM (renamed 2026-09-02, directly
+     * on the live database, outside any migration in this repo). The
+     * database's ENUM definition still has a 'TO_BE_CONVERTED' member left
+     * over from an earlier design, but the app deliberately never writes
+     * it anymore: there's no separate "accepted, awaiting conversion"
+     * stage - a reservation goes straight from awaiting (cash or GCash)
+     * to CONVERTED_TO_BOOKING in one step, either because the receptionist
+     * clicked Convert (Cash) or because a GCash payment came in and
+     * auto-converted it (see ReservationWorkflowService::convertToBooking()/
+     * tryAutoConvert()). Every literal string comparison against this
+     * column anywhere in the codebase must use one of these constants,
+     * never a raw string - MySQL throws a hard error (strict mode) on any
+     * value outside the enum's exact member list.
+     */
+    public const STATUS_AWAITING_CASH = 'AWAITING_CASH_CONFIRMATION';
+    public const STATUS_AWAITING_GCASH = 'AWAITING_GCASH_PAYMENT';
+    public const STATUS_CONVERTED = 'CONVERTED_TO_BOOKING';
+    public const STATUS_REJECTED = 'REJECTED_RESERVATION';
+    public const STATUS_CANCELLED = 'CANCELLED_RESERVATION';
+
+    /**
+     * Either "awaiting" status - the old code's plain 'pending_review'.
+     * Also every still-open, not-yet-resolved reservation (not converted,
+     * rejected, or cancelled), since there's no third "accepted but not
+     * yet converted" stage anymore - kept as a second name (ACTIVE_STATUSES)
+     * only where "still active" reads more naturally than "still awaiting".
+     */
+    public const AWAITING_STATUSES = [self::STATUS_AWAITING_CASH, self::STATUS_AWAITING_GCASH];
+
+    /** Alias of AWAITING_STATUSES - see that constant's docblock. */
+    public const ACTIVE_STATUSES = self::AWAITING_STATUSES;
+
     protected $fillable = [
         'guest_id',
         'guest_first_name',
@@ -239,7 +272,7 @@ class Reservation extends Model
      */
     public function getPaymentDeadlineAttribute(): ?string
     {
-        if (! in_array($this->status, ['pending_review', 'ready_for_booking'], true)) {
+        if (! in_array($this->status, self::ACTIVE_STATUSES, true)) {
             return null;
         }
 

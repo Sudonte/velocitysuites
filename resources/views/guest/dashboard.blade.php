@@ -64,7 +64,7 @@
                     </div>
                     <div class="col-md-4">
                         <p class="mb-1"><strong>Guests:</strong> {{ $currentReservation->number_of_guests }}</p>
-                        <p class="mb-1"><strong>Status:</strong> <x-status-badge status="checked_in" domain="booking" /></p>
+                        <p class="mb-1"><strong>Status:</strong> <x-status-badge status="CHECKED_IN" domain="booking" /></p>
                     </div>
                 </div>
                 <div class="mt-3">
@@ -211,12 +211,12 @@
                     <tbody>
                         @foreach($upcomingReservations as $reservation)
                             <tr>
-                                <td>{{ $reservation->roomType->name }} @if($reservation->status !== 'converted')<small class="text-muted">(room to be assigned)</small>@endif</td>
+                                <td>{{ $reservation->roomType->name }} @if($reservation->status !== \App\Models\Reservation::STATUS_CONVERTED)<small class="text-muted">(room to be assigned)</small>@endif</td>
                                 <td>{{ $reservation->check_in->format('M d, Y') }}</td>
                                 <td>{{ $reservation->check_out->format('M d, Y') }}</td>
                                 <td>{{ $reservation->number_of_guests }}</td>
                                 <td>
-                                    @if($reservation->status === 'converted' && $reservation->booking)
+                                    @if($reservation->status === \App\Models\Reservation::STATUS_CONVERTED && $reservation->booking)
                                         <x-status-badge :status="$reservation->booking->booking_status" domain="booking" />
                                     @else
                                         <x-status-badge :status="$reservation->status" domain="reservation" />
@@ -346,7 +346,7 @@
                                 <td>{{ $reservation->check_in->format('M d, Y') }}</td>
                                 <td>{{ $reservation->check_out->format('M d, Y') }}</td>
                                 <td>
-                                    @if($reservation->status === 'converted' && $reservation->booking)
+                                    @if($reservation->status === \App\Models\Reservation::STATUS_CONVERTED && $reservation->booking)
                                         <x-status-badge :status="$reservation->booking->booking_status" domain="booking" />
                                     @else
                                         <x-status-badge :status="$reservation->status" domain="reservation" />

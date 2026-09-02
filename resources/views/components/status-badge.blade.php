@@ -3,11 +3,11 @@
 @php
 $maps = [
     'reservation' => [
-        'pending_review' => 'warning', 'ready_for_booking' => 'info', 'rejected' => 'danger',
-        'cancelled' => 'danger', 'converted' => 'success',
+        'AWAITING_CASH_CONFIRMATION' => 'warning', 'AWAITING_GCASH_PAYMENT' => 'warning',
+        'REJECTED_RESERVATION' => 'danger', 'CANCELLED_RESERVATION' => 'danger', 'CONVERTED_TO_BOOKING' => 'success',
     ],
     'booking' => [
-        'confirmed' => 'success', 'checked_in' => 'primary', 'checked_out' => 'secondary', 'cancelled' => 'danger',
+        'ACTIVE_BOOKING' => 'success', 'CHECKED_IN' => 'primary', 'COMPLETED_BOOKING' => 'secondary', 'CANCELLED_BOOKING' => 'danger',
     ],
     'discount_verification' => [
         'not_requested' => 'secondary', 'pending' => 'warning', 'approved' => 'success', 'rejected' => 'danger',
@@ -48,6 +48,15 @@ $maps = [
     ],
 ];
 $labels = [
+    'reservation' => [
+        'AWAITING_CASH_CONFIRMATION' => 'Awaiting Cash Payment', 'AWAITING_GCASH_PAYMENT' => 'Awaiting GCash Payment',
+        'REJECTED_RESERVATION' => 'Rejected', 'CANCELLED_RESERVATION' => 'Cancelled',
+        'CONVERTED_TO_BOOKING' => 'Converted',
+    ],
+    'booking' => [
+        'ACTIVE_BOOKING' => 'Confirmed', 'CHECKED_IN' => 'Checked In', 'COMPLETED_BOOKING' => 'Checked Out',
+        'CANCELLED_BOOKING' => 'Cancelled',
+    ],
     'announcement_status' => [
         'archived' => 'Unpublished',
     ],

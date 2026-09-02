@@ -204,7 +204,7 @@
     </div>
 @endif
 
-@if(in_array($reservation->status, ['pending_review', 'ready_for_booking']))
+@if(in_array($reservation->status, \App\Models\Reservation::ACTIVE_STATUSES))
     <hr>
     <div class="alert alert-danger d-none" id="detailsActionError"></div>
 
@@ -240,7 +240,7 @@
         </div>
     @endif
 
-    @if($reservation->payment_method === 'gcash' && $reservation->status === 'pending_review' && $reservation->payments->isEmpty())
+    @if($reservation->payment_method === 'gcash' && $reservation->status === \App\Models\Reservation::STATUS_AWAITING_GCASH && $reservation->payments->isEmpty())
         <!-- No manual Accept step for GCash - recordDepositPayment() moves this
              straight to ready_for_booking (and usually auto-converts) the
              moment the guest actually submits a payment; there's nothing for

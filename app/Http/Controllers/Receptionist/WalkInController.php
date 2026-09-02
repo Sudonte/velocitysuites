@@ -105,7 +105,7 @@ class WalkInController extends Controller
             'adults' => $validated['adults'],
             'children' => $children,
             'number_of_guests' => $validated['adults'] + $children,
-            'status' => 'pending_review',
+            'status' => Reservation::STATUS_AWAITING_CASH,
         ]);
 
         if ($validated['intent'] === 'book') {

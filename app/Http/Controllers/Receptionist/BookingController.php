@@ -68,9 +68,9 @@ class BookingController extends Controller
         $query = Booking::with(['reservation.guest.user', 'reservation.payments', 'guest.user', 'payments', 'roomType', 'room', 'rooms']);
 
         match ($tab) {
-            'pending' => $query->where('booking_status', 'confirmed')->whereNull('verified_at'),
-            'verified' => $query->where('booking_status', 'confirmed')->whereNotNull('verified_at')->whereNull('hidden_at'),
-            'rejected' => $query->where('booking_status', 'cancelled')->whereNull('hidden_at'),
+            'pending' => $query->where('booking_status', Booking::STATUS_ACTIVE)->whereNull('verified_at'),
+            'verified' => $query->where('booking_status', Booking::STATUS_ACTIVE)->whereNotNull('verified_at')->whereNull('hidden_at'),
+            'rejected' => $query->where('booking_status', Booking::STATUS_CANCELLED)->whereNull('hidden_at'),
             'archived' => $query->whereNotNull('hidden_at'),
         };
 
@@ -90,9 +90,9 @@ class BookingController extends Controller
         // receptionist's priority, not whoever was most recently confirmed.
         $bookings = $query->orderByRaw('viewed_at IS NULL DESC')->orderBy('check_in')->paginate(15)->withQueryString();
 
-        $pendingCount = Booking::where('booking_status', 'confirmed')->whereNull('verified_at')->count();
-        $verifiedCount = Booking::where('booking_status', 'confirmed')->whereNotNull('verified_at')->whereNull('hidden_at')->count();
-        $rejectedCount = Booking::where('booking_status', 'cancelled')->whereNull('hidden_at')->count();
+        $pendingCount = Booking::where('booking_status', Booking::STATUS_ACTIVE)->whereNull('verified_at')->count();
+        $verifiedCount = Booking::where('booking_status', Booking::STATUS_ACTIVE)->whereNotNull('verified_at')->whereNull('hidden_at')->count();
+        $rejectedCount = Booking::where('booking_status', Booking::STATUS_CANCELLED)->whereNull('hidden_at')->count();
 
         return view('receptionist.bookings.index', compact(
             'bookings', 'tab', 'pendingCount', 'verifiedCount', 'rejectedCount'
@@ -168,7 +168,7 @@ class BookingController extends Controller
             'children' => $children,
             'number_of_guests' => $validated['adults'] + $children,
             'confirmed_at' => now(),
-            'booking_status' => 'confirmed',
+            'booking_status' => Booking::STATUS_ACTIVE,
             // Whoever creates it has obviously already seen it - shouldn't
             // show up as "new" (see index()'s ordering / the red-dot
             // indicator in the view) the moment it's created.
@@ -259,7 +259,7 @@ class BookingController extends Controller
      */
     public function recordPayment(Request $request, Booking $booking): RedirectResponse
     {
-        if (!in_array($booking->booking_status, ['confirmed', 'checked_in'], true)) {
+        if (!in_array($booking->booking_status, [Booking::STATUS_ACTIVE, Booking::STATUS_CHECKED_IN], true)) {
             return back()->with('error', 'Only an active (confirmed or checked-in) booking can have a payment recorded.');
         }
 
@@ -325,7 +325,7 @@ class BookingController extends Controller
     public function verify(Booking $booking): RedirectResponse
     {
         abort_if($booking->verified_at !== null, 422, 'This booking is already verified.');
-        abort_unless($booking->booking_status === 'confirmed', 422, 'Only a confirmed booking can be verified.');
+        abort_unless($booking->booking_status === Booking::STATUS_ACTIVE, 422, 'Only a confirmed booking can be verified.');
 
         $booking->loadMissing('reservation.payments');
         abort_if(
@@ -357,7 +357,7 @@ class BookingController extends Controller
      */
     public function reject(Request $request, Booking $booking): RedirectResponse
     {
-        abort_unless($booking->booking_status === 'confirmed', 422, 'Only an active, confirmed booking can be rejected.');
+        abort_unless($booking->booking_status === Booking::STATUS_ACTIVE, 422, 'Only an active, confirmed booking can be rejected.');
 
         $validated = $request->validate([
             'reason' => 'required|string|max:500',
@@ -366,7 +366,7 @@ class BookingController extends Controller
         $previousStatus = $booking->booking_status;
 
         DB::transaction(function () use ($booking, $validated) {
-            $booking->update(['booking_status' => 'cancelled', 'rejection_reason' => $validated['reason']]);
+            $booking->update(['booking_status' => Booking::STATUS_CANCELLED, 'rejection_reason' => $validated['reason']]);
 
             $booking->allPayments()
                 ->where('payment_status', 'pending')
@@ -396,8 +396,8 @@ class BookingController extends Controller
      */
     private function isArchivable(Booking $booking): bool
     {
-        $isCompleted = $booking->booking_status === 'confirmed' && $booking->verified_at !== null;
-        $isCancelled = $booking->booking_status === 'cancelled';
+        $isCompleted = $booking->booking_status === Booking::STATUS_ACTIVE && $booking->verified_at !== null;
+        $isCancelled = $booking->booking_status === Booking::STATUS_CANCELLED;
 
         return $isCompleted || $isCancelled;
     }
@@ -462,7 +462,7 @@ class BookingController extends Controller
      */
     private function reconcileStuckGcashBookings(): void
     {
-        Booking::where('booking_status', 'confirmed')
+        Booking::where('booking_status', Booking::STATUS_ACTIVE)
             ->whereNull('verified_at')
             ->where(function ($q) {
                 // Covers both a reservation-derived booking's GCash deposit

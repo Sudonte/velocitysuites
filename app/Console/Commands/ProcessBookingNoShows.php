@@ -22,7 +22,7 @@ class ProcessBookingNoShows extends Command
 
     public function handle(ReservationWorkflowService $workflow): int
     {
-        $candidates = Booking::where('booking_status', 'confirmed')
+        $candidates = Booking::where('booking_status', Booking::STATUS_ACTIVE)
             ->whereDate('check_in', '<=', now()->toDateString())
             ->with(['roomType', 'reservation.guest.user', 'guest.user'])
             ->get();
@@ -30,7 +30,7 @@ class ProcessBookingNoShows extends Command
         $processed = 0;
         foreach ($candidates as $booking) {
             $workflow->processBookingNoShow($booking);
-            if ($booking->fresh()->booking_status === 'cancelled') {
+            if ($booking->fresh()->booking_status === Booking::STATUS_CANCELLED) {
                 Log::info("Cancelled no-show booking: id={$booking->id}, check_in={$booking->check_in}");
                 $processed++;
             }

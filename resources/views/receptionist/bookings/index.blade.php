@@ -151,7 +151,7 @@
                         <div class="monitoring-item-row">
                             <span class="text-muted">{{ $tab === 'archived' ? 'Status' : 'Reason' }}</span>
                             <span>
-                                @if($booking->booking_status === 'cancelled')
+                                @if($booking->booking_status === \App\Models\Booking::STATUS_CANCELLED)
                                     {{ $gcashPayment && $gcashPayment->rejection_reason ? $gcashPayment->rejection_reason : 'Cancelled' }}
                                 @else
                                     <span class="badge bg-success"><i class="fas fa-check-circle"></i> Completed</span>
@@ -282,7 +282,7 @@
                             <td><x-status-badge :status="$booking->booking_status" domain="booking" /></td>
                         @else
                             <td>
-                                @if($booking->booking_status === 'cancelled')
+                                @if($booking->booking_status === \App\Models\Booking::STATUS_CANCELLED)
                                     @if($gcashPayment && $gcashPayment->rejection_reason)
                                         <span class="text-muted small">{{ $gcashPayment->rejection_reason }}</span>
                                     @else

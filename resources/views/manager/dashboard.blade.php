@@ -118,10 +118,10 @@
     <!-- Category Breakdown Charts -->
     @php
         $bookingsByStatusLegend = [
-            ['label' => 'Confirmed', 'value' => $bookingsByStatus['confirmed'] ?? 0, 'color' => '#17a2b8'],
-            ['label' => 'Checked In', 'value' => $bookingsByStatus['checked_in'] ?? 0, 'color' => '#D6414B'],
-            ['label' => 'Checked Out', 'value' => $bookingsByStatus['checked_out'] ?? 0, 'color' => '#28a745'],
-            ['label' => 'Cancelled', 'value' => $bookingsByStatus['cancelled'] ?? 0, 'color' => '#6c757d'],
+            ['label' => 'Confirmed', 'value' => $bookingsByStatus['ACTIVE_BOOKING'] ?? 0, 'color' => '#17a2b8'],
+            ['label' => 'Checked In', 'value' => $bookingsByStatus['CHECKED_IN'] ?? 0, 'color' => '#D6414B'],
+            ['label' => 'Checked Out', 'value' => $bookingsByStatus['COMPLETED_BOOKING'] ?? 0, 'color' => '#28a745'],
+            ['label' => 'Cancelled', 'value' => $bookingsByStatus['CANCELLED_BOOKING'] ?? 0, 'color' => '#6c757d'],
         ];
         $mgrRoomsByStatusLegend = [
             ['label' => 'Available', 'value' => $availableRooms, 'color' => '#28a745'],
@@ -314,7 +314,7 @@
         doughnutChart(
             'bookingsByStatusChart',
             ['Confirmed', 'Checked In', 'Checked Out', 'Cancelled'],
-            [{{ $bookingsByStatus['confirmed'] ?? 0 }}, {{ $bookingsByStatus['checked_in'] ?? 0 }}, {{ $bookingsByStatus['checked_out'] ?? 0 }}, {{ $bookingsByStatus['cancelled'] ?? 0 }}],
+            [{{ $bookingsByStatus['ACTIVE_BOOKING'] ?? 0 }}, {{ $bookingsByStatus['CHECKED_IN'] ?? 0 }}, {{ $bookingsByStatus['COMPLETED_BOOKING'] ?? 0 }}, {{ $bookingsByStatus['CANCELLED_BOOKING'] ?? 0 }}],
             ['#17a2b8', '#D6414B', '#28a745', '#6c757d']
         );
         doughnutChart(

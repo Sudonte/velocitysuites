@@ -49,13 +49,14 @@
                 <label class="form-label small text-muted mb-1">Status</label>
                 <select name="status" class="form-control">
                     <option value="">All Status</option>
-                    <option value="pending_review" {{ request('status') === 'pending_review' ? 'selected' : '' }}>Pending Review</option>
-                    <option value="ready_for_booking" {{ request('status') === 'ready_for_booking' ? 'selected' : '' }}>Ready for Booking</option>
-                    <option value="confirmed" {{ request('status') === 'confirmed' ? 'selected' : '' }}>Confirmed (Booked)</option>
-                    <option value="checked_in" {{ request('status') === 'checked_in' ? 'selected' : '' }}>Checked-In</option>
-                    <option value="checked_out" {{ request('status') === 'checked_out' ? 'selected' : '' }}>Checked-Out</option>
-                    <option value="rejected" {{ request('status') === 'rejected' ? 'selected' : '' }}>Rejected</option>
-                    <option value="cancelled" {{ request('status') === 'cancelled' ? 'selected' : '' }}>Cancelled</option>
+                    <option value="AWAITING_CASH_CONFIRMATION" {{ request('status') === 'AWAITING_CASH_CONFIRMATION' ? 'selected' : '' }}>Awaiting Cash Payment</option>
+                    <option value="AWAITING_GCASH_PAYMENT" {{ request('status') === 'AWAITING_GCASH_PAYMENT' ? 'selected' : '' }}>Awaiting GCash Payment</option>
+                    <option value="ACTIVE_BOOKING" {{ request('status') === 'ACTIVE_BOOKING' ? 'selected' : '' }}>Confirmed (Booked)</option>
+                    <option value="CHECKED_IN" {{ request('status') === 'CHECKED_IN' ? 'selected' : '' }}>Checked-In</option>
+                    <option value="COMPLETED_BOOKING" {{ request('status') === 'COMPLETED_BOOKING' ? 'selected' : '' }}>Checked-Out</option>
+                    <option value="REJECTED_RESERVATION" {{ request('status') === 'REJECTED_RESERVATION' ? 'selected' : '' }}>Rejected</option>
+                    <option value="CANCELLED_RESERVATION" {{ request('status') === 'CANCELLED_RESERVATION' ? 'selected' : '' }}>Cancelled (Reservation)</option>
+                    <option value="CANCELLED_BOOKING" {{ request('status') === 'CANCELLED_BOOKING' ? 'selected' : '' }}>Cancelled (Booking)</option>
                 </select>
             </div>
             <div class="col-sm-6 col-md-4 col-lg-2">

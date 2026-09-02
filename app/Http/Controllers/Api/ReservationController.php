@@ -192,7 +192,7 @@ class ReservationController extends Controller
             'adults' => $validated['adults'],
             'children' => $children,
             'number_of_guests' => $validated['adults'] + $children,
-            'status' => 'pending_review',
+            'status' => $validated['payment_method'] === 'gcash' ? Reservation::STATUS_AWAITING_GCASH : Reservation::STATUS_AWAITING_CASH,
             'payment_method' => $validated['payment_method'],
             'discount_requested' => $discountRequested,
             'discount_verification_status' => $discountRequested ? 'pending' : 'not_requested',
@@ -230,7 +230,7 @@ class ReservationController extends Controller
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 
-        if ($reservation->status !== 'pending_review') {
+        if (! in_array($reservation->status, Reservation::AWAITING_STATUSES, true)) {
             return response()->json(['message' => 'Can only modify a reservation that is still awaiting review.'], 422);
         }
 

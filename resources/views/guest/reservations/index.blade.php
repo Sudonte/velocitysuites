@@ -81,7 +81,7 @@
                         <td>{{ $reservation->check_out->format('M d, Y') }}</td>
                         <td class="text-end">₱{{ number_format($estimatedTotal, 2) }}</td>
                         <td>
-                            @if($reservation->status === 'converted' && $reservation->booking)
+                            @if($reservation->status === \App\Models\Reservation::STATUS_CONVERTED && $reservation->booking)
                                 <x-status-badge :status="$reservation->booking->booking_status" domain="booking" />
                             @else
                                 <x-status-badge :status="$reservation->status" domain="reservation" />
@@ -91,9 +91,9 @@
                             <?php
                                 // Same terminal-state guard as ReservationWorkflowService::hide() -
                                 // only offer Delete once this row can no longer change.
-                                $isCancelled = in_array($reservation->status, ['cancelled', 'rejected'])
-                                    || ($reservation->booking && $reservation->booking->booking_status === 'cancelled');
-                                $isCompleted = $reservation->booking && $reservation->booking->booking_status === 'checked_out';
+                                $isCancelled = in_array($reservation->status, [\App\Models\Reservation::STATUS_CANCELLED, \App\Models\Reservation::STATUS_REJECTED])
+                                    || ($reservation->booking && $reservation->booking->booking_status === \App\Models\Booking::STATUS_CANCELLED);
+                                $isCompleted = $reservation->booking && $reservation->booking->booking_status === \App\Models\Booking::STATUS_COMPLETED;
                             ?>
                             <a href="{{ route('guest.reservations.show', $reservation) }}" class="btn btn-sm btn-primary">
                                 <i class="fas fa-eye"></i>

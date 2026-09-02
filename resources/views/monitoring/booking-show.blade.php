@@ -187,7 +187,7 @@
                     <li>
                         <span class="text-muted">Staff Verification</span>
                         <span>
-                            @if($booking->booking_status === 'cancelled')
+                            @if($booking->booking_status === \App\Models\Booking::STATUS_CANCELLED)
                                 <span class="badge bg-danger">Cancelled</span>
                             @elseif($booking->verified_at)
                                 <span class="badge bg-success">Verified</span>

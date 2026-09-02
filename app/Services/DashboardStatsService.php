@@ -53,9 +53,9 @@ class DashboardStatsService
         // "Active" and "completed" live on Booking (the operational record
         // from conversion onward) - Reservation's own status only covers
         // the pre-booking lifecycle.
-        $pendingReservations = Reservation::whereIn('status', ['pending_review', 'ready_for_booking'])->count();
-        $activeReservations = Booking::whereIn('booking_status', ['confirmed', 'checked_in'])->count();
-        $completedReservations = Booking::where('booking_status', 'checked_out')->count();
+        $pendingReservations = Reservation::whereIn('status', Reservation::ACTIVE_STATUSES)->count();
+        $activeReservations = Booking::whereIn('booking_status', [Booking::STATUS_ACTIVE, Booking::STATUS_CHECKED_IN])->count();
+        $completedReservations = Booking::where('booking_status', Booking::STATUS_COMPLETED)->count();
 
         $totalReservations = Reservation::count();
         $totalReservationsLastMonth = Reservation::where('created_at', '<=', now()->subMonth())->count();
@@ -211,21 +211,21 @@ class DashboardStatsService
         // operational record from conversion onward), not on Reservation's
         // own status. Always "today", not filter-scoped (see docblock).
         $todayCheckIns = Booking::whereDate('check_in', today())
-            ->where('booking_status', 'confirmed')
+            ->where('booking_status', Booking::STATUS_ACTIVE)
             ->count();
 
         $todayCheckOuts = Booking::whereDate('check_out', today())
-            ->where('booking_status', 'checked_in')
+            ->where('booking_status', Booking::STATUS_CHECKED_IN)
             ->count();
 
-        $inHouseGuests = Booking::where('booking_status', 'checked_in')->count();
+        $inHouseGuests = Booking::where('booking_status', Booking::STATUS_CHECKED_IN)->count();
 
         $periodReservations = Reservation::whereBetween('check_in', [$from, $to])->count();
         $periodBookings = Reservation::whereBetween('check_in', [$from, $to])->whereHas('booking')->count();
-        $periodCancelled = Reservation::whereBetween('check_in', [$from, $to])->where('status', 'cancelled')->count();
+        $periodCancelled = Reservation::whereBetween('check_in', [$from, $to])->where('status', Reservation::STATUS_CANCELLED)->count();
 
         $periodConfirmedBookings = Booking::whereBetween('check_in', [$from, $to])->count();
-        $periodNoShows = Booking::where('booking_status', 'confirmed')
+        $periodNoShows = Booking::where('booking_status', Booking::STATUS_ACTIVE)
             ->whereBetween('check_in', [$from, $to])
             ->where('check_in', '<', now())
             ->count();

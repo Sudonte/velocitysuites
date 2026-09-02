@@ -240,13 +240,12 @@ Route::middleware(['auth', 'account.status', 'log.activity', 'no.cache'])->group
         Route::post('/reservations', [ReceptionistReservationController::class, 'store'])->name('reservations.store');
         Route::get('/reservations/{reservation}/details', [ReceptionistReservationController::class, 'details'])->name('reservations.details');
         Route::get('/reservations/{reservation}/id-card', [ReceptionistReservationController::class, 'idCard'])->name('reservations.id-card');
-        Route::post('/reservations/{reservation}/accept', [ReceptionistReservationController::class, 'accept'])->name('reservations.accept');
         Route::post('/reservations/{reservation}/reject', [ReceptionistReservationController::class, 'reject'])->name('reservations.reject');
         Route::post('/reservations/{reservation}/convert', [ReceptionistReservationController::class, 'convert'])->name('reservations.convert');
         // Cash-only: confirms the walk-in amount received and converts to a
         // Booking in one action - see ReceptionistReservationController::
         // confirmCashPayment()'s docblock for why this differs from the
-        // plain accept/convert pair GCash reservations already use.
+        // plain Convert action a GCash reservation resolves through.
         Route::post('/reservations/{reservation}/confirm-cash-payment', [ReceptionistReservationController::class, 'confirmCashPayment'])->name('reservations.confirm-cash-payment');
         Route::put('/reservations/{reservation}/verify', [ReceptionistReservationController::class, 'verify'])->name('reservations.verify');
 

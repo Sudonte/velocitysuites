@@ -50,14 +50,14 @@ class CheckInController extends Controller
         // Bookings/Check-out since all three operate on this same Booking
         // row), then the existing date order.
         $bookings = Booking::with(['reservation.guest.user', 'guest.user', 'rooms', 'roomType'])
-            ->where('booking_status', $tab === 'expected' ? 'confirmed' : 'checked_in')
+            ->where('booking_status', $tab === 'expected' ? Booking::STATUS_ACTIVE : Booking::STATUS_CHECKED_IN)
             ->orderByRaw('viewed_at IS NULL DESC')
             ->orderBy($tab === 'expected' ? 'check_in' : 'check_out')
             ->simplePaginate(15)
             ->withQueryString();
 
-        $expectedCount = Booking::where('booking_status', 'confirmed')->count();
-        $checkedInCount = Booking::where('booking_status', 'checked_in')->count();
+        $expectedCount = Booking::where('booking_status', Booking::STATUS_ACTIVE)->count();
+        $checkedInCount = Booking::where('booking_status', Booking::STATUS_CHECKED_IN)->count();
 
         return view('receptionist.check-in.index', compact('bookings', 'tab', 'expectedCount', 'checkedInCount'));
     }
@@ -129,7 +129,7 @@ class CheckInController extends Controller
             'children' => $children,
             'number_of_guests' => $validated['adults'] + $children,
             'confirmed_at' => now(),
-            'booking_status' => 'confirmed',
+            'booking_status' => Booking::STATUS_ACTIVE,
             // Whoever creates it has obviously already seen it - shouldn't
             // show up as "new" (see index()'s ordering / the red-dot
             // indicator in the view) the moment it's created. Also
@@ -168,7 +168,7 @@ class CheckInController extends Controller
      */
     public function panel(Booking $booking)
     {
-        if ($booking->booking_status !== 'confirmed') {
+        if ($booking->booking_status !== Booking::STATUS_ACTIVE) {
             abort(422, 'Only confirmed bookings can be checked in.');
         }
 
@@ -208,7 +208,7 @@ class CheckInController extends Controller
      */
     public function store(Request $request, Booking $booking)
     {
-        if ($booking->booking_status !== 'confirmed') {
+        if ($booking->booking_status !== Booking::STATUS_ACTIVE) {
             return response()->json(['message' => 'Only confirmed bookings can be checked in.'], 422);
         }
 
@@ -266,7 +266,7 @@ class CheckInController extends Controller
                     'adults' => $validated['adults'],
                     'children' => $children,
                     'number_of_guests' => $validated['adults'] + $children,
-                    'booking_status' => 'checked_in',
+                    'booking_status' => Booking::STATUS_CHECKED_IN,
                 ]);
             });
         } catch (HttpExceptionInterface $e) {

@@ -25,7 +25,7 @@ class SendPaymentReminders extends Command
 
     public function handle(NotificationService $notifications): int
     {
-        $candidates = Reservation::whereIn('status', ['pending_review', 'ready_for_booking'])
+        $candidates = Reservation::whereIn('status', Reservation::ACTIVE_STATUSES)
             ->whereNull('payment_reminder_sent_at')
             ->whereDoesntHave('payments', fn ($q) => $q->where('payment_status', 'completed'))
             ->with(['roomType', 'guest.user'])

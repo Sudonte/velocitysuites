@@ -77,7 +77,7 @@ class RoomAvailabilityService
         return Room::where('room_type_id', $booking->room_type_id)
             ->where('status', '!=', 'maintenance')
             ->whereDoesntHave('assignedBookings', function ($q) use ($booking) {
-                $q->whereIn('bookings.booking_status', ['confirmed', 'checked_in'])
+                $q->whereIn('bookings.booking_status', [Booking::STATUS_ACTIVE, Booking::STATUS_CHECKED_IN])
                   ->where('bookings.id', '!=', $booking->id)
                   ->where(function ($dates) use ($booking) {
                       $dates->whereBetween('bookings.check_in', [$booking->check_in, $booking->check_out])
@@ -160,7 +160,7 @@ class RoomAvailabilityService
     private function overlappingBookings(int $roomTypeId, Carbon $checkIn, Carbon $checkOut, ?int $excludingBookingId = null)
     {
         return Booking::where('room_type_id', $roomTypeId)
-            ->whereIn('booking_status', ['confirmed', 'checked_in'])
+            ->whereIn('booking_status', [Booking::STATUS_ACTIVE, Booking::STATUS_CHECKED_IN])
             ->when($excludingBookingId, fn ($q) => $q->where('id', '!=', $excludingBookingId))
             ->where(function ($dates) use ($checkIn, $checkOut) {
                 $dates->whereBetween('check_in', [$checkIn, $checkOut])

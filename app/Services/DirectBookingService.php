@@ -114,7 +114,7 @@ class DirectBookingService
                 'children' => $children,
                 'number_of_guests' => $adults + $children,
                 'confirmed_at' => now(),
-                'booking_status' => 'confirmed',
+                'booking_status' => Booking::STATUS_ACTIVE,
                 'payment_method' => $paymentData['payment_method'],
                 'id_card_type' => $idCard['type'] ?? null,
                 'id_card_image_path' => $idCard['path'] ?? null,

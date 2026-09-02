@@ -8,7 +8,7 @@
         <h1 class="mb-0">
             <i class="fas fa-receipt"></i> Reservation #{{ $reservation->id }}
         </h1>
-        @if($reservation->status === 'converted' && $reservation->booking)
+        @if($reservation->status === \App\Models\Reservation::STATUS_CONVERTED && $reservation->booking)
             <x-status-badge :status="$reservation->booking->booking_status" domain="booking" class="fs-6" />
         @else
             <x-status-badge :status="$reservation->status" domain="reservation" class="fs-6" />
@@ -99,7 +99,7 @@
                         @endif
                     </p>
                 @endif
-                @if($reservation->status === 'rejected' && $reservation->rejection_reason)
+                @if($reservation->status === \App\Models\Reservation::STATUS_REJECTED && $reservation->rejection_reason)
                     <div class="alert alert-danger mt-3 mb-0">
                         <strong>Reason:</strong> {{ $reservation->rejection_reason }}
                     </div>
@@ -166,7 +166,7 @@
             </x-card>
 
             <!-- Pay Deposit Now (Pay Later + GCash, still awaiting review) -->
-            @if($reservation->status === 'pending_review' && $reservation->payment_method === 'gcash')
+            @if($reservation->status === \App\Models\Reservation::STATUS_AWAITING_GCASH && $reservation->payment_method === 'gcash')
                 <x-card title="Pay Deposit Now" icon="fas fa-qrcode" bodyClass="card-body" class="mb-4">
                     <p class="text-muted small">Complete your GCash payment now to move this reservation straight to booking conversion.</p>
                     <form action="{{ route('guest.reservations.pay-deposit', $reservation) }}" method="POST" enctype="multipart/form-data">
@@ -271,24 +271,20 @@
                 // branch enforces - lets a web guest cancel an already-converted
                 // Booking exactly like the mobile app can, not just a plain
                 // pending Reservation.
-                $canCancelConverted = $reservation->status === 'converted'
+                $canCancelConverted = $reservation->status === \App\Models\Reservation::STATUS_CONVERTED
                     && $reservation->booking
-                    && !in_array($reservation->booking->booking_status, ['checked_in', 'checked_out', 'cancelled'])
+                    && !in_array($reservation->booking->booking_status, [\App\Models\Booking::STATUS_CHECKED_IN, \App\Models\Booking::STATUS_COMPLETED, \App\Models\Booking::STATUS_CANCELLED])
                     && !$reservation->payments->where('payment_status', 'completed')->where('payment_stage', 'final')->count();
             ?>
-            @if(in_array($reservation->status, ['pending_review', 'ready_for_booking']) || $canCancelConverted)
+            @if(in_array($reservation->status, \App\Models\Reservation::ACTIVE_STATUSES) || $canCancelConverted)
                 <x-card title="Actions" icon="fas fa-bolt" bodyClass="card-body">
-                    @if($reservation->status === 'pending_review')
+                    @if(in_array($reservation->status, \App\Models\Reservation::AWAITING_STATUSES, true))
                         <p class="text-warning mb-3">
                             <i class="fas fa-hourglass"></i> Your reservation is awaiting staff review.
                         </p>
                         <button class="btn btn-info w-100 mb-2" data-bs-toggle="modal" data-bs-target="#modifyModal">
                             <i class="fas fa-edit"></i> Modify Dates
                         </button>
-                    @elseif($reservation->status === 'ready_for_booking')
-                        <p class="text-info mb-3">
-                            <i class="fas fa-check-circle"></i> Ready for booking conversion by our staff.
-                        </p>
                     @else
                         <p class="text-info mb-3">
                             <i class="fas fa-check-circle"></i> Booking confirmed.
@@ -313,8 +309,8 @@
                         @csrf
                         @method('PUT')
                         <button type="submit" class="btn btn-danger w-100"
-                                onclick="return confirm('{{ $reservation->status === 'converted' ? 'Are you sure you want to cancel this booking? Any partial GCash deposit is non-refundable.' : 'Are you sure you want to cancel this reservation?' }}')">
-                            <i class="fas fa-times"></i> {{ $reservation->status === 'converted' ? 'Cancel Booking' : 'Cancel Reservation' }}
+                                onclick="return confirm('{{ $reservation->status === \App\Models\Reservation::STATUS_CONVERTED ? 'Are you sure you want to cancel this booking? Any partial GCash deposit is non-refundable.' : 'Are you sure you want to cancel this reservation?' }}')">
+                            <i class="fas fa-times"></i> {{ $reservation->status === \App\Models\Reservation::STATUS_CONVERTED ? 'Cancel Booking' : 'Cancel Reservation' }}
                         </button>
                     </form>
                 </x-card>
@@ -330,16 +326,7 @@
                             <small class="text-muted">{{ $reservation->created_at->format('M d, Y h:i A') }}</small>
                         </div>
                     </div>
-                    @if($reservation->status === 'ready_for_booking')
-                        <div class="timeline-item">
-                            <div class="timeline-marker" style="background-color: var(--info-color);"></div>
-                            <div class="timeline-content">
-                                <strong>Ready for Booking</strong><br>
-                                <small class="text-muted">Awaiting conversion by staff</small>
-                            </div>
-                        </div>
-                    @endif
-                    @if($reservation->status === 'converted' && $booking)
+                    @if($reservation->status === \App\Models\Reservation::STATUS_CONVERTED && $booking)
                         <div class="timeline-item">
                             <div class="timeline-marker" style="background-color: var(--success-color);"></div>
                             <div class="timeline-content">
@@ -347,13 +334,13 @@
                                 <small class="text-muted">{{ $booking->confirmed_at?->format('M d, Y h:i A') }}</small>
                             </div>
                         </div>
-                        @if(in_array($booking->booking_status, ['checked_in', 'checked_out']))
+                        @if(in_array($booking->booking_status, [\App\Models\Booking::STATUS_CHECKED_IN, \App\Models\Booking::STATUS_COMPLETED]))
                             <div class="timeline-item">
                                 <div class="timeline-marker" style="background-color: var(--primary-color);"></div>
                                 <div class="timeline-content"><strong>Checked In</strong></div>
                             </div>
                         @endif
-                        @if($booking->booking_status === 'checked_out')
+                        @if($booking->booking_status === \App\Models\Booking::STATUS_COMPLETED)
                             <div class="timeline-item">
                                 <div class="timeline-marker" style="background-color: var(--secondary-color);"></div>
                                 <div class="timeline-content"><strong>Checked Out</strong></div>
@@ -367,7 +354,7 @@
 </div>
 
 <!-- Modify Dates Modal -->
-@if($reservation->status === 'pending_review')
+@if(in_array($reservation->status, \App\Models\Reservation::AWAITING_STATUSES, true))
     <div class="modal fade" id="modifyModal" tabindex="-1">
         <div class="modal-dialog">
             <div class="modal-content">

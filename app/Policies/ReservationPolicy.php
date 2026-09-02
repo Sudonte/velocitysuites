@@ -58,7 +58,7 @@ class ReservationPolicy
         }
 
         // Guest can only update their own reservations if status is pending
-        if ($user->role === 'guest' && $user->guest && $user->guest->id === $reservation->guest_id && $reservation->status === 'pending') {
+        if ($user->role === 'guest' && $user->guest && $user->guest->id === $reservation->guest_id && in_array($reservation->status, Reservation::AWAITING_STATUSES, true)) {
             return true;
         }
 
@@ -79,7 +79,7 @@ class ReservationPolicy
         }
 
         // Guest can cancel their own reservations if not checked in
-        if ($user->role === 'guest' && $user->guest && $user->guest->id === $reservation->guest_id && in_array($reservation->status, ['pending', 'confirmed'])) {
+        if ($user->role === 'guest' && $user->guest && $user->guest->id === $reservation->guest_id && in_array($reservation->status, [...Reservation::ACTIVE_STATUSES, Reservation::STATUS_CONVERTED], true)) {
             return true;
         }
 

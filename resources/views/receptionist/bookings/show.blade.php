@@ -171,7 +171,7 @@
                     </div>
                 </div>
 
-                @if(in_array($booking->booking_status, ['confirmed', 'checked_in']) && $remainingBalance > 0.009)
+                @if(in_array($booking->booking_status, [\App\Models\Booking::STATUS_ACTIVE, \App\Models\Booking::STATUS_CHECKED_IN]) && $remainingBalance > 0.009)
                     <hr>
                     <h6 class="text-brand"><i class="fas fa-hand-holding-dollar"></i> Record Walk-In Payment</h6>
                     <p class="text-muted small">Any remaining balance is settled through a walk-in payment at the hotel - record it here as it's received.</p>
@@ -206,7 +206,7 @@
                 </x-card>
             @endif
 
-            @if($booking->booking_status === 'cancelled')
+            @if($booking->booking_status === \App\Models\Booking::STATUS_CANCELLED)
                 <x-card title="Booking Rejected / Failed" icon="fas fa-ban" bodyClass="card-body">
                     <p class="mb-3">
                         @if($booking->rejection_reason)
@@ -352,7 +352,7 @@
                     <li>
                         <span class="text-muted">Staff Verification</span>
                         <span>
-                            @if($booking->booking_status === 'cancelled')
+                            @if($booking->booking_status === \App\Models\Booking::STATUS_CANCELLED)
                                 <span class="badge bg-danger">Cancelled</span>
                             @elseif($booking->verified_at)
                                 <span class="badge bg-success">Verified</span>

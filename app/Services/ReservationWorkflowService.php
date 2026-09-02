@@ -29,19 +29,16 @@ class ReservationWorkflowService
     }
 
     /**
-     * Status a brand-new reservation should start at. Cash always behaves
-     * like Pay Later - it can't be verified online, so the receptionist
-     * reconciles it in person regardless of Pay Now/Later choice. Only
-     * Pay Now + GCash (a payment that's already been made and just needs
-     * staff to glance at the receipt) skips straight to ready_for_booking.
+     * Status a brand-new reservation should start at - purely a function
+     * of payment method now. Even a Pay Now + GCash reservation (payment
+     * already made at submission time) starts here, not already-converted -
+     * recordDepositPayment()/tryAutoConvert() immediately auto-converts it
+     * moments later in the same request once the payment itself is on
+     * file, rather than the status skipping ahead of the payment record.
      */
-    public function initialStatus(string $paymentPreference, ?string $paymentMethod): string
+    public function initialStatus(?string $paymentMethod): string
     {
-        if ($paymentPreference === 'pay_now' && $paymentMethod === 'gcash') {
-            return 'ready_for_booking';
-        }
-
-        return 'pending_review';
+        return $paymentMethod === 'gcash' ? Reservation::STATUS_AWAITING_GCASH : Reservation::STATUS_AWAITING_CASH;
     }
 
     /**
@@ -83,7 +80,7 @@ class ReservationWorkflowService
     {
         return Reservation::where('guest_id', $guest->id)
             ->where('room_type_id', $roomType->id)
-            ->whereNotIn('status', ['cancelled', 'rejected'])
+            ->whereNotIn('status', [Reservation::STATUS_CANCELLED, Reservation::STATUS_REJECTED])
             ->when($excludeReservationId, fn ($q) => $q->where('id', '!=', $excludeReservationId))
             ->where('check_in', '<', $checkOut)
             ->where('check_out', '>', $checkIn)
@@ -93,14 +90,14 @@ class ReservationWorkflowService
     /**
      * Guest submits a GCash payment - either at booking/reservation time
      * (pay_now) or later against an existing Pay Later reservation, as
-     * either a Partial (deposit) or Full (final) payment. Landing here
-     * auto-advances a pending_review reservation to ready_for_booking,
-     * and - new rule - a GCash payment (partial or full) immediately
-     * attempts to auto-convert the reservation into a Booking, since
+     * either a Partial (deposit) or Full (final) payment. A GCash payment
+     * (partial or full) immediately attempts to auto-convert the
+     * reservation straight into a Booking (see tryAutoConvert()), since
      * GCash is the only payment method that can be self-reported by the
      * guest and still trusted enough to skip the receptionist's manual
-     * Accept/Convert step. Cash can never be verified online, so it's
-     * recorded separately (see recordCashIntent()) and never auto-converts.
+     * Convert step. Cash can never be verified online, so it's recorded
+     * separately (see recordCashIntent()) and never auto-converts - a Cash
+     * reservation only ever converts when a receptionist does it.
      */
     public function recordDepositPayment(Reservation $reservation, array $paymentData, string $paymentStage = 'deposit'): Payment
     {
@@ -121,10 +118,6 @@ class ReservationWorkflowService
         $reservation->update([
             'payment_method' => $paymentData['payment_method'] ?? $reservation->payment_method,
         ]);
-
-        if ($reservation->status === 'pending_review') {
-            $reservation->update(['status' => 'ready_for_booking']);
-        }
 
         if (($paymentData['payment_method'] ?? null) === 'gcash') {
             $this->tryAutoConvert($reservation, $payment);
@@ -161,13 +154,13 @@ class ReservationWorkflowService
      * a Booking. If inventory isn't actually available for the dates (a
      * rare race - most reservations don't hold inventory until
      * conversion), conversion is simply skipped and the reservation stays
-     * ready_for_booking for a receptionist to resolve manually via
-     * accept()/convertToBooking() - the payment itself is never blocked
-     * or rolled back over an availability race.
+     * awaiting-GCash for a receptionist to resolve manually via
+     * convertToBooking() - the payment itself is never blocked or rolled
+     * back over an availability race.
      */
     private function tryAutoConvert(Reservation $reservation, Payment $payment): void
     {
-        if ($reservation->status !== 'ready_for_booking') {
+        if ($reservation->status !== Reservation::STATUS_AWAITING_GCASH) {
             return;
         }
 
@@ -183,23 +176,6 @@ class ReservationWorkflowService
     }
 
     /**
-     * Receptionist accepts a Pay Later / Cash reservation that's still
-     * awaiting review - moves it to "To Be Converted to Booking".
-     */
-    public function accept(Reservation $reservation): void
-    {
-        abort_unless($reservation->status === 'pending_review', 422, 'Only a reservation awaiting review can be accepted.');
-
-        $reservation->update(['status' => 'ready_for_booking']);
-
-        Activity::log(
-            'Accepted reservation request',
-            "Reservation #{$reservation->id} for {$reservation->roomType->name} ({$reservation->guest_display_name})",
-            $reservation
-        );
-    }
-
-    /**
      * Receptionist rejects a reservation from either tab. Always requires a
      * reason (e.g. ineligible, or the room type is fully booked for the
      * requested dates).
@@ -207,13 +183,13 @@ class ReservationWorkflowService
     public function reject(Reservation $reservation, string $reason, User $staff): void
     {
         abort_unless(
-            in_array($reservation->status, ['pending_review', 'ready_for_booking']),
+            in_array($reservation->status, Reservation::ACTIVE_STATUSES, true),
             422,
             'Only an active reservation can be rejected.'
         );
 
         DB::transaction(function () use ($reservation, $reason, $staff) {
-            $reservation->update(['status' => 'rejected', 'rejection_reason' => $reason]);
+            $reservation->update(['status' => Reservation::STATUS_REJECTED, 'rejection_reason' => $reason]);
 
             $reservation->payments()
                 ->where('payment_stage', 'deposit')
@@ -263,7 +239,7 @@ class ReservationWorkflowService
         $reason = 'Automatically rejected: the required payment was not completed within the 48-hour deadline.';
 
         DB::transaction(function () use ($reservation, $reason) {
-            $reservation->update(['status' => 'rejected', 'rejection_reason' => $reason]);
+            $reservation->update(['status' => Reservation::STATUS_REJECTED, 'rejection_reason' => $reason]);
 
             $reservation->payments()
                 ->where('payment_stage', 'deposit')
@@ -281,7 +257,7 @@ class ReservationWorkflowService
     }
 
     /**
-     * Automatically cancels a still-active (pending_review/ready_for_booking),
+     * Automatically cancels a still-active (awaiting cash or GCash),
      * still-unpaid reservation once its check-in date has reached the
      * configured no-show cutoff (hotel.no_show_checkin_hour + grace hours -
      * see config/hotel.php's docblock). Deliberately not restricted to
@@ -297,7 +273,7 @@ class ReservationWorkflowService
      */
     public function processNoShow(Reservation $reservation): void
     {
-        if (! in_array($reservation->status, ['pending_review', 'ready_for_booking'], true)) {
+        if (! in_array($reservation->status, Reservation::ACTIVE_STATUSES, true)) {
             return;
         }
 
@@ -321,7 +297,7 @@ class ReservationWorkflowService
         $reason = 'NO_SHOW: guest did not arrive or complete payment before the check-in deadline.';
 
         DB::transaction(function () use ($reservation, $reason) {
-            $reservation->update(['status' => 'cancelled', 'rejection_reason' => $reason]);
+            $reservation->update(['status' => Reservation::STATUS_CANCELLED, 'rejection_reason' => $reason]);
 
             $reservation->payments()
                 ->where('payment_stage', 'deposit')
@@ -358,7 +334,7 @@ class ReservationWorkflowService
      */
     public function processBookingNoShow(Booking $booking): void
     {
-        if ($booking->booking_status !== 'confirmed') {
+        if ($booking->booking_status !== Booking::STATUS_ACTIVE) {
             return;
         }
 
@@ -373,8 +349,8 @@ class ReservationWorkflowService
         $reason = 'NO_SHOW: guest did not arrive within the scheduled check-in period.';
 
         $affected = Booking::where('id', $booking->id)
-            ->where('booking_status', 'confirmed')
-            ->update(['booking_status' => 'cancelled', 'rejection_reason' => $reason]);
+            ->where('booking_status', Booking::STATUS_ACTIVE)
+            ->update(['booking_status' => Booking::STATUS_CANCELLED, 'rejection_reason' => $reason]);
 
         if (! $affected) {
             // Lost the race - a receptionist check-in or other update landed first.
@@ -395,30 +371,24 @@ class ReservationWorkflowService
     /**
      * Convert a reservation into a Booking - gated on room-type inventory
      * actually being available for the requested dates. This is the
-     * receptionist's manual path; a GCash reservation usually never
-     * reaches here at all, since recordDepositPayment() already auto-
-     * converted it via tryAutoConvert() the moment payment came in.
-     *
-     * Callable from pending_review directly, not just ready_for_booking -
-     * auto-accepts first if needed. The Reservations module no longer
-     * exposes "To Be Confirmed"/"To Be Converted" as separate tabs a
-     * receptionist has to work through in order (see Receptionist\
-     * ReservationController::index()); Convert is the one action that
-     * does both, for either payment method - the accept()/ready_for_booking
-     * distinction still exists underneath (still what unlocks the
-     * automatic GCash conversion path), it's just no longer something a
-     * receptionist has to drive by hand for a Cash reservation.
+     * receptionist's manual path, and the ONLY way a Cash reservation ever
+     * converts - there's no auto-convert for Cash, since it can't be
+     * verified online. A GCash reservation usually never reaches here at
+     * all, since recordDepositPayment() already auto-converted it via
+     * tryAutoConvert() the moment payment came in; this stays reachable
+     * for a GCash reservation too as the manual fallback for the rare case
+     * where auto-convert skipped it (no inventory free at that instant -
+     * see tryAutoConvert()'s docblock).
      */
     public function convertToBooking(Reservation $reservation, User $staff): Booking
     {
-        abort_unless(in_array($reservation->status, ['pending_review', 'ready_for_booking'], true), 422, 'Only an active reservation can be converted.');
+        abort_unless(in_array($reservation->status, Reservation::AWAITING_STATUSES, true), 422, 'Only an active reservation can be converted.');
 
         // Defense in depth: a GCash reservation should never reach here
         // without a payment attempt already on file - recordDepositPayment()
-        // is the only path that ever moves a GCash reservation to
-        // ready_for_booking, and it always creates a Payment first. This
-        // backstops that invariant against a receptionist manually forcing
-        // Convert on a GCash reservation the guest never actually paid.
+        // always creates a Payment first. This backstops that invariant
+        // against a receptionist manually forcing Convert on a GCash
+        // reservation the guest never actually paid.
         if ($reservation->payment_method === 'gcash' && $reservation->payments()->doesntExist()) {
             abort(422, 'This reservation has not received a GCash payment submission yet.');
         }
@@ -431,10 +401,6 @@ class ReservationWorkflowService
         }
 
         $booking = DB::transaction(function () use ($reservation, $staff) {
-            if ($reservation->status === 'pending_review') {
-                $reservation->update(['status' => 'ready_for_booking']);
-            }
-
             $booking = $this->createBookingFromReservation($reservation);
 
             $reservation->payments()
@@ -504,7 +470,7 @@ class ReservationWorkflowService
             'children' => $reservation->children,
             'number_of_guests' => $reservation->number_of_guests,
             'confirmed_at' => now(),
-            'booking_status' => 'confirmed',
+            'booking_status' => Booking::STATUS_ACTIVE,
             'payment_method' => $reservation->payment_method,
             'guest_first_name' => $reservation->guest_first_name,
             'guest_middle_name' => $reservation->guest_middle_name,
@@ -516,7 +482,7 @@ class ReservationWorkflowService
             'discount_verification_status' => $reservation->discount_verification_status,
         ]);
 
-        $reservation->update(['status' => 'converted']);
+        $reservation->update(['status' => Reservation::STATUS_CONVERTED]);
 
         return $booking;
     }
@@ -535,15 +501,15 @@ class ReservationWorkflowService
      */
     public function cancel(Reservation $reservation): void
     {
-        if ($reservation->status === 'converted') {
+        if ($reservation->status === Reservation::STATUS_CONVERTED) {
             $this->cancelConvertedBooking($reservation);
             return;
         }
 
-        abort_unless(in_array($reservation->status, ['pending_review', 'ready_for_booking']), 422, 'Cannot cancel this reservation.');
+        abort_unless(in_array($reservation->status, Reservation::ACTIVE_STATUSES, true), 422, 'Cannot cancel this reservation.');
 
         DB::transaction(function () use ($reservation) {
-            $reservation->update(['status' => 'cancelled']);
+            $reservation->update(['status' => Reservation::STATUS_CANCELLED]);
 
             $reservation->payments()
                 ->where('payment_stage', 'deposit')
@@ -560,7 +526,7 @@ class ReservationWorkflowService
         abort_if(! $booking, 404, 'Booking not found.');
 
         abort_if(
-            in_array($booking->booking_status, ['checked_in', 'checked_out', 'cancelled']),
+            in_array($booking->booking_status, [Booking::STATUS_CHECKED_IN, Booking::STATUS_COMPLETED, Booking::STATUS_CANCELLED]),
             422,
             'This booking can no longer be cancelled.'
         );
@@ -568,8 +534,8 @@ class ReservationWorkflowService
         abort_if($booking->verified_at !== null, 422, 'This booking has already been verified by our staff and can no longer be cancelled.');
 
         DB::transaction(function () use ($reservation, $booking) {
-            $booking->update(['booking_status' => 'cancelled']);
-            $reservation->update(['status' => 'cancelled']);
+            $booking->update(['booking_status' => Booking::STATUS_CANCELLED]);
+            $reservation->update(['status' => Reservation::STATUS_CANCELLED]);
         });
 
         $this->logCancellation($reservation);
@@ -608,7 +574,7 @@ class ReservationWorkflowService
     public function switchToGcash(Reservation $reservation): void
     {
         abort_unless(
-            in_array($reservation->status, ['pending_review', 'ready_for_booking']),
+            in_array($reservation->status, Reservation::ACTIVE_STATUSES, true),
             422,
             'This reservation is no longer eligible to change its payment method.'
         );
@@ -633,7 +599,7 @@ class ReservationWorkflowService
     public function switchToCash(Reservation $reservation): void
     {
         abort_unless(
-            in_array($reservation->status, ['pending_review', 'ready_for_booking']),
+            in_array($reservation->status, Reservation::ACTIVE_STATUSES, true),
             422,
             'This reservation is no longer eligible to change its payment method.'
         );
@@ -661,9 +627,9 @@ class ReservationWorkflowService
     {
         $booking = $reservation->booking;
 
-        $isCancelled = in_array($reservation->status, ['cancelled', 'rejected'])
-            || ($booking && $booking->booking_status === 'cancelled');
-        $isCompleted = $booking && $booking->booking_status === 'checked_out';
+        $isCancelled = in_array($reservation->status, [Reservation::STATUS_CANCELLED, Reservation::STATUS_REJECTED])
+            || ($booking && $booking->booking_status === Booking::STATUS_CANCELLED);
+        $isCompleted = $booking && $booking->booking_status === Booking::STATUS_COMPLETED;
 
         abort_unless($isCancelled || $isCompleted, 422, 'Only completed or cancelled bookings/reservations can be deleted.');
 
@@ -699,7 +665,7 @@ class ReservationWorkflowService
      */
     public function reconcileGcashBookingPayment(Booking $booking): void
     {
-        if ($booking->booking_status !== 'confirmed' || $booking->verified_at !== null) {
+        if ($booking->booking_status !== Booking::STATUS_ACTIVE || $booking->verified_at !== null) {
             return;
         }
 
@@ -722,7 +688,7 @@ class ReservationWorkflowService
                     'payment_status' => 'rejected',
                 ]);
             }
-            $booking->update(['booking_status' => 'cancelled']);
+            $booking->update(['booking_status' => Booking::STATUS_CANCELLED]);
         });
 
         Activity::log(

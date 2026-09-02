@@ -4,8 +4,10 @@ namespace App\Http\Controllers\Guest;
 
 use App\Http\Controllers\Controller;
 use App\Models\Billing;
+use App\Models\Booking;
 use App\Models\Payment;
 use App\Models\Promotion;
+use App\Models\Reservation;
 use Illuminate\View\View;
 
 class GuestDashboardController extends Controller
@@ -22,8 +24,8 @@ class GuestDashboardController extends Controller
         // Current active stay: a converted reservation whose Booking is
         // currently checked in.
         $currentReservation = $guest->reservations()
-            ->where('status', 'converted')
-            ->whereHas('booking', fn ($q) => $q->where('booking_status', 'checked_in'))
+            ->where('status', Reservation::STATUS_CONVERTED)
+            ->whereHas('booking', fn ($q) => $q->where('booking_status', Booking::STATUS_CHECKED_IN))
             ->with(['roomType', 'booking.room', 'booking.billing'])
             ->first();
 
@@ -31,10 +33,10 @@ class GuestDashboardController extends Controller
         // confirmed booking that hasn't checked in yet.
         $upcomingReservations = $guest->reservations()
             ->where(function ($q) {
-                $q->whereIn('status', ['pending_review', 'ready_for_booking'])
+                $q->whereIn('status', Reservation::ACTIVE_STATUSES)
                   ->orWhere(function ($q2) {
-                      $q2->where('status', 'converted')
-                         ->whereHas('booking', fn ($b) => $b->where('booking_status', 'confirmed'));
+                      $q2->where('status', Reservation::STATUS_CONVERTED)
+                         ->whereHas('booking', fn ($b) => $b->where('booking_status', Booking::STATUS_ACTIVE));
                   });
             })
             ->with(['roomType', 'booking'])
@@ -47,10 +49,10 @@ class GuestDashboardController extends Controller
         // without this a "removed" transaction would silently resurface here.
         $pastReservations = $guest->reservations()
             ->where(function ($q) {
-                $q->whereIn('status', ['rejected', 'cancelled'])
+                $q->whereIn('status', [Reservation::STATUS_REJECTED, Reservation::STATUS_CANCELLED])
                   ->orWhere(function ($q2) {
-                      $q2->where('status', 'converted')
-                         ->whereHas('booking', fn ($b) => $b->where('booking_status', 'checked_out'));
+                      $q2->where('status', Reservation::STATUS_CONVERTED)
+                         ->whereHas('booking', fn ($b) => $b->where('booking_status', Booking::STATUS_COMPLETED));
                   });
             })
             ->whereNull('hidden_at')

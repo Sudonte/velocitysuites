@@ -86,10 +86,10 @@
     <div class="detail-section-title"><i class="fas fa-calendar-check"></i> Reservations &amp; Payments</div>
     <div class="row mb-3">
         <div class="col-md-6 col-lg-3 mb-3">
-            <x-stat-card icon="fas fa-hourglass-half" label="Pending Reservations" :value="$pendingReservations" color="warning" href="{{ route('admin.reservations.index', ['status' => 'pending_review']) }}" />
+            <x-stat-card icon="fas fa-hourglass-half" label="Pending Reservations" :value="$pendingReservations" color="warning" href="{{ route('admin.reservations.index', ['status' => 'AWAITING_CASH_CONFIRMATION']) }}" />
         </div>
         <div class="col-md-6 col-lg-3 mb-3">
-            <x-stat-card icon="fas fa-calendar-check" label="Active Reservations" :value="$activeReservations" color="primary" href="{{ route('admin.reservations.index', ['status' => 'confirmed']) }}" />
+            <x-stat-card icon="fas fa-calendar-check" label="Active Reservations" :value="$activeReservations" color="primary" href="{{ route('admin.reservations.index', ['status' => 'ACTIVE_BOOKING']) }}" />
         </div>
         <div class="col-md-6 col-lg-3 mb-3">
             <x-stat-card icon="fas fa-credit-card" label="Total Bookings" :value="$totalBookings" :change="$totalBookingsChange" color="info" href="{{ route('admin.reservations.index', ['type' => 'booking']) }}" />

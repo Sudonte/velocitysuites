@@ -79,7 +79,7 @@ class GuestController extends Controller
         foreach ($reservations as $reservation) {
             $nights = abs($reservation->check_out->diffInDays($reservation->check_in));
             $total = $reservation->roomType->rate * $nights;
-            $status = $reservation->status === 'converted' && $reservation->booking
+            $status = $reservation->status === Reservation::STATUS_CONVERTED && $reservation->booking
                 ? $reservation->booking->booking_status
                 : $reservation->status;
 

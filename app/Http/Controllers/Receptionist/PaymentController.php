@@ -78,7 +78,7 @@ class PaymentController extends Controller
     private function autoCompleteBooking(Payment $payment): void
     {
         $booking = $this->resolveBooking($payment);
-        if (!$booking || $booking->verified_at !== null || $booking->booking_status !== 'confirmed') {
+        if (!$booking || $booking->verified_at !== null || $booking->booking_status !== Booking::STATUS_ACTIVE) {
             return;
         }
 

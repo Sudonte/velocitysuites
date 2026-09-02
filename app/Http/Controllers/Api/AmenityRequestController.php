@@ -63,7 +63,7 @@ class AmenityRequestController extends Controller
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 
-        if (in_array($reservation->status, ['cancelled', 'rejected'], true)) {
+        if (in_array($reservation->status, [Reservation::STATUS_CANCELLED, Reservation::STATUS_REJECTED], true)) {
             return response()->json(['message' => 'This reservation is no longer active.'], 422);
         }
 

@@ -96,7 +96,7 @@ class BookingService
      * has no 'pending' member, since a Booking never exists before that
      * point.
      */
-    public function ensureBooking(Reservation $reservation, string $bookingStatus = 'confirmed'): Booking
+    public function ensureBooking(Reservation $reservation, string $bookingStatus = Booking::STATUS_ACTIVE): Booking
     {
         if ($reservation->booking) {
             return $reservation->booking;
@@ -111,11 +111,11 @@ class BookingService
             'children' => $reservation->children,
             'number_of_guests' => $reservation->number_of_guests,
             'confirmed_at' => now(),
-            'booking_status' => $bookingStatus === 'pending' ? 'confirmed' : $bookingStatus,
+            'booking_status' => $bookingStatus === 'pending' ? Booking::STATUS_ACTIVE : $bookingStatus,
         ]);
 
-        if ($reservation->status !== 'converted') {
-            $reservation->update(['status' => 'converted']);
+        if ($reservation->status !== Reservation::STATUS_CONVERTED) {
+            $reservation->update(['status' => Reservation::STATUS_CONVERTED]);
         }
 
         return $booking;
@@ -190,7 +190,7 @@ class BookingService
     public function recordPayment(Reservation $reservation, array $paymentData, bool $staffRecorded): Payment
     {
         return DB::transaction(function () use ($reservation, $paymentData, $staffRecorded) {
-            $booking = $this->ensureBooking($reservation, $staffRecorded ? 'confirmed' : 'pending');
+            $booking = $this->ensureBooking($reservation, $staffRecorded ? Booking::STATUS_ACTIVE : 'pending');
             $billing = $this->ensureBilling($booking, $reservation);
 
             $referenceNumber = $paymentData['reference_number'] ?? null;
@@ -209,8 +209,8 @@ class BookingService
 
             if ($staffRecorded) {
                 $this->recalculateBillingStatus($billing);
-                if ($booking->booking_status !== 'confirmed') {
-                    $booking->update(['booking_status' => 'confirmed']);
+                if ($booking->booking_status !== Booking::STATUS_ACTIVE) {
+                    $booking->update(['booking_status' => Booking::STATUS_ACTIVE]);
                 }
             }
 
@@ -234,8 +234,8 @@ class BookingService
             $this->recalculateBillingStatus($billing);
 
             $booking = $billing->booking;
-            if ($booking && $booking->booking_status !== 'confirmed') {
-                $booking->update(['booking_status' => 'confirmed']);
+            if ($booking && $booking->booking_status !== Booking::STATUS_ACTIVE) {
+                $booking->update(['booking_status' => Booking::STATUS_ACTIVE]);
             }
         });
     }

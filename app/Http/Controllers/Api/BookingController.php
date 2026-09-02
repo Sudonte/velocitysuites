@@ -105,7 +105,7 @@ class BookingController extends Controller
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 
-        if (in_array($booking->booking_status, ['checked_in', 'checked_out', 'cancelled'], true)) {
+        if (in_array($booking->booking_status, [Booking::STATUS_CHECKED_IN, Booking::STATUS_COMPLETED, Booking::STATUS_CANCELLED], true)) {
             return response()->json(['message' => 'This booking can no longer be cancelled.'], 422);
         }
 
@@ -114,7 +114,7 @@ class BookingController extends Controller
         }
 
         DB::transaction(function () use ($booking) {
-            $booking->update(['booking_status' => 'cancelled']);
+            $booking->update(['booking_status' => Booking::STATUS_CANCELLED]);
 
             $booking->payments()
                 ->where('payment_status', 'pending')

@@ -27,7 +27,7 @@ class SendCheckinReminders extends Command
     {
         $windowHours = (int) config('reservations.checkin_reminder_hours_before', 24);
 
-        $bookings = Booking::where('booking_status', 'confirmed')
+        $bookings = Booking::where('booking_status', Booking::STATUS_ACTIVE)
             ->whereNull('checkin_reminder_sent_at')
             ->whereBetween('check_in', [now(), now()->addHours($windowHours)])
             ->with(['reservation.guest.user', 'roomType'])

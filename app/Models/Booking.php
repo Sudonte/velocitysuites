@@ -10,6 +10,20 @@ class Booking extends Model
 {
     use HasFactory, SoftDeletes;
 
+    /**
+     * bookings.booking_status is a real DB ENUM - these are its exact
+     * members (renamed 2026-09-02, directly on the live database, outside
+     * any migration in this repo). Every literal string comparison
+     * against this column anywhere in the codebase must use one of these
+     * constants, never a raw string - MySQL throws a hard error (strict
+     * mode) on any value outside the enum's exact member list. See
+     * Reservation's identical constants for its own status column.
+     */
+    public const STATUS_ACTIVE = 'ACTIVE_BOOKING';
+    public const STATUS_CHECKED_IN = 'CHECKED_IN';
+    public const STATUS_COMPLETED = 'COMPLETED_BOOKING';
+    public const STATUS_CANCELLED = 'CANCELLED_BOOKING';
+
     protected $fillable = [
         'reservation_id',
         'guest_id',

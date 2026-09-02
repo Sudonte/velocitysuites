@@ -27,7 +27,7 @@ class ExpireUnpaidReservations extends Command
 
     public function handle(ReservationWorkflowService $workflow): int
     {
-        $candidates = Reservation::whereIn('status', ['pending_review', 'ready_for_booking'])
+        $candidates = Reservation::whereIn('status', Reservation::ACTIVE_STATUSES)
             ->whereDoesntHave('payments', fn ($q) => $q->where('payment_status', 'completed'))
             ->with(['roomType', 'guest.user', 'payments'])
             ->get()

@@ -39,14 +39,14 @@ class CheckOutController extends Controller
         // shared with Bookings/Check-in since all three operate on this
         // same Booking row), then the existing date order.
         $bookings = Booking::with(['reservation.guest.user', 'guest.user', 'rooms', 'roomType', 'billing'])
-            ->where('booking_status', $tab === 'expected' ? 'checked_in' : 'checked_out')
+            ->where('booking_status', $tab === 'expected' ? Booking::STATUS_CHECKED_IN : Booking::STATUS_COMPLETED)
             ->orderByRaw('viewed_at IS NULL DESC')
             ->orderBy('check_out', $tab === 'expected' ? 'asc' : 'desc')
             ->paginate(15)
             ->withQueryString();
 
-        $expectedCount = Booking::where('booking_status', 'checked_in')->count();
-        $checkedOutCount = Booking::where('booking_status', 'checked_out')->count();
+        $expectedCount = Booking::where('booking_status', Booking::STATUS_CHECKED_IN)->count();
+        $checkedOutCount = Booking::where('booking_status', Booking::STATUS_COMPLETED)->count();
 
         return view('receptionist.check-out.index', compact('bookings', 'tab', 'expectedCount', 'checkedOutCount'));
     }
@@ -58,7 +58,7 @@ class CheckOutController extends Controller
      */
     public function checkOutBilling(Booking $booking)
     {
-        if ($booking->booking_status !== 'checked_in') {
+        if ($booking->booking_status !== Booking::STATUS_CHECKED_IN) {
             return response()->json(['message' => 'Only checked-in bookings can be billed.'], 422);
         }
 
@@ -133,7 +133,7 @@ class CheckOutController extends Controller
 
         $booking = $billing->booking;
 
-        if (!$booking || $booking->booking_status !== 'checked_in') {
+        if (!$booking || $booking->booking_status !== Booking::STATUS_CHECKED_IN) {
             return response()->json(['message' => 'This booking is not awaiting checkout.'], 422);
         }
 
@@ -181,7 +181,7 @@ class CheckOutController extends Controller
             );
 
             if ($completed) {
-                $booking->update(['booking_status' => 'checked_out']);
+                $booking->update(['booking_status' => Booking::STATUS_COMPLETED]);
                 foreach ($rooms as $room) {
                     $room->update(['status' => 'available']);
                 }

@@ -41,7 +41,7 @@ class ReservationMonitoringController extends Controller
             $reservationQuery = Reservation::with(['guest.user', 'roomType', 'booking.room', 'booking.billing', 'payments']);
 
             if ($status) {
-                if (in_array($status, ['confirmed', 'checked_in', 'checked_out'], true)) {
+                if (in_array($status, [Booking::STATUS_ACTIVE, Booking::STATUS_CHECKED_IN, Booking::STATUS_COMPLETED], true)) {
                     $reservationQuery->whereHas('booking', fn ($q) => $q->where('booking_status', $status));
                 } else {
                     $reservationQuery->where('status', $status);
@@ -91,7 +91,7 @@ class ReservationMonitoringController extends Controller
             $bookingQuery = Booking::whereNull('reservation_id')->with(['guest.user', 'roomType', 'room', 'payments']);
 
             if ($status) {
-                if (in_array($status, ['confirmed', 'checked_in', 'checked_out', 'cancelled'], true)) {
+                if (in_array($status, [Booking::STATUS_ACTIVE, Booking::STATUS_CHECKED_IN, Booking::STATUS_COMPLETED, Booking::STATUS_CANCELLED], true)) {
                     $bookingQuery->where('booking_status', $status);
                 } else {
                     $bookingQuery->whereRaw('1 = 0');
@@ -146,7 +146,7 @@ class ReservationMonitoringController extends Controller
         $summaryTotal = $items->count();
         $summaryBookingCount = $items->where('monitor_type', 'booking')->count();
         $summaryReservationCount = $items->where('monitor_type', 'reservation')->count();
-        $summaryPendingCount = $items->whereIn('monitor_status_value', ['pending_review', 'ready_for_booking', 'confirmed'])->count();
+        $summaryPendingCount = $items->whereIn('monitor_status_value', [Reservation::STATUS_AWAITING_CASH, Reservation::STATUS_AWAITING_GCASH, Booking::STATUS_ACTIVE])->count();
 
         $perPage = 15;
         $page = max(1, (int) $request->get('page', 1));

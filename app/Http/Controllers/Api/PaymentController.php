@@ -36,7 +36,7 @@ class PaymentController extends Controller
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 
-        if (!in_array($reservation->status, ['pending_review', 'ready_for_booking'])) {
+        if (!in_array($reservation->status, Reservation::ACTIVE_STATUSES, true)) {
             return response()->json(['message' => 'This reservation is not payable.'], 422);
         }
 

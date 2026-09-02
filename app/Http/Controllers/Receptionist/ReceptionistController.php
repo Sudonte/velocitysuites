@@ -37,21 +37,21 @@ class ReceptionistController extends Controller
         $availableRooms = Room::where('status', 'available')->count();
         $occupiedRooms = Room::where('status', 'occupied')->count();
         $maintenanceRooms = Room::where('status', 'maintenance')->count();
-        $bookingRequests = Reservation::whereIn('status', ['pending_review', 'ready_for_booking'])->count();
-        $awaitingCheckIn = Booking::where('booking_status', 'confirmed')->count();
-        $inHouseGuests = Booking::where('booking_status', 'checked_in')->count();
+        $bookingRequests = Reservation::whereIn('status', Reservation::ACTIVE_STATUSES)->count();
+        $awaitingCheckIn = Booking::where('booking_status', Booking::STATUS_ACTIVE)->count();
+        $inHouseGuests = Booking::where('booking_status', Booking::STATUS_CHECKED_IN)->count();
 
         // Today's schedule stays date-based - it's a schedule. Arrivals due
         // today (not yet checked in, i.e. still pending arrival) and
         // departures due today (still in house).
         $pendingArrivals = Booking::with(['reservation.guest.user', 'guest.user', 'room', 'roomType'])
             ->whereDate('check_in', today())
-            ->where('booking_status', 'confirmed')
+            ->where('booking_status', Booking::STATUS_ACTIVE)
             ->get();
 
         $todayDepartures = Booking::with(['reservation.guest.user', 'guest.user', 'room'])
             ->whereDate('check_out', today())
-            ->where('booking_status', 'checked_in')
+            ->where('booking_status', Booking::STATUS_CHECKED_IN)
             ->get();
 
         // Current Booking & Reservations widget - deliberately queries
@@ -64,8 +64,8 @@ class ReceptionistController extends Controller
         // No cap - small enough that "Expand" can show every matching row.
         $currentReservations = Reservation::with(['guest.user', 'roomType', 'booking.room'])
             ->where(function ($q) {
-                $q->whereIn('status', ['pending_review', 'ready_for_booking'])
-                    ->orWhereHas('booking', fn ($q2) => $q2->where('booking_status', 'confirmed'));
+                $q->whereIn('status', Reservation::ACTIVE_STATUSES)
+                    ->orWhereHas('booking', fn ($q2) => $q2->where('booking_status', Booking::STATUS_ACTIVE));
             })
             ->orderBy('check_in')
             ->get();
@@ -301,7 +301,7 @@ class ReceptionistController extends Controller
      */
     public function amenitiesCreate(Reservation $reservation): View
     {
-        if (!$reservation->booking || $reservation->booking->booking_status !== 'checked_in') {
+        if (!$reservation->booking || $reservation->booking->booking_status !== Booking::STATUS_CHECKED_IN) {
             abort(404);
         }
 
@@ -322,7 +322,7 @@ class ReceptionistController extends Controller
      */
     public function amenitiesStore(Request $request, Reservation $reservation): RedirectResponse
     {
-        if (!$reservation->booking || $reservation->booking->booking_status !== 'checked_in') {
+        if (!$reservation->booking || $reservation->booking->booking_status !== Booking::STATUS_CHECKED_IN) {
             return back()->with('error', 'Amenity requests can only be added for checked-in guests.');
         }
 

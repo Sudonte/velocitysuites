@@ -253,7 +253,7 @@ class ReservationController extends Controller
                 'adults' => $validated['adults'],
                 'children' => $children,
                 'number_of_guests' => $validated['adults'] + $children,
-                'status' => $this->workflow->initialStatus($paymentPreference, $paymentMethod),
+                'status' => $this->workflow->initialStatus($paymentMethod),
                 'payment_preference' => $paymentPreference,
                 'payment_method' => $paymentMethod,
                 'discount_requested' => $discountRequested,
@@ -305,7 +305,7 @@ class ReservationController extends Controller
             abort(403);
         }
 
-        if ($reservation->status !== 'pending_review' || $reservation->payment_method !== 'gcash') {
+        if ($reservation->status !== Reservation::STATUS_AWAITING_GCASH || $reservation->payment_method !== 'gcash') {
             return back()->with('error', 'This reservation is not awaiting an online payment.');
         }
 
@@ -388,7 +388,7 @@ class ReservationController extends Controller
             abort(403);
         }
 
-        if ($reservation->status !== 'pending_review') {
+        if (! in_array($reservation->status, Reservation::AWAITING_STATUSES, true)) {
             return back()->with('error', 'Can only modify a reservation that is still awaiting review.');
         }
 
