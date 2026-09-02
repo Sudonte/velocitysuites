@@ -3,7 +3,6 @@
 namespace App\Http\Controllers\Receptionist;
 
 use App\Http\Controllers\Controller;
-use App\Models\ActivityLog;
 use App\Models\AmenityRequest;
 use App\Models\Booking;
 use App\Models\Payment;
@@ -210,13 +209,7 @@ class ReservationController extends Controller
             ? $this->availability->availableCount($reservation->roomType, $reservation->check_in, $reservation->check_out)
             : null;
 
-        $history = ActivityLog::with('user')
-            ->where('subject_type', 'reservation')
-            ->where('subject_id', $reservation->id)
-            ->orderByDesc('created_at')
-            ->get();
-
-        return view('receptionist.reservations.partials.details', compact('reservation', 'available', 'history'));
+        return view('receptionist.reservations.partials.details', compact('reservation', 'available'));
     }
 
     /**

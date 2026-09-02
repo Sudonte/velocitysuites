@@ -185,29 +185,6 @@
     </div>
 @endif
 
-{{-- Only worth showing once there's an actual payment on file - before
-     that, "history" is just "Created/Submitted reservation", which isn't
-     a transaction and reads as noise on a reservation nobody has paid on
-     yet. --}}
-@if($reservation->payments->isNotEmpty() && $history->isNotEmpty())
-    <hr>
-    <h6 class="text-brand"><i class="fas fa-history"></i> Transaction History</h6>
-    <div class="row">
-        @foreach($history as $entry)
-            <div class="col-md-6 mb-2">
-                <p class="mb-0"><strong>{{ $entry->action }}</strong></p>
-                @if($entry->description)
-                    <p class="mb-0 text-muted small">{{ $entry->description }}</p>
-                @endif
-                <p class="mb-0 text-muted small">
-                    <i class="fas fa-user"></i> {{ $entry->user->full_name ?? 'System' }}
-                    &middot; {{ $entry->created_at->format('M d, Y h:i A') }}
-                </p>
-            </div>
-        @endforeach
-    </div>
-@endif
-
 @if(in_array($reservation->status, \App\Models\Reservation::ACTIVE_STATUSES))
     <hr>
     <div class="alert alert-danger d-none" id="detailsActionError"></div>
