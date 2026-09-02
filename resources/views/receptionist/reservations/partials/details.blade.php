@@ -223,7 +223,7 @@
 
     @if($reservation->payment_method === 'cash')
         <div id="detailsCashPaymentForm" class="d-none">
-            <h6 class="text-brand"><i class="fas fa-money-bill-wave"></i> Confirm Cash Payment</h6>
+            <h6 class="text-brand"><i class="fas fa-money-bill-wave"></i> Convert to Booking</h6>
             <p class="text-muted small">Enter the amount actually received from the guest at the front desk. Must be
                 the full ₱{{ number_format($roomCharge, 2) }}, or a deposit between 20%-50% of that total.</p>
             <div class="mb-2">
@@ -260,18 +260,14 @@
             <i class="fas fa-times"></i> Reject
         </button>
         @if($reservation->payment_method === 'cash')
-            {{-- Two ways to move a Cash reservation forward: a plain Convert
-                 (no accept step needed anymore - convertToBooking() does that
-                 internally either way) for a receptionist who'll record the
-                 payment separately later, or Confirm Cash Payment to do both
-                 in one step. Neither needs the reservation to already be
-                 ready_for_booking. --}}
-            <button type="button" class="btn btn-outline-success" id="detailsConvertBtn" {{ $notEnoughRooms ? 'disabled' : '' }}
+            {{-- One action for Cash: asks how much was actually received,
+                 then records that payment and converts to a Booking in the
+                 same step (confirmCashPayment()) - there's no way to
+                 convert a Cash reservation without also recording what the
+                 guest paid. --}}
+            <button type="button" class="btn btn-success" id="detailsShowCashBtn" {{ $notEnoughRooms ? 'disabled' : '' }}
                     title="{{ $notEnoughRooms ? 'Not enough rooms of this type available for the requested dates.' : '' }}">
                 <i class="fas fa-calendar-check"></i> Convert to Booking
-            </button>
-            <button type="button" class="btn btn-success" id="detailsShowCashBtn" {{ $notEnoughRooms ? 'disabled' : '' }}>
-                <i class="fas fa-money-bill-wave"></i> Confirm Cash Payment
             </button>
         @else
             {{-- GCash, reached here only once a payment is actually on
