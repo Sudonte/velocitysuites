@@ -237,6 +237,11 @@ Route::middleware(['auth', 'account.status', 'log.activity', 'no.cache'])->group
         // routes below on general principle (no actual collision today,
         // since none of them are a bare GET /reservations/{reservation}).
         Route::get('/reservations/create', [ReceptionistReservationController::class, 'create'])->name('reservations.create');
+        // Live availability check for the Create Reservation form - lets the
+        // room type dropdown warn/block before submit instead of only after,
+        // matching the same rooms_requested-vs-availableCount rule store()
+        // already enforces server-side.
+        Route::get('/reservations/check-availability', [ReceptionistReservationController::class, 'checkAvailability'])->name('reservations.check-availability');
         Route::post('/reservations', [ReceptionistReservationController::class, 'store'])->name('reservations.store');
         Route::get('/reservations/{reservation}/details', [ReceptionistReservationController::class, 'details'])->name('reservations.details');
         Route::get('/reservations/{reservation}/id-card', [ReceptionistReservationController::class, 'idCard'])->name('reservations.id-card');
@@ -247,7 +252,6 @@ Route::middleware(['auth', 'account.status', 'log.activity', 'no.cache'])->group
         // confirmCashPayment()'s docblock for why this differs from the
         // plain Convert action a GCash reservation resolves through.
         Route::post('/reservations/{reservation}/confirm-cash-payment', [ReceptionistReservationController::class, 'confirmCashPayment'])->name('reservations.confirm-cash-payment');
-        Route::put('/reservations/{reservation}/verify', [ReceptionistReservationController::class, 'verify'])->name('reservations.verify');
 
         // Booking Module: registry of confirmed bookings, plus creating one
         // directly (see bookings.create/store below) - room assignment and

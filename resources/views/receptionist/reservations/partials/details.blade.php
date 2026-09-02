@@ -14,7 +14,7 @@
         <div>
             <h5 class="mb-1">Reservation #{{ $reservation->id }}</h5>
             <p class="text-muted mb-0">
-                {{ $reservation->guest->user->full_name ?? 'N/A' }}
+                {{ $reservation->guest_display_name }}
                 &bull; {{ $reservation->roomType->name ?? 'N/A' }}
                 &bull; {{ $reservation->check_in->format('M d') }} - {{ $reservation->check_out->format('M d, Y') }}
             </p>
@@ -27,14 +27,14 @@
     <!-- Guest Information + Stay Details -->
     <div class="col-md-6">
         <h6 class="text-brand"><i class="fas fa-user"></i> Guest Information</h6>
-        <p class="mb-1"><strong>Account Holder:</strong> {{ $reservation->guest->user->full_name ?? 'N/A' }}</p>
+        <p class="mb-1"><strong>Account Holder:</strong> {{ $reservation->guest?->user?->full_name ?? 'Walk-in (no account)' }}</p>
         <p class="mb-1">
             <strong>Representative Name:</strong>
-            {{ $reservation->stay_guest_full_name ?? ($reservation->guest->user->full_name ?? 'N/A') }}
+            {{ $reservation->guest_display_name }}
         </p>
-        <p class="mb-1"><strong>Email:</strong> {{ $reservation->guest->user->email ?? 'N/A' }}</p>
-        <p class="mb-1"><strong>Mobile:</strong> {{ $reservation->guest->mobile_number ?: 'Not provided' }}</p>
-        <p class="mb-3"><strong>Address:</strong> {{ $reservation->guest->address ?: 'Not provided' }}</p>
+        <p class="mb-1"><strong>Email:</strong> {{ $reservation->guest?->user?->email ?? 'N/A' }}</p>
+        <p class="mb-1"><strong>Mobile:</strong> {{ $reservation->guest?->mobile_number ?: 'Not provided' }}</p>
+        <p class="mb-3"><strong>Address:</strong> {{ $reservation->guest?->address ?: 'Not provided' }}</p>
 
         <h6 class="text-brand"><i class="fas fa-bed"></i> Stay Details</h6>
         <p class="mb-1">

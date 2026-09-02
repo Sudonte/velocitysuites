@@ -5,7 +5,7 @@
 @section('content')
 <div class="container-fluid py-4">
     <x-page-header icon="fas fa-inbox" title="Reservations"
-        subtitle="Everyone who wants to be reserved. Convert to a booking whenever they're ready - GCash still needs its payment verified in the Bookings module afterward, Cash doesn't.">
+        subtitle="Everyone who wants to be reserved. Open a reservation to see its full details, then Convert it to a booking or Reject it - GCash still needs its payment verified in the Bookings module afterward, Cash doesn't.">
         <x-slot:actions>
             <a href="{{ route('receptionist.reservations.create') }}" class="btn btn-primary">
                 <i class="fas fa-calendar-plus"></i> New Reservation
@@ -26,20 +26,7 @@
         </div>
     @endif
 
-    <ul class="nav nav-tabs mb-3 flex-nowrap overflow-auto">
-        <li class="nav-item">
-            <a class="nav-link text-nowrap {{ $tab === 'active' ? 'active' : '' }}" href="{{ route('receptionist.reservations.index', ['tab' => 'active']) }}">
-                Reservations <span class="badge bg-warning text-dark">{{ $activeCount }}</span>
-            </a>
-        </li>
-        <li class="nav-item">
-            <a class="nav-link text-nowrap {{ $tab === 'verified' ? 'active' : '' }}" href="{{ route('receptionist.reservations.index', ['tab' => 'verified']) }}">
-                Complete Reservation List <span class="badge bg-success">{{ $verifiedCount }}</span>
-            </a>
-        </li>
-    </ul>
-
-    <x-card :title="$tab === 'active' ? 'Reservations' : 'Verified Reservations'" icon="fas fa-list" bodyClass="monitoring-table-wrap">
+    <x-card title="Reservations" icon="fas fa-list" bodyClass="monitoring-table-wrap">
         <div class="d-md-none monitoring-card-list" id="reservationsCardList">
             @forelse($reservations as $reservation)
                 <div class="monitoring-item-card" data-reservation-row="{{ $reservation->id }}">
@@ -67,39 +54,26 @@
                         <span class="text-muted">Payment</span>
                         <span>{{ $reservation->payment_preference === 'pay_now' ? 'Pay Now' : 'Pay Later' }} &middot; {{ $reservation->payment_method === 'gcash' ? 'GCash' : 'Cash' }}</span>
                     </div>
-                    @if($tab === 'active')
-                        @php $available = $availableCounts[$reservation->id] ?? 0; @endphp
-                        <div class="monitoring-item-row">
-                            <span class="text-muted">Availability</span>
-                            <span>
-                                @if($available >= $reservation->rooms_requested)
-                                    <span class="text-success"><i class="fas fa-check-circle"></i> {{ $available }} free</span>
-                                @else
-                                    <span class="text-danger"><i class="fas fa-exclamation-triangle"></i> Only {{ $available }} free</span>
-                                @endif
-                            </span>
-                        </div>
-                    @endif
+                    @php $available = $availableCounts[$reservation->id] ?? 0; @endphp
+                    <div class="monitoring-item-row">
+                        <span class="text-muted">Availability</span>
+                        <span>
+                            @if($available >= $reservation->rooms_requested)
+                                <span class="text-success"><i class="fas fa-check-circle"></i> {{ $available }} free</span>
+                            @else
+                                <span class="text-danger"><i class="fas fa-exclamation-triangle"></i> Only {{ $available }} free</span>
+                            @endif
+                        </span>
+                    </div>
                     <div class="d-flex flex-wrap gap-2 mt-2">
-                        @if($tab !== 'verified')
-                            <button type="button" class="btn btn-sm btn-primary flex-fill" data-bs-toggle="modal"
-                                    data-bs-target="#detailsModal" data-details-url="{{ route('receptionist.reservations.details', $reservation) }}">
-                                <i class="fas fa-eye"></i> View / Manage
-                            </button>
-                            <form action="{{ route('receptionist.reservations.verify', $reservation) }}" method="POST" class="flex-fill">
-                                @csrf
-                                @method('PUT')
-                                <button type="submit" class="btn btn-sm btn-success w-100" onclick="return confirm('Verify this reservation?')">
-                                    <i class="fas fa-check"></i> Verify
-                                </button>
-                            </form>
-                        @else
-                            <span class="badge bg-success align-self-center">Verified</span>
-                        @endif
+                        <button type="button" class="btn btn-sm btn-primary flex-fill" data-bs-toggle="modal"
+                                data-bs-target="#detailsModal" data-details-url="{{ route('receptionist.reservations.details', $reservation) }}">
+                            <i class="fas fa-eye"></i> View / Manage
+                        </button>
                     </div>
                 </div>
             @empty
-                <x-empty-state icon="fas fa-inbox" :message="$tab === 'active' ? 'No reservations right now.' : 'No verified reservations yet.'" />
+                <x-empty-state icon="fas fa-inbox" message="No reservations right now." />
             @endforelse
         </div>
 
@@ -113,9 +87,7 @@
                     <th>Dates</th>
                     <th class="d-none d-lg-table-cell">Guests</th>
                     <th>Payment</th>
-                    @if($tab === 'active')
-                        <th class="d-none d-md-table-cell">Availability</th>
-                    @endif
+                    <th class="d-none d-md-table-cell">Availability</th>
                     <th class="text-nowrap">Actions</th>
                 </tr>
             </thead>
@@ -149,38 +121,25 @@
                             {{ $reservation->payment_preference === 'pay_now' ? 'Pay Now' : 'Pay Later' }}<br>
                             <small class="text-muted">{{ $reservation->payment_method === 'gcash' ? 'GCash' : 'Cash' }}</small>
                         </td>
-                        @if($tab === 'active')
-                            @php $available = $availableCounts[$reservation->id] ?? 0; @endphp
-                            <td class="d-none d-md-table-cell">
-                                @if($available >= $reservation->rooms_requested)
-                                    <span class="text-success"><i class="fas fa-check-circle"></i> {{ $available }} room(s) free</span>
-                                @else
-                                    <span class="text-danger"><i class="fas fa-exclamation-triangle"></i> Only {{ $available }} free (needs {{ $reservation->rooms_requested }})</span>
-                                @endif
-                            </td>
-                        @endif
-                        <td class="text-nowrap">
-                            @if($tab !== 'verified')
-                                <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal"
-                                        data-bs-target="#detailsModal" data-details-url="{{ route('receptionist.reservations.details', $reservation) }}">
-                                    <i class="fas fa-eye"></i> View / Manage
-                                </button>
-                                <form action="{{ route('receptionist.reservations.verify', $reservation) }}" method="POST" class="d-inline">
-                                    @csrf
-                                    @method('PUT')
-                                    <button type="submit" class="btn btn-sm btn-success" onclick="return confirm('Verify this reservation?')">
-                                        <i class="fas fa-check"></i> Verify
-                                    </button>
-                                </form>
+                        @php $available = $availableCounts[$reservation->id] ?? 0; @endphp
+                        <td class="d-none d-md-table-cell">
+                            @if($available >= $reservation->rooms_requested)
+                                <span class="text-success"><i class="fas fa-check-circle"></i> {{ $available }} room(s) free</span>
                             @else
-                                <span class="badge bg-success">Verified</span>
+                                <span class="text-danger"><i class="fas fa-exclamation-triangle"></i> Only {{ $available }} free (needs {{ $reservation->rooms_requested }})</span>
                             @endif
+                        </td>
+                        <td class="text-nowrap">
+                            <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal"
+                                    data-bs-target="#detailsModal" data-details-url="{{ route('receptionist.reservations.details', $reservation) }}">
+                                <i class="fas fa-eye"></i> View / Manage
+                            </button>
                         </td>
                     </tr>
                 @empty
                     <tr id="noReservationsRow">
                         <td colspan="8">
-                            <x-empty-state icon="fas fa-inbox" :message="$tab === 'active' ? 'No reservations right now.' : 'No verified reservations yet.'" />
+                            <x-empty-state icon="fas fa-inbox" message="No reservations right now." />
                         </td>
                     </tr>
                 @endforelse
@@ -279,8 +238,7 @@ document.addEventListener('DOMContentLoaded', function () {
         });
         const tbody = document.getElementById('reservationsTableBody');
         if (tbody && !tbody.querySelector('tr')) {
-            const colspan = {{ $tab === 'active' ? 8 : 7 }};
-            tbody.innerHTML = '<tr id="noReservationsRow"><td colspan="' + colspan + '" class="text-center text-muted py-4">Nothing here right now.</td></tr>';
+            tbody.innerHTML = '<tr id="noReservationsRow"><td colspan="8" class="text-center text-muted py-4">Nothing here right now.</td></tr>';
         }
         const cardList = document.getElementById('reservationsCardList');
         if (cardList && !cardList.querySelector('[data-reservation-row]')) {

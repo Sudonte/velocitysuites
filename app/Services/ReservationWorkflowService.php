@@ -457,6 +457,12 @@ class ReservationWorkflowService
      * at all). That's a real preserve-all-reservation-details bug: once
      * converted, Booking::getStayGuestFullNameAttribute() would return
      * null instead of the guest's actual Representative Name.
+     *
+     * Also bulk-flips this reservation's still-pending booking-time
+     * amenity requests (created by ReservationAmenityService::snapshot())
+     * to approved, for both a Cash and a GCash reservation alike - there's
+     * no separate "verify the reservation" step anymore, so conversion
+     * itself is the moment a reservation's amenity selections become real.
      */
     private function createBookingFromReservation(Reservation $reservation): Booking
     {
@@ -483,6 +489,10 @@ class ReservationWorkflowService
         ]);
 
         $reservation->update(['status' => Reservation::STATUS_CONVERTED]);
+
+        AmenityRequest::where('reservation_id', $reservation->id)
+            ->where('status', 'pending')
+            ->update(['status' => 'approved']);
 
         return $booking;
     }

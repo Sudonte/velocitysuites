@@ -65,6 +65,7 @@
                             @endforeach
                         </select>
                         @error('room_type_id')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                        <div id="availabilityNotice" class="form-text d-none"></div>
                     </div>
 
                     <div class="row">
@@ -114,7 +115,7 @@
                     </div>
 
                     <div class="form-group">
-                        <button type="submit" class="btn btn-primary">
+                        <button type="submit" class="btn btn-primary" id="createReservationSubmit">
                             <i class="fas fa-save"></i> Create Reservation
                         </button>
                         <a href="{{ route('receptionist.reservations.index') }}" class="btn btn-secondary">
@@ -135,8 +136,8 @@
                     </li>
                     <li class="mb-3">
                         <i class="fas fa-list-check text-brand"></i>
-                        <strong>Lands in "To Be Converted to Booking"</strong>
-                        <p class="mb-0 ms-4 text-sm text-muted">Find it there to Convert it to a confirmed Booking, or Confirm Cash Payment to do both at once.</p>
+                        <strong>Lands in the Reservations list</strong>
+                        <p class="mb-0 ms-4 text-sm text-muted">Open it there to Convert it to a confirmed Booking, or Confirm Cash Payment to do both at once.</p>
                     </li>
                     <li class="mb-3">
                         <i class="fas fa-money-bill-wave text-brand"></i>
@@ -148,4 +149,67 @@
         </div>
     </div>
 </div>
+
+@push('scripts')
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const roomTypeSelect = document.getElementById('room_type_id');
+    const checkInInput = document.getElementById('check_in');
+    const checkOutInput = document.getElementById('check_out');
+    const roomsInput = document.getElementById('rooms_requested');
+    const notice = document.getElementById('availabilityNotice');
+    const submitBtn = document.getElementById('createReservationSubmit');
+    const checkUrl = @json(route('receptionist.reservations.check-availability'));
+
+    let requestToken = 0;
+
+    async function checkAvailability() {
+        const roomTypeId = roomTypeSelect.value;
+        const checkIn = checkInInput.value;
+        const checkOut = checkOutInput.value;
+        const roomsRequested = parseInt(roomsInput.value, 10) || 1;
+
+        if (!roomTypeId || !checkIn || !checkOut || checkOut <= checkIn) {
+            notice.classList.add('d-none');
+            submitBtn.disabled = false;
+            return;
+        }
+
+        const thisRequest = ++requestToken;
+        const url = checkUrl + '?room_type_id=' + encodeURIComponent(roomTypeId)
+            + '&check_in=' + encodeURIComponent(checkIn)
+            + '&check_out=' + encodeURIComponent(checkOut);
+
+        try {
+            const response = await fetch(url, { headers: { 'Accept': 'application/json' } });
+            if (!response.ok || thisRequest !== requestToken) return;
+            const data = await response.json();
+            if (thisRequest !== requestToken) return;
+
+            if (data.available < roomsRequested) {
+                notice.textContent = 'Only ' + data.available + ' room(s) of this type are free for these dates (needs ' + roomsRequested + '). Pick a different room type, dates, or room count.';
+                notice.classList.remove('d-none', 'text-success');
+                notice.classList.add('text-danger');
+                submitBtn.disabled = true;
+            } else {
+                notice.textContent = data.available + ' room(s) of this type are free for these dates.';
+                notice.classList.remove('d-none', 'text-danger');
+                notice.classList.add('text-success');
+                submitBtn.disabled = false;
+            }
+        } catch (e) {
+            // Network hiccup - don't block submission over it, store()
+            // re-checks availability server-side regardless.
+            notice.classList.add('d-none');
+            submitBtn.disabled = false;
+        }
+    }
+
+    [roomTypeSelect, checkInInput, checkOutInput, roomsInput].forEach(function (el) {
+        el.addEventListener('change', checkAvailability);
+    });
+    checkAvailability();
+});
+</script>
+@endpush
 @endsection

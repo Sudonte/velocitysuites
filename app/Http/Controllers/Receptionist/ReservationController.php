@@ -24,17 +24,18 @@ use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 use Illuminate\Http\RedirectResponse;
 
 /**
- * The Reservation Module: just a list of people who want to be reserved -
- * "Active" (any reservation still awaiting cash or GCash - see index())
- * and "Verified" (any active reservation additionally marked reviewed by
- * staff). There's no separate "accepted, awaiting conversion" stage - a
- * Cash reservation only ever converts when the receptionist clicks
- * Convert (or Confirm Cash Payment), and a GCash reservation converts
- * automatically the moment the guest's payment comes in. Once converted,
- * a reservation disappears from both tabs and the resulting Booking shows
- * up only in the Booking Module (BookingController) - already verified if
- * it was Cash, in that module's own "For Verification" tab if it was
- * GCash.
+ * The Reservation Module: just a single list of people who want to be
+ * reserved - anyone still awaiting cash confirmation or awaiting GCash
+ * payment (see index()). There's no separate "accepted, awaiting
+ * conversion" stage and no separate staff-reviewed tab: opening a row
+ * (View / Manage) shows its full details, and from there the receptionist
+ * either Converts it or Rejects it - one action button per row, one
+ * decision point. A Cash reservation only ever converts when the
+ * receptionist does that; a GCash reservation converts automatically the
+ * moment the guest's payment comes in. Once converted, a reservation
+ * disappears from this list and the resulting Booking shows up only in
+ * the Booking Module (BookingController) - already verified if it was
+ * Cash, in that module's own "For Verification" tab if it was GCash.
  */
 class ReservationController extends Controller
 {
@@ -47,50 +48,33 @@ class ReservationController extends Controller
 
     public function index(Request $request): View
     {
-        $tab = $request->get('tab', 'active');
-        if (!in_array($tab, ['active', 'verified'])) {
-            $tab = 'active';
-        }
-
-        // "active" is just people who still want to be reserved - awaiting
-        // cash confirmation or awaiting GCash payment, whichever applies.
-        // Convert (see convert() below) converts either one directly, no
-        // separate accept step. "verified" stays a separate, orthogonal
-        // tab exactly as before - any active reservation the receptionist
-        // has additionally marked Verified.
-        $query = Reservation::with(['guest.user', 'roomType']);
-        if ($tab === 'verified') {
-            $query->whereIn('status', Reservation::ACTIVE_STATUSES)->whereNotNull('verified_at');
-        } else {
-            $query->whereIn('status', Reservation::ACTIVE_STATUSES)->whereNull('verified_at');
-        }
-
+        // Just people who still want to be reserved - awaiting cash
+        // confirmation or awaiting GCash payment, whichever applies.
         // Unread first (viewed_at null - see details() below), then
         // closest check-in date - whoever is arriving soonest is the
         // priority to review/convert, not whoever requested first.
-        $reservations = $query->orderByRaw('viewed_at IS NULL DESC')->orderBy('check_in')->paginate(15)->withQueryString();
-
-        $activeCount = Reservation::whereIn('status', Reservation::ACTIVE_STATUSES)->whereNull('verified_at')->count();
-        $verifiedCount = Reservation::whereIn('status', Reservation::ACTIVE_STATUSES)->whereNotNull('verified_at')->count();
+        $reservations = Reservation::with(['guest.user', 'roomType'])
+            ->whereIn('status', Reservation::AWAITING_STATUSES)
+            ->orderByRaw('viewed_at IS NULL DESC')
+            ->orderBy('check_in')
+            ->paginate(15)
+            ->withQueryString();
 
         // Whether the room type still has inventory left for the
-        // requested dates - a GCash row's Convert action is disabled
-        // without it (a Cash row's isn't - convertToBooking() itself
-        // still blocks an actually-full room type either way, this is
-        // just what lets the button show a clear reason up front instead
-        // of a click-then-fail).
+        // requested dates - a row's Convert action is disabled without it
+        // (convertToBooking() itself still blocks an actually-full room
+        // type either way, this is just what lets the button show a clear
+        // reason up front instead of a click-then-fail).
         $availableCounts = collect();
-        if ($tab === 'active') {
-            foreach ($reservations as $reservation) {
-                $availableCounts[$reservation->id] = $this->availability->availableCount(
-                    $reservation->roomType,
-                    $reservation->check_in,
-                    $reservation->check_out
-                );
-            }
+        foreach ($reservations as $reservation) {
+            $availableCounts[$reservation->id] = $this->availability->availableCount(
+                $reservation->roomType,
+                $reservation->check_in,
+                $reservation->check_out
+            );
         }
 
-        return view('receptionist.reservations.index', compact('reservations', 'tab', 'activeCount', 'verifiedCount', 'availableCounts'));
+        return view('receptionist.reservations.index', compact('reservations', 'availableCounts'));
     }
 
     /**
@@ -106,6 +90,31 @@ class ReservationController extends Controller
         $roomTypes = RoomType::where('status', 'active')->orderBy('name')->get();
 
         return view('receptionist.reservations.create', compact('roomTypes'));
+    }
+
+    /**
+     * AJAX-only: how many rooms of this type are actually free for these
+     * dates, so the Create Reservation form's JS can warn/disable Submit
+     * before the receptionist picks a room type that store() would just
+     * reject anyway - same availableCount() check, just surfaced live
+     * instead of only after a failed POST.
+     */
+    public function checkAvailability(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'room_type_id' => 'required|exists:room_types,id',
+            'check_in' => 'required|date',
+            'check_out' => 'required|date|after:check_in',
+        ]);
+
+        $roomType = RoomType::findOrFail($validated['room_type_id']);
+        $available = $this->availability->availableCount(
+            $roomType,
+            Carbon::parse($validated['check_in']),
+            Carbon::parse($validated['check_out'])
+        );
+
+        return response()->json(['available' => $available]);
     }
 
     /**
@@ -384,39 +393,6 @@ class ReservationController extends Controller
             'message' => 'Cash payment confirmed - reservation converted to a confirmed booking!',
             'booking_url' => route('receptionist.bookings.show', $booking),
         ]);
-    }
-
-    /**
-     * Marks a reservation Verified - moves it from the Active
-     * Reservation List to the Complete Reservation List. Doesn't touch
-     * status at all (the reject/convert actions keep working exactly as
-     * before) - this is a separate, additive gate, same pattern as
-     * BookingController::verify().
-     */
-    public function verify(Reservation $reservation): RedirectResponse
-    {
-        abort_if($reservation->verified_at !== null, 422, 'This reservation is already verified.');
-        abort_unless(in_array($reservation->status, Reservation::ACTIVE_STATUSES, true), 422, 'Only an active reservation can be verified.');
-
-        $reservation->update(['verified_at' => now(), 'verified_by' => auth()->id()]);
-
-        // Keep this reservation's booking-time amenity requests (created
-        // pending by ReservationAmenityService::snapshot()) in lockstep
-        // with the reservation's own verification - this does not touch
-        // requests the receptionist has already progressed further
-        // (approved/in_progress/completed) or manually created ones.
-        AmenityRequest::where('reservation_id', $reservation->id)
-            ->where('status', 'pending')
-            ->update(['status' => 'approved']);
-
-        $reservation->loadMissing('guest.user');
-        Activity::log(
-            'Verified reservation',
-            "Reservation #{$reservation->id} - {$reservation->guest_display_name}",
-            $reservation
-        );
-
-        return back()->with('success', 'Reservation verified.');
     }
 
     /**

@@ -14,7 +14,7 @@
             </h1>
             <p class="text-muted">
                 Booking #{{ $reservation->booking->id }} —
-                Guest: {{ $reservation->guest->user->full_name ?? 'N/A' }} —
+                Guest: {{ $reservation->guest_display_name }} —
                 Room: {{ $reservation->booking->room->room_number ?? 'N/A' }}
             </p>
         </div>

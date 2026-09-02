@@ -48,8 +48,8 @@
                 <div class="row mb-2">
                     <div class="col-md-4"><strong>Guest:</strong></div>
                     <div class="col-md-8">
-                        {{ $reservation->stay_guest_full_name ?? $reservation->guest->user->full_name ?? 'N/A' }} ({{ $reservation->guest->user->email ?? '' }})
-                        @if($reservation->stay_guest_full_name && $reservation->guest->user->full_name !== $reservation->stay_guest_full_name)
+                        {{ $reservation->guest_display_name }} ({{ $reservation->guest?->user?->email ?? '' }})
+                        @if($reservation->stay_guest_full_name && $reservation->guest?->user?->full_name && $reservation->guest->user->full_name !== $reservation->stay_guest_full_name)
                             <br><small class="text-muted">Account: {{ $reservation->guest->user->full_name }}</small>
                         @endif
                     </div>
@@ -231,11 +231,11 @@
             <x-card title="Quick Summary" icon="fas fa-clipboard-list" bodyClass="card-body" class="mb-4 monitoring-summary-card">
                 <div class="d-flex align-items-center gap-3 mb-3">
                     <div class="monitoring-avatar">
-                        {{ strtoupper(substr($reservation->stay_guest_full_name ?? $reservation->guest->user->full_name ?? '?', 0, 1)) }}
+                        {{ strtoupper(substr($reservation->guest_display_name, 0, 1)) }}
                     </div>
                     <div>
-                        <p class="mb-0 fw-bold">{{ $reservation->stay_guest_full_name ?? $reservation->guest->user->full_name ?? 'N/A' }}</p>
-                        <small class="text-muted">{{ $reservation->guest->user->email ?? '' }}</small>
+                        <p class="mb-0 fw-bold">{{ $reservation->guest_display_name }}</p>
+                        <small class="text-muted">{{ $reservation->guest?->user?->email ?? '' }}</small>
                     </div>
                 </div>
                 <ul class="list-unstyled mb-0 monitoring-summary-list">

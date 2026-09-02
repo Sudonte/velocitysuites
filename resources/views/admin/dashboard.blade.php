@@ -181,7 +181,7 @@
                         <tbody>
                             @forelse($recentReservations as $reservation)
                                 <tr class="{{ $loop->index >= 5 ? 'preview-extra d-none' : '' }}">
-                                    <td>{{ $reservation->stay_guest_full_name ?? $reservation->guest->user->full_name }}</td>
+                                    <td>{{ $reservation->guest_display_name }}</td>
                                     <td>
                                         @if($reservation->booking)
                                             <span class="badge bg-primary">Booking</span>
