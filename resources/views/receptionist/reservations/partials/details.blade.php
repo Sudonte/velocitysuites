@@ -64,7 +64,7 @@
 
     <!-- Payment Information + Deposit + Discount -->
     <div class="col-md-6">
-        <h6 class="text-brand"><i class="fas fa-receipt"></i> Payment Information</h6>
+        <h6 class="text-brand"><i class="fas fa-receipt"></i> Amount to Pay</h6>
         <div class="table-responsive">
         <table class="table table-sm table-borderless mb-2">
             <tr>
@@ -185,7 +185,11 @@
     </div>
 @endif
 
-@if($history->isNotEmpty())
+{{-- Only worth showing once there's an actual payment on file - before
+     that, "history" is just "Created/Submitted reservation", which isn't
+     a transaction and reads as noise on a reservation nobody has paid on
+     yet. --}}
+@if($reservation->payments->isNotEmpty() && $history->isNotEmpty())
     <hr>
     <h6 class="text-brand"><i class="fas fa-history"></i> Transaction History</h6>
     <div class="row">
