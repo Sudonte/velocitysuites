@@ -3,7 +3,6 @@
 namespace App\Http\Controllers\Receptionist;
 
 use App\Http\Controllers\Controller;
-use App\Models\ActivityLog;
 use App\Models\Booking;
 use App\Models\Payment;
 use App\Models\RoomType;
@@ -225,16 +224,6 @@ class BookingController extends Controller
             $booking->update(['viewed_at' => now()]);
         }
 
-        // Transaction history: every logged action against this booking
-        // (confirmed, room assignment, verification, etc.), newest first -
-        // the receptionist's record that a verification (or any other
-        // action) actually happened and who did it.
-        $history = ActivityLog::with('user')
-            ->where('subject_type', 'booking')
-            ->where('subject_id', $booking->id)
-            ->orderByDesc('created_at')
-            ->get();
-
         // Authoritative Total/Paid/Remaining for the "Payment & Balance"
         // card below - same total_amount_due accessor the guest-facing API
         // already exposes (Api\BookingController::index()/show()), so the
@@ -245,7 +234,7 @@ class BookingController extends Controller
         $amountPaid = (float) $booking->allPayments()->where('payment_status', 'completed')->sum('amount_paid');
         $remainingBalance = max(0, round($totalDue - $amountPaid, 2));
 
-        return view('receptionist.bookings.show', compact('booking', 'history', 'totalDue', 'amountPaid', 'remainingBalance'));
+        return view('receptionist.bookings.show', compact('booking', 'totalDue', 'amountPaid', 'remainingBalance'));
     }
 
     /**

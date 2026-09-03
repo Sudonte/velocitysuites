@@ -155,7 +155,7 @@
                 </x-card>
             @endif
 
-            <x-card title="Payment &amp; Balance" icon="fas fa-wallet" bodyClass="card-body" class="mb-4">
+            <x-card title="Payment & Balance" icon="fas fa-wallet" bodyClass="card-body" class="mb-4">
                 <div class="row text-center mb-3">
                     <div class="col-4">
                         <p class="text-muted small mb-1">Total Amount</p>
@@ -362,23 +362,6 @@
                         </span>
                     </li>
                 </ul>
-            </x-card>
-
-            <x-card title="Transaction History" icon="fas fa-history" bodyClass="card-body">
-                @forelse($history as $entry)
-                    <div class="history-entry {{ !$loop->last ? 'mb-3 pb-3 border-bottom' : '' }}">
-                        <p class="mb-1 fw-bold">{{ $entry->action }}</p>
-                        @if($entry->description)
-                            <p class="mb-1 text-muted small">{{ $entry->description }}</p>
-                        @endif
-                        <p class="mb-0 text-muted small">
-                            <i class="fas fa-user"></i> {{ $entry->user->full_name ?? 'System' }}
-                            &middot; {{ $entry->created_at->format('M d, Y h:i A') }}
-                        </p>
-                    </div>
-                @empty
-                    <p class="text-muted mb-0">No recorded actions yet.</p>
-                @endforelse
             </x-card>
         </div>
     </div>

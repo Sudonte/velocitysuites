@@ -9,7 +9,7 @@
 
     <div class="row">
         <div class="col-lg-8">
-            <x-card title="Guest &amp; Stay" bodyClass="card-body">
+            <x-card title="Guest & Stay" bodyClass="card-body">
                 @if ($errors->any())
                     <div class="alert alert-danger alert-dismissible fade show" role="alert">
                         <strong>Please fix the following:</strong>
