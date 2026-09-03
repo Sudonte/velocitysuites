@@ -87,7 +87,11 @@ class BookingController extends Controller
         // Unread first (viewed_at null - see show() below), then closest
         // check-in date - whoever is arriving soonest is the
         // receptionist's priority, not whoever was most recently confirmed.
-        $bookings = $query->orderByRaw('viewed_at IS NULL DESC')->orderBy('check_in')->paginate(15)->withQueryString();
+        // simplePaginate (Previous/Next only, no numbered page links) -
+        // same fix as Check-in's index(): the numbered page-link boxes
+        // render broken/oversized here for reasons that don't trace back
+        // to anything in this app's own CSS.
+        $bookings = $query->orderByRaw('viewed_at IS NULL DESC')->orderBy('check_in')->simplePaginate(15)->withQueryString();
 
         $pendingCount = Booking::where('booking_status', Booking::STATUS_ACTIVE)->whereNull('verified_at')->count();
         $verifiedCount = Booking::where('booking_status', Booking::STATUS_ACTIVE)->whereNotNull('verified_at')->whereNull('hidden_at')->count();

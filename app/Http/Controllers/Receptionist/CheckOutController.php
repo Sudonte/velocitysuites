@@ -37,12 +37,16 @@ class CheckOutController extends Controller
 
         // Unread first (viewed_at null - see checkOutBilling() below,
         // shared with Bookings/Check-in since all three operate on this
-        // same Booking row), then the existing date order.
+        // same Booking row), then the existing date order. simplePaginate
+        // (Previous/Next only, no numbered page links) - same fix as
+        // Check-in/Bookings/Reservations' index(): the numbered page-link
+        // boxes render broken/oversized here for reasons that don't trace
+        // back to anything in this app's own CSS.
         $bookings = Booking::with(['reservation.guest.user', 'guest.user', 'rooms', 'roomType', 'billing'])
             ->where('booking_status', $tab === 'expected' ? Booking::STATUS_CHECKED_IN : Booking::STATUS_COMPLETED)
             ->orderByRaw('viewed_at IS NULL DESC')
             ->orderBy('check_out', $tab === 'expected' ? 'asc' : 'desc')
-            ->paginate(15)
+            ->simplePaginate(15)
             ->withQueryString();
 
         $expectedCount = Booking::where('booking_status', Booking::STATUS_CHECKED_IN)->count();

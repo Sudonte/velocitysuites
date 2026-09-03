@@ -52,11 +52,15 @@ class ReservationController extends Controller
         // Unread first (viewed_at null - see details() below), then
         // closest check-in date - whoever is arriving soonest is the
         // priority to review/convert, not whoever requested first.
+        // simplePaginate (Previous/Next only, no numbered page links) -
+        // same fix as Check-in/Bookings' index(): the numbered page-link
+        // boxes render broken/oversized here for reasons that don't trace
+        // back to anything in this app's own CSS.
         $reservations = Reservation::with(['guest.user', 'roomType'])
             ->whereIn('status', Reservation::AWAITING_STATUSES)
             ->orderByRaw('viewed_at IS NULL DESC')
             ->orderBy('check_in')
-            ->paginate(15)
+            ->simplePaginate(15)
             ->withQueryString();
 
         // Whether the room type still has inventory left for the
