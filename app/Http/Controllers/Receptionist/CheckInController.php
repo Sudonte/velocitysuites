@@ -130,6 +130,10 @@ class CheckInController extends Controller
             'number_of_guests' => $validated['adults'] + $children,
             'confirmed_at' => now(),
             'booking_status' => Booking::STATUS_ACTIVE,
+            // Same walk-in/cash reasoning as Create Booking/Create
+            // Reservation - never GCash (no guest-submitted receipt exists
+            // for a receptionist-typed walk-in).
+            'payment_method' => 'cash',
             // Whoever creates it has obviously already seen it - shouldn't
             // show up as "new" (see index()'s ordering / the red-dot
             // indicator in the view) the moment it's created. Also

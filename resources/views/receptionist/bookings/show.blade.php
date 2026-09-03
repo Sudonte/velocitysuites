@@ -171,30 +171,29 @@
                     </div>
                 </div>
 
-                @if(in_array($booking->booking_status, [\App\Models\Booking::STATUS_ACTIVE, \App\Models\Booking::STATUS_CHECKED_IN]) && $remainingBalance > 0.009)
+                @if($booking->payment_method === 'cash' && in_array($booking->booking_status, [\App\Models\Booking::STATUS_ACTIVE, \App\Models\Booking::STATUS_CHECKED_IN]) && $remainingBalance > 0.009)
                     <hr>
                     <h6 class="text-brand"><i class="fas fa-hand-holding-dollar"></i> Record Walk-In Payment</h6>
-                    <p class="text-muted small">Any remaining balance is settled through a walk-in payment at the hotel - record it here as it's received.</p>
+                    <p class="text-muted small">Any remaining balance is settled through a walk-in cash payment at the hotel - record it here as it's received.</p>
                     <form action="{{ route('receptionist.bookings.record-payment', $booking) }}" method="POST" class="row g-2 align-items-end"
-                          onsubmit="return confirm('Record this payment against the booking\'s remaining balance?')">
+                          onsubmit="return confirm('Record this cash payment against the booking\'s remaining balance?')">
                         @csrf
-                        <div class="col-sm-4">
-                            <label class="form-label small mb-1">Payment Method</label>
-                            <select name="payment_method" class="form-select" required>
-                                <option value="cash">Cash</option>
-                                <option value="gcash">GCash</option>
-                            </select>
-                        </div>
-                        <div class="col-sm-4">
+                        <div class="col-sm-6">
                             <label class="form-label small mb-1">Amount Received (₱)</label>
                             <input type="number" name="amount_paid" class="form-control" min="0.01" max="{{ $remainingBalance }}" step="0.01" required placeholder="0.00">
                         </div>
-                        <div class="col-sm-4">
+                        <div class="col-sm-6">
                             <button type="submit" class="btn btn-success w-100">
-                                <i class="fas fa-check"></i> Confirm Payment
+                                <i class="fas fa-check"></i> Confirm Cash Payment
                             </button>
                         </div>
                     </form>
+                @elseif($booking->payment_method === 'gcash' && in_array($booking->booking_status, [\App\Models\Booking::STATUS_ACTIVE, \App\Models\Booking::STATUS_CHECKED_IN]) && $remainingBalance > 0.009)
+                    <hr>
+                    <p class="text-muted small mb-0">
+                        <i class="fas fa-info-circle"></i> This booking pays via GCash - any remaining balance is
+                        settled through another GCash submission (verified above), not a walk-in cash entry.
+                    </p>
                 @endif
             </x-card>
 

@@ -168,6 +168,11 @@ class BookingController extends Controller
             'number_of_guests' => $validated['adults'] + $children,
             'confirmed_at' => now(),
             'booking_status' => Booking::STATUS_ACTIVE,
+            // A receptionist typing this in directly is a walk-in, cash-
+            // paid scenario the same as any other Create Booking/Create
+            // Reservation flow - never GCash (that needs a guest-submitted
+            // receipt, which doesn't exist here).
+            'payment_method' => 'cash',
             // Whoever creates it has obviously already seen it - shouldn't
             // show up as "new" (see index()'s ordering / the red-dot
             // indicator in the view) the moment it's created.
@@ -252,13 +257,21 @@ class BookingController extends Controller
             return back()->with('error', 'Only an active (confirmed or checked-in) booking can have a payment recorded.');
         }
 
+        // Walk-in (unverified, staff-declared-complete) recording only ever
+        // makes sense for Cash - a GCash booking's payments must go through
+        // the receipt+number submission and verification flow above
+        // (Booking::gcashPaymentNeedsVerification()'s gate), never a
+        // receptionist just declaring an amount received with no evidence.
+        if ($booking->payment_method !== 'cash') {
+            return back()->with('error', 'Only a Cash booking can have a walk-in payment recorded here.');
+        }
+
         $booking->loadMissing(['reservation.payments', 'payments']);
         $totalDue = $booking->total_amount_due;
         $amountPaid = (float) $booking->allPayments()->where('payment_status', 'completed')->sum('amount_paid');
         $remainingBalance = max(0, round($totalDue - $amountPaid, 2));
 
         $validated = $request->validate([
-            'payment_method' => 'required|in:cash,gcash',
             'amount_paid' => ['required', 'numeric', 'min:0.01', 'max:' . max(0.01, $remainingBalance)],
         ], [
             'amount_paid.max' => "The amount cannot exceed the remaining balance (₱{$remainingBalance}).",
@@ -266,7 +279,7 @@ class BookingController extends Controller
 
         DB::transaction(function () use ($booking, $validated) {
             $paymentData = [
-                'payment_method' => $validated['payment_method'],
+                'payment_method' => 'cash',
                 'amount_paid' => $validated['amount_paid'],
                 'payment_stage' => 'deposit',
                 'payment_status' => 'completed',
@@ -288,7 +301,7 @@ class BookingController extends Controller
         Activity::log(
             'Recorded walk-in payment',
             "Booking #{$booking->id} - {$booking->guest_display_name} - ₱"
-                . number_format((float) $validated['amount_paid'], 2) . " ({$validated['payment_method']}) - remaining balance now ₱" . number_format($newRemaining, 2),
+                . number_format((float) $validated['amount_paid'], 2) . " (cash) - remaining balance now ₱" . number_format($newRemaining, 2),
             $booking
         );
 
