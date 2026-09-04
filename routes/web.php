@@ -330,11 +330,14 @@ Route::middleware(['auth', 'account.status', 'log.activity', 'no.cache'])->group
 
         // Amenity Requests - creation is only reachable for checked-in
         // guests (linked from the Check-in Module's "Checked-in Guests" tab).
-        // No update route: status is entirely system-controlled, synced
-        // from the parent reservation's verify()/reject() action
-        // (Receptionist\ReservationController::verify(),
-        // ReservationWorkflowService::reject()) - the receptionist has no
-        // way to manually change an amenity request's status at all.
+        // No separate update route: a booking-time (pre-check-in) request's
+        // status is system-controlled, bulk-synced pending->approved at
+        // conversion (ReservationWorkflowService::createBookingFromReservation())
+        // or pending->rejected on reject() - but a request added here, after
+        // check-in, has no such sync to ride along with, so amenitiesStore()
+        // itself is the only place its status is ever set. That's why the
+        // picker modal's own Status field exists - see amenities/partials/
+        // picker.blade.php's help text.
         Route::get('/amenities', [ReceptionistController::class, 'amenitiesIndex'])->name('amenities.index');
         Route::get('/amenities/archived', [ReceptionistController::class, 'amenitiesArchived'])->name('amenities.archived');
         Route::get('/amenities/{booking}/create', [ReceptionistController::class, 'amenitiesCreate'])->name('amenities.create');

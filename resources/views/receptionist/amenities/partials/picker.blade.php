@@ -55,6 +55,11 @@
                     <option value="completed">Completed</option>
                     <option value="rejected">Rejected</option>
                 </select>
+                <small class="text-muted d-block mt-1">
+                    Leave as Pending if this is a new request. If you're logging
+                    something already delivered, set it to Completed - there's
+                    no separate screen to update this later.
+                </small>
             </div>
             <div class="col-sm-6 text-sm-end">
                 <span class="text-muted small" id="amenitySelectedSummary">No amenities selected yet.</span>
