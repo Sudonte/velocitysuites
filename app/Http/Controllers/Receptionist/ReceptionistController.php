@@ -294,14 +294,18 @@ class ReceptionistController extends Controller
     }
 
     /**
-     * Show form to create an amenity request for a reservation. Amenity
+     * Show form to create an amenity request for a booking. Amenity
      * Requests are only available for guests who are actually checked in -
      * a room-service or extra-bed request makes no sense before the guest
-     * has a room, and once checked out billing is already closed.
+     * has a room, and once checked out billing is already closed. Works
+     * for a reservation-derived booking and a direct "New Booking"
+     * transaction alike - see amenitiesStore()'s reservation_id/booking_id
+     * branching, which mirrors CheckOutController::generateBilling()'s own
+     * amenity-charge lookup.
      */
-    public function amenitiesCreate(Reservation $reservation): View
+    public function amenitiesCreate(Booking $booking): View
     {
-        if (!$reservation->booking || $reservation->booking->booking_status !== Booking::STATUS_CHECKED_IN) {
+        if ($booking->booking_status !== Booking::STATUS_CHECKED_IN) {
             abort(404);
         }
 
@@ -314,15 +318,15 @@ class ReceptionistController extends Controller
             ->orderBy('amenity_name')
             ->get();
 
-        return view('receptionist.amenities.create', compact('reservation', 'amenities'));
+        return view('receptionist.amenities.create', compact('booking', 'amenities'));
     }
 
     /**
      * Store a new amenity request, snapshotting the amenity's current charge.
      */
-    public function amenitiesStore(Request $request, Reservation $reservation): RedirectResponse
+    public function amenitiesStore(Request $request, Booking $booking): RedirectResponse
     {
-        if (!$reservation->booking || $reservation->booking->booking_status !== Booking::STATUS_CHECKED_IN) {
+        if ($booking->booking_status !== Booking::STATUS_CHECKED_IN) {
             return back()->with('error', 'Amenity requests can only be added for checked-in guests.');
         }
 
@@ -340,10 +344,11 @@ class ReceptionistController extends Controller
         }
 
         AmenityRequest::create([
-            'guest_id' => $reservation->guest_id,
-            'reservation_id' => $reservation->id,
-            'room_id' => $reservation->booking->room_id,
-            'room_type_id' => $reservation->room_type_id,
+            'guest_id' => $booking->reservation_id ? $booking->reservation->guest_id : $booking->guest_id,
+            'reservation_id' => $booking->reservation_id,
+            'booking_id' => $booking->reservation_id ? null : $booking->id,
+            'room_id' => $booking->room_id,
+            'room_type_id' => $booking->room_type_id,
             'amenity_id' => $amenity->id,
             // Snapshot the amenity's current name/category/charge at the
             // time of the request - a later admin rename/recategorize/price

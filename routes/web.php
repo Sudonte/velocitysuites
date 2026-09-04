@@ -337,8 +337,8 @@ Route::middleware(['auth', 'account.status', 'log.activity', 'no.cache'])->group
         // way to manually change an amenity request's status at all.
         Route::get('/amenities', [ReceptionistController::class, 'amenitiesIndex'])->name('amenities.index');
         Route::get('/amenities/archived', [ReceptionistController::class, 'amenitiesArchived'])->name('amenities.archived');
-        Route::get('/amenities/{reservation}/create', [ReceptionistController::class, 'amenitiesCreate'])->name('amenities.create');
-        Route::post('/amenities/{reservation}', [ReceptionistController::class, 'amenitiesStore'])->name('amenities.store');
+        Route::get('/amenities/{booking}/create', [ReceptionistController::class, 'amenitiesCreate'])->name('amenities.create');
+        Route::post('/amenities/{booking}', [ReceptionistController::class, 'amenitiesStore'])->name('amenities.store');
 
         // Billing (used from the Check-Out workflow's Billing Panel, plus a read-only receipt)
         Route::get('/billing/{billing}/receipt', [\App\Http\Controllers\BillingController::class, 'receipt'])->name('billing.receipt');

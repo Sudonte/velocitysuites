@@ -81,8 +81,8 @@
                                 <button type="button" class="btn btn-sm btn-success btn-open-check-in" data-booking-id="{{ $booking->id }}">
                                     <i class="fas fa-sign-in-alt"></i> Check In
                                 </button>
-                            @elseif($booking->reservation)
-                                <a href="{{ route('receptionist.amenities.create', $booking->reservation) }}" class="btn btn-sm btn-outline-primary">
+                            @else
+                                <a href="{{ route('receptionist.amenities.create', $booking) }}" class="btn btn-sm btn-outline-primary">
                                     <i class="fas fa-spa"></i> Add Amenity
                                 </a>
                             @endif

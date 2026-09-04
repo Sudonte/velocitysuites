@@ -96,4 +96,26 @@ class AmenityRequest extends Model
     {
         return (float) $this->charge * (int) $this->quantity;
     }
+
+    /**
+     * Guest name for display, guaranteed non-null - delegates to whichever
+     * of reservation()/booking() this request belongs to (their own
+     * guest_display_name already handles typed-Representative-Name vs
+     * account-holder vs "no account at all" correctly), falling back to
+     * guest_id's own account only if somehow neither is set. Every call
+     * site that used to read $request->guest->user->full_name directly
+     * should use this instead - a walk-in/accountless booking's amenity
+     * requests have no Guest account to read at all.
+     */
+    public function getGuestDisplayNameAttribute(): string
+    {
+        if ($this->reservation_id) {
+            return $this->reservation?->guest_display_name ?? 'Guest';
+        }
+        if ($this->booking_id) {
+            return $this->booking?->guest_display_name ?? 'Guest';
+        }
+
+        return $this->guest?->user?->full_name ?? 'Guest';
+    }
 }

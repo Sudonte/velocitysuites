@@ -6,16 +6,16 @@
 <div class="container-fluid py-4">
     <div class="row mb-4">
         <div class="col-12">
-            <a href="{{ route('receptionist.bookings.show', $reservation->booking) }}" class="btn btn-sm btn-secondary mb-2">
+            <a href="{{ route('receptionist.bookings.show', $booking) }}" class="btn btn-sm btn-secondary mb-2">
                 <i class="fas fa-arrow-left"></i> Back to Booking
             </a>
             <h1 class="mb-0">
                 <i class="fas fa-spa"></i> Add Amenity Request
             </h1>
             <p class="text-muted">
-                Booking #{{ $reservation->booking->id }} —
-                Guest: {{ $reservation->guest_display_name }} —
-                Room: {{ $reservation->booking->room->room_number ?? 'N/A' }}
+                Booking #{{ $booking->id }} —
+                Guest: {{ $booking->guest_display_name }} —
+                Room: {{ $booking->room->room_number ?? 'N/A' }}
             </p>
         </div>
     </div>
@@ -29,7 +29,7 @@
     @endif
 
     <x-card bodyClass="card-body">
-        <form action="{{ route('receptionist.amenities.store', $reservation) }}" method="POST">
+        <form action="{{ route('receptionist.amenities.store', $booking) }}" method="POST">
             @csrf
 
             <div class="mb-3">
@@ -68,7 +68,7 @@
             <button type="submit" class="btn btn-primary">
                 <i class="fas fa-save"></i> Save Request
             </button>
-            <a href="{{ route('receptionist.bookings.show', $reservation->booking) }}" class="btn btn-secondary">Cancel</a>
+            <a href="{{ route('receptionist.bookings.show', $booking) }}" class="btn btn-secondary">Cancel</a>
         </form>
     </x-card>
 </div>

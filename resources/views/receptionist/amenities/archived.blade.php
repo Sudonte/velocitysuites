@@ -89,7 +89,7 @@
                 <div class="monitoring-item-card">
                     <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
                         <div>
-                            <div class="fw-bold">{{ $req->guest->user->full_name ?? 'N/A' }}</div>
+                            <div class="fw-bold">{{ $req->guest_display_name }}</div>
                             <span class="badge {{ $req->display_is_booking ? 'bg-info text-dark' : ($req->display_is_booking === false ? 'bg-secondary' : 'bg-light text-dark border') }}">
                                 {{ $req->display_is_booking ? 'Booking' : ($req->display_is_booking === false ? 'Reservation' : 'Unlinked') }}
                             </span>
@@ -148,7 +148,7 @@
                     @forelse($amenityRequests as $req)
                         <tr>
                             <td>
-                                {{ $req->guest->user->full_name ?? 'N/A' }}
+                                {{ $req->guest_display_name }}
                                 <span class="badge {{ $req->display_is_booking ? 'bg-info text-dark' : ($req->display_is_booking === false ? 'bg-secondary' : 'bg-light text-dark border') }}" title="{{ $req->display_is_booking ? 'This request is tied to a confirmed Booking' : ($req->display_is_booking === false ? 'This request is tied to a Reservation not yet converted to a Booking' : 'No related transaction found') }}">
                                     {{ $req->display_is_booking ? 'Booking' : ($req->display_is_booking === false ? 'Reservation' : 'Unlinked') }}
                                 </span>
@@ -209,7 +209,7 @@
                     <div class="room-type-detail-list mb-3">
                         <div class="room-type-detail-row">
                             <span class="room-type-detail-label">Guest:</span>
-                            <span class="room-type-detail-value">{{ $req->guest->user->full_name ?? 'N/A' }}</span>
+                            <span class="room-type-detail-value">{{ $req->guest_display_name }}</span>
                         </div>
                         @if($req->display_is_booking)
                             <div class="room-type-detail-row">
