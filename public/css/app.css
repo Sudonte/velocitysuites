@@ -1551,3 +1551,31 @@ tbody tr:hover {
         font-size: 0.75rem;
     }
 }
+
+/* Add Amenity picker - click-to-select cards (see
+   receptionist/amenities/partials/picker.blade.php) */
+.amenity-pick-card {
+    cursor: pointer;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.amenity-pick-card:hover {
+    border-color: var(--primary-color);
+}
+.amenity-pick-card.amenity-pick-card-selected {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 2px var(--primary-color);
+}
+.amenity-pick-card-disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+.amenity-selected-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid var(--border-color);
+}
+.amenity-selected-row:last-child {
+    border-bottom: none;
+}

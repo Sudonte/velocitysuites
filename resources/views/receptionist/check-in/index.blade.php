@@ -300,28 +300,63 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     // Add Amenity modal - AJAX-loaded card grid (see
-    // ReceptionistController::amenitiesCreate()) letting a receptionist
-    // request several different amenities, each with its own quantity, in
-    // one submission instead of one dropdown pick at a time.
+    // ReceptionistController::amenitiesCreate()). Clicking a card adds it
+    // to the "Selected Amenities" list below (or removes it, if already
+    // there) - the quantity itself is only ever set/edited in that list,
+    // never on the card, so a receptionist can request several different
+    // amenities, each with its own quantity, in one submission.
     const amenityModalEl = document.getElementById('amenityModal');
     const amenityModal = bootstrap.Modal.getOrCreateInstance(amenityModalEl);
     const amenityContent = document.getElementById('amenityModalContent');
     let activeAmenityBookingId = null;
 
-    function updateAmenitySummary() {
+    function amenitySelectedList() {
+        return amenityContent.querySelector('#amenitySelectedList');
+    }
+
+    function amenityCardFor(id) {
+        return amenityContent.querySelector('.amenity-pick-card[data-amenity-id="' + id + '"]');
+    }
+
+    function amenityRowFor(id) {
+        return amenityContent.querySelector('.amenity-selected-row[data-amenity-id="' + id + '"]');
+    }
+
+    function updateAmenityState() {
         const submitBtn = amenityContent.querySelector('#amenitySubmitBtn');
-        const summary = amenityContent.querySelector('#amenitySelectedSummary');
-        if (!submitBtn || !summary) return;
+        const emptyMsg = amenityContent.querySelector('#amenityEmptyMessage');
+        const list = amenitySelectedList();
+        if (!submitBtn || !list) return;
 
-        const picked = Array.from(amenityContent.querySelectorAll('.amenity-pick-card')).filter(function (card) {
-            const qty = parseInt(card.querySelector('.amenity-qty-input').value, 10) || 0;
-            return qty > 0;
-        });
+        const hasRows = list.children.length > 0;
+        submitBtn.disabled = !hasRows;
+        if (emptyMsg) emptyMsg.classList.toggle('d-none', hasRows);
+    }
 
-        submitBtn.disabled = picked.length === 0;
-        summary.textContent = picked.length === 0
-            ? 'No amenities selected yet.'
-            : picked.length + ' amenity type' + (picked.length === 1 ? '' : 's') + ' selected.';
+    function addAmenityRow(card) {
+        const id = card.dataset.amenityId;
+        const name = card.dataset.amenityName;
+        const charge = parseFloat(card.dataset.amenityCharge) || 0;
+        const stock = parseInt(card.dataset.amenityStock, 10) || 0;
+
+        const row = document.createElement('div');
+        row.className = 'amenity-selected-row';
+        row.dataset.amenityId = id;
+        row.innerHTML = '<span class="flex-grow-1">' + name + '</span>'
+            + '<span class="text-muted small">₱' + charge.toFixed(2) + ' ea.</span>'
+            + '<input type="number" class="form-control form-control-sm amenity-selected-qty" style="width: 5rem;" min="1" max="' + stock + '" step="1" value="1">'
+            + '<button type="button" class="btn btn-sm btn-outline-danger amenity-remove-btn" title="Remove"><i class="fas fa-times"></i></button>';
+        amenitySelectedList().appendChild(row);
+
+        card.classList.add('amenity-pick-card-selected');
+        card.querySelector('.amenity-pick-check')?.classList.remove('d-none');
+    }
+
+    function removeAmenityRow(id) {
+        amenityRowFor(id)?.remove();
+        const card = amenityCardFor(id);
+        card?.classList.remove('amenity-pick-card-selected');
+        card?.querySelector('.amenity-pick-check')?.classList.add('d-none');
     }
 
     amenityModalEl.addEventListener('show.bs.modal', function (event) {
@@ -334,17 +369,32 @@ document.addEventListener('DOMContentLoaded', function () {
             .catch(() => { amenityContent.innerHTML = '<div class="modal-body"><div class="alert alert-danger mb-0">Failed to load amenities.</div></div>'; });
     });
 
-    amenityContent.addEventListener('input', function (e) {
-        if (!e.target.classList.contains('amenity-qty-input')) return;
-        updateAmenitySummary();
-    });
-
     amenityContent.addEventListener('click', async function (e) {
+        const card = e.target.closest('.amenity-pick-card');
+        if (card && !card.classList.contains('amenity-pick-card-disabled')) {
+            const id = card.dataset.amenityId;
+            if (amenityRowFor(id)) {
+                removeAmenityRow(id);
+            } else {
+                addAmenityRow(card);
+            }
+            updateAmenityState();
+            return;
+        }
+
+        const removeBtn = e.target.closest('.amenity-remove-btn');
+        if (removeBtn) {
+            const row = removeBtn.closest('.amenity-selected-row');
+            if (row) removeAmenityRow(row.dataset.amenityId);
+            updateAmenityState();
+            return;
+        }
+
         if (!e.target.closest('#amenitySubmitBtn')) return;
 
-        const items = Array.from(amenityContent.querySelectorAll('.amenity-pick-card')).map(function (card) {
-            const qty = parseInt(card.querySelector('.amenity-qty-input').value, 10) || 0;
-            return { amenity_id: card.dataset.amenityId, quantity: qty };
+        const items = Array.from(amenityContent.querySelectorAll('.amenity-selected-row')).map(function (row) {
+            const qty = parseInt(row.querySelector('.amenity-selected-qty').value, 10) || 0;
+            return { amenity_id: row.dataset.amenityId, quantity: qty };
         }).filter(item => item.quantity > 0);
 
         if (items.length === 0) return;
