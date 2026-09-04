@@ -349,7 +349,6 @@ document.addEventListener('DOMContentLoaded', function () {
 
         if (items.length === 0) return;
 
-        const status = amenityContent.querySelector('#amenityStatusSelect')?.value || 'pending';
         const errorAlert = amenityContent.querySelector('#amenityErrorAlert');
 
         try {
@@ -360,7 +359,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     'Accept': 'application/json',
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ items: items, status: status }),
+                body: JSON.stringify({ items: items }),
             });
             const data = await response.json().catch(() => ({}));
             if (!response.ok) throw new Error(data.message || 'Something went wrong.');

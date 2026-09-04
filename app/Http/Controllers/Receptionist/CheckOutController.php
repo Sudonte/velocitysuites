@@ -66,9 +66,17 @@ class CheckOutController extends Controller
             return response()->json(['message' => 'Only checked-in bookings can be billed.'], 422);
         }
 
+        $booking->load(['reservation.guest.user', 'guest.user', 'rooms']);
         $billing = $booking->billing ?? $this->generateBilling($booking);
 
-        $booking->load(['reservation.guest.user', 'guest.user', 'rooms']);
+        // Recomputed on every open, not just once at generateBilling()'s
+        // initial creation - an amenity added mid-stay (Receptionist\
+        // ReceptionistController::amenitiesStore()) or a headcount change
+        // must actually reach the bill, not just show in the itemized list
+        // below. Leaves room_charge/discount alone - those are locked in
+        // at creation and only change via applyDiscount() itself.
+        $this->refreshStayCharges($booking, $billing);
+
         $billing->load(['additionalCharges', 'discountApplied']);
 
         // First open marks it read - see index()'s ordering / the
@@ -401,6 +409,40 @@ class CheckOutController extends Controller
     }
 
     /**
+     * Refreshes additional_guest_fee/amenity_charge from the booking's
+     * current headcount/rooms and approved amenity requests - same
+     * calculation generateBilling() uses at creation, just re-run every
+     * time the panel opens so anything added mid-stay actually reaches
+     * the bill (see checkOutBilling()). room_charge/discount are
+     * deliberately left alone - those are locked in at creation and only
+     * change via applyDiscount() itself.
+     */
+    private function refreshStayCharges(Booking $booking, Billing $billing): void
+    {
+        $rooms = $booking->rooms->isNotEmpty() ? $booking->rooms : collect([$booking->room])->filter();
+        $adults = $booking->adults ?? $booking->number_of_guests;
+        $totalCapacity = $rooms->sum('room_capacity');
+        $extraGuests = max(0, $adults - $totalCapacity);
+        $extraGuestFee = $extraGuests * (float) config('hotel.extra_guest_fee_rate', 0);
+
+        $amenityCharge = (float) AmenityRequest::where(function ($q) use ($booking) {
+                if ($booking->reservation_id) {
+                    $q->where('reservation_id', $booking->reservation_id);
+                } else {
+                    $q->where('booking_id', $booking->id);
+                }
+            })
+            ->where('status', 'approved')
+            ->sum(DB::raw('charge * quantity'));
+
+        $billing->update([
+            'additional_guest_fee' => round($extraGuestFee, 2),
+            'amenity_charge' => round($amenityCharge, 2),
+        ]);
+        $billing->recalculateTotal();
+    }
+
+    /**
      * Generate a billing record for a booking. Any already-verified deposit
      * payment made at reservation time (see
      * ReservationWorkflowService::convertToBooking()) is re-parented onto
@@ -419,47 +461,27 @@ class CheckOutController extends Controller
         $rooms = $booking->rooms->isNotEmpty() ? $booking->rooms : collect([$booking->room])->filter();
         $roomCharge = $rooms->sum(fn ($room) => (float) $room->room_rate) * $nights;
 
-        // Children under 12 stay free - only adults count toward the
-        // extra-guest fee, measured against the combined capacity of every
-        // assigned room, not just one.
-        $adults = $booking->adults ?? $booking->number_of_guests;
-        $totalCapacity = $rooms->sum('room_capacity');
-        $extraGuests = max(0, $adults - $totalCapacity);
-        $extraGuestFee = $extraGuests * (float) config('hotel.extra_guest_fee_rate', 0);
-
-        // Covers both a reservation-derived booking's amenity requests
-        // (reservation_id) and a direct booking's own (booking_id) -
-        // whichever applies. Branched explicitly rather than relying on
-        // where('reservation_id', null) matching semantics.
-        $amenityCharge = (float) AmenityRequest::where(function ($q) use ($booking) {
-                if ($booking->reservation_id) {
-                    $q->where('reservation_id', $booking->reservation_id);
-                } else {
-                    $q->where('booking_id', $booking->id);
-                }
-            })
-            ->where('status', 'approved')
-            ->sum(DB::raw('charge * quantity'));
-
         // No automatic discount - Promotions are package/amenity-only now
         // (their inclusions are zero-charge amenity requests granted at
-        // conversion time, handled separately above via $amenityCharge).
+        // conversion time, handled separately via amenity_charge below).
         // Authorized discounts (Senior Citizen, PWD, etc.) are applied
         // manually here by the receptionist after verifying the guest's
         // uploaded ID, via applyDiscount() above.
-        $discount = 0;
-
-        $total = max(0, $roomCharge + $extraGuestFee + $amenityCharge - $discount);
-
         $billing = Billing::create([
             'booking_id' => $booking->id,
             'room_charge' => round($roomCharge, 2),
-            'additional_guest_fee' => round($extraGuestFee, 2),
-            'amenity_charge' => round($amenityCharge, 2),
-            'discount' => round($discount, 2),
-            'total_amount' => round($total, 2),
+            'additional_guest_fee' => 0,
+            'amenity_charge' => 0,
+            'discount' => 0,
+            'total_amount' => round($roomCharge, 2),
             'billing_status' => 'pending',
         ]);
+
+        // Fills in additional_guest_fee/amenity_charge and the resulting
+        // total - same calculation refreshStayCharges() re-runs on every
+        // later checkOutBilling() open, so there's exactly one place this
+        // math lives.
+        $this->refreshStayCharges($booking, $billing);
 
         // Re-parent any already-completed pre-checkout payment onto this
         // billing so it counts toward the balance immediately. A

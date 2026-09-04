@@ -331,15 +331,19 @@ class ReceptionistController extends Controller
     /**
      * How many of each amenity are still actually available: the catalog's
      * own quantity (its total supply) minus every request already made
-     * against it that wasn't rejected - a rejected request never actually
-     * took stock, so it doesn't count against what's left. Hotel-wide, not
-     * scoped to one guest/stay - "how much amenity is left" is a shared
-     * pool, the same reasoning room inventory already uses.
+     * against it that wasn't rejected AND whose booking hasn't checked out
+     * yet - a rejected request never actually took stock, and a checked-
+     * out stay has returned whatever it borrowed, so neither counts
+     * against what's left. Hotel-wide, not scoped to one guest/stay -
+     * "how much amenity is left" is a shared pool, the same reasoning room
+     * inventory already uses.
      */
     private function remainingAmenityStock(iterable $amenityIds): \Illuminate\Support\Collection
     {
         $requested = AmenityRequest::whereIn('amenity_id', $amenityIds)
             ->where('status', '!=', 'rejected')
+            ->whereDoesntHave('booking', fn ($q) => $q->where('booking_status', Booking::STATUS_COMPLETED))
+            ->whereDoesntHave('reservation.booking', fn ($q) => $q->where('booking_status', Booking::STATUS_COMPLETED))
             ->selectRaw('amenity_id, SUM(quantity) as used')
             ->groupBy('amenity_id')
             ->pluck('used', 'amenity_id');
@@ -353,9 +357,13 @@ class ReceptionistController extends Controller
 
     /**
      * Store one or more amenity requests from the card-grid picker above,
-     * snapshotting each amenity's current name/category/charge. All items
-     * share one Status - a receptionist recording several requests already
-     * fulfilled sets it once for the whole batch, not per item.
+     * snapshotting each amenity's current name/category/charge. Always
+     * created 'approved' - there's no separate review step for a
+     * receptionist adding this directly (they're standing at the counter
+     * confirming it), and 'approved' is also the one status
+     * CheckOutController::generateBilling()'s amenity-charge lookup
+     * actually counts, so a request added here is guaranteed to appear on
+     * the final bill if it has a charge.
      */
     public function amenitiesStore(Request $request, Booking $booking): JsonResponse
     {
@@ -367,7 +375,6 @@ class ReceptionistController extends Controller
             'items' => 'required|array|min:1',
             'items.*.amenity_id' => 'required|exists:amenities,id',
             'items.*.quantity' => 'required|integer|min:1',
-            'status' => 'required|in:pending,approved,in_progress,completed,rejected',
         ]);
 
         // Backend enforcement, not just the card grid's own filtering - a
@@ -389,16 +396,13 @@ class ReceptionistController extends Controller
         // Same remaining-stock check the card grid itself is built from -
         // enforced here too, not just as a client-side max on the quantity
         // input, in case stock moved between opening the modal and
-        // submitting it. A batch marked Rejected on arrival never actually
-        // takes stock, so it's exempt.
-        if ($validated['status'] !== 'rejected') {
-            $remainingStock = $this->remainingAmenityStock($amenities->keys());
-            foreach ($validated['items'] as $item) {
-                $remaining = $remainingStock[$item['amenity_id']] ?? 0;
-                if ($item['quantity'] > $remaining) {
-                    $name = $amenities->get($item['amenity_id'])->amenity_name;
-                    return response()->json(['message' => "Only {$remaining} of \"{$name}\" left - lower the quantity."], 422);
-                }
+        // submitting it.
+        $remainingStock = $this->remainingAmenityStock($amenities->keys());
+        foreach ($validated['items'] as $item) {
+            $remaining = $remainingStock[$item['amenity_id']] ?? 0;
+            if ($item['quantity'] > $remaining) {
+                $name = $amenities->get($item['amenity_id'])->amenity_name;
+                return response()->json(['message' => "Only {$remaining} of \"{$name}\" left - lower the quantity."], 422);
             }
         }
 
@@ -423,7 +427,7 @@ class ReceptionistController extends Controller
                     'category' => $amenity->category,
                     'quantity' => $item['quantity'],
                     'charge' => (float) $amenity->charge,
-                    'status' => $validated['status'],
+                    'status' => 'approved',
                 ]);
             }
         });

@@ -45,21 +45,7 @@
 
         <hr>
 
-        <div class="row g-2 align-items-end">
-            <div class="col-sm-6">
-                <label class="form-label small mb-1">Status</label>
-                <select id="amenityStatusSelect" class="form-select form-select-sm">
-                    <option value="pending" selected>Pending</option>
-                    <option value="approved">Approved</option>
-                    <option value="in_progress">In Progress</option>
-                    <option value="completed">Completed</option>
-                    <option value="rejected">Rejected</option>
-                </select>
-            </div>
-            <div class="col-sm-6 text-sm-end">
-                <span class="text-muted small" id="amenitySelectedSummary">No amenities selected yet.</span>
-            </div>
-        </div>
+        <p class="text-muted small mb-0 text-sm-end" id="amenitySelectedSummary">No amenities selected yet.</p>
     @endif
 </div>
 <div class="modal-footer">
