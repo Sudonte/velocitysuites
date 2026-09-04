@@ -113,7 +113,15 @@
                     @for ($i = 0; $i < $booking->rooms_requested; $i++)
                         @php $preselected = $assignedRoomIds[$i] ?? null; @endphp
                         <div class="room-select-row mb-2">
-                            <select name="room_ids[]" class="form-select room-select" required>
+                            {{-- Starts disabled - Step 2 is hidden until "Next" passes
+                                 Step 1's validation. A disabled control is reliably
+                                 excluded from constraint validation (unlike relying on
+                                 display:none, which Chrome still tries to focus/report
+                                 on and throws "is not focusable", silently aborting the
+                                 Next click handler). Re-enabled in JS right before Step
+                                 2 is revealed - see index.blade.php's checkInNextBtn
+                                 handler. --}}
+                            <select name="room_ids[]" class="form-select room-select" required disabled>
                                 <option value="">-- Select an available room --</option>
                                 @foreach($assignableRooms as $room)
                                     <option value="{{ $room->id }}" {{ (int) $preselected === $room->id ? 'selected' : '' }}>Room {{ $room->room_number }}</option>

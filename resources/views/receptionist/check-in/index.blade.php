@@ -219,20 +219,27 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // Step 1 (Guest Details) -> Step 2 (Assign Room): client-side only,
     // both steps submit together as one request - see store()'s docblock
-    // for why. Hidden required fields (the other step) are skipped by
-    // native constraint validation, so reportValidity() here only checks
-    // whatever step is currently visible.
+    // for why. The room selects start `disabled` in the Blade template
+    // (see panel.blade.php) precisely so reportValidity() here - which
+    // only checks Step 1 - never trips over them: a required field hidden
+    // via display:none is NOT reliably excluded from constraint
+    // validation in Chrome (it still tries to focus/report on it and
+    // throws "is not focusable", silently aborting this whole handler
+    // before the step toggle below ever runs) - `disabled` is the one
+    // exclusion the spec actually guarantees.
     content.addEventListener('click', function (e) {
         if (e.target.closest('#checkInNextBtn')) {
             const form = document.getElementById('checkInForm');
             if (!form.reportValidity()) return;
 
+            content.querySelectorAll('.room-select').forEach(s => s.disabled = false);
             document.getElementById('checkInStepDetails').classList.add('d-none');
             document.getElementById('checkInStepRooms').classList.remove('d-none');
             document.getElementById('checkInNextBtn').classList.add('d-none');
             document.getElementById('checkInBackBtn').classList.remove('d-none');
             document.getElementById('checkInSubmitBtn').classList.remove('d-none');
         } else if (e.target.closest('#checkInBackBtn')) {
+            content.querySelectorAll('.room-select').forEach(s => s.disabled = true);
             document.getElementById('checkInStepRooms').classList.add('d-none');
             document.getElementById('checkInStepDetails').classList.remove('d-none');
             document.getElementById('checkInBackBtn').classList.add('d-none');
