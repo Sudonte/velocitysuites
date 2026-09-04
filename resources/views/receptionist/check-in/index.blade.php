@@ -82,9 +82,10 @@
                                     <i class="fas fa-sign-in-alt"></i> Check In
                                 </button>
                             @else
-                                <a href="{{ route('receptionist.amenities.create', $booking) }}" class="btn btn-sm btn-outline-primary">
+                                <button type="button" class="btn btn-sm btn-outline-primary btn-open-amenity" data-bs-toggle="modal"
+                                        data-bs-target="#amenityModal" data-booking-id="{{ $booking->id }}">
                                     <i class="fas fa-spa"></i> Add Amenity
-                                </a>
+                                </button>
                             @endif
                         </td>
                     </tr>
@@ -113,6 +114,16 @@
     </div>
 </div>
 
+<!-- Add Amenity Modal (AJAX-loaded card grid - see
+     ReceptionistController::amenitiesCreate()/amenitiesStore()) -->
+<div class="modal fade" id="amenityModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-scrollable modal-lg">
+        <div class="modal-content" id="amenityModalContent">
+            <!-- Injected via AJAX -->
+        </div>
+    </div>
+</div>
+
 @push('scripts')
 <script>
 document.addEventListener('DOMContentLoaded', function () {
@@ -126,6 +137,8 @@ document.addEventListener('DOMContentLoaded', function () {
     const urls = {
         panel: @json(route('receptionist.check-in.panel', ['booking' => '__ID__'])),
         store: @json(route('receptionist.check-in.store', ['booking' => '__ID__'])),
+        amenityCreate: @json(route('receptionist.amenities.create', ['booking' => '__ID__'])),
+        amenityStore: @json(route('receptionist.amenities.store', ['booking' => '__ID__'])),
     };
 
     function buildUrl(template, id) {
@@ -283,6 +296,84 @@ document.addEventListener('DOMContentLoaded', function () {
             window.location.reload();
         } catch (err) {
             showError(err.message);
+        }
+    });
+
+    // Add Amenity modal - AJAX-loaded card grid (see
+    // ReceptionistController::amenitiesCreate()) letting a receptionist
+    // request several different amenities, each with its own quantity, in
+    // one submission instead of one dropdown pick at a time.
+    const amenityModalEl = document.getElementById('amenityModal');
+    const amenityModal = bootstrap.Modal.getOrCreateInstance(amenityModalEl);
+    const amenityContent = document.getElementById('amenityModalContent');
+    let activeAmenityBookingId = null;
+
+    function updateAmenitySummary() {
+        const submitBtn = amenityContent.querySelector('#amenitySubmitBtn');
+        const summary = amenityContent.querySelector('#amenitySelectedSummary');
+        if (!submitBtn || !summary) return;
+
+        const picked = Array.from(amenityContent.querySelectorAll('.amenity-pick-card')).filter(function (card) {
+            const qty = parseInt(card.querySelector('.amenity-qty-input').value, 10) || 0;
+            return qty > 0;
+        });
+
+        submitBtn.disabled = picked.length === 0;
+        summary.textContent = picked.length === 0
+            ? 'No amenities selected yet.'
+            : picked.length + ' amenity type' + (picked.length === 1 ? '' : 's') + ' selected.';
+    }
+
+    amenityModalEl.addEventListener('show.bs.modal', function (event) {
+        const button = event.relatedTarget;
+        activeAmenityBookingId = button.getAttribute('data-booking-id');
+        amenityContent.innerHTML = '<div class="modal-body text-center py-5"><i class="fas fa-spinner fa-spin fa-2x"></i></div>';
+        fetch(buildUrl(urls.amenityCreate, activeAmenityBookingId), { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+            .then(r => r.text())
+            .then(html => { amenityContent.innerHTML = html; })
+            .catch(() => { amenityContent.innerHTML = '<div class="modal-body"><div class="alert alert-danger mb-0">Failed to load amenities.</div></div>'; });
+    });
+
+    amenityContent.addEventListener('input', function (e) {
+        if (!e.target.classList.contains('amenity-qty-input')) return;
+        updateAmenitySummary();
+    });
+
+    amenityContent.addEventListener('click', async function (e) {
+        if (!e.target.closest('#amenitySubmitBtn')) return;
+
+        const items = Array.from(amenityContent.querySelectorAll('.amenity-pick-card')).map(function (card) {
+            const qty = parseInt(card.querySelector('.amenity-qty-input').value, 10) || 0;
+            return { amenity_id: card.dataset.amenityId, quantity: qty };
+        }).filter(item => item.quantity > 0);
+
+        if (items.length === 0) return;
+
+        const status = amenityContent.querySelector('#amenityStatusSelect')?.value || 'pending';
+        const errorAlert = amenityContent.querySelector('#amenityErrorAlert');
+
+        try {
+            const response = await fetch(buildUrl(urls.amenityStore, activeAmenityBookingId), {
+                method: 'POST',
+                headers: {
+                    'X-CSRF-TOKEN': csrfToken,
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ items: items, status: status }),
+            });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(data.message || 'Something went wrong.');
+
+            amenityModal.hide();
+            window.location.reload();
+        } catch (err) {
+            if (errorAlert) {
+                errorAlert.textContent = err.message;
+                errorAlert.classList.remove('d-none');
+            } else {
+                alert(err.message);
+            }
         }
     });
 });

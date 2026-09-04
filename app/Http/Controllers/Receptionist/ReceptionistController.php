@@ -11,8 +11,9 @@ use App\Models\Reservation;
 use App\Models\Room;
 use App\Services\NotificationService;
 use App\Services\RoomAvailabilityService;
-use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
 class ReceptionistController extends Controller
@@ -294,14 +295,17 @@ class ReceptionistController extends Controller
     }
 
     /**
-     * Show form to create an amenity request for a booking. Amenity
-     * Requests are only available for guests who are actually checked in -
-     * a room-service or extra-bed request makes no sense before the guest
-     * has a room, and once checked out billing is already closed. Works
-     * for a reservation-derived booking and a direct "New Booking"
-     * transaction alike - see amenitiesStore()'s reservation_id/booking_id
-     * branching, which mirrors CheckOutController::generateBilling()'s own
-     * amenity-charge lookup.
+     * AJAX-loaded modal content: a card grid of every Paid/Additional
+     * amenity (with its catalog stock count shown on each card) so a
+     * receptionist can request several different amenities - each with
+     * its own quantity - in one submission, instead of one dropdown pick
+     * at a time. Amenity Requests are only available for guests who are
+     * actually checked in - a room-service or extra-bed request makes no
+     * sense before the guest has a room, and once checked out billing is
+     * already closed. Works for a reservation-derived booking and a
+     * direct "New Booking" transaction alike - see amenitiesStore()'s
+     * reservation_id/booking_id branching, which mirrors
+     * CheckOutController::generateBilling()'s own amenity-charge lookup.
      */
     public function amenitiesCreate(Booking $booking): View
     {
@@ -318,48 +322,72 @@ class ReceptionistController extends Controller
             ->orderBy('amenity_name')
             ->get();
 
-        return view('receptionist.amenities.create', compact('booking', 'amenities'));
+        return view('receptionist.amenities.partials.picker', compact('booking', 'amenities'));
     }
 
     /**
-     * Store a new amenity request, snapshotting the amenity's current charge.
+     * Store one or more amenity requests from the card-grid picker above,
+     * snapshotting each amenity's current name/category/charge. All items
+     * share one Status - a receptionist recording several requests already
+     * fulfilled sets it once for the whole batch, not per item.
      */
-    public function amenitiesStore(Request $request, Booking $booking): RedirectResponse
+    public function amenitiesStore(Request $request, Booking $booking): JsonResponse
     {
         if ($booking->booking_status !== Booking::STATUS_CHECKED_IN) {
-            return back()->with('error', 'Amenity requests can only be added for checked-in guests.');
+            return response()->json(['message' => 'Amenity requests can only be added for checked-in guests.'], 422);
         }
 
         $validated = $request->validate([
-            'amenity_id' => 'required|exists:amenities,id',
-            'quantity' => 'required|integer|min:1',
+            'items' => 'required|array|min:1',
+            'items.*.amenity_id' => 'required|exists:amenities,id',
+            'items.*.quantity' => 'required|integer|min:1',
             'status' => 'required|in:pending,approved,in_progress,completed,rejected',
         ]);
 
-        // Backend enforcement, not just the dropdown's own filtering - a
+        // Backend enforcement, not just the card grid's own filtering - a
         // Free/Included amenity can never become a chargeable request.
-        $amenity = Amenity::where('charge', '>', 0)->find($validated['amenity_id']);
-        if (! $amenity) {
-            return back()->withInput()->with('error', 'Only Paid/Additional amenities can be requested.');
+        // Resolved up front (before creating anything) so one bad item
+        // fails the whole submission rather than leaving a partial set of
+        // requests behind.
+        $amenities = Amenity::where('charge', '>', 0)
+            ->whereIn('id', collect($validated['items'])->pluck('amenity_id'))
+            ->get()
+            ->keyBy('id');
+
+        foreach ($validated['items'] as $item) {
+            if (! $amenities->has($item['amenity_id'])) {
+                return response()->json(['message' => 'Only Paid/Additional amenities can be requested.'], 422);
+            }
         }
 
-        AmenityRequest::create([
-            'guest_id' => $booking->reservation_id ? $booking->reservation->guest_id : $booking->guest_id,
-            'reservation_id' => $booking->reservation_id,
-            'booking_id' => $booking->reservation_id ? null : $booking->id,
-            'room_id' => $booking->room_id,
-            'room_type_id' => $booking->room_type_id,
-            'amenity_id' => $amenity->id,
-            // Snapshot the amenity's current name/category/charge at the
-            // time of the request - a later admin rename/recategorize/price
-            // change must not rewrite this historical record.
-            'amenity_name' => $amenity->amenity_name,
-            'category' => $amenity->category,
-            'quantity' => $validated['quantity'],
-            'charge' => (float) $amenity->charge,
-            'status' => $validated['status'],
-        ]);
+        $guestId = $booking->reservation_id ? $booking->reservation->guest_id : $booking->guest_id;
 
-        return redirect()->route('receptionist.amenities.index')->with('success', 'Amenity request added.');
+        DB::transaction(function () use ($validated, $booking, $guestId, $amenities) {
+            foreach ($validated['items'] as $item) {
+                $amenity = $amenities->get($item['amenity_id']);
+
+                AmenityRequest::create([
+                    'guest_id' => $guestId,
+                    'reservation_id' => $booking->reservation_id,
+                    'booking_id' => $booking->reservation_id ? null : $booking->id,
+                    'room_id' => $booking->room_id,
+                    'room_type_id' => $booking->room_type_id,
+                    'amenity_id' => $amenity->id,
+                    // Snapshot the amenity's current name/category/charge at
+                    // the time of the request - a later admin rename/
+                    // recategorize/price change must not rewrite this
+                    // historical record.
+                    'amenity_name' => $amenity->amenity_name,
+                    'category' => $amenity->category,
+                    'quantity' => $item['quantity'],
+                    'charge' => (float) $amenity->charge,
+                    'status' => $validated['status'],
+                ]);
+            }
+        });
+
+        $count = count($validated['items']);
+
+        return response()->json(['message' => $count . ' amenity request' . ($count === 1 ? '' : 's') . ' added.']);
     }
 }
