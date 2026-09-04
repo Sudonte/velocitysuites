@@ -350,6 +350,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
         card.classList.add('amenity-pick-card-selected');
         card.querySelector('.amenity-pick-check')?.classList.remove('d-none');
+        card.querySelector('.amenity-pick-hint')?.classList.add('d-none');
     }
 
     function removeAmenityRow(id) {
@@ -357,6 +358,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const card = amenityCardFor(id);
         card?.classList.remove('amenity-pick-card-selected');
         card?.querySelector('.amenity-pick-check')?.classList.add('d-none');
+        card?.querySelector('.amenity-pick-hint')?.classList.remove('d-none');
     }
 
     amenityModalEl.addEventListener('show.bs.modal', function (event) {

@@ -24,22 +24,25 @@
                          data-amenity-charge="{{ $amenity->charge }}"
                          data-amenity-stock="{{ max(0, $inStock) }}"
                          role="button" tabindex="0">
-                        <div class="card-body d-flex flex-column">
-                            <div class="d-flex align-items-start justify-content-between gap-2 mb-2">
-                                <div class="d-flex align-items-start gap-2">
-                                    <i class="fas {{ $amenity->icon }} text-brand fs-4"></i>
-                                    <div>
-                                        <p class="fw-bold mb-0">{{ $amenity->amenity_name }}</p>
-                                        <small class="text-muted">{{ $amenity->category ?: 'Uncategorized' }}</small>
-                                    </div>
+                        <div class="card-body d-flex flex-column position-relative">
+                            <span class="badge bg-success amenity-pick-check d-none position-absolute top-0 end-0 m-2">
+                                <i class="fas fa-check"></i> Selected
+                            </span>
+                            <div class="d-flex align-items-start gap-2 mb-2">
+                                <i class="fas {{ $amenity->icon }} text-brand fs-4"></i>
+                                <div>
+                                    <p class="fw-bold mb-0">{{ $amenity->amenity_name }}</p>
+                                    <small class="text-muted">{{ $amenity->category ?: 'Uncategorized' }}</small>
                                 </div>
-                                <i class="fas fa-circle-check text-success amenity-pick-check d-none"></i>
                             </div>
                             <p class="mb-1 text-brand fw-bold">₱{{ number_format($amenity->charge, 2) }}</p>
                             <p class="mb-0 small {{ $inStock > 0 ? 'text-muted' : 'text-danger' }}">
                                 <i class="fas fa-boxes-stacked"></i>
                                 {{ $inStock > 0 ? "{$inStock} available" : 'Out of stock' }}
                             </p>
+                            @if($inStock > 0)
+                                <p class="mb-0 small text-brand mt-2 amenity-pick-hint"><i class="fas fa-plus"></i> Click to add</p>
+                            @endif
                         </div>
                     </div>
                 </div>

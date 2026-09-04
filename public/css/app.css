@@ -1562,12 +1562,16 @@ tbody tr:hover {
     border-color: var(--primary-color);
 }
 .amenity-pick-card.amenity-pick-card-selected {
-    border-color: var(--primary-color);
-    box-shadow: 0 0 0 2px var(--primary-color);
+    border-color: var(--success-color);
+    box-shadow: 0 0 0 2px var(--success-color);
+    background-color: rgba(40, 167, 69, 0.08);
 }
 .amenity-pick-card-disabled {
     cursor: not-allowed;
     opacity: 0.6;
+}
+.amenity-pick-hint {
+    opacity: 0.75;
 }
 .amenity-selected-row {
     display: flex;
