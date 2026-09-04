@@ -49,7 +49,7 @@ class BookingController extends Controller
      * receptionist-created) all auto-verify at creation, so nothing but a
      * GCash booking awaiting Receptionist\PaymentController::verify() (or
      * a pre-existing Cash booking from before that auto-verify shipped)
-     * ever lands here. Other tabs: 'verified' (Complete Booking List -
+     * ever lands here. Other tabs: 'verified' (Confirmed Bookings -
      * verified but not yet archived), 'rejected' (cancelled, not archived
      * - needs a receptionist decision), 'archived' (verified OR
      * cancelled, archived - see isArchivable()). ?verified=1 is kept
@@ -318,7 +318,7 @@ class BookingController extends Controller
 
     /**
      * Marks a booking Verified - moves it from the Active Booking List
-     * to the Complete Booking List. Doesn't touch booking_status at all
+     * to the Confirmed Bookings. Doesn't touch booking_status at all
      * (Check-in/Check-out still work exactly as before); this is a
      * separate, additive gate.
      *
@@ -396,7 +396,7 @@ class BookingController extends Controller
     /**
      * A booking is archivable once it's reached an end state: completed
      * (still booking_status=confirmed, but verified_at is set - the
-     * Complete Booking List) or rejected/failed (booking_status=cancelled).
+     * Confirmed Bookings) or rejected/failed (booking_status=cancelled).
      * An active confirmed-but-not-yet-verified or checked-in/checked-out
      * booking is never archivable from here.
      */
@@ -410,7 +410,7 @@ class BookingController extends Controller
 
     /**
      * Archives a completed or rejected/failed booking - removes it from
-     * the Complete Booking List or "Rejected / Failed" tab into "Archived"
+     * the Confirmed Bookings or "Rejected / Failed" tab into "Archived"
      * without ever hard-deleting anything, same non-destructive pattern as
      * the guest-facing hide() (ReservationWorkflowService::hide()).
      */

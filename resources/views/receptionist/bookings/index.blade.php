@@ -35,7 +35,7 @@
         </li>
         <li class="nav-item">
             <a class="nav-link text-nowrap {{ $tab === 'verified' ? 'active' : '' }}" href="{{ route('receptionist.bookings.index', ['tab' => 'verified']) }}">
-                Complete Booking List <span class="badge bg-success">{{ $verifiedCount }}</span>
+                Confirmed Bookings <span class="badge bg-success">{{ $verifiedCount }}</span>
             </a>
         </li>
         <li class="nav-item">
@@ -86,7 +86,7 @@
     @php
         $cardTitles = [
             'pending' => 'Bookings Pending Verification',
-            'verified' => 'Verified Bookings',
+            'verified' => 'Confirmed Bookings',
             'rejected' => 'Rejected / Failed Bookings',
             'archived' => 'Archived Bookings',
         ];
@@ -110,9 +110,6 @@
                                 <small class="text-muted">@unless($booking->viewed_at)<span class="unread-dot" title="New"></span>@endunless#{{ $booking->id }}</small>
                             </div>
                         </div>
-                        @if($tab === 'pending' || $tab === 'verified')
-                            <x-status-badge :status="$booking->booking_status" domain="booking" />
-                        @endif
                     </div>
                     <div class="monitoring-item-row">
                         <span class="text-muted">Room Type</span>
@@ -134,16 +131,6 @@
                                     <x-status-badge :status="$gcashPayment->payment_status" domain="payment" />
                                 @else
                                     <span class="text-muted small"><i class="fas fa-money-bill-wave"></i> Cash</span>
-                                @endif
-                            </span>
-                        </div>
-                        <div class="monitoring-item-row">
-                            <span class="text-muted">Verification</span>
-                            <span>
-                                @if($booking->verified_at)
-                                    <span class="badge bg-success"><i class="fas fa-check-circle"></i> Verified</span>
-                                @else
-                                    <span class="badge bg-warning text-dark"><i class="fas fa-hourglass-half"></i> Pending</span>
                                 @endif
                             </span>
                         </div>
@@ -200,7 +187,7 @@
                 </div>
             @empty
                 <x-empty-state icon="fas fa-calendar-check" :message="match($tab) {
-                    'verified' => 'No verified bookings yet.',
+                    'verified' => 'No confirmed bookings yet.',
                     'rejected' => 'No rejected or failed bookings right now.',
                     'archived' => 'No archived bookings.',
                     default => 'No bookings pending verification.',
@@ -219,11 +206,12 @@
                     <th>Check-Out</th>
                     <th class="d-none d-md-table-cell">Total</th>
                     @if($tab === 'pending')
-                        <th>Status</th>
                         <th>Payment</th>
-                        <th>Verification</th>
                     @elseif($tab === 'verified')
-                        <th>Status</th>
+                        {{-- No Status column - every row here is already
+                             booking_status=Confirmed by definition (this tab's
+                             own query scope), same reasoning the pending tab's
+                             removed Status/Verification columns followed. --}}
                     @else
                         <th>{{ $tab === 'archived' ? 'Status' : 'Reason' }}</th>
                     @endif
@@ -262,7 +250,6 @@
                         <td>{{ $booking->check_out->format('M d, Y') }}</td>
                         <td class="d-none d-md-table-cell">{{ $bookingTotal !== null ? '₱' . number_format($bookingTotal, 2) : 'N/A' }}</td>
                         @if($tab === 'pending')
-                            <td><x-status-badge :status="$booking->booking_status" domain="booking" /></td>
                             <td>
                                 @if($gcashPayment)
                                     <span class="badge bg-light text-dark border mb-1"><i class="fas fa-qrcode"></i> GCash</span><br>
@@ -271,15 +258,8 @@
                                     <span class="text-muted small"><i class="fas fa-money-bill-wave"></i> Cash</span>
                                 @endif
                             </td>
-                            <td>
-                                @if($booking->verified_at)
-                                    <span class="badge bg-success"><i class="fas fa-check-circle"></i> Verified</span>
-                                @else
-                                    <span class="badge bg-warning text-dark"><i class="fas fa-hourglass-half"></i> Pending</span>
-                                @endif
-                            </td>
                         @elseif($tab === 'verified')
-                            <td><x-status-badge :status="$booking->booking_status" domain="booking" /></td>
+                            {{-- No Status column here either - see the header's comment above. --}}
                         @else
                             <td>
                                 @if($booking->booking_status === \App\Models\Booking::STATUS_CANCELLED)
@@ -352,14 +332,14 @@
                     <tr>
                         @php
                             $colspan = match ($tab) {
-                                'pending' => 11,
-                                'verified' => 9,
+                                'pending' => 8,
+                                'verified' => 7,
                                 default => 8,
                             };
                         @endphp
                         <td colspan="{{ $colspan }}">
                             <x-empty-state icon="fas fa-calendar-check" :message="match($tab) {
-                                'verified' => 'No verified bookings yet.',
+                                'verified' => 'No confirmed bookings yet.',
                                 'rejected' => 'No rejected or failed bookings right now.',
                                 'archived' => 'No archived bookings.',
                                 default => 'No bookings pending verification.',

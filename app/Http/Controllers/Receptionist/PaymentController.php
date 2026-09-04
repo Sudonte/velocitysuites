@@ -38,7 +38,7 @@ class PaymentController extends Controller
     /**
      * Marks a payment Verified and, in the same action, completes its
      * parent Booking too (sets Booking::verified_at/verified_by - moving
-     * it from the Active Booking List to the Complete Booking List) if one
+     * it from the Active Booking List to the Confirmed Bookings) if one
      * exists and isn't already verified. Previously a receptionist had to
      * verify the payment here and then separately click "Verify Booking"
      * on Receptionist\BookingController::verify() - now verifying the
