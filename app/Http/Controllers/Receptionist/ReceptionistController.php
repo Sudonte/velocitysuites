@@ -296,12 +296,13 @@ class ReceptionistController extends Controller
 
     /**
      * AJAX-loaded modal content: a card grid of every Paid/Additional
-     * amenity (with its catalog stock count shown on each card) so a
-     * receptionist can request several different amenities - each with
-     * its own quantity - in one submission, instead of one dropdown pick
-     * at a time. Amenity Requests are only available for guests who are
-     * actually checked in - a room-service or extra-bed request makes no
-     * sense before the guest has a room, and once checked out billing is
+     * amenity - name, price, and how many are actually still available
+     * right now (see remainingAmenityStock() below) - so a receptionist
+     * can request several different amenities, each with its own
+     * quantity, in one submission instead of one dropdown pick at a time.
+     * Amenity Requests are only available for guests who are actually
+     * checked in - a room-service or extra-bed request makes no sense
+     * before the guest has a room, and once checked out billing is
      * already closed. Works for a reservation-derived booking and a
      * direct "New Booking" transaction alike - see amenitiesStore()'s
      * reservation_id/booking_id branching, which mirrors
@@ -322,7 +323,32 @@ class ReceptionistController extends Controller
             ->orderBy('amenity_name')
             ->get();
 
-        return view('receptionist.amenities.partials.picker', compact('booking', 'amenities'));
+        $remainingStock = $this->remainingAmenityStock($amenities->pluck('id'));
+
+        return view('receptionist.amenities.partials.picker', compact('booking', 'amenities', 'remainingStock'));
+    }
+
+    /**
+     * How many of each amenity are still actually available: the catalog's
+     * own quantity (its total supply) minus every request already made
+     * against it that wasn't rejected - a rejected request never actually
+     * took stock, so it doesn't count against what's left. Hotel-wide, not
+     * scoped to one guest/stay - "how much amenity is left" is a shared
+     * pool, the same reasoning room inventory already uses.
+     */
+    private function remainingAmenityStock(iterable $amenityIds): \Illuminate\Support\Collection
+    {
+        $requested = AmenityRequest::whereIn('amenity_id', $amenityIds)
+            ->where('status', '!=', 'rejected')
+            ->selectRaw('amenity_id, SUM(quantity) as used')
+            ->groupBy('amenity_id')
+            ->pluck('used', 'amenity_id');
+
+        return Amenity::whereIn('id', $amenityIds)
+            ->get(['id', 'quantity'])
+            ->mapWithKeys(fn ($amenity) => [
+                $amenity->id => max(0, (int) $amenity->quantity - (int) ($requested[$amenity->id] ?? 0)),
+            ]);
     }
 
     /**
@@ -357,6 +383,22 @@ class ReceptionistController extends Controller
         foreach ($validated['items'] as $item) {
             if (! $amenities->has($item['amenity_id'])) {
                 return response()->json(['message' => 'Only Paid/Additional amenities can be requested.'], 422);
+            }
+        }
+
+        // Same remaining-stock check the card grid itself is built from -
+        // enforced here too, not just as a client-side max on the quantity
+        // input, in case stock moved between opening the modal and
+        // submitting it. A batch marked Rejected on arrival never actually
+        // takes stock, so it's exempt.
+        if ($validated['status'] !== 'rejected') {
+            $remainingStock = $this->remainingAmenityStock($amenities->keys());
+            foreach ($validated['items'] as $item) {
+                $remaining = $remainingStock[$item['amenity_id']] ?? 0;
+                if ($item['quantity'] > $remaining) {
+                    $name = $amenities->get($item['amenity_id'])->amenity_name;
+                    return response()->json(['message' => "Only {$remaining} of \"{$name}\" left - lower the quantity."], 422);
+                }
             }
         }
 

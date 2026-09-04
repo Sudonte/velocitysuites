@@ -15,7 +15,7 @@
     @else
         <div class="row g-3" id="amenityCardGrid">
             @foreach($amenities as $amenity)
-                @php $inStock = (int) $amenity->quantity; @endphp
+                @php $inStock = (int) ($remainingStock[$amenity->id] ?? 0); @endphp
                 <div class="col-sm-6 col-lg-4">
                     <div class="card h-100 amenity-pick-card" data-amenity-id="{{ $amenity->id }}">
                         <div class="card-body d-flex flex-column">
@@ -55,11 +55,6 @@
                     <option value="completed">Completed</option>
                     <option value="rejected">Rejected</option>
                 </select>
-                <small class="text-muted d-block mt-1">
-                    Leave as Pending if this is a new request. If you're logging
-                    something already delivered, set it to Completed - there's
-                    no separate screen to update this later.
-                </small>
             </div>
             <div class="col-sm-6 text-sm-end">
                 <span class="text-muted small" id="amenitySelectedSummary">No amenities selected yet.</span>
