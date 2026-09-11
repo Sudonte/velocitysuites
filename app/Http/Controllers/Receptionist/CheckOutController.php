@@ -322,7 +322,10 @@ class CheckOutController extends Controller
             $billing->recalculateTotal();
         });
 
-        $billing->refresh()->loadMissing('booking.account_guest.user');
+        // account_guest is an accessor (Booking::getAccountGuestAttribute()),
+        // not a real relation, so it can't be dot-loaded via loadMissing() -
+        // eager-load both branches it reads from instead.
+        $billing->refresh()->loadMissing(['booking.reservation.guest.user', 'booking.guest.user']);
         Activity::log(
             'Recorded additional charge',
             "Billing #{$billing->id} - {$validated['description']} (₱" . number_format((float) $validated['amount'], 2) . ')',
