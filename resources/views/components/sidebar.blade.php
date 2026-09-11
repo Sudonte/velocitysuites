@@ -302,6 +302,29 @@
         transform: translateX(2px);
     }
 
+    /* "New entries" indicator on a sidebar link (Check-In/Check-Out) -
+       positioned on the icon itself, not the link text, so it stays in the
+       same spot whether the sidebar is expanded or collapsed to icon-only. */
+    .nav-icon-wrap {
+        position: relative;
+        display: inline-flex;
+    }
+
+    .sidebar-nav-dot {
+        position: absolute;
+        top: -2px;
+        right: -3px;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background-color: var(--danger-color);
+        border: 1.5px solid var(--surface-color);
+    }
+
+    .sidebar-inner .nav-link.active .sidebar-nav-dot {
+        border-color: var(--primary-color);
+    }
+
     /* Active link is the one place this theme uses a solid red fill - a
        clear, unambiguous "you are here" marker against the otherwise white/
        light sidebar, white text/icon for contrast against it. */
@@ -427,6 +450,21 @@
                 </a></li>
             </ul>
         @elseif(auth()->user()->role === 'receptionist')
+            @php
+                // Same "new" signal each module's own index() already sorts
+                // by (viewed_at IS NULL) and its table row marks with
+                // .unread-dot - mirrored here as a sidebar-level indicator
+                // so a receptionist can tell there's something unopened in
+                // Check-In/Check-Out without visiting the module first.
+                // Cheap boolean existence checks, not counts - this partial
+                // renders on every receptionist page.
+                $sidebarHasNewCheckIns = \App\Models\Booking::where('booking_status', \App\Models\Booking::STATUS_ACTIVE)
+                    ->whereNull('viewed_at')
+                    ->exists();
+                $sidebarHasNewCheckOuts = \App\Models\Booking::where('booking_status', \App\Models\Booking::STATUS_CHECKED_IN)
+                    ->whereNull('viewed_at')
+                    ->exists();
+            @endphp
             <ul class="nav flex-column">
                 <li><a href="{{ route('receptionist.dashboard') }}" class="nav-link {{ request()->routeIs('receptionist.dashboard') ? 'active' : '' }}" title="Dashboard">
                     <i class="fas fa-home"></i> <span class="link-text">Dashboard</span>
@@ -438,10 +476,10 @@
                     <i class="fas fa-calendar-check"></i> <span class="link-text">Bookings</span>
                 </a></li>
                 <li><a href="{{ route('receptionist.check-in.index') }}" class="nav-link {{ request()->routeIs('receptionist.check-in.*') ? 'active' : '' }}" title="Check-In">
-                    <i class="fas fa-sign-in-alt"></i> <span class="link-text">Check-In</span>
+                    <span class="nav-icon-wrap"><i class="fas fa-sign-in-alt"></i>@if($sidebarHasNewCheckIns)<span class="sidebar-nav-dot" title="New"></span>@endif</span> <span class="link-text">Check-In</span>
                 </a></li>
                 <li><a href="{{ route('receptionist.check-out.index') }}" class="nav-link {{ request()->routeIs('receptionist.check-out.*') ? 'active' : '' }}" title="Check-Out">
-                    <i class="fas fa-sign-out-alt"></i> <span class="link-text">Check-Out</span>
+                    <span class="nav-icon-wrap"><i class="fas fa-sign-out-alt"></i>@if($sidebarHasNewCheckOuts)<span class="sidebar-nav-dot" title="New"></span>@endif</span> <span class="link-text">Check-Out</span>
                 </a></li>
                 <li><a href="{{ route('receptionist.rooms.index') }}" class="nav-link {{ request()->routeIs('receptionist.rooms.*') ? 'active' : '' }}" title="Rooms">
                     <i class="fas fa-door-open"></i> <span class="link-text">Rooms</span>
