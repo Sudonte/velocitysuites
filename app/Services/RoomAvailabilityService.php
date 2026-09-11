@@ -78,15 +78,8 @@ class RoomAvailabilityService
             ->where('status', '!=', 'maintenance')
             ->whereDoesntHave('assignedBookings', function ($q) use ($booking) {
                 $q->whereIn('bookings.booking_status', [Booking::STATUS_ACTIVE, Booking::STATUS_CHECKED_IN])
-                  ->where('bookings.id', '!=', $booking->id)
-                  ->where(function ($dates) use ($booking) {
-                      $dates->whereBetween('bookings.check_in', [$booking->check_in, $booking->check_out])
-                            ->orWhereBetween('bookings.check_out', [$booking->check_in, $booking->check_out])
-                            ->orWhere(function ($spanning) use ($booking) {
-                                $spanning->where('bookings.check_in', '<=', $booking->check_in)
-                                         ->where('bookings.check_out', '>=', $booking->check_out);
-                            });
-                  });
+                  ->where('bookings.id', '!=', $booking->id);
+                $this->occupiesRoom($q, $booking->check_in, $booking->check_out, 'bookings.');
             })
             ->orderBy('room_number')
             ->get();
@@ -159,17 +152,52 @@ class RoomAvailabilityService
      */
     private function overlappingBookings(int $roomTypeId, Carbon $checkIn, Carbon $checkOut, ?int $excludingBookingId = null)
     {
-        return Booking::where('room_type_id', $roomTypeId)
+        $query = Booking::where('room_type_id', $roomTypeId)
             ->whereIn('booking_status', [Booking::STATUS_ACTIVE, Booking::STATUS_CHECKED_IN])
-            ->when($excludingBookingId, fn ($q) => $q->where('id', '!=', $excludingBookingId))
-            ->where(function ($dates) use ($checkIn, $checkOut) {
-                $dates->whereBetween('check_in', [$checkIn, $checkOut])
-                      ->orWhereBetween('check_out', [$checkIn, $checkOut])
-                      ->orWhere(function ($spanning) use ($checkIn, $checkOut) {
-                          $spanning->where('check_in', '<=', $checkIn)
-                                   ->where('check_out', '>=', $checkOut);
+            ->when($excludingBookingId, fn ($q) => $q->where('id', '!=', $excludingBookingId));
+
+        $this->occupiesRoom($query, $checkIn, $checkOut);
+
+        return $query;
+    }
+
+    /**
+     * The actual "does a booking occupy this room/room-type for
+     * [checkIn, checkOut)" test, shared by assignableRooms() (queried
+     * through the booking_rooms pivot join, hence $columnPrefix) and
+     * overlappingBookings() (queried directly against bookings).
+     *
+     * Standard half-open-interval overlap (existing.check_in < new.check_out
+     * AND existing.check_out > new.check_in) - with one exception: checkout
+     * is a manual receptionist action here, never automatic, so a
+     * CHECKED_IN booking whose recorded check_out has already passed (the
+     * guest hasn't actually left yet) still occupies the room. Without this,
+     * an overdue guest's room silently became "assignable" again the moment
+     * the calendar rolled past their planned checkout, even though nobody
+     * had checked them out - letting a receptionist assign a second guest
+     * into a room that was still physically occupied. Only applied when the
+     * candidate stay starts today or earlier (an actual check-in), so it
+     * can't wrongly block an unrelated future date-range availability
+     * lookup (e.g. a guest browsing next month's rates) just because
+     * today's occupant happens to be overdue.
+     */
+    private function occupiesRoom($query, Carbon $checkIn, Carbon $checkOut, string $columnPrefix = ''): void
+    {
+        $checkInCol = $columnPrefix . 'check_in';
+        $checkOutCol = $columnPrefix . 'check_out';
+        $statusCol = $columnPrefix . 'booking_status';
+
+        $query->where($checkInCol, '<', $checkOut)
+              ->where(function ($end) use ($checkIn, $checkOutCol, $statusCol) {
+                  $end->where($checkOutCol, '>', $checkIn);
+
+                  if ($checkIn->lte(Carbon::today())) {
+                      $end->orWhere(function ($overstay) use ($checkOutCol, $statusCol) {
+                          $overstay->where($statusCol, Booking::STATUS_CHECKED_IN)
+                                   ->where($checkOutCol, '<=', Carbon::today());
                       });
-            });
+                  }
+              });
     }
 }
 
