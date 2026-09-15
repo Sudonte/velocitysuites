@@ -39,7 +39,10 @@ class ReceptionistController extends Controller
         $occupiedRooms = Room::where('status', 'occupied')->count();
         $maintenanceRooms = Room::where('status', 'maintenance')->count();
         $bookingRequests = Reservation::whereIn('status', Reservation::ACTIVE_STATUSES)->count();
-        $awaitingCheckIn = Booking::where('booking_status', Booking::STATUS_ACTIVE)->count();
+        // Matches Check-in's own "Expected Check-ins" tab (CheckInController::
+        // index()) - a still-unverified booking never appears there, so it
+        // shouldn't inflate this tile or the Pending Arrivals list below either.
+        $awaitingCheckIn = Booking::where('booking_status', Booking::STATUS_ACTIVE)->whereNotNull('verified_at')->count();
         $inHouseGuests = Booking::where('booking_status', Booking::STATUS_CHECKED_IN)->count();
 
         // Today's schedule stays date-based - it's a schedule. Arrivals due
@@ -48,6 +51,7 @@ class ReceptionistController extends Controller
         $pendingArrivals = Booking::with(['reservation.guest.user', 'guest.user', 'room', 'roomType'])
             ->whereDate('check_in', today())
             ->where('booking_status', Booking::STATUS_ACTIVE)
+            ->whereNotNull('verified_at')
             ->get();
 
         $todayDepartures = Booking::with(['reservation.guest.user', 'guest.user', 'room'])

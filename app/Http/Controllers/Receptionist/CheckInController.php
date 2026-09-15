@@ -41,6 +41,28 @@ class CheckInController extends Controller
             $tab = 'expected';
         }
 
+        // Expected Check-ins only ever offers a booking whose payment/
+        // transaction is already verified (Bookings module's own "For
+        // Verification" tab - booking_status ACTIVE + verified_at null -
+        // is exactly the set this excludes) - a receptionist shouldn't be
+        // able to room and check in a guest whose booking hasn't cleared
+        // verification yet.
+        $range = $request->get('range', 'today');
+        if (!in_array($range, ['today', 'week', 'month', 'all'])) {
+            $range = 'today';
+        }
+
+        // Each option widens the window rather than narrowing to an exact
+        // slice - an overdue arrival (check_in already in the past) stays
+        // visible under every option, "Today" included, since hiding a
+        // guest who should already be here would be worse than a longer list.
+        $rangeEnd = match ($range) {
+            'today' => Carbon::today()->endOfDay(),
+            'week' => Carbon::now()->endOfWeek(),
+            'month' => Carbon::now()->endOfMonth(),
+            'all' => null,
+        };
+
         // simplePaginate (Previous/Next only, no numbered page links, no
         // COUNT query) instead of paginate() - the numbered page-link
         // boxes were rendering broken/oversized here for reasons that
@@ -51,15 +73,17 @@ class CheckInController extends Controller
         // row), then the existing date order.
         $bookings = Booking::with(['reservation.guest.user', 'guest.user', 'rooms', 'roomType'])
             ->where('booking_status', $tab === 'expected' ? Booking::STATUS_ACTIVE : Booking::STATUS_CHECKED_IN)
+            ->when($tab === 'expected', fn ($q) => $q->whereNotNull('verified_at'))
+            ->when($tab === 'expected' && $rangeEnd, fn ($q) => $q->where('check_in', '<=', $rangeEnd))
             ->orderByRaw('viewed_at IS NULL DESC')
             ->orderBy($tab === 'expected' ? 'check_in' : 'check_out')
             ->simplePaginate(15)
             ->withQueryString();
 
-        $expectedCount = Booking::where('booking_status', Booking::STATUS_ACTIVE)->count();
+        $expectedCount = Booking::where('booking_status', Booking::STATUS_ACTIVE)->whereNotNull('verified_at')->count();
         $checkedInCount = Booking::where('booking_status', Booking::STATUS_CHECKED_IN)->count();
 
-        return view('receptionist.check-in.index', compact('bookings', 'tab', 'expectedCount', 'checkedInCount'));
+        return view('receptionist.check-in.index', compact('bookings', 'tab', 'range', 'expectedCount', 'checkedInCount'));
     }
 
     /**

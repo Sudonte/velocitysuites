@@ -459,6 +459,7 @@
                 // Cheap boolean existence checks, not counts - this partial
                 // renders on every receptionist page.
                 $sidebarHasNewCheckIns = \App\Models\Booking::where('booking_status', \App\Models\Booking::STATUS_ACTIVE)
+                    ->whereNotNull('verified_at')
                     ->whereNull('viewed_at')
                     ->exists();
                 $sidebarHasNewCheckOuts = \App\Models\Booking::where('booking_status', \App\Models\Booking::STATUS_CHECKED_IN)

@@ -28,7 +28,7 @@
 
     <ul class="nav nav-tabs mb-3">
         <li class="nav-item">
-            <a class="nav-link {{ $tab === 'expected' ? 'active' : '' }}" href="{{ route('receptionist.check-in.index', ['tab' => 'expected']) }}">
+            <a class="nav-link {{ $tab === 'expected' ? 'active' : '' }}" href="{{ route('receptionist.check-in.index', ['tab' => 'expected', 'range' => $range]) }}">
                 Expected Check-ins <span class="badge bg-warning text-dark">{{ $expectedCount }}</span>
             </a>
         </li>
@@ -40,6 +40,20 @@
     </ul>
 
     <x-card :title="$tab === 'expected' ? 'Expected Check-ins' : 'Checked-in Guests'" icon="fas fa-list" bodyClass="table-responsive">
+        @if($tab === 'expected')
+            <x-slot:actions>
+                <form method="GET" action="{{ route('receptionist.check-in.index') }}" class="d-flex align-items-center gap-2">
+                    <input type="hidden" name="tab" value="expected">
+                    <label for="rangeFilter" class="mb-0 small text-muted text-nowrap">Arriving:</label>
+                    <select id="rangeFilter" name="range" class="form-select form-select-sm" onchange="this.form.submit()">
+                        <option value="today" {{ $range === 'today' ? 'selected' : '' }}>Today</option>
+                        <option value="week" {{ $range === 'week' ? 'selected' : '' }}>This Week</option>
+                        <option value="month" {{ $range === 'month' ? 'selected' : '' }}>This Month</option>
+                        <option value="all" {{ $range === 'all' ? 'selected' : '' }}>All</option>
+                    </select>
+                </form>
+            </x-slot:actions>
+        @endif
         <table class="table table-hover mb-0 align-middle">
             <thead>
                 <tr>
