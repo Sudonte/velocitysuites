@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Amenity;
+use App\Models\Booking;
 use App\Models\Room;
 use App\Models\RoomType;
 use Illuminate\Http\RedirectResponse;
@@ -21,9 +22,14 @@ class RoomTypeManagementController extends Controller
      */
     public function index(Request $request): View
     {
+        // Derived from actual CHECKED_IN occupancy, not the raw `status`
+        // column (which can drift - see Room::getEffectiveStatusAttribute()'s
+        // docblock) - matches DashboardStatsService/AdminReportController's
+        // own available-room counts instead of disagreeing with them.
         $query = RoomType::withCount([
             'rooms',
-            'rooms as available_rooms_count' => fn ($q) => $q->where('status', 'available'),
+            'rooms as available_rooms_count' => fn ($q) => $q->where('status', '!=', 'maintenance')
+                ->whereDoesntHave('assignedBookings', fn ($qq) => $qq->where('booking_status', Booking::STATUS_CHECKED_IN)),
         ]);
 
         if ($request->has('search') && $request->search) {

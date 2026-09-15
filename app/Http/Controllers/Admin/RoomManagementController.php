@@ -80,6 +80,14 @@ class RoomManagementController extends Controller
             'status' => 'required|in:available,occupied,maintenance',
         ]);
 
+        // Same guard as deactivate() - a guest physically in this room
+        // can't be hidden from every occupancy count/list by setting
+        // maintenance out from under them.
+        if ($validated['status'] === 'maintenance' && $room->isCurrentlyOccupied()) {
+            return back()->withInput()
+                ->with('error', "Room {$room->room_number} is currently occupied - it can't be set to maintenance until the guest checks out.");
+        }
+
         $wasMaintenance = $room->status === 'maintenance';
         $room->update($validated);
 
@@ -185,6 +193,17 @@ class RoomManagementController extends Controller
      */
     public function deactivate(Room $room): RedirectResponse
     {
+        // A guest is physically in this room right now - setting it to
+        // maintenance wouldn't remove that occupancy, it would just hide it:
+        // Room::getEffectiveStatusAttribute() shows 'maintenance' unconditionally
+        // once this column is set, so every room list/dashboard tally would
+        // silently stop counting a room that's actually occupied. Block until
+        // the guest actually checks out.
+        if ($room->isCurrentlyOccupied()) {
+            return redirect()->route('admin.rooms.index')
+                ->with('error', "Room {$room->room_number} is currently occupied - it can't be set to maintenance until the guest checks out.");
+        }
+
         $room->update(['status' => 'maintenance']);
 
         return redirect()->route('admin.rooms.index')->with('success', 'Room deactivated (set to maintenance).');

@@ -79,7 +79,7 @@ class ReservationMonitoringController extends Controller
                 $reservation->monitor_guest_email = $reservation->guest->user->email ?? '';
                 $reservation->monitor_room_label = $reservation->roomType->name ?? 'N/A';
                 $reservation->monitor_assigned_room = $reservation->booking?->room?->room_number;
-                $reservation->monitor_status_value = $reservation->booking ? $reservation->booking->booking_status : $reservation->status;
+                $reservation->monitor_status_value = $reservation->booking ? $reservation->booking->display_status : $reservation->status;
                 $reservation->monitor_status_domain = $reservation->booking ? 'booking' : 'reservation';
                 $reservation->monitor_latest_payment = $reservation->payments->sortByDesc('created_at')->first();
                 $reservation->monitor_show_route = route('admin.reservations.show', $reservation);
@@ -129,7 +129,7 @@ class ReservationMonitoringController extends Controller
                 $booking->monitor_guest_email = $booking->account_guest?->user?->email ?? '';
                 $booking->monitor_room_label = $booking->roomType->name ?? 'N/A';
                 $booking->monitor_assigned_room = $booking->room?->room_number;
-                $booking->monitor_status_value = $booking->booking_status;
+                $booking->monitor_status_value = $booking->display_status;
                 $booking->monitor_status_domain = 'booking';
                 $booking->monitor_latest_payment = $booking->allPayments()->sortByDesc('created_at')->first();
                 $booking->monitor_show_route = route('admin.bookings.show', $booking);
@@ -146,7 +146,12 @@ class ReservationMonitoringController extends Controller
         $summaryTotal = $items->count();
         $summaryBookingCount = $items->where('monitor_type', 'booking')->count();
         $summaryReservationCount = $items->where('monitor_type', 'reservation')->count();
-        $summaryPendingCount = $items->whereIn('monitor_status_value', [Reservation::STATUS_AWAITING_CASH, Reservation::STATUS_AWAITING_GCASH, Booking::STATUS_ACTIVE])->count();
+        // 'AWAITING_VERIFICATION' (Booking::display_status - see that
+        // accessor) replaces Booking::STATUS_ACTIVE here: an ACTIVE
+        // booking that's already been verified isn't "pending" anything,
+        // and monitor_status_value now holds display_status, not the raw
+        // booking_status, for every booking row above.
+        $summaryPendingCount = $items->whereIn('monitor_status_value', [Reservation::STATUS_AWAITING_CASH, Reservation::STATUS_AWAITING_GCASH, 'AWAITING_VERIFICATION'])->count();
 
         $perPage = 15;
         $page = max(1, (int) $request->get('page', 1));

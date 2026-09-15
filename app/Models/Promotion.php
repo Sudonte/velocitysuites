@@ -62,12 +62,19 @@ class Promotion extends Model
 
     /**
      * Check if promotion is currently active.
+     *
+     * start_date/end_date are `date`-cast (Carbon instances) - comparing
+     * one against a plain string via <=/>= always resolved false/true
+     * respectively regardless of the actual dates (PHP's DateTime-vs-
+     * string comparison rules), so this accessor always returned false.
+     * Comparing against another Carbon instance instead fixes that.
      */
     public function getIsActiveAttribute()
     {
-        $today = now()->toDateString();
-        return $this->status === 'active' && 
-               $this->start_date <= $today && 
-               $this->end_date >= $today;
+        $today = now()->startOfDay();
+
+        return $this->status === 'active'
+            && $this->start_date <= $today
+            && $this->end_date >= $today;
     }
 }

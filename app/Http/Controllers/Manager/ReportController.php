@@ -52,9 +52,14 @@ class ReportController extends Controller
             ->limit(5)
             ->get();
 
-        // Top guests (by reservation count in range)
+        // Top guests (by reservation count in range) - guest_id is
+        // nullable (a receptionist-created walk-in reservation has no
+        // Guest account at all), and grouping by it would otherwise
+        // collapse every accountless walk-in in the range into one NULL
+        // bucket that could outrank, or displace, real repeat guests.
         $topGuests = Reservation::select('guest_id', DB::raw('COUNT(*) as reservation_count'))
             ->with('guest.user')
+            ->whereNotNull('guest_id')
             ->whereBetween('check_in', [$from, $to])
             ->groupBy('guest_id')
             ->orderByDesc('reservation_count')
