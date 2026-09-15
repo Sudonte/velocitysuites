@@ -96,8 +96,17 @@ class DashboardStatsService
             // added) does.
             'totalRooms' => $totalRooms,
             'totalRoomsChange' => $this->percentChange($totalRooms, $totalRoomsLastMonth),
-            'availableRooms' => Room::where('status', 'available')->count(),
-            'occupiedRooms' => Room::where('status', 'occupied')->count(),
+            // Occupied/available derived from an actual CHECKED_IN booking
+            // assignment, not the stored `status` column - that only flips
+            // at explicit check-in/check-out events (or a manual admin
+            // edit) and can drift from what's really occupied right now.
+            // See Room::getEffectiveStatusAttribute()'s docblock.
+            'availableRooms' => Room::where('status', '!=', 'maintenance')
+                ->whereDoesntHave('assignedBookings', fn ($q) => $q->where('booking_status', Booking::STATUS_CHECKED_IN))
+                ->count(),
+            'occupiedRooms' => Room::where('status', '!=', 'maintenance')
+                ->whereHas('assignedBookings', fn ($q) => $q->where('booking_status', Booking::STATUS_CHECKED_IN))
+                ->count(),
             'maintenanceRooms' => Room::where('status', 'maintenance')->count(),
 
             // Promotions/Discounts/Amenities - plain status counts (not
@@ -200,8 +209,14 @@ class DashboardStatsService
     public function managerStats(Carbon $from, Carbon $to): array
     {
         $totalRooms = Room::count();
-        $occupiedRooms = Room::where('status', 'occupied')->count();
-        $availableRooms = Room::where('status', 'available')->count();
+        // See adminStats()'s identical fix above - derived from an actual
+        // CHECKED_IN booking assignment, not the stored `status` column.
+        $occupiedRooms = Room::where('status', '!=', 'maintenance')
+            ->whereHas('assignedBookings', fn ($q) => $q->where('booking_status', Booking::STATUS_CHECKED_IN))
+            ->count();
+        $availableRooms = Room::where('status', '!=', 'maintenance')
+            ->whereDoesntHave('assignedBookings', fn ($q) => $q->where('booking_status', Booking::STATUS_CHECKED_IN))
+            ->count();
         $maintenanceRooms = Room::where('status', 'maintenance')->count();
         $occupancyRate = $totalRooms > 0
             ? round(($occupiedRooms / $totalRooms) * 100, 1)

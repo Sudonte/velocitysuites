@@ -42,7 +42,7 @@
                         <span class="room-type-stat-chip"><i class="fas fa-bed"></i> {{ $roomType->bed_type }}</span>
                     @endif
                 </div>
-                <p class="mb-0"><strong>Status:</strong> <x-status-badge :status="$room->status" domain="room" /></p>
+                <p class="mb-0"><strong>Status:</strong> <x-status-badge :status="$room->effective_status" domain="room" /></p>
             </x-card>
 
             @if($room->amenities)

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\ActivityLog;
+use App\Models\Booking;
 use App\Models\Payment;
 use App\Models\Reservation;
 use App\Models\Room;
@@ -61,10 +62,18 @@ class AdminReportController extends Controller
         // Room summary - no "reserved" status anymore (room assignment only
         // ever happens at check-in, straight to "occupied" - see the same
         // fix already applied to DashboardStatsService::adminStats()).
+        // Occupied/available derived from an actual CHECKED_IN booking
+        // assignment, not the stored `status` column - see
+        // Room::getEffectiveStatusAttribute()'s docblock for why that
+        // column can drift from what's really occupied right now.
         $roomReports = [
             'total' => Room::count(),
-            'available' => Room::where('status', 'available')->count(),
-            'occupied' => Room::where('status', 'occupied')->count(),
+            'available' => Room::where('status', '!=', 'maintenance')
+                ->whereDoesntHave('assignedBookings', fn ($q) => $q->where('booking_status', Booking::STATUS_CHECKED_IN))
+                ->count(),
+            'occupied' => Room::where('status', '!=', 'maintenance')
+                ->whereHas('assignedBookings', fn ($q) => $q->where('booking_status', Booking::STATUS_CHECKED_IN))
+                ->count(),
             'maintenance' => Room::where('status', 'maintenance')->count(),
         ];
 

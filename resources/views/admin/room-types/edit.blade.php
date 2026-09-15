@@ -219,7 +219,7 @@
                 @forelse($roomType->rooms as $room)
                     <p class="mb-1">
                         <strong>Room {{ $room->room_number }}</strong> — {{ $room->room_name }}
-                        <x-status-badge :status="$room->status" domain="room" />
+                        <x-status-badge :status="$room->effective_status" domain="room" />
                     </p>
                 @empty
                     <p class="text-muted mb-0">No rooms assigned to this type yet.</p>

@@ -139,6 +139,38 @@ class Room extends Model
     }
 
     /**
+     * Whether a guest is actually in this room right now - the
+     * booking_rooms pivot's own CHECKED_IN row, not the stored `status`
+     * column below. `status` only ever flips at explicit lifecycle events
+     * (CheckInController::store() sets 'occupied', checkout sets it back
+     * to 'available') and can also be hand-edited by an admin
+     * (Admin\RoomManagementController::update()), so it can drift from
+     * reality; this is the ground truth to check instead.
+     */
+    public function isCurrentlyOccupied(): bool
+    {
+        return $this->assignedBookings()->where('booking_status', Booking::STATUS_CHECKED_IN)->exists();
+    }
+
+    /**
+     * The status every "what's this room's status" display should render,
+     * instead of the raw `status` column - see isCurrentlyOccupied()'s
+     * docblock for why that column can lag reality. 'maintenance' always
+     * wins (it's a deliberate manual designation with no booking signal to
+     * derive it from); otherwise this is computed fresh from whether a
+     * CHECKED_IN booking is actually assigned right now, so a stale
+     * 'available' can never hide a room a guest is currently occupying.
+     */
+    public function getEffectiveStatusAttribute(): string
+    {
+        if ($this->status === 'maintenance') {
+            return 'maintenance';
+        }
+
+        return $this->isCurrentlyOccupied() ? 'occupied' : 'available';
+    }
+
+    /**
      * Amenities are managed only at the Room Type level (System
      * Administrator requirement: an individual room can never carry its own
      * independent amenity assignment - it always reflects exactly what its

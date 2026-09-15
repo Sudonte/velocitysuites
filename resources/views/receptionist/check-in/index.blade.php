@@ -74,7 +74,7 @@
                                 {{ $booking->rooms->pluck('room_number')->implode(', ') }}
                                 ({{ $booking->roomType->name ?? '' }})
                                 @if($tab === 'checked_in')
-                                    <x-status-badge :status="$booking->rooms->first()->status" domain="room" />
+                                    <x-status-badge :status="$booking->rooms->first()->effective_status" domain="room" />
                                 @endif
                             @elseif($tab === 'expected')
                                 <span class="text-muted small"><i class="fas fa-door-open"></i> Not yet assigned</span>

@@ -247,7 +247,7 @@
                 <p class="mb-2"><strong>Type:</strong> {{ $room->roomType->name }}</p>
                 <p class="mb-2"><strong>Capacity:</strong> {{ $room->room_capacity }} guests</p>
                 <p class="mb-2"><strong>Rate:</strong> ₱{{ number_format($room->room_rate, 2) }}/night</p>
-                <p class="mb-2"><strong>Status:</strong> <x-status-badge :status="$room->status" domain="room" /></p>
+                <p class="mb-2"><strong>Status:</strong> <x-status-badge :status="$room->effective_status" domain="room" /></p>
                 <p class="mb-0"><strong>Created:</strong> {{ $room->created_at->format('M d, Y') }}</p>
             </x-card>
 

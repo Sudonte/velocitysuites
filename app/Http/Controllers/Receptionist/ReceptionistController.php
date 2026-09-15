@@ -35,9 +35,20 @@ class ReceptionistController extends Controller
         // Status-driven counts that mirror the actual work queues, so any
         // action (accept, convert, check-in, check-out) moves these
         // immediately - check-in/check-out are no longer date-gated.
-        $availableRooms = Room::where('status', 'available')->count();
-        $occupiedRooms = Room::where('status', 'occupied')->count();
+        // Occupied/available are derived from an actual CHECKED_IN booking
+        // assignment (Room::isCurrentlyOccupied()), not the stored `status`
+        // column - that only flips at explicit check-in/check-out events (or
+        // an admin's manual edit) and can drift from what's really occupied
+        // right now. Maintenance stays a plain column read since it's a
+        // deliberate manual designation with no booking signal to derive it
+        // from - see Room::getEffectiveStatusAttribute()'s docblock.
         $maintenanceRooms = Room::where('status', 'maintenance')->count();
+        $occupiedRooms = Room::where('status', '!=', 'maintenance')
+            ->whereHas('assignedBookings', fn ($q) => $q->where('booking_status', Booking::STATUS_CHECKED_IN))
+            ->count();
+        $availableRooms = Room::where('status', '!=', 'maintenance')
+            ->whereDoesntHave('assignedBookings', fn ($q) => $q->where('booking_status', Booking::STATUS_CHECKED_IN))
+            ->count();
         $bookingRequests = Reservation::whereIn('status', Reservation::ACTIVE_STATUSES)->count();
         // Matches Check-in's own "Expected Check-ins" tab (CheckInController::
         // index()) - a still-unverified booking never appears there, so it

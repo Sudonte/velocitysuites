@@ -104,7 +104,7 @@
                                     <h5 class="mb-0">Room {{ $room->room_number }}</h5>
                                     <small class="text-muted">{{ $room->room_name }}</small>
                                 </div>
-                                <x-status-badge :status="$room->status" domain="room" />
+                                <x-status-badge :status="$room->effective_status" domain="room" />
                             </div>
 
                             <x-room-gallery :images="collect($room->gallery)" :title="'Room ' . $room->room_number"
