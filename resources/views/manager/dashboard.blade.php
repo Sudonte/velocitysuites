@@ -218,7 +218,7 @@
                                     <td>{{ $reservation->check_out->format('M d, Y') }}</td>
                                     <td>
                                         @if($reservation->booking)
-                                            <x-status-badge :status="$reservation->booking->booking_status" domain="booking" />
+                                            <x-status-badge :status="$reservation->booking->display_status" domain="booking" />
                                         @else
                                             <x-status-badge :status="$reservation->status" domain="reservation" />
                                         @endif

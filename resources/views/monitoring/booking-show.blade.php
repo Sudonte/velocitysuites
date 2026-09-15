@@ -15,7 +15,7 @@
         </div>
         <div>
             <span class="badge bg-primary fs-6"><i class="fas fa-credit-card"></i> Booking</span>
-            <x-status-badge :status="$booking->booking_status" domain="booking" class="fs-6" />
+            <x-status-badge :status="$booking->display_status" domain="booking" class="fs-6" />
         </div>
     </div>
 
@@ -24,7 +24,7 @@
             <x-card title="Booking Details" icon="fas fa-info-circle" bodyClass="card-body" class="mb-4">
                 <div class="row mb-2">
                     <div class="col-md-4"><strong>Status:</strong></div>
-                    <div class="col-md-8"><x-status-badge :status="$booking->booking_status" domain="booking" /></div>
+                    <div class="col-md-8"><x-status-badge :status="$booking->display_status" domain="booking" /></div>
                 </div>
                 <div class="row mb-2">
                     <div class="col-md-4"><strong>Guest:</strong></div>

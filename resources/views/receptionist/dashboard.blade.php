@@ -90,7 +90,7 @@
                             <tr>
                                 <td>{{ $booking->guest_display_name }}</td>
                                 <td>{{ $booking->room->room_number ?? $booking->roomType->name ?? 'N/A' }}</td>
-                                <td><x-status-badge :status="$booking->booking_status" domain="booking" /></td>
+                                <td><x-status-badge :status="$booking->display_status" domain="booking" /></td>
                             </tr>
                         @empty
                             <tr><td colspan="3"><x-empty-state icon="fas fa-sign-in-alt" message="No pending arrivals today." /></td></tr>
@@ -116,7 +116,7 @@
                             <tr>
                                 <td>{{ $booking->guest_display_name }}</td>
                                 <td>{{ $booking->room->room_number ?? 'N/A' }}</td>
-                                <td><x-status-badge :status="$booking->booking_status" domain="booking" /></td>
+                                <td><x-status-badge :status="$booking->display_status" domain="booking" /></td>
                             </tr>
                         @empty
                             <tr><td colspan="3"><x-empty-state icon="fas fa-sign-out-alt" message="No departures today." /></td></tr>
@@ -160,7 +160,7 @@
                                     <td>{{ $item->check_out->format('M d, Y') }}</td>
                                     <td>
                                         @if($item->booking)
-                                            <x-status-badge :status="$item->booking->booking_status" domain="booking" />
+                                            <x-status-badge :status="$item->booking->display_status" domain="booking" />
                                         @else
                                             <x-status-badge :status="$item->status" domain="reservation" />
                                         @endif

@@ -22,7 +22,7 @@
     <div class="page-header">
         <h1 class="mb-0"><i class="fas fa-calendar-check"></i> Booking #{{ $booking->id }}</h1>
         <div class="d-flex align-items-center gap-2">
-            <x-status-badge :status="$booking->booking_status" domain="booking" class="fs-6" />
+            <x-status-badge :status="$booking->display_status" domain="booking" class="fs-6" />
             @if($booking->verified_at)
                 <span class="badge bg-success">Verified</span>
             @endif

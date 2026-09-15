@@ -82,7 +82,7 @@
                         <td class="text-end">₱{{ number_format($estimatedTotal, 2) }}</td>
                         <td>
                             @if($reservation->status === \App\Models\Reservation::STATUS_CONVERTED && $reservation->booking)
-                                <x-status-badge :status="$reservation->booking->booking_status" domain="booking" />
+                                <x-status-badge :status="$reservation->booking->display_status" domain="booking" />
                             @else
                                 <x-status-badge :status="$reservation->status" domain="reservation" />
                             @endif

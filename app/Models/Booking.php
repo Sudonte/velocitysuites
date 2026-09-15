@@ -70,6 +70,18 @@ class Booking extends Model
     ];
 
     /**
+     * display_status always appended (unlike this model's other computed
+     * accessors, which callers opt into manually) so every JSON response
+     * this Booking appears in - Api\BookingController and Api\
+     * ReservationController's nested reservation->booking alike - carries
+     * the corrected status a client should actually render, without each
+     * mobile screen needing its own booking_status+verified_at check.
+     */
+    protected $appends = [
+        'display_status',
+    ];
+
+    /**
      * Get the reservation associated with the booking - null for a
      * "New Booking" mobile-app transaction, which is created directly and
      * never derived from a Reservation (see Services\DirectBookingService).
@@ -214,6 +226,24 @@ class Booking extends Model
         $payment = $this->latestGcashPayment();
 
         return $payment !== null && ! $payment->isVerified();
+    }
+
+    /**
+     * booking_status alone reads as "Confirmed" (x-status-badge's
+     * ACTIVE_BOOKING label) even while a GCash booking is still sitting
+     * unverified in the Bookings module's "For Verification" tab -
+     * booking_status only ever flips at check-in/check-out, never at
+     * verification. Every guest/staff-facing status badge should read
+     * this instead of booking_status directly, so a guest whose GCash
+     * payment hasn't been reviewed yet isn't told their booking is done.
+     */
+    public function getDisplayStatusAttribute(): string
+    {
+        if ($this->booking_status === self::STATUS_ACTIVE && $this->verified_at === null) {
+            return 'AWAITING_VERIFICATION';
+        }
+
+        return $this->booking_status;
     }
 
     /**

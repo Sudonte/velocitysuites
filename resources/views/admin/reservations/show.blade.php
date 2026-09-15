@@ -16,7 +16,7 @@
         <div>
             @if($reservation->booking)
                 <span class="badge bg-primary fs-6"><i class="fas fa-credit-card"></i> Booking</span>
-                <x-status-badge :status="$reservation->booking->booking_status" domain="booking" class="fs-6" />
+                <x-status-badge :status="$reservation->booking->display_status" domain="booking" class="fs-6" />
             @else
                 <span class="badge bg-secondary fs-6"><i class="fas fa-calendar-alt"></i> Reservation</span>
                 <x-status-badge :status="$reservation->status" domain="reservation" class="fs-6" />
@@ -39,7 +39,7 @@
                     <div class="col-md-4"><strong>Status:</strong></div>
                     <div class="col-md-8">
                         @if($reservation->booking)
-                            <x-status-badge :status="$reservation->booking->booking_status" domain="booking" />
+                            <x-status-badge :status="$reservation->booking->display_status" domain="booking" />
                         @else
                             <x-status-badge :status="$reservation->status" domain="reservation" />
                         @endif
@@ -96,7 +96,7 @@
                     <div class="row mb-0">
                         <div class="col-md-4"><strong>Booking Status:</strong></div>
                         <div class="col-md-8">
-                            <x-status-badge :status="$reservation->booking->booking_status" domain="booking" />
+                            <x-status-badge :status="$reservation->booking->display_status" domain="booking" />
                         </div>
                     </div>
                 </x-card>

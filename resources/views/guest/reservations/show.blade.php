@@ -9,7 +9,7 @@
             <i class="fas fa-receipt"></i> Reservation #{{ $reservation->id }}
         </h1>
         @if($reservation->status === \App\Models\Reservation::STATUS_CONVERTED && $reservation->booking)
-            <x-status-badge :status="$reservation->booking->booking_status" domain="booking" class="fs-6" />
+            <x-status-badge :status="$reservation->booking->display_status" domain="booking" class="fs-6" />
         @else
             <x-status-badge :status="$reservation->status" domain="reservation" class="fs-6" />
         @endif
