@@ -1583,3 +1583,101 @@ tbody tr:hover {
 .amenity-selected-row:last-child {
     border-bottom: none;
 }
+
+/* Notifications list (resources/views/notifications/index.blade.php and
+   its manager equivalent) - previously entirely unstyled, so the icon/
+   body/actions markup just stacked block-by-block and "Mark Read" ended
+   up on its own line under the message instead of beside it. Laid out as
+   a row: icon, then the flexible body, then actions pinned to the right -
+   actions stack vertically (not wrap) so a notification with more than
+   one action (View Details/View Transaction) still reads as one tidy
+   column instead of wrapping awkwardly next to the message. */
+.notification-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 1rem;
+    padding: 1rem 0;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.notification-item:last-child {
+    border-bottom: none;
+}
+
+.notification-item.is-unread {
+    background-color: rgba(193, 18, 31, 0.04);
+}
+
+.notification-icon {
+    flex-shrink: 0;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: rgba(193, 18, 31, 0.08);
+    color: var(--primary-color);
+    font-size: 1rem;
+}
+
+.notification-body {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.notification-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.35rem 1rem;
+}
+
+.notification-title {
+    margin-bottom: 0;
+}
+
+.notification-time {
+    color: var(--text-light);
+    font-size: 0.8rem;
+    white-space: nowrap;
+}
+
+.notification-message {
+    margin: 0.35rem 0 0.5rem;
+}
+
+.notification-category-tag {
+    display: inline-block;
+    font-size: 0.75rem;
+    color: var(--text-light);
+    background-color: rgba(0, 0, 0, 0.04);
+    border-radius: var(--radius-btn, 8px);
+    padding: 0.15rem 0.55rem;
+}
+
+.notification-actions {
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.4rem;
+}
+
+@media (max-width: 576px) {
+    /* Narrow enough that a side column would cramp the message - fall
+       back to stacking, with actions left-aligned under the body instead
+       of centered under the icon. */
+    .notification-item {
+        flex-wrap: wrap;
+    }
+
+    .notification-actions {
+        flex-direction: row;
+        align-items: center;
+        flex-wrap: wrap;
+        width: 100%;
+        padding-left: calc(40px + 1rem);
+    }
+}
