@@ -329,6 +329,16 @@ class ReservationController extends Controller
             'reference_number.unique' => 'This GCash reference number has already been used.',
         ]);
 
+        // Same guard as Api\PaymentController::store() - without it, a
+        // double-click/double-tab/retry-after-slow-response here creates a
+        // second live GCash payment row for this reservation, with nothing
+        // ever superseding the first. Cancel/void the existing attempt
+        // first (Guest\PaymentController::cancel()/void()).
+        $paymentStageForDupeCheck = $validated['payment_type'] === 'full' ? 'final' : 'deposit';
+        if ($reservation->payments()->where('payment_stage', $paymentStageForDupeCheck)->where('payment_status', 'pending')->exists()) {
+            return back()->withInput()->with('error', 'A payment for this reservation is already awaiting verification. Cancel or void it before submitting another.');
+        }
+
         if ($validated['payment_type'] === 'full') {
             if (abs((float) $validated['gcash_amount'] - $range['total']) > 0.01) {
                 return back()->withInput()->with('error', "Full payment must equal the total amount due (₱{$range['total']}).");

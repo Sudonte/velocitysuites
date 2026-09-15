@@ -103,13 +103,17 @@ class AmenityRequestController extends Controller
             ], 422);
         }
 
-        // Same stock ceiling ReservationAmenityService::validateSelection()
-        // enforces at booking time - a post-booking top-up request must not
-        // be able to ask for more than the amenity's own configured stock
-        // either.
-        if ($validated['quantity'] > $liveAmenity->quantity) {
+        // Same shared-pool ceiling ReservationAmenityService::validateSelection()
+        // and Receptionist\ReceptionistController::amenitiesStore() enforce -
+        // the amenity's actual remaining stock right now (catalog quantity
+        // minus every other non-rejected, not-yet-checked-out request
+        // against it, hotel-wide), not just its raw configured quantity.
+        // Without this, a post-booking top-up request could take stock
+        // that's already committed to another guest's overlapping stay.
+        $remaining = Amenity::remainingStockFor([$liveAmenity->id])[$liveAmenity->id] ?? 0;
+        if ($validated['quantity'] > $remaining) {
             return response()->json([
-                'message' => "\"{$liveAmenity->amenity_name}\" only has {$liveAmenity->quantity} available - please lower the quantity.",
+                'message' => "\"{$liveAmenity->amenity_name}\" only has {$remaining} left - please lower the quantity.",
             ], 422);
         }
 

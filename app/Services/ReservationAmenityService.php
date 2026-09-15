@@ -24,16 +24,23 @@ class ReservationAmenityService
      * the whole submission is rejected rather than silently dropping
      * items - this is real backend enforcement of "guests cannot select
      * inactive/free amenities as paid add-ons", not just a UI filter.
-     * Also enforces the amenity's own configured stock (`amenities.quantity`)
-     * as a hard per-selection ceiling - the Android app already caps the
-     * quantity stepper at this same value client-side
-     * (AddOnAmenity#getMaxQuantity()), but nothing previously stopped a
-     * direct API call from requesting more than exists.
+     * Also enforces the amenity's actual remaining stock right now
+     * (Amenity::remainingStockFor() - the catalog's configured quantity
+     * minus every other non-rejected, not-yet-checked-out request against
+     * it, hotel-wide) as a hard per-selection ceiling, not just the
+     * catalog's total configured quantity - the same shared pool
+     * Receptionist\ReceptionistController::remainingAmenityStock()
+     * already enforces on its own side. Previously this only checked the
+     * raw catalog total, so two guests could each independently request
+     * the full stock of a limited shared amenity (e.g. 3 of 3 extra beds)
+     * for overlapping stays and both would pass, unaware of each other.
      * Returns the resolved [Amenity, quantity] pairs, ready to snapshot.
      */
     public function validateSelection(array $items): Collection
     {
         $resolved = collect();
+        $amenityIds = collect($items)->pluck('amenity_id')->filter()->unique();
+        $remainingStock = Amenity::remainingStockFor($amenityIds);
 
         foreach ($items as $item) {
             $amenity = Amenity::where('status', 'active')
@@ -47,10 +54,11 @@ class ReservationAmenityService
             }
 
             $quantity = (int) $item['quantity'];
+            $remaining = $remainingStock[$amenity->id] ?? 0;
 
-            if ($quantity > $amenity->quantity) {
+            if ($quantity > $remaining) {
                 throw ValidationException::withMessages([
-                    'amenities' => "\"{$amenity->amenity_name}\" only has {$amenity->quantity} available - please lower the quantity.",
+                    'amenities' => "\"{$amenity->amenity_name}\" only has {$remaining} left - please lower the quantity.",
                 ]);
             }
 

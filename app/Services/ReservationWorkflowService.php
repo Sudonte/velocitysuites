@@ -191,8 +191,12 @@ class ReservationWorkflowService
         DB::transaction(function () use ($reservation, $reason, $staff) {
             $reservation->update(['status' => Reservation::STATUS_REJECTED, 'rejection_reason' => $reason]);
 
+            // Not stage-filtered: a Pay-Now-Full GCash submission is
+            // payment_stage 'final', not 'deposit' - filtering to deposit
+            // only left a full-payment submission's Payment row stuck at
+            // 'pending' forever once its reservation was rejected, with no
+            // other code path that would ever touch it again.
             $reservation->payments()
-                ->where('payment_stage', 'deposit')
                 ->where('payment_status', 'pending')
                 ->get()
                 ->each(fn ($payment) => $payment->update([
@@ -241,8 +245,8 @@ class ReservationWorkflowService
         DB::transaction(function () use ($reservation, $reason) {
             $reservation->update(['status' => Reservation::STATUS_REJECTED, 'rejection_reason' => $reason]);
 
+            // Not stage-filtered - see reject()'s identical comment above.
             $reservation->payments()
-                ->where('payment_stage', 'deposit')
                 ->where('payment_status', 'pending')
                 ->update(['payment_status' => 'failed']);
 
@@ -299,8 +303,8 @@ class ReservationWorkflowService
         DB::transaction(function () use ($reservation, $reason) {
             $reservation->update(['status' => Reservation::STATUS_CANCELLED, 'rejection_reason' => $reason]);
 
+            // Not stage-filtered - see reject()'s identical comment above.
             $reservation->payments()
-                ->where('payment_stage', 'deposit')
                 ->where('payment_status', 'pending')
                 ->update(['payment_status' => 'failed']);
 
@@ -403,8 +407,13 @@ class ReservationWorkflowService
         $booking = DB::transaction(function () use ($reservation, $staff) {
             $booking = $this->createBookingFromReservation($reservation);
 
+            // Not stage-filtered: a Pay-Now-Full GCash reservation that
+            // missed tryAutoConvert()'s auto-conversion window (e.g. the
+            // room type was momentarily fully booked) has its payment at
+            // payment_stage 'final', not 'deposit' - a receptionist
+            // manually converting it here needs that payment completed
+            // too, not left stuck at 'pending'.
             $reservation->payments()
-                ->where('payment_stage', 'deposit')
                 ->where('payment_status', 'pending')
                 ->get()
                 ->each(fn ($payment) => $payment->update([
@@ -521,8 +530,8 @@ class ReservationWorkflowService
         DB::transaction(function () use ($reservation) {
             $reservation->update(['status' => Reservation::STATUS_CANCELLED]);
 
+            // Not stage-filtered - see reject()'s identical comment above.
             $reservation->payments()
-                ->where('payment_stage', 'deposit')
                 ->where('payment_status', 'pending')
                 ->update(['payment_status' => 'failed']);
         });

@@ -123,13 +123,24 @@ class Payment extends Model
     }
 
     /**
-     * True once a GCash payment has been recorded (payment_status
-     * 'completed') but not yet acted on by a receptionist (neither
-     * verified nor rejected).
+     * True while a guest-submitted GCash payment is still awaiting
+     * resolution and hasn't been acted on by a receptionist (neither
+     * verified nor rejected) - covers both the 'completed' case (a
+     * booking-stage payment sitting in a receptionist's review queue) AND
+     * the raw 'pending' case (a reservation-stage deposit/final GCash
+     * payment whose ReservationWorkflowService::tryAutoConvert() attempt
+     * never actually completed it - e.g. the room type was momentarily
+     * fully booked). Without 'pending' here, a guest whose auto-convert
+     * got skipped could never cancel/void the stuck submission themselves
+     * (Guest\PaymentController/Api\PaymentController's cancel()/void()),
+     * since it would never reach 'completed' on its own.
      */
     public function isPendingVerification(): bool
     {
-        return $this->payment_status === 'completed' && $this->verified_at === null && $this->rejected_at === null;
+        return $this->payment_method === 'gcash'
+            && in_array($this->payment_status, ['pending', 'completed'], true)
+            && $this->verified_at === null
+            && $this->rejected_at === null;
     }
 
     public function isVerified(): bool
