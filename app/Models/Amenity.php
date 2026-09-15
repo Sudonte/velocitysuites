@@ -97,4 +97,35 @@ class Amenity extends Model
 
         return 'fa-circle-check';
     }
+
+    /**
+     * How many of each amenity are actually still available right now:
+     * the catalog's own configured `quantity` (total supply) minus every
+     * request already made against it that wasn't rejected AND whose stay
+     * hasn't checked out yet (a rejected request never took stock; a
+     * checked-out stay has returned whatever it borrowed). Hotel-wide,
+     * shared across every guest and every booking/reservation, not
+     * scoped to one - the same reasoning room inventory already uses.
+     * Shared between Receptionist\ReceptionistController's own request
+     * flow and every guest-facing selection point (booking-time via
+     * ReservationAmenityService::validateSelection(), post-check-in
+     * top-ups via Api\AmenityRequestController) so none of them can
+     * approve more of a shared amenity than the hotel actually has.
+     */
+    public static function remainingStockFor(iterable $amenityIds): \Illuminate\Support\Collection
+    {
+        $requested = AmenityRequest::whereIn('amenity_id', $amenityIds)
+            ->where('status', '!=', 'rejected')
+            ->whereDoesntHave('booking', fn ($q) => $q->where('booking_status', Booking::STATUS_COMPLETED))
+            ->whereDoesntHave('reservation.booking', fn ($q) => $q->where('booking_status', Booking::STATUS_COMPLETED))
+            ->selectRaw('amenity_id, SUM(quantity) as used')
+            ->groupBy('amenity_id')
+            ->pluck('used', 'amenity_id');
+
+        return static::whereIn('id', $amenityIds)
+            ->get(['id', 'quantity'])
+            ->mapWithKeys(fn (self $amenity) => [
+                $amenity->id => max(0, (int) $amenity->quantity - (int) ($requested[$amenity->id] ?? 0)),
+            ]);
+    }
 }

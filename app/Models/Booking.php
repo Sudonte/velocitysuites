@@ -191,8 +191,35 @@ class Booking extends Model
         $nights = $this->check_in && $this->check_out
             ? max(1, abs($this->check_out->diffInDays($this->check_in)))
             : 1;
-        $roomTotal = (float) ($this->roomType->rate ?? 0) * $nights * max(1, $this->rooms_requested);
-        $amenityTotal = (float) AmenityRequest::where('booking_id', $this->id)
+        // Once rooms are actually assigned (at check-in), price off each
+        // room's own effective rate (rate_override, if any) summed - same
+        // math CheckOutController::generateBilling() uses - since it can
+        // differ from the room type's base rate. Before check-in, no rooms
+        // are assigned yet, so this is still just the room type's base
+        // rate times how many rooms were requested - the best estimate
+        // available pre-check-in.
+        $rooms = $this->rooms;
+        $roomTotal = $rooms->isNotEmpty()
+            ? $rooms->sum(fn (Room $room) => (float) $room->room_rate) * $nights
+            : (float) ($this->roomType->rate ?? 0) * $nights * max(1, $this->rooms_requested);
+
+        // Same reservation_id/booking_id branching CheckOutController::
+        // refreshStayCharges() uses - a reservation-derived booking's
+        // amenity requests are keyed by reservation_id, not booking_id
+        // (see ReceptionistController::amenitiesStore()), so querying
+        // booking_id alone silently returned 0 amenity charge for every
+        // Reserve-then-Convert booking, the normal path (only a direct
+        // "New Booking" transaction ever sets booking_id). Also matches
+        // that method's 'approved'-only filter - a rejected request never
+        // should have counted toward what's due.
+        $amenityTotal = (float) AmenityRequest::where(function ($q) {
+                if ($this->reservation_id) {
+                    $q->where('reservation_id', $this->reservation_id);
+                } else {
+                    $q->where('booking_id', $this->id);
+                }
+            })
+            ->where('status', 'approved')
             ->selectRaw('COALESCE(SUM(charge * quantity), 0) as total')
             ->value('total');
 

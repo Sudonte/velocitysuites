@@ -355,19 +355,7 @@ class ReceptionistController extends Controller
      */
     private function remainingAmenityStock(iterable $amenityIds): \Illuminate\Support\Collection
     {
-        $requested = AmenityRequest::whereIn('amenity_id', $amenityIds)
-            ->where('status', '!=', 'rejected')
-            ->whereDoesntHave('booking', fn ($q) => $q->where('booking_status', Booking::STATUS_COMPLETED))
-            ->whereDoesntHave('reservation.booking', fn ($q) => $q->where('booking_status', Booking::STATUS_COMPLETED))
-            ->selectRaw('amenity_id, SUM(quantity) as used')
-            ->groupBy('amenity_id')
-            ->pluck('used', 'amenity_id');
-
-        return Amenity::whereIn('id', $amenityIds)
-            ->get(['id', 'quantity'])
-            ->mapWithKeys(fn ($amenity) => [
-                $amenity->id => max(0, (int) $amenity->quantity - (int) ($requested[$amenity->id] ?? 0)),
-            ]);
+        return Amenity::remainingStockFor($amenityIds);
     }
 
     /**

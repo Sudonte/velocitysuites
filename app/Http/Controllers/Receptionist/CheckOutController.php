@@ -419,6 +419,17 @@ class CheckOutController extends Controller
      * the bill (see checkOutBilling()). room_charge/discount are
      * deliberately left alone - those are locked in at creation and only
      * change via applyDiscount() itself.
+     *
+     * Also re-parents any completed payment still missing a billing_id
+     * (Receptionist\BookingController::recordPayment() records a walk-in
+     * Cash payment directly against the reservation/booking, never
+     * against a Billing - previously only generateBilling()'s one-time
+     * creation ever did this re-parenting, so a payment recorded after
+     * the Billing already existed stayed permanently invisible to
+     * Billing::getBalanceAttribute(), understating the balance forever)
+     * and recomputes billing_status from the resulting total, so a
+     * mid-stay payment actually moves the bill from pending to
+     * partial/paid instead of only ever happening once at creation.
      */
     private function refreshStayCharges(Booking $booking, Billing $billing): void
     {
@@ -443,6 +454,28 @@ class CheckOutController extends Controller
             'amenity_charge' => round($amenityCharge, 2),
         ]);
         $billing->recalculateTotal();
+
+        // Reservation-derived: only a deposit-stage payment is still
+        // unparented (a final-stage one, if any, was already re-parented
+        // at conversion time). Direct booking: any stage, since there's no
+        // deposit concept for that transaction type.
+        if ($booking->reservation_id) {
+            $booking->reservation->payments()
+                ->where('payment_stage', 'deposit')
+                ->where('payment_status', 'completed')
+                ->whereNull('billing_id')
+                ->update(['billing_id' => $billing->id]);
+        } else {
+            $booking->payments()
+                ->where('payment_status', 'completed')
+                ->whereNull('billing_id')
+                ->update(['billing_id' => $billing->id]);
+        }
+
+        $paid = (float) $billing->payments()->where('payment_status', 'completed')->sum('amount_paid');
+        $billing->update([
+            'billing_status' => $paid <= 0 ? 'pending' : ($paid >= (float) $billing->total_amount ? 'paid' : 'partial'),
+        ]);
     }
 
     /**
@@ -454,7 +487,6 @@ class CheckOutController extends Controller
      */
     private function generateBilling(Booking $booking): Billing
     {
-        $reservation = $booking->reservation; // null for a direct "New Booking" transaction
         $nights = max(1, abs($booking->check_out->diffInDays($booking->check_in)));
 
         // A multi-room booking's rooms may each have their own rate
@@ -481,35 +513,11 @@ class CheckOutController extends Controller
         ]);
 
         // Fills in additional_guest_fee/amenity_charge and the resulting
-        // total - same calculation refreshStayCharges() re-runs on every
-        // later checkOutBilling() open, so there's exactly one place this
-        // math lives.
+        // total, re-parents any already-completed pre-checkout payment
+        // onto this billing, and sets billing_status accordingly - same
+        // logic refreshStayCharges() re-runs on every later
+        // checkOutBilling() open, so there's exactly one place this lives.
         $this->refreshStayCharges($booking, $billing);
-
-        // Re-parent any already-completed pre-checkout payment onto this
-        // billing so it counts toward the balance immediately. A
-        // reservation-derived booking's payment was a "deposit" stage
-        // (paid at reservation time); a direct booking's was already
-        // "final" stage (paid in full at booking time, see
-        // DirectBookingService::create()) - there's no deposit concept for
-        // that transaction type, so no stage filter is needed there.
-        if ($reservation) {
-            $reservation->payments()
-                ->where('payment_stage', 'deposit')
-                ->where('payment_status', 'completed')
-                ->whereNull('billing_id')
-                ->update(['billing_id' => $billing->id]);
-        } else {
-            $booking->payments()
-                ->where('payment_status', 'completed')
-                ->whereNull('billing_id')
-                ->update(['billing_id' => $billing->id]);
-        }
-
-        $paid = (float) $billing->payments()->where('payment_status', 'completed')->sum('amount_paid');
-        if ($paid > 0) {
-            $billing->update(['billing_status' => $paid >= (float) $billing->total_amount ? 'paid' : 'partial']);
-        }
 
         return $billing;
     }
