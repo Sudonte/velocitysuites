@@ -18,13 +18,12 @@
         </div>
     </div>
 
-    @php $tooEarly = \Illuminate\Support\Facades\Date::now()->startOfDay()->lt($booking->check_in->copy()->startOfDay()); @endphp
-    @if($tooEarly)
-        <div class="alert alert-warning mb-0">
-            <i class="fas fa-exclamation-triangle"></i>
-            This guest isn't scheduled to check in until {{ $booking->check_in->format('M d, Y') }}. Early check-in isn't allowed.
-        </div>
-    @elseif($assignableRooms->count() < $booking->rooms_requested)
+    {{-- Early check-in is allowed for now (temporarily relaxed per request -
+         previously blocked this whole form behind a "not scheduled yet"
+         warning when $booking->check_in was still in the future). Re-add
+         that date check here (and in CheckInController::store()) if this
+         needs to be restricted again later. --}}
+    @if($assignableRooms->count() < $booking->rooms_requested)
         <div class="alert alert-warning mb-0">
             <i class="fas fa-exclamation-triangle"></i>
             This booking needs {{ $booking->rooms_requested }} {{ $booking->roomType->name ?? '' }} room(s), but only {{ $assignableRooms->count() }} {{ $assignableRooms->count() === 1 ? 'is' : 'are' }} currently free for these dates.

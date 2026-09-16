@@ -240,14 +240,11 @@ class CheckInController extends Controller
             return response()->json(['message' => 'Only confirmed bookings can be checked in.'], 422);
         }
 
-        // Guest must not be checked in earlier than the scheduled check-in
-        // date - calendar-day comparison, since no specific "check-in hour"
-        // concept exists anywhere else in this app.
-        if (now()->startOfDay()->lt($booking->check_in->copy()->startOfDay())) {
-            return response()->json([
-                'message' => "This guest isn't scheduled to check in until {$booking->check_in->format('M d, Y')}. Early check-in isn't allowed.",
-            ], 422);
-        }
+        // Early check-in is allowed for now (temporarily relaxed per
+        // request - previously blocked a booking from being checked in
+        // before its scheduled check_in date). Re-add a calendar-day
+        // comparison against $booking->check_in here if this needs to be
+        // restricted again later.
 
         $validated = $request->validate([
             'guest_first_name' => 'required|string|max:100',
