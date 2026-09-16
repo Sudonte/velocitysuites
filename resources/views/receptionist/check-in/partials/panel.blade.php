@@ -138,7 +138,7 @@
 </div>
 <div class="modal-footer">
     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-    @if(!$tooEarly && $assignableRooms->count() >= $booking->rooms_requested)
+    @if($assignableRooms->count() >= $booking->rooms_requested)
         <button type="button" id="checkInNextBtn" class="btn btn-primary">
             Next: Assign Room <i class="fas fa-arrow-right"></i>
         </button>
