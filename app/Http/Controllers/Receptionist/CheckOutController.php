@@ -11,6 +11,7 @@ use App\Models\Discount;
 use App\Models\Payment;
 use App\Services\NotificationService;
 use App\Support\Activity;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -67,7 +68,7 @@ class CheckOutController extends Controller
         }
 
         $booking->load(['reservation.guest.user', 'guest.user', 'rooms']);
-        $billing = $booking->billing ?? $this->generateBilling($booking);
+        $billing = $booking->billing ?? $this->firstOrGenerateBilling($booking);
 
         // Recomputed on every open, not just once at generateBilling()'s
         // initial creation - an amenity added mid-stay (Receptionist\
@@ -476,6 +477,30 @@ class CheckOutController extends Controller
         $billing->update([
             'billing_status' => $paid <= 0 ? 'pending' : ($paid >= (float) $billing->total_amount ? 'paid' : 'partial'),
         ]);
+    }
+
+    /**
+     * A booking must only ever have one Billing (Booking::billing() is
+     * hasOne, and billings.booking_id is now DB-unique to guarantee it) -
+     * this closes the race checkOutBilling()'s own $booking->billing ??
+     * generateBilling($booking) can't close by itself: two concurrent
+     * checkout-panel opens for the same booking could both see billing()
+     * as null and both call generateBilling(). Whichever loses that race
+     * now hits the unique constraint instead of creating a duplicate row -
+     * caught here and treated as "someone else just created it", re-
+     * fetching and using that one instead of erroring out.
+     */
+    private function firstOrGenerateBilling(Booking $booking): Billing
+    {
+        try {
+            return $this->generateBilling($booking);
+        } catch (QueryException $e) {
+            if ((int) $e->getCode() !== 23000) {
+                throw $e;
+            }
+
+            return $booking->billing()->firstOrFail();
+        }
     }
 
     /**
