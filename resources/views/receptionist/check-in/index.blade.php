@@ -66,50 +66,67 @@
                 </tr>
             </thead>
             <tbody>
-                @forelse($bookings as $booking)
-                    <tr>
-                        <td>@unless($booking->viewed_at)<span class="unread-dot" title="New"></span>@endunless{{ $booking->guest_display_name }}</td>
-                        <td style="min-width: 200px;">
-                            @if($booking->rooms->isNotEmpty())
-                                {{ $booking->rooms->pluck('room_number')->implode(', ') }}
-                                ({{ $booking->roomType->name ?? '' }})
-                                @if($tab === 'checked_in')
-                                    <x-status-badge :status="$booking->rooms->first()->effective_status" domain="room" />
-                                @endif
-                            @elseif($tab === 'expected')
-                                <span class="text-muted small"><i class="fas fa-door-open"></i> Not yet assigned</span>
-                            @else
-                                <span class="text-muted">N/A</span>
-                            @endif
-                        </td>
-                        <td>
-                            {{ $booking->check_in->format('M d, Y') }}
-                            @if($tab === 'expected' && $booking->check_in->isAfter(today()))
-                                <span class="badge bg-info" title="Scheduled for a future date">Early</span>
-                            @endif
-                        </td>
-                        <td>{{ $booking->check_out->format('M d, Y') }}</td>
-                        <td>{{ $booking->number_of_guests }}</td>
-                        <td class="text-nowrap">
-                            @if($tab === 'expected')
-                                <button type="button" class="btn btn-sm btn-success btn-open-check-in" data-booking-id="{{ $booking->id }}">
-                                    <i class="fas fa-sign-in-alt"></i> Check In
-                                </button>
-                            @else
+                @if($tab === 'checked_in')
+                    {{-- One row per physical room (see CheckInController::index()) -
+                         $bookings here is actually a paginated Room collection.
+                         Multiple rows for the same multi-room booking still all
+                         open the one same booking-level Add Amenity/checkout
+                         flow, keyed by booking id, not room id. --}}
+                    @forelse($bookings as $room)
+                        @php $booking = $room->assignedBookings->first(); @endphp
+                        @continue(!$booking)
+                        <tr>
+                            <td>@unless($booking->viewed_at)<span class="unread-dot" title="New"></span>@endunless{{ $booking->guest_display_name }}</td>
+                            <td style="min-width: 200px;">
+                                {{ $room->room_number }} ({{ $booking->roomType->name ?? '' }})
+                                <x-status-badge :status="$room->effective_status" domain="room" />
+                            </td>
+                            <td>{{ $booking->check_in->format('M d, Y') }}</td>
+                            <td>{{ $booking->check_out->format('M d, Y') }}</td>
+                            <td>{{ $booking->number_of_guests }}</td>
+                            <td class="text-nowrap">
                                 <button type="button" class="btn btn-sm btn-outline-primary btn-open-amenity" data-bs-toggle="modal"
                                         data-bs-target="#amenityModal" data-booking-id="{{ $booking->id }}">
                                     <i class="fas fa-spa"></i> Add Amenity
                                 </button>
-                            @endif
-                        </td>
-                    </tr>
-                @empty
-                    <tr>
-                        <td colspan="6">
-                            <x-empty-state icon="fas fa-sign-in-alt" :message="$tab === 'expected' ? 'No expected check-ins.' : 'No checked-in guests.'" />
-                        </td>
-                    </tr>
-                @endforelse
+                            </td>
+                        </tr>
+                    @empty
+                        <tr>
+                            <td colspan="6">
+                                <x-empty-state icon="fas fa-sign-in-alt" message="No checked-in guests." />
+                            </td>
+                        </tr>
+                    @endforelse
+                @else
+                    @forelse($bookings as $booking)
+                        <tr>
+                            <td>@unless($booking->viewed_at)<span class="unread-dot" title="New"></span>@endunless{{ $booking->guest_display_name }}</td>
+                            <td style="min-width: 200px;">
+                                <span class="text-muted small"><i class="fas fa-door-open"></i> Not yet assigned</span>
+                            </td>
+                            <td>
+                                {{ $booking->check_in->format('M d, Y') }}
+                                @if($booking->check_in->isAfter(today()))
+                                    <span class="badge bg-info" title="Scheduled for a future date">Early</span>
+                                @endif
+                            </td>
+                            <td>{{ $booking->check_out->format('M d, Y') }}</td>
+                            <td>{{ $booking->number_of_guests }}</td>
+                            <td class="text-nowrap">
+                                <button type="button" class="btn btn-sm btn-success btn-open-check-in" data-booking-id="{{ $booking->id }}">
+                                    <i class="fas fa-sign-in-alt"></i> Check In
+                                </button>
+                            </td>
+                        </tr>
+                    @empty
+                        <tr>
+                            <td colspan="6">
+                                <x-empty-state icon="fas fa-sign-in-alt" message="No expected check-ins." />
+                            </td>
+                        </tr>
+                    @endforelse
+                @endif
             </tbody>
         </table>
         <x-slot:footer>

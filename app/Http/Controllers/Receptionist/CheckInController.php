@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Receptionist;
 
 use App\Http\Controllers\Controller;
 use App\Models\Booking;
+use App\Models\Room;
 use App\Models\RoomType;
 use App\Rules\ValidPhoneNumber;
 use App\Services\NotificationService;
@@ -63,6 +64,30 @@ class CheckInController extends Controller
             'all' => null,
         };
 
+        $expectedCount = Booking::where('booking_status', Booking::STATUS_ACTIVE)->whereNotNull('verified_at')->count();
+        $checkedInCount = Booking::where('booking_status', Booking::STATUS_CHECKED_IN)->count();
+
+        if ($tab === 'checked_in') {
+            // One row per physical room, not per booking - a multi-room
+            // booking previously showed as a single row with its room
+            // numbers concatenated ("302, 303"), making it hard to look a
+            // guest up by room number. A room can only ever have one
+            // CHECKED_IN booking assigned to it at a time
+            // (RoomAvailabilityService's occupancy rules), so each row's
+            // assignedBookings is exactly one booking - but check-out (and
+            // its Billing) always stays keyed to that shared Booking, never
+            // the individual room, so multiple rows for the same
+            // multi-room booking still point at the one same billing.
+            $bookings = Room::whereHas('assignedBookings', fn ($q) => $q->where('booking_status', Booking::STATUS_CHECKED_IN))
+                ->with(['assignedBookings' => fn ($q) => $q->where('booking_status', Booking::STATUS_CHECKED_IN)
+                    ->with(['reservation.guest.user', 'guest.user', 'roomType'])])
+                ->orderBy('room_number')
+                ->simplePaginate(15)
+                ->withQueryString();
+
+            return view('receptionist.check-in.index', compact('bookings', 'tab', 'range', 'expectedCount', 'checkedInCount'));
+        }
+
         // simplePaginate (Previous/Next only, no numbered page links, no
         // COUNT query) instead of paginate() - the numbered page-link
         // boxes were rendering broken/oversized here for reasons that
@@ -72,16 +97,13 @@ class CheckInController extends Controller
         // Bookings/Check-out since all three operate on this same Booking
         // row), then the existing date order.
         $bookings = Booking::with(['reservation.guest.user', 'guest.user', 'rooms', 'roomType'])
-            ->where('booking_status', $tab === 'expected' ? Booking::STATUS_ACTIVE : Booking::STATUS_CHECKED_IN)
-            ->when($tab === 'expected', fn ($q) => $q->whereNotNull('verified_at'))
-            ->when($tab === 'expected' && $rangeEnd, fn ($q) => $q->where('check_in', '<=', $rangeEnd))
+            ->where('booking_status', Booking::STATUS_ACTIVE)
+            ->whereNotNull('verified_at')
+            ->when($rangeEnd, fn ($q) => $q->where('check_in', '<=', $rangeEnd))
             ->orderByRaw('viewed_at IS NULL DESC')
-            ->orderBy($tab === 'expected' ? 'check_in' : 'check_out')
+            ->orderBy('check_in')
             ->simplePaginate(15)
             ->withQueryString();
-
-        $expectedCount = Booking::where('booking_status', Booking::STATUS_ACTIVE)->whereNotNull('verified_at')->count();
-        $checkedInCount = Booking::where('booking_status', Booking::STATUS_CHECKED_IN)->count();
 
         return view('receptionist.check-in.index', compact('bookings', 'tab', 'range', 'expectedCount', 'checkedInCount'));
     }
