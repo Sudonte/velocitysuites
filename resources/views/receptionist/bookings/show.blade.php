@@ -17,9 +17,11 @@
 
     @php
         $gcashPayment = $booking->latestGcashPayment();
+        $nights = $booking->number_of_nights;
     @endphp
 
-    <div class="page-header">
+    <!-- ===================== BOOKING DETAILS header ===================== -->
+    <div class="page-header d-flex flex-wrap align-items-center justify-content-between gap-2">
         <h1 class="mb-0"><i class="fas fa-calendar-check"></i> Booking #{{ $booking->id }}</h1>
         <div class="d-flex align-items-center gap-2">
             <x-status-badge :status="$booking->display_status" domain="booking" class="fs-6" />
@@ -32,67 +34,141 @@
         </div>
     </div>
 
-    <div class="row">
+    @if($siblings)
+        <div class="alert alert-info d-flex align-items-center gap-2 mt-3 mb-0">
+            <i class="fas fa-layer-group"></i>
+            <span>
+                This transaction includes <strong>{{ $siblings->count() }} room types/bookings</strong>
+                (#{{ $siblings->pluck('id')->join(', #') }}) detected as booked together by the same guest, for the
+                same dates, around the same time. Totals below reflect the complete transaction.
+            </span>
+        </div>
+    @endif
+
+    <div class="row mt-3">
         <div class="col-lg-8">
-            <x-card title="Guest Information" bodyClass="card-body" class="mb-4">
-                <p class="mb-1"><strong>Account Holder:</strong> {{ $booking->account_guest_full_name ?? 'N/A' }}</p>
-                <p class="mb-1">
-                    <strong>Representative Name:</strong>
-                    {{ $booking->guest_display_name }}
-                </p>
-                <p class="mb-1"><strong>Email:</strong> {{ $booking->account_guest?->user?->email ?? 'N/A' }}</p>
-                <p class="mb-0"><strong>Phone:</strong> {{ $booking->account_guest?->mobile_number ?: 'Not provided' }}</p>
+            <!-- ===================== GUEST INFORMATION ===================== -->
+            <x-card title="Guest Information" icon="fas fa-user" bodyClass="card-body" class="mb-4">
+                <dl class="detail-list mb-0">
+                    <div><dt>Account Holder</dt><dd>{{ $booking->account_guest_full_name ?? 'N/A' }}</dd></div>
+                    <div><dt>Representative Name</dt><dd>{{ $booking->guest_display_name }}</dd></div>
+                    <div><dt>Email</dt><dd>{{ $booking->account_guest?->user?->email ?? 'N/A' }}</dd></div>
+                    <div><dt>Mobile Number</dt><dd>{{ $booking->account_guest?->mobile_number ?: 'Not provided' }}</dd></div>
+                    <div><dt>Adults</dt><dd>{{ $booking->adults }}</dd></div>
+                    <div><dt>Children</dt><dd>{{ $booking->children }}</dd></div>
+                    <div><dt>Total Guests</dt><dd>{{ $booking->number_of_guests }}</dd></div>
+                </dl>
             </x-card>
 
-            <x-card title="Booking Information" bodyClass="card-body" class="mb-4">
-                <div class="d-flex align-items-start gap-3">
-                    @if($booking->roomType)
-                        <img src="{{ $booking->roomType->image_url }}" alt="{{ $booking->roomType->name }}"
-                             class="rounded" style="width: 72px; height: 72px; object-fit: cover; flex-shrink: 0;">
-                    @endif
-                    <div class="flex-grow-1">
-                        <div class="row">
-                            <div class="col-md-6">
-                                <p class="mb-1">
-                                    <strong>Room Type Requested:</strong> {{ $booking->roomType->name ?? 'N/A' }}
-                                    @if($booking->rooms_requested > 1)
-                                        <span class="badge bg-secondary">&times;{{ $booking->rooms_requested }} rooms</span>
-                                    @endif
-                                </p>
-                            </div>
-                            <div class="col-md-6">
-                                <p class="mb-1"><strong>Check-In:</strong> {{ $booking->check_in->format('F d, Y') }}</p>
-                                <p class="mb-1"><strong>Check-Out:</strong> {{ $booking->check_out->format('F d, Y') }}</p>
-                            </div>
+            <!-- ===================== STAY INFORMATION ===================== -->
+            <x-card title="Stay Information" icon="fas fa-calendar-days" bodyClass="card-body" class="mb-4">
+                <dl class="detail-list mb-0">
+                    <div><dt>Check-In</dt><dd>{{ $booking->check_in->format('F d, Y') }}</dd></div>
+                    <div><dt>Check-Out</dt><dd>{{ $booking->check_out->format('F d, Y') }}</dd></div>
+                    <div><dt>Nights</dt><dd>{{ $nights }}</dd></div>
+                    <div><dt>Booking / Creation Date</dt><dd>{{ $booking->created_at?->format('F d, Y') ?? 'N/A' }}</dd></div>
+                    <div><dt>Creation Time</dt><dd>{{ $booking->created_at?->format('h:i A') ?? 'N/A' }}</dd></div>
+                </dl>
+            </x-card>
+
+            <!-- ===================== ROOM INFORMATION ===================== -->
+            <x-card title="Room Information" icon="fas fa-bed" bodyClass="card-body" class="mb-4">
+                @foreach($roomLines as $line)
+                    @php
+                        $lineRoomType = \App\Models\RoomType::find($line['room_type_id'] ?? null);
+                        $assigned = $line['assigned_room_numbers'] ?? [];
+                    @endphp
+                    <div class="d-flex align-items-start gap-3 {{ !$loop->last ? 'pb-3 mb-3 border-bottom' : '' }}">
+                        @if($lineRoomType)
+                            <img src="{{ $lineRoomType->image_url }}" alt="{{ $line['room_type'] }}"
+                                 class="rounded" style="width: 80px; height: 80px; object-fit: cover; flex-shrink: 0;">
+                        @endif
+                        <div class="flex-grow-1">
+                            <h6 class="mb-2">
+                                {{ $line['room_type'] }}
+                                <span class="badge bg-secondary">&times;{{ $line['quantity'] }}</span>
+                            </h6>
+                            <dl class="detail-list mb-0">
+                                <div><dt>Price / Room / Night</dt><dd>₱{{ number_format($line['price_per_night'], 2) }}</dd></div>
+                                <div><dt>Quantity</dt><dd>{{ $line['quantity'] }}</dd></div>
+                                <div><dt>Assigned Room Numbers</dt>
+                                    <dd>
+                                        @if(count($assigned))
+                                            {{ implode(', ', $assigned) }}
+                                        @else
+                                            <span class="text-muted">Not yet assigned</span>
+                                        @endif
+                                    </dd>
+                                </div>
+                                <div><dt>Room Subtotal ({{ $line['nights'] }} night{{ $line['nights'] == 1 ? '' : 's' }})</dt>
+                                    <dd class="fw-bold">₱{{ number_format($line['subtotal'], 2) }}</dd>
+                                </div>
+                            </dl>
                         </div>
-                        <p class="mb-1"><strong>Guests:</strong> {{ $booking->adults }} adult{{ $booking->adults == 1 ? '' : 's' }}@if($booking->children > 0), {{ $booking->children }} child{{ $booking->children == 1 ? '' : 'ren' }}@endif</p>
-                        <p class="mb-1"><strong>Total Amount:</strong> ₱{{ number_format($totalDue, 2) }}</p>
-                        <p class="mb-0"><strong>Confirmed:</strong> {{ $booking->confirmed_at?->format('M d, Y h:i A') }}</p>
                     </div>
+                @endforeach
+                <div class="d-flex justify-content-between align-items-center pt-2 mt-1 border-top">
+                    <span class="fw-bold">Room Total</span>
+                    <span class="fw-bold text-brand">₱{{ number_format($roomTotal, 2) }}</span>
                 </div>
             </x-card>
 
+            <!-- ===================== AMENITIES ===================== -->
+            <x-card title="Amenities" icon="fas fa-spa" bodyClass="card-body" class="mb-4">
+                @if($amenityRows->isEmpty())
+                    <x-empty-state icon="fas fa-spa" message="No amenities selected for this booking." />
+                @else
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover mb-2">
+                            <thead>
+                                <tr>
+                                    <th>Amenity</th>
+                                    <th>Quantity</th>
+                                    <th>Price</th>
+                                    <th>Subtotal</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach($amenityRows as $row)
+                                    <tr>
+                                        <td>{{ $row->amenity_name }}</td>
+                                        <td>{{ $row->quantity }}</td>
+                                        <td>₱{{ number_format($row->charge, 2) }}</td>
+                                        <td>₱{{ number_format($row->charge * $row->quantity, 2) }}</td>
+                                        <td><x-status-badge :status="$row->status" domain="amenity_request" /></td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center pt-2 border-top">
+                        <span class="fw-bold">Amenities Total</span>
+                        <span class="fw-bold text-brand">₱{{ number_format($amenitiesTotal, 2) }}</span>
+                    </div>
+                @endif
+            </x-card>
+
             @if($gcashPayment)
-                <x-card title="GCash Payment Verification" icon="fas fa-qrcode" bodyClass="card-body" class="mb-4">
+                <!-- ===================== GCASH PAYMENT INFORMATION ===================== -->
+                <x-card title="GCash Payment Information" icon="fas fa-qrcode" bodyClass="card-body" class="mb-4">
                     <div class="row">
                         <div class="col-md-6">
-                            <p class="mb-1"><strong>Registered GCash Number:</strong></p>
-                            <p class="mb-3">{{ $gcashPayment->gcash_number ?: 'Not provided' }}</p>
-
-                            <p class="mb-1"><strong>Reference Number:</strong></p>
-                            <p class="mb-3">{{ $gcashPayment->reference_number ?: 'Not provided' }}</p>
-
-                            <p class="mb-1"><strong>Amount Paid:</strong></p>
-                            <p class="mb-3">₱{{ number_format($gcashPayment->amount_paid, 2) }}</p>
-
-                            <p class="mb-1"><strong>Payment Date &amp; Time:</strong></p>
-                            <p class="mb-0">{{ $gcashPayment->payment_date?->format('M d, Y h:i A') ?? 'Not recorded' }}</p>
+                            <dl class="detail-list mb-0">
+                                <div><dt>GCash Mobile Number</dt><dd>{{ $gcashPayment->gcash_number ?: 'Not provided' }}</dd></div>
+                                <div><dt>GCash Reference Number</dt><dd>{{ $gcashPayment->reference_number ?: 'Not provided' }}</dd></div>
+                                <div><dt>Payment Percentage</dt>
+                                    <dd>{{ $booking->selected_payment_percentage ? (int) $booking->selected_payment_percentage . '%' : 'N/A' }}</dd>
+                                </div>
+                                <div><dt>Submitted Amount</dt><dd>₱{{ number_format($gcashPayment->amount_paid, 2) }}</dd></div>
+                                <div><dt>Payment Date &amp; Time</dt><dd>{{ $gcashPayment->payment_date?->format('M d, Y h:i A') ?? 'Not recorded' }}</dd></div>
+                            </dl>
                         </div>
                         <div class="col-md-6">
-                            <p class="mb-1"><strong>Uploaded Receipt:</strong></p>
+                            <p class="mb-1"><strong>Receipt / Proof of Payment:</strong></p>
                             @if($gcashPayment->receipt_path)
                                 <a href="{{ $gcashPayment->receipt_url }}" target="_blank" rel="noopener">
-                                    <img src="{{ $gcashPayment->receipt_url }}" alt="GCash Payment Receipt" class="img-thumbnail" style="max-height: 240px;">
+                                    <img src="{{ $gcashPayment->receipt_url }}" alt="GCash Payment Receipt" class="img-thumbnail" style="max-height: 220px;">
                                     <small class="d-block text-muted mt-1"><i class="fas fa-expand"></i> Click to open full size</small>
                                 </a>
                             @else
@@ -155,21 +231,32 @@
                 </x-card>
             @endif
 
-            <x-card title="Payment & Balance" icon="fas fa-wallet" bodyClass="card-body" class="mb-4">
-                <div class="row text-center mb-3">
-                    <div class="col-4">
-                        <p class="text-muted small mb-1">Total Amount</p>
-                        <p class="fw-bold mb-0">₱{{ number_format($totalDue, 2) }}</p>
+            <!-- ===================== PAYMENT SUMMARY ===================== -->
+            <x-card title="Payment Summary" icon="fas fa-wallet" bodyClass="card-body" class="mb-4">
+                <dl class="detail-list mb-3">
+                    <div><dt>Room Total</dt><dd>₱{{ number_format($roomTotal, 2) }}</dd></div>
+                    <div><dt>Amenities Total</dt><dd>₱{{ number_format($amenitiesTotal, 2) }}</dd></div>
+                    <div><dt>Grand Total</dt><dd class="fw-bold text-brand">₱{{ number_format($totalDue, 2) }}</dd></div>
+                    <div><dt>Payment Method</dt><dd>{{ $gcashPayment ? 'GCash' : 'Cash' }}</dd></div>
+                    <div><dt>Payment Percentage</dt>
+                        <dd>{{ $booking->selected_payment_percentage ? (int) $booking->selected_payment_percentage . '%' : 'N/A' }}</dd>
                     </div>
-                    <div class="col-4">
-                        <p class="text-muted small mb-1">Amount Paid</p>
-                        <p class="fw-bold mb-0 text-success">₱{{ number_format($amountPaid, 2) }}</p>
+                    <div><dt>Amount Paid</dt><dd class="text-success">₱{{ number_format($amountPaid, 2) }}</dd></div>
+                    <div><dt>Remaining Balance</dt>
+                        <dd class="{{ $remainingBalance > 0.009 ? 'text-danger' : 'text-success' }}">₱{{ number_format($remainingBalance, 2) }}</dd>
                     </div>
-                    <div class="col-4">
-                        <p class="text-muted small mb-1">Remaining Balance</p>
-                        <p class="fw-bold mb-0 {{ $remainingBalance > 0.009 ? 'text-danger' : 'text-success' }}">₱{{ number_format($remainingBalance, 2) }}</p>
+                    <div><dt>Payment Status</dt>
+                        <dd>
+                            @if($remainingBalance <= 0.009)
+                                <span class="badge bg-success">Fully Paid</span>
+                            @elseif($amountPaid > 0)
+                                <span class="badge bg-warning text-dark">Partially Paid</span>
+                            @else
+                                <span class="badge bg-secondary">Unpaid</span>
+                            @endif
+                        </dd>
                     </div>
-                </div>
+                </dl>
 
                 @if($booking->payment_method === 'cash' && in_array($booking->booking_status, [\App\Models\Booking::STATUS_ACTIVE, \App\Models\Booking::STATUS_CHECKED_IN]) && $remainingBalance > 0.009)
                     <hr>
@@ -198,13 +285,43 @@
             </x-card>
 
             @if($booking->billing)
-                <x-card title="Billing" bodyClass="card-body">
-                    <p class="mb-1"><strong>Status:</strong> <x-status-badge :status="$booking->billing->billing_status" domain="billing" /></p>
-                    <p class="mb-1"><strong>Total Amount:</strong> ₱{{ number_format($booking->billing->total_amount, 2) }}</p>
-                    <p class="mb-0"><strong>Balance:</strong> ₱{{ number_format($booking->billing->balance, 2) }}</p>
+                <x-card title="Billing" icon="fas fa-file-invoice-dollar" bodyClass="card-body" class="mb-4">
+                    <dl class="detail-list mb-0">
+                        <div><dt>Status</dt><dd><x-status-badge :status="$booking->billing->billing_status" domain="billing" /></dd></div>
+                        <div><dt>Total Amount</dt><dd>₱{{ number_format($booking->billing->total_amount, 2) }}</dd></div>
+                        <div><dt>Balance</dt><dd>₱{{ number_format($booking->billing->balance, 2) }}</dd></div>
+                    </dl>
                 </x-card>
             @endif
 
+            <!-- ===================== SPECIAL REQUESTS ===================== -->
+            <x-card title="Special Requests" icon="fas fa-comment-dots" bodyClass="card-body" class="mb-4">
+                <x-empty-state icon="fas fa-comment-dots" message="No special requests on file for this booking." />
+            </x-card>
+
+            <!-- ===================== TRANSACTION / STATUS HISTORY ===================== -->
+            @if($history->isNotEmpty())
+                <x-card title="Transaction / Status History" icon="fas fa-clock-rotate-left" bodyClass="card-body" class="mb-4">
+                    <ul class="list-unstyled mb-0">
+                        @foreach($history as $entry)
+                            <li class="pb-3 mb-3 border-bottom">
+                                <div class="d-flex justify-content-between">
+                                    <strong>{{ $entry->action }}</strong>
+                                    <small class="text-muted">{{ $entry->created_at?->format('M d, Y h:i A') }}</small>
+                                </div>
+                                @if($entry->description)
+                                    <div class="text-muted small">{{ $entry->description }}</div>
+                                @endif
+                                @if($entry->user)
+                                    <div class="text-muted small">by {{ $entry->user->full_name ?? $entry->user->email }}</div>
+                                @endif
+                            </li>
+                        @endforeach
+                    </ul>
+                </x-card>
+            @endif
+
+            <!-- ===================== AUTHORIZED RECEPTIONIST ACTIONS ===================== -->
             @if($booking->booking_status === \App\Models\Booking::STATUS_CANCELLED)
                 <x-card title="Booking Rejected / Failed" icon="fas fa-ban" bodyClass="card-body">
                     <p class="mb-3">
@@ -319,8 +436,8 @@
                 </div>
                 <ul class="list-unstyled mb-0 monitoring-summary-list">
                     <li>
-                        <span class="text-muted">Room Type</span>
-                        <span>{{ $booking->roomType->name ?? 'N/A' }}</span>
+                        <span class="text-muted">Room Type(s)</span>
+                        <span>{{ collect($roomLines)->pluck('room_type')->join(', ') }}</span>
                     </li>
                     <li>
                         <span class="text-muted">Stay</span>
@@ -328,7 +445,11 @@
                     </li>
                     <li>
                         <span class="text-muted">Nights</span>
-                        <span>{{ $booking->number_of_nights }}</span>
+                        <span>{{ $nights }}</span>
+                    </li>
+                    <li>
+                        <span class="text-muted">Grand Total</span>
+                        <span class="fw-bold">₱{{ number_format($totalDue, 2) }}</span>
                     </li>
                     <li>
                         <span class="text-muted">Payment Method</span>
@@ -391,6 +512,3 @@
 @endif
 
 @endsection
-
-
-

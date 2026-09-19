@@ -78,6 +78,20 @@ class PaymentController extends Controller
             // deliberately not the same 5120 (5MB) cap other image uploads
             // (id card, profile picture) in this app use.
             'receipt' => 'required_if:payment_method,gcash|image|mimes:jpeg,png,jpg|max:51200',
+            // The exact tier (20/30/40/50/100) the guest picked on the
+            // mobile payment screen - the Android client already sends this
+            // (PaymentRequest#selected_payment_percentage/
+            // ApiService#submitGcashPayment()'s own doc), but until now
+            // nothing here validated or persisted it, so
+            // reservations.selected_payment_percentage/required_payment_amount
+            // stayed null for every real submission - every screen that
+            // reads it back (Booking Details, Payment Receipt, Billing
+            // Summary) silently hid that row. Purely a display label - the
+            // actual money is independently, strictly validated below
+            // against $range/full-total regardless of what's sent here, so
+            // accepting any of the 5 known values (rather than cross-checking
+            // it against payment_type) can't be used to under/overpay.
+            'selected_payment_percentage' => 'nullable|numeric|in:20,30,40,50,100',
         ], [
             'reference_number.unique' => 'This GCash reference number has already been used.',
         ]);
@@ -126,6 +140,19 @@ class PaymentController extends Controller
         } else {
             $payment = $this->workflow->recordCashIntent($reservation, (float) $validated['amount_paid'], $paymentStage);
         }
+
+        // Persist the percentage/amount for this submission onto the
+        // reservation - overwritten on every new submission (never
+        // accumulated), matching the guest-facing contract that these two
+        // fields always reflect the most recent payment attempt, not a
+        // running history (see Android's renderStoredPaymentPercentageIfPresent()
+        // doc: the read-only lock only applies while that latest submission
+        // is still pending verification; once verified/rejected, a further
+        // submission's own values simply replace these again).
+        $reservation->update([
+            'selected_payment_percentage' => $validated['selected_payment_percentage'] ?? null,
+            'required_payment_amount' => (float) $validated['amount_paid'],
+        ]);
 
         $user = auth()->user();
         $reservation->refresh()->loadMissing(['roomType', 'booking']);

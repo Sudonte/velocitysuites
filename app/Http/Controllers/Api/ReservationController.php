@@ -3,15 +3,18 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Booking;
 use App\Models\Reservation;
 use App\Models\RoomType;
 use App\Services\NotificationService;
 use App\Services\ReservationAmenityService;
 use App\Services\ReservationWorkflowService;
+use App\Services\TransactionArchiveService;
 use App\Support\Activity;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 
 class ReservationController extends Controller
@@ -19,12 +22,18 @@ class ReservationController extends Controller
     protected NotificationService $notificationService;
     protected ReservationWorkflowService $workflow;
     protected ReservationAmenityService $amenityService;
+    protected TransactionArchiveService $archiveService;
 
-    public function __construct(NotificationService $notificationService, ReservationWorkflowService $workflow, ReservationAmenityService $amenityService)
-    {
+    public function __construct(
+        NotificationService $notificationService,
+        ReservationWorkflowService $workflow,
+        ReservationAmenityService $amenityService,
+        TransactionArchiveService $archiveService
+    ) {
         $this->notificationService = $notificationService;
         $this->workflow = $workflow;
         $this->amenityService = $amenityService;
+        $this->archiveService = $archiveService;
     }
 
     /**
@@ -102,16 +111,20 @@ class ReservationController extends Controller
     public function store(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'room_type_id' => 'required|exists:room_types,id',
+            // Multi-room-type shape (preferred - see MULTI_ROOM_TRANSACTION_BACKEND_SPEC.md).
+            // 'rooms' array present -> authoritative, and the legacy
+            // room_type_id/rooms_requested pair below is ignored even if
+            // also sent. 'rooms' absent -> falls back to the legacy pair
+            // (backward compatible with any in-flight app version still
+            // sending the old single-room shape - and with the web form,
+            // which already sends rooms_requested for multiple rooms of the
+            // SAME type, distinct from this array's multiple DIFFERENT types).
+            'rooms' => 'nullable|array|min:1',
+            'rooms.*.room_type_id' => 'required_with:rooms|exists:room_types,id',
+            'rooms.*.quantity' => 'required_with:rooms|integer|min:1|max:50',
+            'room_type_id' => 'required_without:rooms|exists:room_types,id',
             'check_in' => 'required|date|after:today',
             'check_out' => 'required|date|after:check_in',
-            // Forward-compat only: the web form already lets a guest request
-            // multiple rooms of the same type in one reservation (see
-            // Guest\ReservationController@store); the Android app doesn't
-            // send this yet (achieves the same guest-facing outcome today by
-            // submitting one reservation per room instead), but the API
-            // already accepts and stores it correctly so a future app update
-            // can adopt the single-call shape without another backend change.
             'rooms_requested' => 'nullable|integer|min:1|max:50',
             'adults' => 'required|integer|min:1',
             'children' => 'nullable|integer|min:0',
@@ -135,8 +148,23 @@ class ReservationController extends Controller
             'amenities' => 'nullable|array',
             'amenities.*.amenity_id' => 'required_with:amenities|integer',
             'amenities.*.quantity' => 'required_with:amenities|integer|min:1',
+            // One per Confirm-button tap (never per room/line) - lets a
+            // double-tap or client/network retry of the same submission
+            // attempt safely return the original reservation instead of
+            // creating a duplicate. See MULTI_ROOM_TRANSACTION_BACKEND_SPEC.md
+            // section 9b. Optional - an older app version that never sends
+            // one simply gets no idempotency protection, same as today.
+            'idempotency_key' => 'nullable|string|max:100',
         ]);
         $children = $validated['children'] ?? 0;
+
+        if (! empty($validated['idempotency_key'])) {
+            $existing = Reservation::where('idempotency_key', $validated['idempotency_key'])->first();
+            if ($existing) {
+                $existing->load(['roomType', 'booking.room', 'bookingAmenities']);
+                return response()->json($existing, 201);
+            }
+        }
 
         // Validated before creating anything, so an invalid amenity
         // selection rejects the whole submission (422) rather than
@@ -146,30 +174,53 @@ class ReservationController extends Controller
         $user = auth()->user();
         $guest = $user->guest;
 
-        $roomType = RoomType::findOrFail($validated['room_type_id']);
+        $checkIn = \Carbon\Carbon::parse($validated['check_in']);
+        $checkOut = \Carbon\Carbon::parse($validated['check_out']);
 
-        if ($roomType->status !== 'active') {
-            return response()->json(['message' => 'This room type is not currently offered.'], 422);
-        }
+        // Normalize either request shape into one array of
+        // ['room_type' => RoomType, 'quantity' => int] lines - everything
+        // below this point is shape-agnostic. Never empty - see
+        // DirectBookingService's identical convention on the Booking side.
+        $rawLines = $validated['rooms'] ?? [
+            ['room_type_id' => $validated['room_type_id'], 'quantity' => $validated['rooms_requested'] ?? 1],
+        ];
+        $roomLines = collect($rawLines)->map(fn (array $line) => [
+            'room_type' => RoomType::findOrFail($line['room_type_id']),
+            'quantity' => (int) $line['quantity'],
+        ]);
 
-        if (! $roomType->rooms()->where('status', '!=', 'maintenance')->exists()) {
-            return response()->json(['message' => 'No rooms of this type are currently in service.'], 422);
-        }
+        foreach ($roomLines as $line) {
+            /** @var RoomType $roomType */
+            $roomType = $line['room_type'];
 
-        // The Android app now sends rooms_requested in a single call per
-        // room type (no more sequential single-room requests for one
-        // multi-room stay - see the rooms_requested validation above), so
-        // this can safely apply the same guard Guest\ReservationController
-        // ::store() already uses, reaching parity between the two entry
-        // points.
-        if ($this->workflow->hasOverlappingReservation($guest, $roomType, \Carbon\Carbon::parse($validated['check_in']), \Carbon\Carbon::parse($validated['check_out']))) {
-            return response()->json([
-                'message' => "You already have a {$roomType->name} reservation that overlaps these dates. Check My Reservations to modify or cancel it instead of submitting a duplicate.",
-            ], 422);
+            if ($roomType->status !== 'active') {
+                return response()->json(['message' => "{$roomType->name} is not currently offered."], 422);
+            }
+
+            if (! $roomType->rooms()->where('status', '!=', 'maintenance')->exists()) {
+                return response()->json(['message' => "No {$roomType->name} rooms are currently in service."], 422);
+            }
+
+            // The Android app now sends every room type in a single call
+            // (no more sequential single-room-type requests for one
+            // multi-room-type stay), so this can safely apply the same
+            // guard Guest\ReservationController::store() already uses, per
+            // room type in the request - reaching parity between the two
+            // entry points for every line, not just the first.
+            if ($this->workflow->hasOverlappingReservation($guest, $roomType, $checkIn, $checkOut)) {
+                return response()->json([
+                    'message' => "You already have a {$roomType->name} reservation that overlaps these dates. Check My Reservations to modify or cancel it instead of submitting a duplicate.",
+                ], 422);
+            }
         }
 
         $idCardType = $validated['id_card_type'] ?? 'None';
         $discountRequested = $idCardType !== 'None';
+
+        /** @var RoomType $firstRoomType */
+        $firstRoomType = $roomLines->first()['room_type'];
+        $totalRoomsRequested = (int) $roomLines->sum('quantity');
+        $nights = max(1, abs($checkOut->diffInDays($checkIn)));
 
         // Plain Reserve - no payment, no Booking row (payment goes through
         // PaymentController against this reservation once created).
@@ -180,33 +231,96 @@ class ReservationController extends Controller
         // *type* the guest picked is informational only, same as the
         // website's checkbox - only a receptionist can apply a specific
         // Discount, after verifying the uploaded ID.
-        $reservation = Reservation::create([
-            'guest_id' => $guest->id,
-            'guest_first_name' => $validated['guest_first_name'],
-            'guest_middle_name' => $validated['guest_middle_name'] ?? null,
-            'guest_last_name' => $validated['guest_last_name'],
-            'room_type_id' => $roomType->id,
-            'rooms_requested' => $validated['rooms_requested'] ?? 1,
-            'check_in' => $validated['check_in'],
-            'check_out' => $validated['check_out'],
-            'adults' => $validated['adults'],
-            'children' => $children,
-            'number_of_guests' => $validated['adults'] + $children,
-            'status' => $validated['payment_method'] === 'gcash' ? Reservation::STATUS_AWAITING_GCASH : Reservation::STATUS_AWAITING_CASH,
-            'payment_method' => $validated['payment_method'],
-            'discount_requested' => $discountRequested,
-            'discount_verification_status' => $discountRequested ? 'pending' : 'not_requested',
-            'id_card_type' => $discountRequested ? $idCardType : null,
-            'additional_guest_details' => $validated['additional_guests'] ?? null,
-        ]);
+        //
+        // room_type_id/rooms_requested on the parent row are kept in sync
+        // from the FIRST line's type and the SUM of every line's quantity,
+        // purely for backward-compatible display - identical convention to
+        // Api\ReservationController::update()'s already-patched multi-room
+        // path and DirectBookingService::create()'s Booking-side equivalent.
+        try {
+            $reservation = DB::transaction(function () use (
+                $guest, $validated, $roomLines, $firstRoomType, $totalRoomsRequested,
+                $checkIn, $checkOut, $children, $discountRequested, $idCardType, $nights
+            ) {
+                $reservation = Reservation::create([
+                    'guest_id' => $guest->id,
+                    'guest_first_name' => $validated['guest_first_name'],
+                    'guest_middle_name' => $validated['guest_middle_name'] ?? null,
+                    'guest_last_name' => $validated['guest_last_name'],
+                    'room_type_id' => $firstRoomType->id,
+                    'rooms_requested' => $totalRoomsRequested,
+                    'check_in' => $checkIn,
+                    'check_out' => $checkOut,
+                    'adults' => $validated['adults'],
+                    'children' => $children,
+                    'number_of_guests' => $validated['adults'] + $children,
+                    'status' => $validated['payment_method'] === 'gcash' ? Reservation::STATUS_AWAITING_GCASH : Reservation::STATUS_AWAITING_CASH,
+                    'payment_method' => $validated['payment_method'],
+                    'discount_requested' => $discountRequested,
+                    'discount_verification_status' => $discountRequested ? 'pending' : 'not_requested',
+                    'id_card_type' => $discountRequested ? $idCardType : null,
+                    'additional_guest_details' => $validated['additional_guests'] ?? null,
+                    'idempotency_key' => $validated['idempotency_key'] ?? null,
+                ]);
+
+                foreach ($roomLines as $line) {
+                    /** @var RoomType $roomType */
+                    $roomType = $line['room_type'];
+                    $quantity = $line['quantity'];
+
+                    \App\Models\ReservationRoomLine::create([
+                        'reservation_id' => $reservation->id,
+                        'room_type_id' => $roomType->id,
+                        'room_type_name' => $roomType->name,
+                        'quantity' => $quantity,
+                        'price_per_night' => $roomType->rate,
+                        'number_of_nights' => $nights,
+                        'subtotal' => round((float) $roomType->rate * $nights * $quantity, 2),
+                    ]);
+                }
+
+                return $reservation;
+            });
+        } catch (\Illuminate\Database\UniqueConstraintViolationException $e) {
+            // Lost a genuine race: another request with the SAME
+            // idempotency_key committed its own Reservation (+ room_lines)
+            // microseconds before this one - the initial "already exists?"
+            // check above ran on both requests before either had committed,
+            // so neither saw the other. The DB::transaction() above has
+            // already rolled back everything from THIS attempt (idempotency_key
+            // is set at the very first insert inside that transaction,
+            // specifically so this failure happens before any child row is
+            // created). Only treat this as "the winner's row, return it"
+            // when the failure is actually on idempotency_key - any other
+            // unique violation is a genuine, different error.
+            if (! empty($validated['idempotency_key']) && str_contains($e->getMessage(), 'idempotency_key')) {
+                $winner = Reservation::where('idempotency_key', $validated['idempotency_key'])->first();
+                if ($winner) {
+                    $winner->load(['roomType', 'booking.room', 'bookingAmenities']);
+                    return response()->json($winner, 201);
+                }
+            }
+            Log::error('Reservation creation failed on an unexpected unique constraint violation', [
+                'idempotency_key' => $validated['idempotency_key'] ?? null,
+                'error' => $e->getMessage(),
+            ]);
+            return response()->json(['message' => 'This reservation could not be created. Please try again.'], 500);
+        }
 
         $this->amenityService->snapshot($reservation, $resolvedAmenities);
 
-        $this->notificationService->notifyNewBooking($user, $roomType->name, $reservation->id);
+        // "Deluxe x2, Suite x1" for a multi-room-type transaction, or just
+        // "Deluxe" for the common single-line case (no "x1" suffix, matching
+        // the pre-multi-room-type notification/activity text exactly).
+        $roomSummary = $roomLines->map(
+            fn (array $line) => $line['quantity'] > 1 ? "{$line['room_type']->name} x{$line['quantity']}" : $line['room_type']->name
+        )->join(', ');
+
+        $this->notificationService->notifyNewBooking($user, $roomSummary, $reservation->id);
 
         Activity::log(
             'Submitted reservation request (mobile)',
-            "Reservation #{$reservation->id} for {$roomType->name} ({$reservation->check_in} to {$reservation->check_out})",
+            "Reservation #{$reservation->id} for {$roomSummary} ({$reservation->check_in} to {$reservation->check_out})",
             $reservation
         );
 
@@ -234,11 +348,40 @@ class ReservationController extends Controller
             return response()->json(['message' => 'Can only modify a reservation that is still awaiting review.'], 422);
         }
 
+        // Server-side one-time-edit lock - mirrors payment_method_locked_at's
+        // own pattern. The Android app's own LocalTransactionState.hasModifiedOnce()
+        // gate is per-device SharedPreferences only and must never be trusted
+        // as the sole enforcement - this column is the actual, unbypassable
+        // source of truth.
+        if ($reservation->edited_at !== null) {
+            return response()->json(['message' => 'This reservation has already been modified and cannot be edited again.'], 422);
+        }
+
+        // A present-but-zero legacy room_type_id/rooms_requested means "no
+        // change requested" (an older Android build may still send 0 here) -
+        // treat it as genuinely absent so `nullable` skips exists()/min:1
+        // instead of rejecting the whole Modify over a meaningless 0.
+        if ((int) $request->input('room_type_id', 0) === 0) {
+            $request->request->remove('room_type_id');
+        }
+        if ((int) $request->input('rooms_requested', 0) === 0) {
+            $request->request->remove('rooms_requested');
+        }
+
         $validated = $request->validate([
             'check_in' => 'required|date|after:today',
             'check_out' => 'required|date|after:check_in',
             'adults' => 'required|integer|min:1',
             'children' => 'nullable|integer|min:0',
+            // Multi-room-type shape (preferred - mirrors store()'s shape
+            // exactly). 'rooms' present -> authoritative, fully REPLACES
+            // every ReservationRoomLine on this reservation (add, remove, or
+            // change quantities of any room type in one call).
+            'rooms' => 'nullable|array|min:1',
+            'rooms.*.room_type_id' => 'required_with:rooms|exists:room_types,id',
+            'rooms.*.quantity' => 'required_with:rooms|integer|min:1|max:50',
+            // Legacy single-room-type shape - still accepted for backward
+            // compatibility with an older app build.
             'room_type_id' => 'nullable|exists:room_types,id',
             'rooms_requested' => 'nullable|integer|min:1|max:50',
             'id_card_type' => 'nullable|in:None,Senior Citizen,PWD',
@@ -247,6 +390,14 @@ class ReservationController extends Controller
             'additional_guests.*.age' => 'required_with:additional_guests|integer|min:0',
             'additional_guests.*.gender' => 'nullable|string|max:30',
             'additional_guests.*.relationship' => 'nullable|string|max:50',
+            // Fully REPLACES the reservation's current amenity selection
+            // when sent. Omitted entirely (key absent) means "keep current
+            // amenities unchanged" - an empty array [] is a deliberate
+            // "remove all amenities" and is honored (array_key_exists()
+            // below distinguishes "key absent" from "key present but empty").
+            'amenities' => 'nullable|array',
+            'amenities.*.amenity_id' => 'required_with:amenities|integer',
+            'amenities.*.quantity' => 'required_with:amenities|integer|min:1',
         ]);
         $children = $validated['children'] ?? 0;
 
@@ -256,18 +407,71 @@ class ReservationController extends Controller
             'adults' => $validated['adults'],
             'children' => $children,
             'number_of_guests' => $validated['adults'] + $children,
+            // Set atomically with every other field in this one save - the
+            // edit is considered "used" the moment this update succeeds,
+            // never a separate call.
+            'edited_at' => now(),
         ];
 
-        if (! empty($validated['room_type_id'])) {
-            $roomType = RoomType::findOrFail($validated['room_type_id']);
-            if ($roomType->status !== 'active') {
-                return response()->json(['message' => 'This room type is not currently offered.'], 422);
+        // Multi-room-type replacement - `rooms` or the legacy single
+        // room_type_id/rooms_requested pair. Sending neither key leaves the
+        // reservation's existing room selection completely untouched.
+        $roomLinesInput = null;
+        if (! empty($validated['rooms'])) {
+            $roomLinesInput = $validated['rooms'];
+        } elseif (! empty($validated['room_type_id'])) {
+            $roomLinesInput = [
+                ['room_type_id' => $validated['room_type_id'], 'quantity' => $validated['rooms_requested'] ?? 1],
+            ];
+        }
+
+        $roomLines = null;
+        $checkIn = \Carbon\Carbon::parse($validated['check_in']);
+        $checkOut = \Carbon\Carbon::parse($validated['check_out']);
+        $guest = $reservation->guest;
+
+        if ($roomLinesInput !== null) {
+            $roomLines = collect($roomLinesInput)->map(fn (array $line) => [
+                'room_type' => RoomType::findOrFail($line['room_type_id']),
+                'quantity' => (int) $line['quantity'],
+            ]);
+
+            foreach ($roomLines as $line) {
+                /** @var RoomType $roomType */
+                $roomType = $line['room_type'];
+
+                if ($roomType->status !== 'active') {
+                    return response()->json(['message' => "{$roomType->name} is not currently offered."], 422);
+                }
+                if (! $roomType->rooms()->where('status', '!=', 'maintenance')->exists()) {
+                    return response()->json(['message' => "No {$roomType->name} rooms are currently in service."], 422);
+                }
+                // Excludes this reservation itself (see
+                // ReservationWorkflowService::hasOverlappingReservation()'s
+                // $excludeReservationId param) - editing a reservation's own
+                // dates/room selection must never conflict with its own
+                // prior selection.
+                if ($guest && $this->workflow->hasOverlappingReservation($guest, $roomType, $checkIn, $checkOut, $reservation->id)) {
+                    return response()->json([
+                        'message' => "You already have a {$roomType->name} reservation that overlaps these dates.",
+                    ], 422);
+                }
             }
-            if (! $roomType->rooms()->where('status', '!=', 'maintenance')->exists()) {
-                return response()->json(['message' => 'No rooms of this type are currently in service.'], 422);
-            }
-            $updates['room_type_id'] = $roomType->id;
-            $updates['rooms_requested'] = $validated['rooms_requested'] ?? 1;
+
+            // room_type_id/rooms_requested kept in sync from the FIRST
+            // selection and the SUM of every selection's quantity, purely
+            // for backward-compatible display - identical convention to
+            // store()'s own.
+            $updates['room_type_id'] = $roomLines->first()['room_type']->id;
+            $updates['rooms_requested'] = (int) $roomLines->sum('quantity');
+        }
+
+        // Amenities replacement - validated up front (before anything is
+        // written) so an invalid selection rejects the whole Modify rather
+        // than partially applying it.
+        $resolvedAmenities = null;
+        if (array_key_exists('amenities', $validated)) {
+            $resolvedAmenities = $this->amenityService->validateSelection($validated['amenities'] ?? []);
         }
 
         // Only touch the discount/ID fields if the guest actually changed the
@@ -290,7 +494,47 @@ class ReservationController extends Controller
         // every other reservation-lifecycle action in this controller.
         $before = "{$reservation->roomType->name} x{$reservation->rooms_requested}, {$reservation->check_in} to {$reservation->check_out}, {$reservation->adults} adult(s)/{$reservation->children} child(ren)";
 
-        $reservation->update($updates);
+        // Everything below - the reservation's own fields, its room lines,
+        // and its amenities - is one atomic unit: if any step fails (e.g.
+        // an amenity snapshot error), nothing partially applies.
+        DB::transaction(function () use ($reservation, $updates, $roomLines, $resolvedAmenities) {
+            $reservation->update($updates);
+
+            if ($roomLines !== null) {
+                $nights = max(1, abs($reservation->check_out->diffInDays($reservation->check_in)));
+                $reservation->roomLines()->delete();
+                foreach ($roomLines as $line) {
+                    /** @var RoomType $roomType */
+                    $roomType = $line['room_type'];
+                    $quantity = $line['quantity'];
+                    \App\Models\ReservationRoomLine::create([
+                        'reservation_id' => $reservation->id,
+                        'room_type_id' => $roomType->id,
+                        'room_type_name' => $roomType->name,
+                        'quantity' => $quantity,
+                        'price_per_night' => $roomType->rate,
+                        'number_of_nights' => $nights,
+                        'subtotal' => round((float) $roomType->rate * $nights * $quantity, 2),
+                    ]);
+                }
+            }
+
+            if ($resolvedAmenities !== null) {
+                // Fully replaces the prior selection - both the historical
+                // charge snapshot rows and their matching still-pending
+                // AmenityRequest rows (a checked-in guest's later, unrelated
+                // in-stay amenity requests never reach here, since a
+                // reservation being edited hasn't converted/checked in yet -
+                // every AmenityRequest tied to it at this point is one of
+                // these original creation-time rows).
+                $reservation->bookingAmenities()->delete();
+                \App\Models\AmenityRequest::where('reservation_id', $reservation->id)
+                    ->where('status', 'pending')
+                    ->delete();
+                $this->amenityService->snapshot($reservation, $resolvedAmenities);
+            }
+        });
+
         $reservation->refresh();
 
         $after = "{$reservation->roomType->name} x{$reservation->rooms_requested}, {$reservation->check_in} to {$reservation->check_out}, {$reservation->adults} adult(s)/{$reservation->children} child(ren)";
@@ -301,7 +545,7 @@ class ReservationController extends Controller
             $reservation
         );
 
-        return response()->json($reservation->fresh(['roomType', 'booking.room', 'payments']));
+        return response()->json($reservation->fresh(['roomType', 'booking.room', 'payments', 'roomLines', 'bookingAmenities']));
     }
 
     /**
@@ -422,6 +666,94 @@ class ReservationController extends Controller
         }
 
         return Storage::disk('local')->response($reservation->id_card_image_path);
+    }
+
+    /**
+     * Guest-initiated PERMANENT deletion of a Reservation - hard,
+     * non-recoverable, unlike hide() above (which only ever sets
+     * hidden_at and never touches a single child row). Handles both a
+     * reservation that never converted (eligibility keyed off the
+     * reservation's own status) and one that did (eligibility keyed off
+     * the resulting Booking's status instead, since "the operational
+     * status lives on Booking" once converted - reservation.status stays
+     * CONVERTED_TO_BOOKING forever and is never itself re-checked here).
+     * Confirmed against the live backend (2026-09-18) that
+     * Api\BookingController is exclusively a direct-booking controller -
+     * every reservation-derived transaction, converted or not, is
+     * deleted through this endpoint instead. See
+     * TRANSACTION_DELETE_BACKEND_SPEC.md's 2026-09-18 update for the full
+     * investigation and TransactionArchiveService for why payments/
+     * billing are archived rather than either hard-deleted blindly or
+     * left blocking the delete.
+     */
+    public function destroy(Reservation $reservation): JsonResponse
+    {
+        if ($reservation->guest_id !== auth()->user()->guest->id) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        $booking = $reservation->booking;
+
+        if ($booking) {
+            if (! in_array($booking->booking_status, [Booking::STATUS_COMPLETED, Booking::STATUS_CANCELLED], true)) {
+                return response()->json(['message' => 'This booking cannot be permanently deleted while it is still active.'], 409);
+            }
+        } elseif (! in_array($reservation->status, [Reservation::STATUS_CANCELLED, Reservation::STATUS_REJECTED], true)) {
+            return response()->json(['message' => 'This reservation cannot be permanently deleted while it is still active.'], 409);
+        }
+
+        $reservationId = $reservation->id;
+        $guestId = $reservation->guest_id;
+        $bookingId = $booking?->id;
+        $roomTypeName = optional($reservation->roomType)->name ?? 'room';
+
+        try {
+            DB::transaction(function () use ($reservation, $booking, $guestId, $reservationId) {
+                $this->archiveService->archiveAndPurgeFinancials($reservation, $booking, $guestId);
+
+                if ($booking && $booking->id_card_image_path) {
+                    Storage::disk('local')->delete($booking->id_card_image_path);
+                }
+                if ($reservation->id_card_image_path) {
+                    Storage::disk('local')->delete($reservation->id_card_image_path);
+                }
+
+                if ($booking) {
+                    // Safety check per TRANSACTION_DELETE_BACKEND_SPEC.md: never
+                    // delete a booking reached any way other than being this
+                    // exact reservation's own, exclusively-linked conversion.
+                    if ((int) $booking->reservation_id !== (int) $reservationId) {
+                        throw new \RuntimeException(
+                            "Booking {$booking->id} reservation_id ({$booking->reservation_id}) does not match reservation {$reservationId} during permanent delete - aborting."
+                        );
+                    }
+                    $booking->forceDelete();
+                }
+
+                $reservation->delete();
+            });
+        } catch (\Throwable $e) {
+            Log::error('Permanent reservation delete failed', [
+                'endpoint' => 'DELETE guest/reservations/{reservation}',
+                'reservation_id' => $reservationId,
+                'booking_id' => $bookingId,
+                'guest_id' => $guestId,
+                'reservation_status' => $reservation->status,
+                'booking_status' => $booking?->booking_status,
+                'exception' => get_class($e),
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json(['message' => 'This transaction could not be permanently deleted. Please try again or contact support.'], 500);
+        }
+
+        Activity::log(
+            'Permanently deleted reservation',
+            "Reservation #{$reservationId} for {$roomTypeName}",
+            null
+        );
+
+        return response()->json(['message' => 'Reservation permanently deleted.']);
     }
 }
 

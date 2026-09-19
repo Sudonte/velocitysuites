@@ -6,9 +6,12 @@ use App\Http\Controllers\Controller;
 use App\Models\Booking;
 use App\Models\Payment;
 use App\Models\RoomType;
+use App\Models\ActivityLog;
+use App\Models\AmenityRequest;
 use App\Services\NotificationService;
 use App\Services\ReservationWorkflowService;
 use App\Services\RoomAvailabilityService;
+use App\Services\TransactionGroupingService;
 use App\Support\Activity;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
@@ -39,6 +42,7 @@ class BookingController extends Controller
         private ReservationWorkflowService $workflow,
         private NotificationService $notifications,
         private RoomAvailabilityService $availability,
+        private TransactionGroupingService $grouping,
     ) {
     }
 
@@ -233,17 +237,65 @@ class BookingController extends Controller
             $booking->update(['viewed_at' => now()]);
         }
 
+        // Best-effort multi-room-type grouping - see TransactionGroupingService's
+        // own doc for why this is a heuristic (same guest/dates/creation
+        // window), not a real FK, for organic guest data. Null when this
+        // booking isn't part of any detected group (the common, single-room-
+        // type case) or has its own authoritative room_lines already.
+        $siblings = empty($booking->room_lines) ? $this->grouping->siblingsForBooking($booking) : null;
+        $transactionBookings = $siblings ?? collect([$booking]);
+        $roomLines = $this->grouping->roomLinesForBooking($booking, $siblings);
+
         // Authoritative Total/Paid/Remaining for the "Payment & Balance"
         // card below - same total_amount_due accessor the guest-facing API
-        // already exposes (Api\BookingController::index()/show()), so the
-        // receptionist and guest always see the identical figure, whether
-        // or not a Billing row exists yet (it doesn't until checkout - see
-        // CheckOutController::generateBilling()).
-        $totalDue = $booking->total_amount_due;
-        $amountPaid = (float) $booking->allPayments()->where('payment_status', 'completed')->sum('amount_paid');
+        // already exposes (Api\BookingController::index()/show()), summed
+        // across every sibling in the detected group (never just this one
+        // row) so the receptionist sees the complete transaction's true
+        // total, not one room type's own share of it.
+        $totalDue = round((float) $transactionBookings->sum(fn (Booking $b) => $b->total_amount_due), 2);
+        $amountPaid = (float) $transactionBookings->sum(
+            fn (Booking $b) => (float) $b->allPayments()->where('payment_status', 'completed')->sum('amount_paid')
+        );
         $remainingBalance = max(0, round($totalDue - $amountPaid, 2));
 
-        return view('receptionist.bookings.show', compact('booking', 'totalDue', 'amountPaid', 'remainingBalance'));
+        // Amenities: same query getTotalAmountDueAttribute() itself uses for
+        // money (reservation_id for a converted booking, booking_id for a
+        // direct one) - single source of truth, summed across every sibling
+        // in the group (amenities are only ever attached to one sibling at
+        // creation time, so this naturally picks up whichever one carries
+        // them without double-counting).
+        $amenityRows = collect();
+        foreach ($transactionBookings as $b) {
+            $amenityRows = $amenityRows->merge(
+                AmenityRequest::where(function ($q) use ($b) {
+                    if ($b->reservation_id) {
+                        $q->where('reservation_id', $b->reservation_id);
+                    } else {
+                        $q->where('booking_id', $b->id);
+                    }
+                })->get()
+            );
+        }
+        $amenitiesTotal = (float) $amenityRows->where('status', 'approved')->sum(fn ($r) => $r->charge * $r->quantity);
+        $roomTotal = round((float) collect($roomLines)->sum('subtotal'), 2);
+
+        // Transaction/status history - this booking's own entries, plus its
+        // founding reservation's (if converted), merged newest-first so the
+        // receptionist sees the whole lifecycle in one timeline.
+        $historySubjects = [['type' => 'booking', 'id' => $booking->id]];
+        if ($booking->reservation_id) {
+            $historySubjects[] = ['type' => 'reservation', 'id' => $booking->reservation_id];
+        }
+        $history = ActivityLog::where(function ($q) use ($historySubjects) {
+            foreach ($historySubjects as $s) {
+                $q->orWhere(fn ($qq) => $qq->where('subject_type', $s['type'])->where('subject_id', $s['id']));
+            }
+        })->with('user')->orderByDesc('created_at')->get();
+
+        return view('receptionist.bookings.show', compact(
+            'booking', 'totalDue', 'amountPaid', 'remainingBalance',
+            'siblings', 'roomLines', 'roomTotal', 'amenityRows', 'amenitiesTotal', 'history'
+        ));
     }
 
     /**

@@ -74,7 +74,20 @@ class RoomAvailabilityService
      */
     public function assignableRooms(Booking $booking): Collection
     {
-        return Room::where('room_type_id', $booking->room_type_id)
+        return $this->assignableRoomsOfType($booking->room_type_id, $booking);
+    }
+
+    /**
+     * Same as assignableRooms() above, but for an arbitrary room type
+     * rather than always $booking->room_type_id - the building block for a
+     * genuine multi-room-type booking's per-line assignment (see
+     * assignableRoomsByLine()/assignRoomsForLines() below), since a
+     * multi-room-type booking needs this same free/occupied query run once
+     * per distinct room type, not just its own (first-line) type.
+     */
+    public function assignableRoomsOfType(int $roomTypeId, Booking $booking): Collection
+    {
+        return Room::where('room_type_id', $roomTypeId)
             ->where('status', '!=', 'maintenance')
             ->whereDoesntHave('assignedBookings', function ($q) use ($booking) {
                 $q->whereIn('bookings.booking_status', [Booking::STATUS_ACTIVE, Booking::STATUS_CHECKED_IN])
@@ -83,6 +96,27 @@ class RoomAvailabilityService
             })
             ->orderBy('room_number')
             ->get();
+    }
+
+    /**
+     * Assignable rooms grouped by room_type_id, one entry per distinct room
+     * type the booking actually needs rooms for - real booking_room_lines
+     * when this is a genuine multi-room-type booking, or a single
+     * [room_type_id => rooms] entry keyed off the booking's own
+     * room_type_id for the legacy single-room-type case. Keys are strings
+     * (room_type_id) to match the shape the check-in panel's Blade view/JS
+     * naturally works with (form field names, not array indices).
+     */
+    public function assignableRoomsByLine(Booking $booking): Collection
+    {
+        $lines = $booking->roomLines()->get();
+        if ($lines->isEmpty()) {
+            return collect([(string) $booking->room_type_id => $this->assignableRoomsOfType($booking->room_type_id, $booking)]);
+        }
+
+        return $lines->mapWithKeys(
+            fn ($line) => [(string) $line->room_type_id => $this->assignableRoomsOfType($line->room_type_id, $booking)]
+        );
     }
 
     /**
@@ -110,6 +144,53 @@ class RoomAvailabilityService
         $booking->update(['room_id' => $rooms->first()->id]);
 
         return $rooms;
+    }
+
+    /**
+     * assignRooms()'s multi-room-type-aware counterpart - $roomIdsByType is
+     * ['<room_type_id>' => [room_id, room_id, ...]], one entry per line
+     * returned by assignableRoomsByLine(). Validates every line
+     * independently against ITS OWN type's assignable rooms (never a
+     * different line's rooms bleeding into another's pick), and that every
+     * line got exactly its own required quantity of distinct rooms. Syncs
+     * every picked room across every line onto the booking in one pivot
+     * write, and sets bookings.room_id to the very first line's first
+     * picked room (matches assignRooms()'s existing "first assigned room"
+     * convention for the many display-only call sites that only need "the
+     * room" as a reasonable simplification).
+     */
+    public function assignRoomsForLines(Booking $booking, array $roomIdsByType): Collection
+    {
+        $requiredByType = $booking->roomLines()->get()->isEmpty()
+            ? collect([(string) $booking->room_type_id => $booking->rooms_requested])
+            : $booking->roomLines()->get()->mapWithKeys(fn ($line) => [(string) $line->room_type_id => $line->quantity]);
+
+        $allRooms = collect();
+
+        foreach ($requiredByType as $roomTypeId => $requiredQuantity) {
+            $picked = collect($roomIdsByType[$roomTypeId] ?? []);
+            if ($picked->count() !== (int) $requiredQuantity) {
+                $roomType = RoomType::find((int) $roomTypeId);
+                abort(422, "This booking needs exactly {$requiredQuantity} " . ($roomType->name ?? 'room')
+                    . ' room(s) assigned - selected ' . $picked->count() . '.');
+            }
+
+            $assignable = $this->assignableRoomsOfType((int) $roomTypeId, $booking)->keyBy('id');
+            $rooms = $picked->map(fn ($id) => $assignable->get((int) $id));
+
+            if ($rooms->contains(null)) {
+                $roomType = RoomType::find((int) $roomTypeId);
+                abort(422, 'One or more selected rooms are no longer available: they are not a free '
+                    . ($roomType->name ?? 'matching') . ' room for these dates. Please try again.');
+            }
+
+            $allRooms = $allRooms->merge($rooms);
+        }
+
+        $booking->rooms()->sync($allRooms->pluck('id'));
+        $booking->update(['room_id' => $allRooms->first()->id]);
+
+        return $allRooms;
     }
 
     /**

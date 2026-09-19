@@ -53,8 +53,19 @@ class ReservationWorkflowService
      */
     public function depositRange(RoomType $roomType, int $nights, int $roomsRequested = 1): array
     {
-        $total = (float) $roomType->rate * max(1, $nights) * max(1, $roomsRequested);
+        return $this->depositRangeForTotal((float) $roomType->rate * max(1, $nights) * max(1, $roomsRequested));
+    }
 
+    /**
+     * Same min/max/total shape as depositRange() above, from an
+     * already-computed total - the room-lines-aware entry point for a
+     * genuine multi-room-type reservation, where a single roomType/
+     * roomsRequested pair can't represent the real charge (see
+     * BookingService::quoteRoomCharge()'s identical room_lines-summing
+     * logic, which callers should use to compute $total for that case).
+     */
+    public function depositRangeForTotal(float $total): array
+    {
         return [
             'total' => round($total, 2),
             'min' => round($total * (float) config('hotel.minimum_payment_ratio', 0.20), 2),
@@ -164,8 +175,7 @@ class ReservationWorkflowService
             return;
         }
 
-        $available = $this->availability->availableCount($reservation->roomType, $reservation->check_in, $reservation->check_out);
-        if ($available < $reservation->rooms_requested) {
+        if ($this->firstUnavailableLine($reservation)) {
             return;
         }
 
@@ -173,6 +183,41 @@ class ReservationWorkflowService
             $this->createBookingFromReservation($reservation);
             $payment->update(['payment_status' => 'completed']);
         });
+    }
+
+    /**
+     * Checks availability per room-type line for a genuine multi-room-type
+     * reservation (real reservation_room_lines), or the single roomType/
+     * rooms_requested pair for a legacy single-room-type one - checking only
+     * $reservation->roomType/$reservation->rooms_requested (the FIRST
+     * line's type and the SUMMED quantity across every line) would
+     * incorrectly pass or fail conversion based on the wrong room type's
+     * inventory the moment more than one room type is involved. Returns
+     * null when everything requested is available, or
+     * ['name' => ..., 'quantity' => ..., 'available' => ...] for the first
+     * line found short, for a clear error message.
+     */
+    private function firstUnavailableLine(Reservation $reservation): ?array
+    {
+        $lines = $reservation->roomLines()->get();
+        if ($lines->isEmpty()) {
+            $available = $this->availability->availableCount($reservation->roomType, $reservation->check_in, $reservation->check_out);
+            if ($available < $reservation->rooms_requested) {
+                return ['name' => $reservation->roomType->name, 'quantity' => $reservation->rooms_requested, 'available' => $available];
+            }
+
+            return null;
+        }
+
+        foreach ($lines as $line) {
+            $roomType = RoomType::find($line->room_type_id);
+            $available = $this->availability->availableCount($roomType, $reservation->check_in, $reservation->check_out);
+            if ($available < $line->quantity) {
+                return ['name' => $line->room_type_name, 'quantity' => $line->quantity, 'available' => $available];
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -397,11 +442,10 @@ class ReservationWorkflowService
             abort(422, 'This reservation has not received a GCash payment submission yet.');
         }
 
-        $available = $this->availability->availableCount($reservation->roomType, $reservation->check_in, $reservation->check_out);
-        if ($available < $reservation->rooms_requested) {
-            abort(422, $reservation->rooms_requested > 1
-                ? "Not enough {$reservation->roomType->name} rooms available for the requested dates (needs {$reservation->rooms_requested}, only {$available} free)."
-                : "This room type is fully booked for the requested dates.");
+        if ($shortfall = $this->firstUnavailableLine($reservation)) {
+            abort(422, $shortfall['quantity'] > 1
+                ? "Not enough {$shortfall['name']} rooms available for the requested dates (needs {$shortfall['quantity']}, only {$shortfall['available']} free)."
+                : "{$shortfall['name']} is fully booked for the requested dates.");
         }
 
         $booking = DB::transaction(function () use ($reservation, $staff) {
@@ -496,6 +540,24 @@ class ReservationWorkflowService
             'discount_requested' => $reservation->discount_requested,
             'discount_verification_status' => $reservation->discount_verification_status,
         ]);
+
+        // Carry every itemized room-type line over to the new Booking - a
+        // genuine multi-room-type reservation (real reservation_room_lines,
+        // not the legacy single room_type_id/rooms_requested pair) must not
+        // lose its per-line breakdown at conversion, or Booking::
+        // getTotalAmountDueAttribute()/BookingService::ensureBilling() would
+        // silently fall back to pricing the whole booking at just the first
+        // line's rate x the summed quantity once room_lines is empty.
+        foreach ($reservation->roomLines()->get() as $line) {
+            $booking->roomLines()->create([
+                'room_type_id' => $line->room_type_id,
+                'room_type_name' => $line->room_type_name,
+                'quantity' => $line->quantity,
+                'price_per_night' => $line->price_per_night,
+                'number_of_nights' => $line->number_of_nights,
+                'subtotal' => $line->subtotal,
+            ]);
+        }
 
         $reservation->update(['status' => Reservation::STATUS_CONVERTED]);
 

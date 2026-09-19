@@ -54,6 +54,9 @@ class Booking extends Model
         'verified_by',
         'hidden_at',
         'viewed_at',
+        'selected_payment_percentage',
+        'required_payment_amount',
+        'idempotency_key',
     ];
 
     protected $casts = [
@@ -67,6 +70,14 @@ class Booking extends Model
         'deleted_at' => 'datetime',
         'discount_requested' => 'boolean',
         'additional_guest_details' => 'array',
+        // 'float', not 'decimal:2' - the mobile app's BookingRoomDto/
+        // DirectBookingResponseDto declare these as Java Double (a genuine
+        // JSON number), unlike every other money field on this model (which
+        // Android reads as String, matching Laravel's decimal:N cast, which
+        // deliberately serializes as a formatted string). A decimal cast here
+        // would break Gson deserialization the moment either field is non-null.
+        'selected_payment_percentage' => 'float',
+        'required_payment_amount' => 'float',
     ];
 
     /**
@@ -79,6 +90,7 @@ class Booking extends Model
      */
     protected $appends = [
         'display_status',
+        'room_lines',
     ];
 
     /**
@@ -169,6 +181,57 @@ class Booking extends Model
     }
 
     /**
+     * Itemized room-type lines for a genuinely multi-room-type transaction
+     * (quantity/price/subtotal per distinct room type) - see
+     * MULTI_ROOM_TRANSACTION_BACKEND_SPEC.md, which requested this exact
+     * shape under a `rooms` key. Deliberately named roomLines()/room_lines
+     * instead, NOT rooms()/rooms - that name is already the real, existing
+     * belongsToMany to the physical assigned Room units (booking_rooms
+     * pivot), read via plain property access (`$this->rooms`) by
+     * getTotalAmountDueAttribute() above expecting real Room models with a
+     * room_rate column; overriding it with an array-returning accessor
+     * would silently break that calculation.
+     */
+    public function roomLines()
+    {
+        return $this->hasMany(BookingRoomLine::class);
+    }
+
+    /**
+     * The `room_lines` JSON field the mobile app's ApiMapper/BookingRoomDto
+     * already expect (via Billing::getRoomLinesAttribute() for a converted
+     * transaction, or directly here for a genuinely direct Booking) - one
+     * entry per distinct room type, each carrying its own assigned physical
+     * room numbers (grouped from the real rooms() relation above by
+     * room_type_id, empty before check-in). Returns [] when this booking
+     * predates the multi-room-type feature (no booking_room_lines rows).
+     */
+    public function getRoomLinesAttribute(): array
+    {
+        $lines = $this->roomLines()->get();
+        if ($lines->isEmpty()) {
+            return [];
+        }
+
+        $assignedByType = $this->rooms->groupBy('room_type_id');
+
+        return $lines->map(function (BookingRoomLine $line) use ($assignedByType) {
+            $assignedNumbers = ($assignedByType->get($line->room_type_id) ?? collect())
+                ->pluck('room_number')->values()->all();
+
+            return [
+                'room_type_id' => (string) $line->room_type_id,
+                'room_type' => $line->room_type_name,
+                'quantity' => $line->quantity,
+                'price_per_night' => (float) $line->price_per_night,
+                'nights' => $line->number_of_nights,
+                'subtotal' => (float) $line->subtotal,
+                'assigned_room_numbers' => $assignedNumbers,
+            ];
+        })->values()->all();
+    }
+
+    /**
      * Calculate the number of nights.
      */
     public function getNumberOfNightsAttribute()
@@ -194,14 +257,23 @@ class Booking extends Model
         // Once rooms are actually assigned (at check-in), price off each
         // room's own effective rate (rate_override, if any) summed - same
         // math CheckOutController::generateBilling() uses - since it can
-        // differ from the room type's base rate. Before check-in, no rooms
-        // are assigned yet, so this is still just the room type's base
-        // rate times how many rooms were requested - the best estimate
-        // available pre-check-in.
+        // differ from the room type's base rate. Before check-in: for a
+        // genuine multi-room-type transaction (real booking_room_lines -
+        // see DirectBookingService::create()), sum each line's own frozen
+        // subtotal (own room type's own rate x own quantity) - using only
+        // roomType/rooms_requested here would silently price every line at
+        // the FIRST line's rate times the SUM of every line's quantity,
+        // both wrong the moment more than one room type is involved.
+        // Genuinely single-room-type bookings (no room_lines rows) keep the
+        // original plain calculation unchanged.
         $rooms = $this->rooms;
-        $roomTotal = $rooms->isNotEmpty()
-            ? $rooms->sum(fn (Room $room) => (float) $room->room_rate) * $nights
-            : (float) ($this->roomType->rate ?? 0) * $nights * max(1, $this->rooms_requested);
+        if ($rooms->isNotEmpty()) {
+            $roomTotal = $rooms->sum(fn (Room $room) => (float) $room->room_rate) * $nights;
+        } elseif (! empty($this->room_lines)) {
+            $roomTotal = collect($this->room_lines)->sum('subtotal');
+        } else {
+            $roomTotal = (float) ($this->roomType->rate ?? 0) * $nights * max(1, $this->rooms_requested);
+        }
 
         // Same reservation_id/booking_id branching CheckOutController::
         // refreshStayCharges() uses - a reservation-derived booking's

@@ -47,6 +47,10 @@ Route::middleware(['auth.api', 'role:guest'])->group(function () {
     Route::put('/guest/payments/{payment}/void', [PaymentController::class, 'void']);
     Route::post('/guest/reservations/{reservation}/id-card', [ReservationController::class, 'uploadIdCard']);
     Route::get('/guest/reservations/{reservation}/id-card', [ReservationController::class, 'showIdCard']);
+    // Permanent, non-recoverable deletion - see ReservationController::destroy()'s
+    // own docblock and TRANSACTION_DELETE_BACKEND_SPEC.md for the full contract.
+    // Handles a reservation whether or not it has since converted to a Booking.
+    Route::delete('/guest/reservations/{reservation}', [ReservationController::class, 'destroy']);
 
     // "New Booking" - a genuinely independent transaction, never derived
     // from a Reservation (see Services\DirectBookingService's docblock).
@@ -59,6 +63,10 @@ Route::middleware(['auth.api', 'role:guest'])->group(function () {
     Route::get('/guest/bookings/{booking}', [BookingController::class, 'show']);
     Route::put('/guest/bookings/{booking}/cancel', [BookingController::class, 'cancel']);
     Route::get('/guest/bookings/{booking}/id-card', [BookingController::class, 'showIdCard']);
+    // Permanent, non-recoverable deletion - direct bookings only (see
+    // BookingController::destroy()'s own docblock); a reservation-derived
+    // booking is deleted through DELETE guest/reservations/{reservation} instead.
+    Route::delete('/guest/bookings/{booking}', [BookingController::class, 'destroy']);
 
     // Post-booking Additional Amenity Requests - only for Paid/Additional
     // amenities the guest already selected at booking time (see

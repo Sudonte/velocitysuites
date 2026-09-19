@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Receptionist;
 
 use App\Http\Controllers\Controller;
+use App\Models\ActivityLog;
 use App\Models\AmenityRequest;
 use App\Models\Booking;
 use App\Models\Payment;
@@ -12,6 +13,7 @@ use App\Models\RoomType;
 use App\Services\NotificationService;
 use App\Services\ReservationWorkflowService;
 use App\Services\RoomAvailabilityService;
+use App\Services\TransactionGroupingService;
 use App\Support\Activity;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
@@ -42,6 +44,7 @@ class ReservationController extends Controller
         private NotificationService $notificationService,
         private ReservationWorkflowService $workflow,
         private RoomAvailabilityService $availability,
+        private TransactionGroupingService $grouping,
     ) {
     }
 
@@ -200,7 +203,7 @@ class ReservationController extends Controller
      */
     public function details(Reservation $reservation)
     {
-        $reservation->load(['guest.user', 'roomType', 'payments']);
+        $reservation->load(['guest.user', 'roomType', 'payments', 'bookingAmenities']);
 
         // First open marks it read - see index()'s ordering / the
         // red-dot indicator in the view, both keyed off viewed_at.
@@ -213,7 +216,34 @@ class ReservationController extends Controller
             ? $this->availability->availableCount($reservation->roomType, $reservation->check_in, $reservation->check_out)
             : null;
 
-        return view('receptionist.reservations.partials.details', compact('reservation', 'available'));
+        // Best-effort multi-room-type grouping - see
+        // TransactionGroupingService's own doc for why this is a heuristic
+        // (same guest/dates/creation window), not a real FK, for organic
+        // guest data. Null when this reservation isn't part of any detected
+        // group or already has its own authoritative room_lines.
+        $siblings = empty($reservation->room_lines) ? $this->grouping->siblingsForReservation($reservation) : null;
+        $transactionReservations = $siblings ?? collect([$reservation]);
+        $roomLines = $this->grouping->roomLinesForReservation($reservation, $siblings);
+        $roomTotal = round((float) collect($roomLines)->sum('subtotal'), 2);
+
+        // Amenities: summed across every sibling in the group (only ever
+        // attached to one sibling at creation time - see Booking's
+        // identical convention in Receptionist\BookingController::show()).
+        $amenityRows = collect();
+        foreach ($transactionReservations as $r) {
+            $amenityRows = $amenityRows->merge($r->bookingAmenities);
+        }
+        $amenitiesTotal = (float) $amenityRows->sum('subtotal');
+
+        $history = ActivityLog::where('subject_type', 'reservation')
+            ->where('subject_id', $reservation->id)
+            ->with('user')
+            ->orderByDesc('created_at')
+            ->get();
+
+        return view('receptionist.reservations.partials.details', compact(
+            'reservation', 'available', 'siblings', 'roomLines', 'roomTotal', 'amenityRows', 'amenitiesTotal', 'history'
+        ));
     }
 
     /**
@@ -321,7 +351,16 @@ class ReservationController extends Controller
 
         $reservation->loadMissing('roomType');
         $nights = abs($reservation->check_out->diffInDays($reservation->check_in));
-        $range = $this->workflow->depositRange($reservation->roomType, $nights, $reservation->rooms_requested);
+        // Room-lines-aware: a genuine multi-room-type reservation (real
+        // reservation_room_lines) must be priced by summing every line's own
+        // rate x quantity, not roomType/rooms_requested alone (the FIRST
+        // line's type times the SUMMED quantity across every line) - same
+        // fix already applied to BookingService::quoteRoomCharge() and
+        // Booking::getTotalAmountDueAttribute().
+        $roomTotal = ! empty($reservation->room_lines)
+            ? (float) collect($reservation->room_lines)->sum('subtotal')
+            : (float) ($reservation->roomType->rate ?? 0) * max(1, $nights) * max(1, $reservation->rooms_requested);
+        $range = $this->workflow->depositRangeForTotal($roomTotal);
 
         $isFull = abs($amount - $range['total']) <= 0.01;
         if (!$isFull && ($amount < $range['min'] || $amount > $range['max'])) {
@@ -408,14 +447,23 @@ class ReservationController extends Controller
             return;
         }
 
+        // Match a room-type-specific promo against EVERY room type in this
+        // booking, not just $booking->room_type_id (the FIRST line's type
+        // for a genuine multi-room-type transaction) - otherwise a promo
+        // scoped to a room type the guest genuinely booked, just not as
+        // the first line, would be silently skipped.
+        $roomTypeIds = ! empty($booking->room_lines)
+            ? collect($booking->room_lines)->pluck('room_type_id')->map(fn ($id) => (int) $id)->all()
+            : [$booking->room_type_id];
+
         $promos = Promotion::with('amenities')
             ->where('status', 'active')
             ->where('promo_type', 'amenity')
             ->whereDate('start_date', '<=', today())
             ->whereDate('end_date', '>=', today())
-            ->where(function ($q) use ($booking) {
+            ->where(function ($q) use ($roomTypeIds) {
                 $q->whereNull('room_type_id')
-                  ->orWhere('room_type_id', $booking->room_type_id);
+                  ->orWhereIn('room_type_id', $roomTypeIds);
             })
             ->get();
 

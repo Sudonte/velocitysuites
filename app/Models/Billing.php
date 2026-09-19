@@ -9,6 +9,14 @@ class Billing extends Model
 {
     use HasFactory;
 
+    /**
+     * Post-conversion, the mobile app's ApiMapper reads a converted
+     * transaction's itemized room lines from here (dto.booking.billing.room_lines)
+     * rather than directly off Booking - see getRoomLinesAttribute() below
+     * and MULTI_ROOM_TRANSACTION_BACKEND_SPEC.md's "BillingDto#rooms" note.
+     */
+    protected $appends = ['room_lines'];
+
     protected $fillable = [
         'booking_id',
         'room_charge',
@@ -103,6 +111,18 @@ class Billing extends Model
             ->sum('amount_paid');
 
         return max(0, $this->running_total - $paid);
+    }
+
+    /**
+     * A converted transaction's itemized room lines - delegates entirely to
+     * the owning Booking's own accessor (property access invokes
+     * Booking::getRoomLinesAttribute(), not its rooms() relation - see that
+     * method's own doc) so this can never drift from what a genuinely direct
+     * Booking's own top-level room_lines field would show for the same data.
+     */
+    public function getRoomLinesAttribute(): array
+    {
+        return $this->booking?->room_lines ?? [];
     }
 
     /**

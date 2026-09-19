@@ -9,11 +9,13 @@ use App\Models\RoomType;
 use App\Services\DirectBookingService;
 use App\Services\NotificationService;
 use App\Services\ReservationAmenityService;
+use App\Services\TransactionArchiveService;
 use App\Support\Activity;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 
@@ -30,6 +32,7 @@ class BookingController extends Controller
         private DirectBookingService $directBookingService,
         private ReservationAmenityService $amenityService,
         private NotificationService $notificationService,
+        private TransactionArchiveService $archiveService,
     ) {
     }
 
@@ -149,7 +152,17 @@ class BookingController extends Controller
     public function store(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'room_type_id' => 'required|exists:room_types,id',
+            // Multi-room-type shape (preferred - see MULTI_ROOM_TRANSACTION_BACKEND_SPEC.md).
+            // 'rooms' array present -> authoritative, and the legacy
+            // room_type_id/rooms_requested pair below is ignored even if
+            // also sent. 'rooms' absent -> falls back to the legacy pair
+            // (backward compatible with any in-flight app version still
+            // sending the old single-room shape).
+            'rooms' => 'nullable|array|min:1',
+            'rooms.*.room_type_id' => 'required_with:rooms|exists:room_types,id',
+            'rooms.*.quantity' => 'required_with:rooms|integer|min:1|max:50',
+            // Legacy single-room-type shape - required only when 'rooms' isn't sent.
+            'room_type_id' => 'required_without:rooms|exists:room_types,id',
             'check_in' => 'required|date|after:today',
             'check_out' => 'required|date|after:check_in',
             'rooms_requested' => 'nullable|integer|min:1|max:50',
@@ -183,25 +196,54 @@ class BookingController extends Controller
             // (id card, profile picture) in this app use.
             'receipt' => 'required_if:payment_method,gcash|image|mimes:jpeg,png,jpg|max:51200',
             'amount_paid' => 'required|numeric|min:0',
+            // The exact tier (20/30/40/50/100) the guest picked - see
+            // Api\PaymentController::store()'s identical field/doc. Purely a
+            // display label; amount_paid above is independently validated
+            // against $expectedTotal regardless of what's sent here.
+            'selected_payment_percentage' => 'nullable|numeric|in:20,30,40,50,100',
+            // One per Confirm-button tap (never per room/line) - lets a
+            // double-tap or client/network retry of the same submission
+            // attempt safely return the original booking instead of
+            // creating a duplicate. See MULTI_ROOM_TRANSACTION_BACKEND_SPEC.md
+            // section 9b. Optional - an older app version that never sends
+            // one simply gets no idempotency protection, same as today.
+            'idempotency_key' => 'nullable|string|max:100',
         ], [
             'reference_number.unique' => 'This GCash reference number has already been used.',
         ]);
 
+        if (! empty($validated['idempotency_key'])) {
+            $existing = Booking::where('idempotency_key', $validated['idempotency_key'])->first();
+            if ($existing) {
+                return response()->json(array_merge($existing->toArray(), ['total_amount_due' => $existing->total_amount_due]), 201);
+            }
+        }
+
         $children = $validated['children'] ?? 0;
-        $roomsRequested = $validated['rooms_requested'] ?? 1;
         $checkIn = Carbon::parse($validated['check_in']);
         $checkOut = Carbon::parse($validated['check_out']);
+
+        // Normalize either request shape into one array of
+        // ['room_type' => RoomType, 'quantity' => int] lines - everything
+        // below this point is shape-agnostic. See DirectBookingService's
+        // own doc for why $roomLines is never empty.
+        $rawLines = $validated['rooms'] ?? [
+            ['room_type_id' => $validated['room_type_id'], 'quantity' => $validated['rooms_requested'] ?? 1],
+        ];
+        $roomLines = collect($rawLines)->map(fn (array $line) => [
+            'room_type' => RoomType::findOrFail($line['room_type_id']),
+            'quantity' => (int) $line['quantity'],
+        ])->all();
 
         // Validated before creating anything - an invalid amenity
         // selection or unavailable room rejects the whole submission
         // (422) rather than creating a booking and payment first.
         $resolvedAmenities = $this->amenityService->validateSelection($validated['amenities'] ?? []);
 
-        $roomType = RoomType::findOrFail($validated['room_type_id']);
-        $this->directBookingService->validateRoomAvailability($roomType, $checkIn, $checkOut, $roomsRequested);
+        $this->directBookingService->validateRoomLinesAvailability($roomLines, $checkIn, $checkOut);
 
         $nights = abs($checkOut->diffInDays($checkIn));
-        $expectedTotal = $this->directBookingService->totalAmountDue($roomType, $nights, $roomsRequested, $resolvedAmenities);
+        $expectedTotal = $this->directBookingService->totalAmountDueForLines($roomLines, $nights, $resolvedAmenities);
         $amountPaid = (float) $validated['amount_paid'];
         if ($amountPaid <= 0 || $amountPaid > $expectedTotal + 0.01) {
             return response()->json([
@@ -233,32 +275,77 @@ class BookingController extends Controller
         /** @var Guest $guest */
         $guest = auth()->user()->guest;
 
-        $booking = $this->directBookingService->create(
-            $guest,
-            $roomType,
-            $checkIn,
-            $checkOut,
-            $roomsRequested,
-            (int) $validated['adults'],
-            $children,
-            [
-                'first_name' => $validated['guest_first_name'],
-                'middle_name' => $validated['guest_middle_name'] ?? null,
-                'last_name' => $validated['guest_last_name'],
-            ],
-            $validated['additional_guests'] ?? null,
-            $idCard,
-            $paymentData,
-            $resolvedAmenities
-        );
+        try {
+            $booking = $this->directBookingService->create(
+                $guest,
+                $roomLines,
+                $checkIn,
+                $checkOut,
+                (int) $validated['adults'],
+                $children,
+                [
+                    'first_name' => $validated['guest_first_name'],
+                    'middle_name' => $validated['guest_middle_name'] ?? null,
+                    'last_name' => $validated['guest_last_name'],
+                ],
+                $validated['additional_guests'] ?? null,
+                $idCard,
+                $paymentData,
+                $resolvedAmenities,
+                $validated['idempotency_key'] ?? null
+            );
+        } catch (\Illuminate\Database\UniqueConstraintViolationException $e) {
+            // Lost a genuine race: another request with the SAME
+            // idempotency_key committed its own Booking (+ room_lines +
+            // payment + amenity_requests) microseconds before this one -
+            // the initial "already exists?" check above ran on both
+            // requests before either had committed, so neither saw the
+            // other. DirectBookingService::create()'s own DB::transaction()
+            // has already rolled back everything from THIS attempt (the
+            // idempotency_key column itself is set at the very first insert
+            // inside that transaction, specifically so this failure happens
+            // before any child row is created - see that method's own doc).
+            // Only treat this as "the winner's row, return it" when the
+            // failure is actually on idempotency_key - any other unique
+            // violation (e.g. a raced GCash reference_number) is a genuine,
+            // different error and must still surface as one.
+            if (! empty($validated['idempotency_key']) && str_contains($e->getMessage(), 'idempotency_key')) {
+                $winner = Booking::where('idempotency_key', $validated['idempotency_key'])->first();
+                if ($winner) {
+                    return response()->json(array_merge($winner->toArray(), ['total_amount_due' => $winner->total_amount_due]), 201);
+                }
+            }
+            Log::error('Booking creation failed on an unexpected unique constraint violation', [
+                'idempotency_key' => $validated['idempotency_key'] ?? null,
+                'error' => $e->getMessage(),
+            ]);
+            return response()->json(['message' => 'This booking could not be created. Please try again.'], 500);
+        }
+
+        // See Api\PaymentController::store()'s identical persistence - a
+        // direct booking's payment happens atomically at creation, so this
+        // is the one place it needs to be set, never overwritten again
+        // (a direct Booking has no later "Pay Now against remaining
+        // balance" endpoint the way a Reservation's does).
+        $booking->update([
+            'selected_payment_percentage' => $validated['selected_payment_percentage'] ?? null,
+            'required_payment_amount' => (float) $validated['amount_paid'],
+        ]);
+
+        // "Deluxe x2, Suite x1" for a multi-room-type transaction, or just
+        // "Deluxe" for the common single-line case (no "x1" suffix, matching
+        // the pre-multi-room-type notification/activity text exactly).
+        $roomSummary = collect($roomLines)->map(
+            fn (array $line) => $line['quantity'] > 1 ? "{$line['room_type']->name} x{$line['quantity']}" : $line['room_type']->name
+        )->join(', ');
 
         $user = auth()->user();
-        $this->notificationService->notifyNewBooking($user, $roomType->name, $booking->id);
-        $this->notificationService->notifyPaymentSubmitted($user, (float) $validated['amount_paid'], $roomType->name, $booking->id);
+        $this->notificationService->notifyNewBooking($user, $roomSummary, $booking->id);
+        $this->notificationService->notifyPaymentSubmitted($user, (float) $validated['amount_paid'], $roomSummary, $booking->id);
 
         Activity::log(
             'Submitted booking (mobile, direct)',
-            "Booking #{$booking->id} for {$roomType->name} ({$booking->check_in->toDateString()} to {$booking->check_out->toDateString()})",
+            "Booking #{$booking->id} for {$roomSummary} ({$booking->check_in->toDateString()} to {$booking->check_out->toDateString()})",
             $booking
         );
 
@@ -282,5 +369,63 @@ class BookingController extends Controller
         }
 
         return Storage::disk('local')->response($booking->id_card_image_path);
+    }
+
+    /**
+     * Guest-initiated PERMANENT deletion of a direct Booking - hard,
+     * non-recoverable, unlike Receptionist\BookingController::destroy()
+     * (a staff-side soft delete/archive via SoftDeletes, which never
+     * touches child rows at all). Scoped to reservation_id === null only,
+     * same as cancel()/show()/showIdCard() above - a reservation-derived
+     * Booking is deleted through Api\ReservationController::destroy()
+     * instead, confirmed against this controller's own existing scope
+     * rather than assumed (see TRANSACTION_DELETE_BACKEND_SPEC.md's
+     * 2026-09-18 update for the full investigation).
+     */
+    public function destroy(Booking $booking): JsonResponse
+    {
+        if ($booking->reservation_id !== null || $booking->guest_id !== auth()->user()->guest->id) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        if (! in_array($booking->booking_status, [Booking::STATUS_COMPLETED, Booking::STATUS_CANCELLED], true)) {
+            return response()->json(['message' => 'This booking cannot be permanently deleted while it is still active.'], 409);
+        }
+
+        $bookingId = $booking->id;
+        $guestId = $booking->guest_id;
+        $bookingStatus = $booking->booking_status;
+        $roomTypeName = optional($booking->roomType)->name ?? 'room';
+
+        try {
+            DB::transaction(function () use ($booking, $guestId) {
+                $this->archiveService->archiveAndPurgeFinancials(null, $booking, $guestId);
+
+                if ($booking->id_card_image_path) {
+                    Storage::disk('local')->delete($booking->id_card_image_path);
+                }
+
+                $booking->forceDelete();
+            });
+        } catch (\Throwable $e) {
+            Log::error('Permanent booking delete failed', [
+                'endpoint' => 'DELETE guest/bookings/{booking}',
+                'booking_id' => $bookingId,
+                'guest_id' => $guestId,
+                'booking_status' => $bookingStatus,
+                'exception' => get_class($e),
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json(['message' => 'This transaction could not be permanently deleted. Please try again or contact support.'], 500);
+        }
+
+        Activity::log(
+            'Permanently deleted booking',
+            "Booking #{$bookingId} for {$roomTypeName}",
+            null
+        );
+
+        return response()->json(['message' => 'Booking permanently deleted.']);
     }
 }

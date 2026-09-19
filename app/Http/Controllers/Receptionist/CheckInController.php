@@ -223,8 +223,23 @@ class CheckInController extends Controller
         }
 
         $booking->load(['reservation.guest.user', 'guest.user', 'roomType', 'rooms']);
-        $assignableRooms = $this->availability->assignableRooms($booking);
+        // One entry per distinct room type this booking actually needs
+        // rooms for (real booking_room_lines for a genuine multi-room-type
+        // booking, or a single legacy entry otherwise) - see
+        // RoomAvailabilityService::assignableRoomsByLine()'s own doc.
+        $assignableRoomsByLine = $this->availability->assignableRoomsByLine($booking);
+        $roomLines = ! empty($booking->room_lines) ? $booking->room_lines : [[
+            'room_type_id' => (string) $booking->room_type_id,
+            'room_type' => $booking->roomType->name ?? 'N/A',
+            'quantity' => $booking->rooms_requested,
+        ]];
         $assignedRoomIds = $booking->rooms->pluck('id')->all();
+        // Grouped by room_type_id, matching $roomLines' shape - a flat
+        // index into $assignedRoomIds would misalign across multiple
+        // room-type lines (line 2's Nth select would show line 1's Nth
+        // assigned room instead of its own).
+        $assignedRoomIdsByType = $booking->rooms->groupBy('room_type_id')
+            ->map(fn ($rooms) => $rooms->pluck('id')->all());
         $accountGuest = $booking->account_guest;
 
         // First open marks it read - see index()'s ordering / the
@@ -236,7 +251,7 @@ class CheckInController extends Controller
         }
 
         return view('receptionist.check-in.partials.panel', compact(
-            'booking', 'assignableRooms', 'assignedRoomIds', 'accountGuest'
+            'booking', 'assignableRoomsByLine', 'roomLines', 'assignedRoomIds', 'assignedRoomIdsByType', 'accountGuest'
         ));
     }
 
@@ -281,11 +296,17 @@ class CheckInController extends Controller
             ],
             'adults' => 'required|integer|min:1',
             'children' => 'nullable|integer|min:0',
-            'room_ids' => 'required|array|size:' . $booking->rooms_requested,
-            'room_ids.*' => 'required|integer|distinct',
+            // Grouped by room_type_id - room_ids[<room_type_id>][] - one
+            // group per distinct room type this booking needs rooms for
+            // (see RoomAvailabilityService::assignRoomsForLines(), which
+            // validates each group's own quantity/availability
+            // independently; a single-room-type booking simply has one
+            // group). Replaces the old flat room_ids[] shape, which assumed
+            // every booking only ever needed one room type.
+            'room_ids' => 'required|array|min:1',
+            'room_ids.*' => 'required|array',
+            'room_ids.*.*' => 'required|integer|distinct',
         ], [
-            'room_ids.size' => 'This booking needs exactly ' . $booking->rooms_requested . ' room(s) assigned - select ' . $booking->rooms_requested . '.',
-            'room_ids.*.distinct' => 'The same room was selected more than once.',
             'checkin_current_address.required_if' => 'Enter the guest\'s current address, or check "Same as permanent address".',
         ]);
 
@@ -297,7 +318,7 @@ class CheckInController extends Controller
         try {
             $rooms = null;
             DB::transaction(function () use ($booking, $validated, $children, $currentAddress, &$rooms) {
-                $rooms = $this->availability->assignRooms($booking, $validated['room_ids']);
+                $rooms = $this->availability->assignRoomsForLines($booking, $validated['room_ids']);
 
                 foreach ($rooms as $room) {
                     $room->update(['status' => 'occupied']);

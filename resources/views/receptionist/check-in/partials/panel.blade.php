@@ -9,7 +9,7 @@
         <div class="col-md-6">
             <strong>Guest:</strong> {{ $booking->guest_display_name }}<br>
             <strong>Booking:</strong> #{{ $booking->id }}<br>
-            <strong>Room Type:</strong> {{ $booking->roomType->name ?? 'N/A' }}
+            <strong>Room Type{{ count($roomLines) > 1 ? 's' : '' }}:</strong> {{ collect($roomLines)->pluck('room_type')->join(', ') }}
         </div>
         <div class="col-md-6 text-md-end">
             <strong>Check-In:</strong> {{ $booking->check_in->format('M d, Y') }}<br>
@@ -18,15 +18,26 @@
         </div>
     </div>
 
+    @php
+        // Every distinct room type this booking needs rooms for must have
+        // enough free inventory - a shortfall in ANY one line blocks the
+        // whole check-in the same way a shortfall in the single legacy
+        // room type used to (never partially assignable).
+        $shortfallLine = collect($roomLines)->first(
+            fn ($line) => ($assignableRoomsByLine[(string) $line['room_type_id']] ?? collect())->count() < $line['quantity']
+        );
+    @endphp
+
     {{-- Early check-in is allowed for now (temporarily relaxed per request -
          previously blocked this whole form behind a "not scheduled yet"
          warning when $booking->check_in was still in the future). Re-add
          that date check here (and in CheckInController::store()) if this
          needs to be restricted again later. --}}
-    @if($assignableRooms->count() < $booking->rooms_requested)
+    @if($shortfallLine)
+        @php $freeCount = ($assignableRoomsByLine[(string) $shortfallLine['room_type_id']] ?? collect())->count(); @endphp
         <div class="alert alert-warning mb-0">
             <i class="fas fa-exclamation-triangle"></i>
-            This booking needs {{ $booking->rooms_requested }} {{ $booking->roomType->name ?? '' }} room(s), but only {{ $assignableRooms->count() }} {{ $assignableRooms->count() === 1 ? 'is' : 'are' }} currently free for these dates.
+            This booking needs {{ $shortfallLine['quantity'] }} {{ $shortfallLine['room_type'] }} room(s), but only {{ $freeCount }} {{ $freeCount === 1 ? 'is' : 'are' }} currently free for these dates.
         </div>
     @else
         <form id="checkInForm">
@@ -95,42 +106,56 @@
                 </p>
             </div>
 
-            {{-- Step 2: Room Assignment - shown after Guest Details is confirmed. --}}
+            {{-- Step 2: Room Assignment - shown after Guest Details is confirmed.
+                 One group of selects per distinct room type the booking needs
+                 rooms for (real booking_room_lines for a genuine multi-room-type
+                 booking, or a single group for the legacy single-room-type case -
+                 see RoomAvailabilityService::assignableRoomsByLine()'s own doc). --}}
             <div id="checkInStepRooms" class="d-none">
-                <h6 class="mb-3">
-                    <i class="fas fa-door-open"></i> Assign Room{{ $booking->rooms_requested > 1 ? 's' : '' }}
-                    @if($booking->rooms_requested > 1)
-                        <span class="badge bg-secondary">{{ $booking->rooms_requested }} needed</span>
-                    @endif
-                </h6>
+                <h6 class="mb-3"><i class="fas fa-door-open"></i> Assign Rooms</h6>
                 @if(!empty($assignedRoomIds))
                     <div class="alert alert-info py-2 mb-2">
                         <i class="fas fa-circle-info"></i> Already assigned ahead of arrival - confirm below, or change the selection if needed.
                     </div>
                 @endif
-                <div id="roomSelectRows">
-                    @for ($i = 0; $i < $booking->rooms_requested; $i++)
-                        @php $preselected = $assignedRoomIds[$i] ?? null; @endphp
-                        <div class="room-select-row mb-2">
-                            {{-- Starts disabled - Step 2 is hidden until "Next" passes
-                                 Step 1's validation. A disabled control is reliably
-                                 excluded from constraint validation (unlike relying on
-                                 display:none, which Chrome still tries to focus/report
-                                 on and throws "is not focusable", silently aborting the
-                                 Next click handler). Re-enabled in JS right before Step
-                                 2 is revealed - see index.blade.php's checkInNextBtn
-                                 handler. --}}
-                            <select name="room_ids[]" class="form-select room-select" required disabled>
-                                <option value="">-- Select an available room --</option>
-                                @foreach($assignableRooms as $room)
-                                    <option value="{{ $room->id }}" {{ (int) $preselected === $room->id ? 'selected' : '' }}>Room {{ $room->room_number }}</option>
-                                @endforeach
-                            </select>
+                @foreach($roomLines as $line)
+                    @php
+                        $typeId = (string) $line['room_type_id'];
+                        $roomsOfType = $assignableRoomsByLine[$typeId] ?? collect();
+                    @endphp
+                    <div class="mb-3">
+                        <p class="mb-1 fw-bold">
+                            {{ $line['room_type'] }}
+                            @if($line['quantity'] > 1)
+                                <span class="badge bg-secondary">{{ $line['quantity'] }} needed</span>
+                            @endif
+                        </p>
+                        <div id="roomSelectRows-{{ $typeId }}">
+                            @php $preselectedForType = $assignedRoomIdsByType[$typeId] ?? []; @endphp
+                            @for ($i = 0; $i < $line['quantity']; $i++)
+                                @php $preselected = $preselectedForType[$i] ?? null; @endphp
+                                <div class="room-select-row mb-2">
+                                    {{-- Starts disabled - Step 2 is hidden until "Next" passes
+                                         Step 1's validation. A disabled control is reliably
+                                         excluded from constraint validation (unlike relying on
+                                         display:none, which Chrome still tries to focus/report
+                                         on and throws "is not focusable", silently aborting the
+                                         Next click handler). Re-enabled in JS right before Step
+                                         2 is revealed - see index.blade.php's checkInNextBtn
+                                         handler. --}}
+                                    <select name="room_ids[{{ $typeId }}][]" class="form-select room-select" data-room-type-id="{{ $typeId }}" required disabled>
+                                        <option value="">-- Select an available room --</option>
+                                        @foreach($roomsOfType as $room)
+                                            <option value="{{ $room->id }}" {{ (int) $preselected === $room->id ? 'selected' : '' }}>Room {{ $room->room_number }}</option>
+                                        @endforeach
+                                    </select>
+                                </div>
+                            @endfor
                         </div>
-                    @endfor
-                </div>
+                    </div>
+                @endforeach
                 <p class="text-muted small mt-2 mb-0">
-                    <i class="fas fa-info-circle"></i> Only {{ $booking->roomType->name ?? '' }} rooms free for the full stay are listed. Each room can only be picked once.
+                    <i class="fas fa-info-circle"></i> Only rooms of the matching type, free for the full stay, are listed in each dropdown. Each room can only be picked once.
                 </p>
             </div>
         </form>
@@ -138,7 +163,7 @@
 </div>
 <div class="modal-footer">
     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-    @if($assignableRooms->count() >= $booking->rooms_requested)
+    @if(!$shortfallLine)
         <button type="button" id="checkInNextBtn" class="btn btn-primary">
             Next: Assign Room <i class="fas fa-arrow-right"></i>
         </button>

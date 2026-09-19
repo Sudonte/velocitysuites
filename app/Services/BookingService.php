@@ -8,6 +8,7 @@ use App\Models\Booking;
 use App\Models\Payment;
 use App\Models\Promotion;
 use App\Models\Reservation;
+use App\Models\RoomType;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
@@ -41,31 +42,71 @@ class BookingService
     {
         $roomType = $reservation->roomType;
         $nights = max(1, abs($reservation->check_out->diffInDays($reservation->check_in)));
-        // rate x nights x rooms_requested - matches DirectBookingService::
-        // totalAmountDue()'s formula exactly (found missing the
-        // rooms_requested factor here while wiring up the mobile app's
-        // pre-payment bill preview; a multi-room reservation's real Billing
-        // total, once converted, was undercharging by a factor of
-        // rooms_requested until this fix).
-        $roomCharge = (float) $roomType->rate * $nights * max(1, $reservation->rooms_requested);
 
-        $promo = Promotion::where('status', 'active')
-            ->where('promo_type', 'discount')
-            ->whereDate('start_date', '<=', today())
-            ->whereDate('end_date', '>=', today())
-            ->where(function ($q) use ($roomType) {
-                $q->whereNull('room_type_id')
-                  ->orWhere('room_type_id', $roomType->id);
-            })
-            ->orderByDesc('discount_value')
-            ->first();
+        // Per-room-type-line lines when this is a genuine multi-room-type
+        // reservation (real reservation_room_lines - see
+        // Api\ReservationController::store()/update()), else a single
+        // synthetic line matching the legacy roomType/rooms_requested
+        // fields - unifies both cases into the one discount loop below.
+        // Using only roomType/rooms_requested for room_charge itself would
+        // price every line at the FIRST line's rate times the SUM of every
+        // line's quantity, wrong the moment more than one room type is
+        // involved (the same bug already fixed on the Booking side - see
+        // Booking::getTotalAmountDueAttribute()).
+        $lines = ! empty($reservation->room_lines)
+            ? collect($reservation->room_lines)->map(fn (array $l) => [
+                'room_type_id' => (int) $l['room_type_id'],
+                'subtotal' => (float) $l['subtotal'],
+            ])
+            : collect([[
+                'room_type_id' => $roomType->id,
+                'subtotal' => (float) $roomType->rate * $nights * max(1, $reservation->rooms_requested),
+            ]]);
 
-        $discount = 0;
-        if ($promo) {
-            $discount = $promo->discount_type === 'percentage'
-                ? round(($roomCharge * (float) $promo->discount_value) / 100, 2)
-                : (float) $promo->discount_value;
+        $roomCharge = (float) $lines->sum('subtotal');
+
+        // A discount-type promo is matched and computed PER LINE, against
+        // that line's own room type and own subtotal - a promo scoped to
+        // one room type must never discount a different room type's
+        // charge (matching the FIRST line's type alone would either
+        // over-discount an unrelated line, or silently skip a genuinely
+        // eligible line that isn't first). Percentage discounts scale
+        // naturally per line; a fixed-amount promo is applied only once
+        // per promo across the whole reservation (not once per matching
+        // line), so a flat "₱500 off" site-wide promo can't become ₱1000+
+        // off just because it matches two different room-type lines.
+        $promoDiscount = 0;
+        $appliedFixedPromoIds = [];
+        foreach ($lines as $line) {
+            $lineRoomType = RoomType::find($line['room_type_id']);
+            if (! $lineRoomType) {
+                continue;
+            }
+
+            $promo = Promotion::where('status', 'active')
+                ->where('promo_type', 'discount')
+                ->whereDate('start_date', '<=', today())
+                ->whereDate('end_date', '>=', today())
+                ->where(function ($q) use ($lineRoomType) {
+                    $q->whereNull('room_type_id')
+                      ->orWhere('room_type_id', $lineRoomType->id);
+                })
+                ->orderByDesc('discount_value')
+                ->first();
+
+            if (! $promo) {
+                continue;
+            }
+
+            if ($promo->discount_type === 'percentage') {
+                $promoDiscount += min(round($line['subtotal'] * (float) $promo->discount_value / 100, 2), $line['subtotal']);
+            } elseif (! in_array($promo->id, $appliedFixedPromoIds, true)) {
+                $promoDiscount += min((float) $promo->discount_value, $line['subtotal']);
+                $appliedFixedPromoIds[] = $promo->id;
+            }
         }
+
+        $discount = $promoDiscount;
 
         if (in_array($reservation->id_card_type, ['Senior Citizen', 'PWD'], true)) {
             $discount += round($roomCharge * 0.20, 2);

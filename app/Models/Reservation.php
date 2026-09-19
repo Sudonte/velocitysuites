@@ -71,6 +71,10 @@ class Reservation extends Model
         'verified_by',
         'hidden_at',
         'viewed_at',
+        'selected_payment_percentage',
+        'required_payment_amount',
+        'idempotency_key',
+        'edited_at',
     ];
 
     protected $casts = [
@@ -83,6 +87,13 @@ class Reservation extends Model
         'viewed_at' => 'datetime',
         'payment_method_locked_at' => 'datetime',
         'payment_reminder_sent_at' => 'datetime',
+        'edited_at' => 'datetime',
+        // 'float', not 'decimal:2' - see Booking's identical cast for why
+        // (the mobile app's ReservationDto declares these as Java Double, a
+        // genuine JSON number, not the String every other money field on
+        // this model uses to match Laravel's string-producing decimal cast).
+        'selected_payment_percentage' => 'float',
+        'required_payment_amount' => 'float',
     ];
 
     /**
@@ -93,7 +104,7 @@ class Reservation extends Model
      * payment_deadline is the 48-hour Pay Later/Pay Now cutoff (see
      * getPaymentDeadlineAttribute()) - also always derived, never stored.
      */
-    protected $appends = ['discount_preview', 'payment_deadline'];
+    protected $appends = ['discount_preview', 'payment_deadline', 'room_lines'];
 
     /**
      * Get the guest associated with the reservation.
@@ -163,6 +174,43 @@ class Reservation extends Model
     public function amenityRequests()
     {
         return $this->hasMany(AmenityRequest::class);
+    }
+
+    /**
+     * Itemized room-type lines for a genuinely multi-room-type transaction -
+     * see Booking::roomLines()'s identical doc. A reservation never has
+     * physical room assignments of its own (that only happens at check-in,
+     * against the converted Booking), so unlike Booking::getRoomLinesAttribute()
+     * this never populates assigned_room_numbers - always [] here.
+     */
+    public function roomLines()
+    {
+        return $this->hasMany(ReservationRoomLine::class);
+    }
+
+    /**
+     * The `room_lines` JSON field for a still-unconverted reservation (see
+     * Booking::getRoomLinesAttribute()'s identical shape/doc) - once
+     * converted, the guest reads booking.billing.room_lines instead (see
+     * Billing::getRoomLinesAttribute()), which is authoritative for a
+     * converted transaction's actual charged amounts.
+     */
+    public function getRoomLinesAttribute(): array
+    {
+        $lines = $this->roomLines()->get();
+        if ($lines->isEmpty()) {
+            return [];
+        }
+
+        return $lines->map(fn (ReservationRoomLine $line) => [
+            'room_type_id' => (string) $line->room_type_id,
+            'room_type' => $line->room_type_name,
+            'quantity' => $line->quantity,
+            'price_per_night' => (float) $line->price_per_night,
+            'nights' => $line->number_of_nights,
+            'subtotal' => (float) $line->subtotal,
+            'assigned_room_numbers' => [],
+        ])->values()->all();
     }
 
     /**

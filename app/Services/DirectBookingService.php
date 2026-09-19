@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Amenity;
 use App\Models\AmenityRequest;
 use App\Models\Booking;
+use App\Models\BookingRoomLine;
 use App\Models\Guest;
 use App\Models\Payment;
 use App\Models\RoomType;
@@ -25,6 +26,14 @@ use Illuminate\Validation\ValidationException;
  * Api\ReservationController::store() and ReservationWorkflowService as
  * closely as possible so the two transaction types stay behaviorally
  * consistent, while never creating a Reservation row.
+ *
+ * Multi-room-type support (2026-09-19): a single "New Booking" transaction
+ * can now cover several distinct room types in one call (e.g. Deluxe x2 +
+ * Suite x1) instead of exactly one - see MULTI_ROOM_TRANSACTION_BACKEND_SPEC.md.
+ * `$roomLines` throughout this class is an array of
+ * ['room_type' => RoomType, 'quantity' => int] pairs, always at least one
+ * entry (a genuinely single-room-type booking is simply a one-entry array,
+ * not a separate code path).
  */
 class DirectBookingService
 {
@@ -35,17 +44,20 @@ class DirectBookingService
     }
 
     /**
-     * Confirms the requested room type actually has enough available
-     * inventory for the dates - the exact same check
+     * Confirms every requested room type/quantity actually has enough
+     * available inventory for the dates - the exact same check
      * Api\ReservationController::store() implicitly relies on later at
      * conversion time, applied up front here since a direct booking
      * consumes inventory immediately (booking_status starts at
-     * 'confirmed', not a pending/reviewable state).
+     * 'confirmed', not a pending/reviewable state). Throws on the first
+     * room type that fails, naming that room type specifically - callers
+     * should validate every line before creating anything (see
+     * Api\BookingController::store()'s all-or-nothing contract).
      */
-    public function validateRoomAvailability(RoomType $roomType, Carbon $checkIn, Carbon $checkOut, int $roomsRequested): void
+    public function validateRoomTypeAvailability(RoomType $roomType, Carbon $checkIn, Carbon $checkOut, int $roomsRequested): void
     {
         if ($roomType->status !== 'active') {
-            throw ValidationException::withMessages(['room_type_id' => 'This room type is not currently offered.']);
+            throw ValidationException::withMessages(['room_type_id' => "{$roomType->name} is not currently offered."]);
         }
 
         $available = $this->availability->availableCount($roomType, $checkIn, $checkOut);
@@ -53,30 +65,51 @@ class DirectBookingService
             throw ValidationException::withMessages([
                 'rooms_requested' => $roomsRequested > 1
                     ? "Not enough {$roomType->name} rooms available for these dates (needs {$roomsRequested}, only {$available} free)."
-                    : "This room type is fully booked for these dates.",
+                    : "{$roomType->name} is fully booked for these dates.",
             ]);
         }
     }
 
     /**
-     * The full amount due for a direct booking - room charge (rate x
-     * nights x rooms) plus every selected paid amenity's subtotal.
-     * amount_paid may now be less than this (a partial/deposit payment,
-     * mirroring ReservationWorkflowService::depositRange()) - see
+     * Validates every line in a multi-room-type selection - see this
+     * class's own doc for the `$roomLines` shape. All-or-nothing: throws on
+     * the first line that fails (never creates a booking containing only
+     * the room types that happened to pass).
+     */
+    public function validateRoomLinesAvailability(array $roomLines, Carbon $checkIn, Carbon $checkOut): void
+    {
+        foreach ($roomLines as $line) {
+            $this->validateRoomTypeAvailability($line['room_type'], $checkIn, $checkOut, $line['quantity']);
+        }
+    }
+
+    /**
+     * The full amount due for a direct booking - every room line's own
+     * rate x nights x quantity, summed, plus every selected paid amenity's
+     * subtotal. amount_paid may now be less than this (a partial/deposit
+     * payment, mirroring ReservationWorkflowService::depositRange()) - see
      * Api\BookingController::store()'s validation and the `payment_stage`
      * it computes against this total.
      */
-    public function totalAmountDue(RoomType $roomType, int $nights, int $roomsRequested, Collection $resolvedAmenities): float
+    public function totalAmountDueForLines(array $roomLines, int $nights, Collection $resolvedAmenities): float
     {
-        $roomTotal = (float) $roomType->rate * max(1, $nights) * max(1, $roomsRequested);
+        $roomTotal = collect($roomLines)->sum(
+            fn (array $line) => (float) $line['room_type']->rate * max(1, $nights) * max(1, $line['quantity'])
+        );
         $amenityTotal = $resolvedAmenities->sum(fn (array $entry) => (float) $entry['amenity']->charge * $entry['quantity']);
 
         return round($roomTotal + $amenityTotal, 2);
     }
 
     /**
-     * Creates the Booking, its Payment, and any paid-amenity request rows
-     * atomically - either the whole transaction lands, or none of it does.
+     * Creates the Booking, its itemized booking_room_lines (one per distinct
+     * room type), its Payment, and any paid-amenity request rows atomically -
+     * either the whole transaction lands, or none of it does. `$roomLines`
+     * is never empty (see this class's own doc). The parent Booking row's
+     * own `room_type_id`/`rooms_requested` are kept in sync from the first
+     * line's type and the summed quantity across every line, purely for
+     * backward-compatible display - identical convention to
+     * Api\ReservationController::update()'s patched multi-room path.
      * `$paymentData` mirrors Api\PaymentController::store()'s already-
      * validated shape (payment_method, reference_number, gcash_number,
      * receipt_path, amount_paid). `$idCard` is ['type' => ..., 'path' => ...]
@@ -84,30 +117,43 @@ class DirectBookingService
      */
     public function create(
         Guest $guest,
-        RoomType $roomType,
+        array $roomLines,
         Carbon $checkIn,
         Carbon $checkOut,
-        int $roomsRequested,
         int $adults,
         int $children,
         array $guestName,
         ?array $additionalGuests,
         ?array $idCard,
         array $paymentData,
-        Collection $resolvedAmenities
+        Collection $resolvedAmenities,
+        ?string $idempotencyKey = null
     ): Booking {
         return DB::transaction(function () use (
-            $guest, $roomType, $checkIn, $checkOut, $roomsRequested, $adults, $children,
-            $guestName, $additionalGuests, $idCard, $paymentData, $resolvedAmenities
+            $guest, $roomLines, $checkIn, $checkOut, $adults, $children,
+            $guestName, $additionalGuests, $idCard, $paymentData, $resolvedAmenities, $idempotencyKey
         ) {
+            $nights = max(1, abs($checkOut->diffInDays($checkIn)));
+            $firstRoomType = $roomLines[0]['room_type'];
+            $totalRoomsRequested = collect($roomLines)->sum('quantity');
+
+            // idempotency_key is set here, as part of THIS insert, rather
+            // than in a separate update() after the fact - a collision (two
+            // requests racing with the same key) must fail at the earliest
+            // possible point, before any room_lines/payment/amenity_request
+            // rows are created, so the DB::transaction() rollback below
+            // leaves nothing behind for the loser to clean up. See
+            // Api\BookingController::store()'s catch of the resulting
+            // UniqueConstraintViolationException for the re-fetch-and-return
+            // side of this protection.
             $booking = Booking::create([
                 'reservation_id' => null,
                 'guest_id' => $guest->id,
                 'guest_first_name' => $guestName['first_name'],
                 'guest_middle_name' => $guestName['middle_name'] ?? null,
                 'guest_last_name' => $guestName['last_name'],
-                'room_type_id' => $roomType->id,
-                'rooms_requested' => $roomsRequested,
+                'room_type_id' => $firstRoomType->id,
+                'rooms_requested' => $totalRoomsRequested,
                 'check_in' => $checkIn,
                 'check_out' => $checkOut,
                 'adults' => $adults,
@@ -121,6 +167,7 @@ class DirectBookingService
                 'discount_requested' => $idCard !== null,
                 'discount_verification_status' => $idCard !== null ? 'pending' : 'not_requested',
                 'additional_guest_details' => $additionalGuests,
+                'idempotency_key' => $idempotencyKey,
                 // No verified_by - no staff member actually verified
                 // anything here, the system is just recognizing there's
                 // nothing to verify (mirrors payment_status starting
@@ -133,6 +180,22 @@ class DirectBookingService
                 'verified_at' => $paymentData['payment_method'] === 'gcash' ? null : now(),
             ]);
 
+            foreach ($roomLines as $line) {
+                /** @var RoomType $roomType */
+                $roomType = $line['room_type'];
+                $quantity = $line['quantity'];
+
+                BookingRoomLine::create([
+                    'booking_id' => $booking->id,
+                    'room_type_id' => $roomType->id,
+                    'room_type_name' => $roomType->name,
+                    'quantity' => $quantity,
+                    'price_per_night' => $roomType->rate,
+                    'number_of_nights' => $nights,
+                    'subtotal' => round((float) $roomType->rate * $nights * $quantity, 2),
+                ]);
+            }
+
             $payment = Payment::create([
                 'reservation_id' => null,
                 'booking_id' => $booking->id,
@@ -142,9 +205,10 @@ class DirectBookingService
                 'receipt_path' => $paymentData['receipt_path'] ?? null,
                 'amount_paid' => $paymentData['amount_paid'],
                 'payment_status' => $paymentData['payment_method'] === 'gcash' ? 'pending' : 'completed',
-                // Computed by the caller against totalAmountDue() - defaults
-                // to 'final' for any caller that doesn't set it (e.g. a
-                // future full-payment-only path), preserving prior behavior.
+                // Computed by the caller against totalAmountDueForLines() -
+                // defaults to 'final' for any caller that doesn't set it
+                // (e.g. a future full-payment-only path), preserving prior
+                // behavior.
                 'payment_stage' => $paymentData['payment_stage'] ?? 'final',
                 'payment_date' => now(),
             ]);
@@ -170,7 +234,13 @@ class DirectBookingService
                     'guest_id' => $guest->id,
                     'reservation_id' => null,
                     'booking_id' => $booking->id,
-                    'room_type_id' => $roomType->id,
+                    // Amenity requests were always keyed to a single
+                    // room_type_id even before multi-room-type support -
+                    // kept pointed at the first line's type (the same
+                    // "first line" convention used for the parent row's own
+                    // room_type_id above), since amenities aren't currently
+                    // attributed to a specific room type anywhere downstream.
+                    'room_type_id' => $firstRoomType->id,
                     'amenity_id' => $amenity->id,
                     'amenity_name' => $amenity->amenity_name,
                     'category' => $amenity->category,
@@ -180,7 +250,7 @@ class DirectBookingService
                 ]);
             }
 
-            return $booking->fresh(['roomType', 'guest.user', 'payments']);
+            return $booking->fresh(['roomType', 'guest.user', 'payments', 'roomLines']);
         });
     }
 }

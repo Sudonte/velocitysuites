@@ -297,7 +297,16 @@ document.addEventListener('DOMContentLoaded', function () {
         e.preventDefault();
 
         const form = e.target;
-        const roomIds = Array.from(form.querySelectorAll('select[name="room_ids[]"]')).map(s => s.value);
+        // Grouped by room_type_id (see panel.blade.php's data-room-type-id
+        // on each select) - one group per distinct room type the booking
+        // needs rooms for, matching CheckInController::store()'s
+        // room_ids[<room_type_id>][] validation shape.
+        const roomIds = {};
+        form.querySelectorAll('select.room-select').forEach(function (select) {
+            const typeId = select.dataset.roomTypeId;
+            if (!roomIds[typeId]) roomIds[typeId] = [];
+            roomIds[typeId].push(select.value);
+        });
         const payload = {
             guest_first_name: form.querySelector('[name="guest_first_name"]').value,
             guest_middle_name: form.querySelector('[name="guest_middle_name"]').value,
