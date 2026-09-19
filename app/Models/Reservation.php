@@ -214,6 +214,61 @@ class Reservation extends Model
     }
 
     /**
+     * The `amenities` JSON field the mobile app's ApiMapper/BookingAmenityDto
+     * expect (see that DTO's own doc - "Not returned by the live API today"
+     * was the actual gap, not an Android-side bug: this reservation's own
+     * bookingAmenities() relation (ReservationAmenity - the frozen,
+     * creation-time snapshot of every paid amenity the guest selected) was
+     * never actually serialized under this key on any guest-facing
+     * response). Every selected amenity counts here regardless of its
+     * matching AmenityRequest's approval status - a still-unconverted
+     * reservation has no post-booking "approve/reject" workflow yet; the
+     * guest already committed to and was charged for exactly this
+     * selection at creation time. Once converted, the guest reads
+     * booking.billing.amenities instead (Billing has no such accessor yet
+     * - see Booking::getAmenitiesAttribute()'s identical convention, which
+     * IS keyed off approval status, since a converted transaction's
+     * amenities CAN be rejected/added post-booking).
+     */
+    public function getAmenitiesAttribute(): array
+    {
+        return $this->bookingAmenities->map(fn (ReservationAmenity $a) => [
+            'amenity_id' => (string) $a->amenity_id,
+            'amenity_name' => $a->amenity_name,
+            'quantity' => $a->quantity,
+            'unit_price' => (float) $a->charge,
+            'subtotal' => (float) $a->subtotal,
+        ])->values()->all();
+    }
+
+    /**
+     * The true grand total for this still-unconverted reservation (room
+     * charge across every room-type line, plus every selected paid
+     * amenity's subtotal) - the reservation-side counterpart of
+     * Booking::getTotalAmountDueAttribute(), which the mobile app's
+     * ApiMapper already expects under this exact key (its own doc already
+     * claimed "Reservation::total_amount_due... sums every room line's
+     * subtotal plus every amenity's subtotal server-side" - that accessor
+     * simply never existed until now, so this field was always absent from
+     * the response and every pre-conversion reservation silently fell back
+     * to Android's own single-room-type, zero-amenity legacy formula).
+     * Deliberately NOT in $appends, matching Booking's identical
+     * reasoning - only attached explicitly where actually needed
+     * (Api\ReservationController::show()/index()) to avoid an extra query
+     * per row on every listing.
+     */
+    public function getTotalAmountDueAttribute(): float
+    {
+        $roomTotal = ! empty($this->room_lines)
+            ? (float) collect($this->room_lines)->sum('subtotal')
+            : (float) ($this->roomType->rate ?? 0) * $this->number_of_nights * max(1, $this->rooms_requested);
+
+        $amenityTotal = (float) $this->bookingAmenities->sum('subtotal');
+
+        return round($roomTotal + $amenityTotal, 2);
+    }
+
+    /**
      * Calculate the number of nights.
      */
     public function getNumberOfNightsAttribute()

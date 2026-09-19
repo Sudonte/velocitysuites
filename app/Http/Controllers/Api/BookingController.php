@@ -59,17 +59,18 @@ class BookingController extends Controller
         $perPage = min($request->integer('per_page', 15), 200);
 
         $paginated = $query->latest('check_in')->paginate($perPage);
-        // total_amount_due is a computed accessor (Booking::getTotalAmountDueAttribute()),
-        // deliberately not auto-appended everywhere - attach it explicitly
-        // here since the guest-facing list needs it (see toBooking() on the
-        // Android side, which reads it to compute a correct remaining balance
-        // now that amount_paid can be a partial/deposit amount).
-        $paginated->getCollection()->transform(function (Booking $booking) {
-            $data = $booking->toArray();
-            $data['total_amount_due'] = $booking->total_amount_due;
-
-            return $data;
-        });
+        // total_amount_due/amenities are computed accessors
+        // (Booking::getTotalAmountDueAttribute()/getAmenitiesAttribute()),
+        // deliberately not in the model's own $appends (would add extra
+        // queries per row to every Booking listing app-wide, e.g. Admin/
+        // Manager/Receptionist) - appended here at runtime instead, since
+        // the guest-facing list needs both (see toBooking() on the Android
+        // side, which reads total_amount_due to compute a correct
+        // remaining balance now that amount_paid can be a partial/deposit
+        // amount, and amenities for the itemized breakdown -
+        // BookingAmenityDto's own doc previously noted this key was never
+        // actually sent by any guest-facing endpoint).
+        $paginated->getCollection()->each(fn (Booking $b) => $b->append(['total_amount_due', 'amenities']));
 
         return response()->json($paginated);
     }
@@ -82,7 +83,7 @@ class BookingController extends Controller
 
         $booking->load(['roomType', 'payments']);
 
-        return response()->json(array_merge($booking->toArray(), ['total_amount_due' => $booking->total_amount_due]));
+        return response()->json($booking->append(['total_amount_due', 'amenities']));
     }
 
     /**
@@ -215,7 +216,7 @@ class BookingController extends Controller
         if (! empty($validated['idempotency_key'])) {
             $existing = Booking::where('idempotency_key', $validated['idempotency_key'])->first();
             if ($existing) {
-                return response()->json(array_merge($existing->toArray(), ['total_amount_due' => $existing->total_amount_due]), 201);
+                return response()->json($existing->append(['total_amount_due', 'amenities']), 201);
             }
         }
 
@@ -312,7 +313,7 @@ class BookingController extends Controller
             if (! empty($validated['idempotency_key']) && str_contains($e->getMessage(), 'idempotency_key')) {
                 $winner = Booking::where('idempotency_key', $validated['idempotency_key'])->first();
                 if ($winner) {
-                    return response()->json(array_merge($winner->toArray(), ['total_amount_due' => $winner->total_amount_due]), 201);
+                    return response()->json($winner->append(['total_amount_due', 'amenities']), 201);
                 }
             }
             Log::error('Booking creation failed on an unexpected unique constraint violation', [
@@ -349,7 +350,7 @@ class BookingController extends Controller
             $booking
         );
 
-        return response()->json(array_merge($booking->toArray(), ['total_amount_due' => $booking->total_amount_due]), 201);
+        return response()->json($booking->append(['total_amount_due', 'amenities']), 201);
     }
 
     /**

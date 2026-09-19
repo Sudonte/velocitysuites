@@ -81,6 +81,12 @@ class ReservationController extends Controller
         $reservations->getCollection()->each(function (Reservation $r) {
             $this->workflow->expireUnpaid($r);
             $this->workflow->processNoShow($r);
+            // total_amount_due/amenities are computed accessors,
+            // deliberately not in the model's own $appends (would add
+            // extra queries per row to every listing) - appended here at
+            // runtime instead, since the guest-facing list needs both (see
+            // Api\BookingController::index()'s identical convention).
+            $r->append(['total_amount_due', 'amenities']);
         });
 
         return response()->json($reservations);
@@ -99,7 +105,7 @@ class ReservationController extends Controller
         $this->workflow->expireUnpaid($reservation);
         $this->workflow->processNoShow($reservation);
 
-        return response()->json($reservation);
+        return response()->json($reservation->append(['total_amount_due', 'amenities']));
     }
 
     /**
@@ -162,7 +168,7 @@ class ReservationController extends Controller
             $existing = Reservation::where('idempotency_key', $validated['idempotency_key'])->first();
             if ($existing) {
                 $existing->load(['roomType', 'booking.room', 'bookingAmenities']);
-                return response()->json($existing, 201);
+                return response()->json($existing->append(['total_amount_due', 'amenities']), 201);
             }
         }
 
@@ -297,7 +303,7 @@ class ReservationController extends Controller
                 $winner = Reservation::where('idempotency_key', $validated['idempotency_key'])->first();
                 if ($winner) {
                     $winner->load(['roomType', 'booking.room', 'bookingAmenities']);
-                    return response()->json($winner, 201);
+                    return response()->json($winner->append(['total_amount_due', 'amenities']), 201);
                 }
             }
             Log::error('Reservation creation failed on an unexpected unique constraint violation', [
@@ -326,7 +332,7 @@ class ReservationController extends Controller
 
         $reservation->load(['roomType', 'booking.room', 'bookingAmenities']);
 
-        return response()->json($reservation, 201);
+        return response()->json($reservation->append(['total_amount_due', 'amenities']), 201);
     }
 
     /**
@@ -545,7 +551,7 @@ class ReservationController extends Controller
             $reservation
         );
 
-        return response()->json($reservation->fresh(['roomType', 'booking.room', 'payments', 'roomLines', 'bookingAmenities']));
+        return response()->json($reservation->fresh(['roomType', 'booking.room', 'payments', 'roomLines', 'bookingAmenities'])->append(['total_amount_due', 'amenities']));
     }
 
     /**
@@ -562,7 +568,7 @@ class ReservationController extends Controller
 
         $this->workflow->switchToGcash($reservation);
 
-        return response()->json($reservation->fresh(['roomType', 'booking.room', 'payments']));
+        return response()->json($reservation->fresh(['roomType', 'booking.room', 'payments'])->append(['total_amount_due', 'amenities']));
     }
 
     /**
@@ -578,7 +584,7 @@ class ReservationController extends Controller
 
         $this->workflow->switchToCash($reservation);
 
-        return response()->json($reservation->fresh(['roomType', 'booking.room', 'payments']));
+        return response()->json($reservation->fresh(['roomType', 'booking.room', 'payments'])->append(['total_amount_due', 'amenities']));
     }
 
     /**
@@ -601,7 +607,7 @@ class ReservationController extends Controller
 
         $this->notificationService->notifyReservationCancelled($user, $roomName, $reservation->id);
 
-        return response()->json($reservation->fresh(['roomType', 'booking.room', 'payments']));
+        return response()->json($reservation->fresh(['roomType', 'booking.room', 'payments'])->append(['total_amount_due', 'amenities']));
     }
 
     /**
@@ -619,7 +625,7 @@ class ReservationController extends Controller
 
         $this->workflow->hide($reservation);
 
-        return response()->json($reservation->fresh(['roomType', 'booking.room', 'payments']));
+        return response()->json($reservation->fresh(['roomType', 'booking.room', 'payments'])->append(['total_amount_due', 'amenities']));
     }
 
     /**

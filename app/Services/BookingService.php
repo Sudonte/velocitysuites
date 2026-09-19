@@ -163,12 +163,25 @@ class BookingService
     }
 
     /**
-     * Ensure a Billing row exists, seeded with the room charge/discount
-     * locked in at the time it's first created. Deliberately does NOT
-     * overwrite room_charge/discount on an existing Billing (see
+     * Ensure a Billing row exists, seeded with the room charge/discount/
+     * amenity charge locked in at the time it's first created. Deliberately
+     * does NOT overwrite room_charge/discount on an existing Billing (see
      * applyStayCharges for what does get refreshed) - a guest who
      * pre-paid keeps the rate/discount they were quoted even if a
      * promotion expires before checkout.
+     *
+     * amenity_charge is seeded from the reservation's own bookingAmenities
+     * (ReservationAmenity - the frozen, creation-time snapshot of every
+     * paid amenity the guest already selected and was charged for) rather
+     * than left at its column default of 0 - previously this method never
+     * set amenity_charge at all, so total_amount was room-charge-only from
+     * conversion until the guest actually checked out (applyStayCharges()
+     * is the only other place that sets it, and that only ever runs at
+     * checkout) - every screen reading this Billing row in between showed
+     * a grand total silently missing the guest's own paid amenities.
+     * total_amount itself is computed via recalculateTotal() (the same
+     * single formula applyStayCharges() relies on later) rather than
+     * duplicated here, so the two can never disagree.
      */
     public function ensureBilling(Booking $booking, Reservation $reservation): Billing
     {
@@ -177,14 +190,19 @@ class BookingService
         }
 
         $quote = $this->quoteRoomCharge($reservation);
+        $amenityCharge = round((float) $reservation->bookingAmenities->sum('subtotal'), 2);
 
-        return Billing::create([
+        $billing = Billing::create([
             'booking_id' => $booking->id,
             'room_charge' => $quote['room_charge'],
+            'amenity_charge' => $amenityCharge,
             'discount' => $quote['discount'],
-            'total_amount' => $quote['total'],
+            'total_amount' => 0,
             'billing_status' => 'pending',
         ]);
+        $billing->recalculateTotal();
+
+        return $billing;
     }
 
     /**

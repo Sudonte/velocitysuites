@@ -275,27 +275,55 @@ class Booking extends Model
             $roomTotal = (float) ($this->roomType->rate ?? 0) * $nights * max(1, $this->rooms_requested);
         }
 
-        // Same reservation_id/booking_id branching CheckOutController::
-        // refreshStayCharges() uses - a reservation-derived booking's
-        // amenity requests are keyed by reservation_id, not booking_id
-        // (see ReceptionistController::amenitiesStore()), so querying
-        // booking_id alone silently returned 0 amenity charge for every
-        // Reserve-then-Convert booking, the normal path (only a direct
-        // "New Booking" transaction ever sets booking_id). Also matches
-        // that method's 'approved'-only filter - a rejected request never
-        // should have counted toward what's due.
-        $amenityTotal = (float) AmenityRequest::where(function ($q) {
+        $amenityTotal = (float) $this->approvedAmenityRequests()
+            ->selectRaw('COALESCE(SUM(charge * quantity), 0) as total')
+            ->value('total');
+
+        return round($roomTotal + $amenityTotal, 2);
+    }
+
+    /**
+     * Same reservation_id/booking_id branching CheckOutController::
+     * refreshStayCharges() uses - a reservation-derived booking's amenity
+     * requests are keyed by reservation_id, not booking_id (see
+     * ReceptionistController::amenitiesStore()), so querying booking_id
+     * alone silently returned 0 amenity charge for every Reserve-then-
+     * Convert booking, the normal path (only a direct "New Booking"
+     * transaction ever sets booking_id). Only 'approved' rows - a rejected
+     * request never should have counted toward what's due. Single source
+     * of truth shared by getTotalAmountDueAttribute() (the money) and
+     * getAmenitiesAttribute() (the itemized breakdown) below, so the two
+     * can never disagree about which rows count.
+     */
+    private function approvedAmenityRequests()
+    {
+        return AmenityRequest::where(function ($q) {
                 if ($this->reservation_id) {
                     $q->where('reservation_id', $this->reservation_id);
                 } else {
                     $q->where('booking_id', $this->id);
                 }
             })
-            ->where('status', 'approved')
-            ->selectRaw('COALESCE(SUM(charge * quantity), 0) as total')
-            ->value('total');
+            ->where('status', 'approved');
+    }
 
-        return round($roomTotal + $amenityTotal, 2);
+    /**
+     * The `amenities` JSON field the mobile app's ApiMapper/BookingAmenityDto
+     * expect (see that DTO's own doc - "Not returned by the live API
+     * today" was the actual gap: this booking's approved amenity_requests
+     * - the exact same rows getTotalAmountDueAttribute() already sums for
+     * the money total - were never actually serialized under this key on
+     * any guest-facing response).
+     */
+    public function getAmenitiesAttribute(): array
+    {
+        return $this->approvedAmenityRequests()->get()->map(fn (AmenityRequest $a) => [
+            'amenity_id' => (string) $a->amenity_id,
+            'amenity_name' => $a->amenity_name,
+            'quantity' => $a->quantity,
+            'unit_price' => (float) $a->charge,
+            'subtotal' => round((float) $a->charge * $a->quantity, 2),
+        ])->values()->all();
     }
 
     /**

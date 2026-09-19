@@ -52,8 +52,17 @@ class PaymentController extends Controller
         }
 
         $reservation->loadMissing('roomType');
-        $nights = abs($reservation->check_out->diffInDays($reservation->check_in));
-        $range = $this->workflow->depositRange($reservation->roomType, $nights, $reservation->rooms_requested);
+        // Room-lines-aware, amenities-inclusive - see Reservation::
+        // getTotalAmountDueAttribute()'s own doc. The old depositRange()
+        // call this replaced only ever priced roomType->rate (the FIRST
+        // room-type line) x rooms_requested (the SUM of every line's
+        // quantity) x nights, with no amenities at all - wrong the moment
+        // more than one room type or any paid amenity was involved, and
+        // this is the one call site that actually gates what amount the
+        // guest is allowed to submit, so that error directly caused a
+        // guest-visible over/under-payment requirement, not just a display
+        // bug.
+        $range = $this->workflow->depositRangeForTotal($reservation->total_amount_due);
 
         $validated = $request->validate([
             'payment_method' => 'required|in:cash,gcash',
@@ -167,7 +176,7 @@ class PaymentController extends Controller
 
         return response()->json([
             'payment' => $payment,
-            'reservation' => $reservation,
+            'reservation' => $reservation->append(['total_amount_due', 'amenities']),
         ], 201);
     }
 
@@ -213,7 +222,7 @@ class PaymentController extends Controller
 
         return response()->json([
             'payment' => $payment->fresh(),
-            'reservation' => $reservation->fresh(['roomType', 'booking.room', 'payments']),
+            'reservation' => $reservation->fresh(['roomType', 'booking.room', 'payments'])->append(['total_amount_due', 'amenities']),
         ]);
     }
 

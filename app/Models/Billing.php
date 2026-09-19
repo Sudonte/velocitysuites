@@ -14,8 +14,11 @@ class Billing extends Model
      * transaction's itemized room lines from here (dto.booking.billing.room_lines)
      * rather than directly off Booking - see getRoomLinesAttribute() below
      * and MULTI_ROOM_TRANSACTION_BACKEND_SPEC.md's "BillingDto#rooms" note.
+     * Same for its itemized amenity lines (dto.booking.billing.amenities) -
+     * see getAmenitiesAttribute() below, previously missing entirely (see
+     * that accessor's own doc for the guest-facing symptom this caused).
      */
-    protected $appends = ['room_lines'];
+    protected $appends = ['room_lines', 'amenities'];
 
     protected $fillable = [
         'booking_id',
@@ -123,6 +126,24 @@ class Billing extends Model
     public function getRoomLinesAttribute(): array
     {
         return $this->booking?->room_lines ?? [];
+    }
+
+    /**
+     * A converted transaction's itemized paid amenities - delegates
+     * entirely to the owning Booking's own accessor (Booking::
+     * getAmenitiesAttribute()), same convention as getRoomLinesAttribute()
+     * above, so this can never drift from what the booking's own top-level
+     * amenities field would show. Previously this accessor didn't exist at
+     * all, so the mobile app's ApiMapper (which already reads
+     * dto.booking.billing.amenities and trusts totalAmount as already
+     * amenities-inclusive for a converted transaction) always got a
+     * null/empty list here regardless of what the guest actually paid for -
+     * see BookingAmenityDto's own doc, which explicitly called this out as
+     * "not returned by the live API today."
+     */
+    public function getAmenitiesAttribute(): array
+    {
+        return $this->booking?->amenities ?? [];
     }
 
     /**
