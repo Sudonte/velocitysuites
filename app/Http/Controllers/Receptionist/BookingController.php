@@ -276,7 +276,13 @@ class BookingController extends Controller
                 })->get()
             );
         }
-        $amenitiesTotal = (float) $amenityRows->where('status', 'approved')->sum(fn ($r) => $r->charge * $r->quantity);
+        // Excludes only 'rejected', matching Booking::billableAmenityRequests()
+        // exactly - a GCash booking's amenity_requests sit at 'pending' until
+        // the receptionist verifies the payment below, but the guest already
+        // paid for them at booking time, so they must count here too (not
+        // just once verified) or this card would show a Grand Total the
+        // receptionist's own verification screen later contradicts.
+        $amenitiesTotal = (float) $amenityRows->where('status', '!=', 'rejected')->sum(fn ($r) => $r->charge * $r->quantity);
         $roomTotal = round((float) collect($roomLines)->sum('subtotal'), 2);
 
         // Transaction/status history - this booking's own entries, plus its

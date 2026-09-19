@@ -275,7 +275,7 @@ class Booking extends Model
             $roomTotal = (float) ($this->roomType->rate ?? 0) * $nights * max(1, $this->rooms_requested);
         }
 
-        $amenityTotal = (float) $this->approvedAmenityRequests()
+        $amenityTotal = (float) $this->billableAmenityRequests()
             ->selectRaw('COALESCE(SUM(charge * quantity), 0) as total')
             ->value('total');
 
@@ -289,13 +289,29 @@ class Booking extends Model
      * ReceptionistController::amenitiesStore()), so querying booking_id
      * alone silently returned 0 amenity charge for every Reserve-then-
      * Convert booking, the normal path (only a direct "New Booking"
-     * transaction ever sets booking_id). Only 'approved' rows - a rejected
-     * request never should have counted toward what's due. Single source
-     * of truth shared by getTotalAmountDueAttribute() (the money) and
-     * getAmenitiesAttribute() (the itemized breakdown) below, so the two
-     * can never disagree about which rows count.
+     * transaction ever sets booking_id).
+     *
+     * Excludes only 'rejected' rows, NOT filtered down to 'approved' -
+     * previously this required 'approved', which conflated two unrelated
+     * things: the receptionist's staff-facing fulfillment/delivery
+     * workflow (pending -> approved -> in_progress -> completed) versus
+     * whether the guest actually committed to and paid for this amenity at
+     * booking time. A GCash-paid direct booking's amenity_requests start
+     * at 'pending' (DirectBookingService::create()) and only get bulk-
+     * flipped to 'approved' when a receptionist later verifies the GCash
+     * payment (Receptionist\PaymentController) - so with the old filter,
+     * Booking Details showed Amenities Total = 0 and Grand Total =
+     * room-only for the entire "pending verification" window, even though
+     * the guest's own Grand Total (and the amount they were required to
+     * pay) already included those amenities at creation time. Matches
+     * Reservation::getAmenitiesAttribute()'s identical, already-correct
+     * reasoning ("every selected amenity counts... regardless of...
+     * approval status"). Single source of truth shared by
+     * getTotalAmountDueAttribute() (the money) and getAmenitiesAttribute()
+     * (the itemized breakdown) below, so the two can never disagree about
+     * which rows count.
      */
-    private function approvedAmenityRequests()
+    private function billableAmenityRequests()
     {
         return AmenityRequest::where(function ($q) {
                 if ($this->reservation_id) {
@@ -304,20 +320,20 @@ class Booking extends Model
                     $q->where('booking_id', $this->id);
                 }
             })
-            ->where('status', 'approved');
+            ->where('status', '!=', 'rejected');
     }
 
     /**
      * The `amenities` JSON field the mobile app's ApiMapper/BookingAmenityDto
      * expect (see that DTO's own doc - "Not returned by the live API
-     * today" was the actual gap: this booking's approved amenity_requests
+     * today" was the actual gap: this booking's billable amenity_requests
      * - the exact same rows getTotalAmountDueAttribute() already sums for
      * the money total - were never actually serialized under this key on
      * any guest-facing response).
      */
     public function getAmenitiesAttribute(): array
     {
-        return $this->approvedAmenityRequests()->get()->map(fn (AmenityRequest $a) => [
+        return $this->billableAmenityRequests()->get()->map(fn (AmenityRequest $a) => [
             'amenity_id' => (string) $a->amenity_id,
             'amenity_name' => $a->amenity_name,
             'quantity' => $a->quantity,
