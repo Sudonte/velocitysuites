@@ -1,5 +1,18 @@
 @php
+    // $depositPayment stays "the most recent deposit-stage submission" for
+    // display of its own GCash details/receipt/verify-reject actions below -
+    // that's correct even while unverified or rejected, since the
+    // receptionist needs to see and act on exactly that attempt.
     $depositPayment = $reservation->payments->firstWhere('payment_stage', 'deposit');
+    // Amount Paid / Remaining Balance must NEVER be driven by that single,
+    // possibly-unverified object though - only verified (payment_status
+    // 'completed') deposit-stage payments count as paid, summed (not just
+    // the latest), matching the same authoritative rule
+    // Receptionist\BookingController::show() already applies.
+    $verifiedDepositAmountPaid = (float) $reservation->payments
+        ->where('payment_stage', 'deposit')
+        ->where('payment_status', 'completed')
+        ->sum('amount_paid');
     $nights = $reservation->number_of_nights;
     // roomCharge kept as the single legacy fallback ONLY for the pre-filled
     // "Amount Paid" input default below - $roomTotal (from the controller,
@@ -154,8 +167,8 @@
                     <dd>{{ $reservation->selected_payment_percentage ? (int) $reservation->selected_payment_percentage . '%' : 'N/A' }}</dd>
                 </div>
                 @if($depositPayment)
-                    <div><dt>Amount Paid</dt><dd class="text-success">₱{{ number_format($depositPayment->amount_paid, 2) }}</dd></div>
-                    @php $depositRemaining = max(0, $grandTotal - (float) $depositPayment->amount_paid); @endphp
+                    <div><dt>Amount Paid</dt><dd class="text-success">₱{{ number_format($verifiedDepositAmountPaid, 2) }}</dd></div>
+                    @php $depositRemaining = max(0, $grandTotal - $verifiedDepositAmountPaid); @endphp
                     <div><dt>Remaining Balance</dt><dd>₱{{ number_format($depositRemaining, 2) }}</dd></div>
                     <div><dt>Payment Status</dt><dd><x-status-badge :status="$depositPayment->payment_status" domain="payment" /></dd></div>
                 @else

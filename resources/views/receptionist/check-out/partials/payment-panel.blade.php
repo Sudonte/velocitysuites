@@ -54,25 +54,38 @@
     <div class="alert alert-danger d-none" id="paymentErrorAlert"></div>
 
     <form id="paymentForm">
-        <div class="mb-3">
-            <label class="form-label">Payment Method <span class="text-danger">*</span></label>
-            <select name="payment_method" id="paymentMethodSelect" class="form-select" required>
-                <option value="cash">Cash</option>
-                <option value="gcash">GCash</option>
-            </select>
-        </div>
-        <div class="mb-3">
-            <label class="form-label">Amount Received <span class="text-danger">*</span></label>
-            <input type="number" step="0.01" min="0.01" name="amount_paid" id="amountPaidInput" class="form-control" value="{{ $balance }}" data-balance="{{ $balance }}" required>
-        </div>
-        <div class="mb-3 d-none" id="referenceNumberGroup">
-            <label class="form-label">Reference Number <span class="text-danger">*</span></label>
-            <input type="text" name="reference_number" id="referenceNumberInput" class="form-control" placeholder="GCash reference number">
-        </div>
-        <div class="mb-3 d-none" id="changeDueGroup">
-            <label class="form-label">Change Due</label>
-            <input type="text" class="form-control" id="changeDueDisplay" readonly>
-        </div>
+        @if($balance > 0.009)
+            <div class="mb-3">
+                <label class="form-label">Payment Method <span class="text-danger">*</span></label>
+                <select name="payment_method" id="paymentMethodSelect" class="form-select" required>
+                    <option value="cash">Cash</option>
+                    <option value="gcash">GCash</option>
+                </select>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Amount Received <span class="text-danger">*</span></label>
+                <input type="number" step="0.01" min="0.01" name="amount_paid" id="amountPaidInput" class="form-control" value="{{ $balance }}" data-balance="{{ $balance }}" required>
+            </div>
+            <div class="mb-3 d-none" id="referenceNumberGroup">
+                <label class="form-label">Reference Number <span class="text-danger">*</span></label>
+                <input type="text" name="reference_number" id="referenceNumberInput" class="form-control" placeholder="GCash reference number">
+            </div>
+            <div class="mb-3 d-none" id="changeDueGroup">
+                <label class="form-label">Change Due</label>
+                <input type="text" class="form-control" id="changeDueDisplay" readonly>
+            </div>
+        @else
+            {{-- Grand Total already fully covered by prior verified payments
+                 (e.g. a 100%-tier reservation converted with its payment
+                 already verified) - nothing left to collect, so the form
+                 submits a 0-amount completion instead of blocking the
+                 receptionist with a payment field that can never validate. --}}
+            <input type="hidden" name="payment_method" value="cash">
+            <input type="hidden" name="amount_paid" value="0">
+            <div class="alert alert-success mb-0">
+                <i class="fas fa-check-circle"></i> This stay is already fully paid - no additional payment is required. Click "Complete Check-Out" to finish.
+            </div>
+        @endif
     </form>
 </div>
 <div class="modal-footer">
@@ -80,6 +93,6 @@
         <i class="fas fa-arrow-left"></i> Back to Billing
     </button>
     <button type="submit" form="paymentForm" class="btn btn-success" id="completePaymentBtn">
-        <i class="fas fa-check"></i> Complete Payment
+        <i class="fas fa-check"></i> {{ $balance > 0.009 ? 'Complete Payment' : 'Complete Check-Out' }}
     </button>
 </div>

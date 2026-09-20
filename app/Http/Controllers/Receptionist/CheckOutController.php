@@ -135,13 +135,23 @@ class CheckOutController extends Controller
      * Record a payment against a billing from the Payment Panel. Completes the
      * check-out (reservation + room status, notifications) only once the
      * balance reaches zero; a partial payment leaves the guest checked in.
+     *
+     * amount_paid may be 0 - that's the "already fully paid before
+     * checkout" case (e.g. a 100%-tier reservation converted with its
+     * Grand Total already covered by a receptionist-verified payment):
+     * the Payment Panel still has to be able to finalize the check-out
+     * (transition booking_status to STATUS_COMPLETED) even though there's
+     * nothing left to collect. A 0 submission is only ever accepted when
+     * the billing's balance is already covered by prior completed
+     * payments - it must never be a way to skip a genuine outstanding
+     * balance, so that's checked explicitly before anything else runs.
      */
     public function recordPayment(Request $request, Billing $billing)
     {
         $validated = $request->validate([
             'payment_method' => 'required|in:cash,gcash',
             'reference_number' => 'required_if:payment_method,gcash|nullable|string|max:255',
-            'amount_paid' => 'required|numeric|min:0.01',
+            'amount_paid' => 'required|numeric|min:0',
         ]);
 
         $booking = $billing->booking;
@@ -150,22 +160,32 @@ class CheckOutController extends Controller
             return response()->json(['message' => 'This booking is not awaiting checkout.'], 422);
         }
 
+        if ((float) $validated['amount_paid'] <= 0 && (float) $billing->balance > 0.009) {
+            return response()->json([
+                'message' => 'A payment amount is required - the remaining balance is ₱' . number_format($billing->balance, 2) . '.',
+            ], 422);
+        }
+
         $completed = false;
 
         DB::transaction(function () use ($validated, $billing, $booking, &$completed) {
-            if (empty($validated['reference_number'])) {
-                $validated['reference_number'] = 'PAY-' . strtoupper(Str::random(10));
-            }
+            $amountPaid = (float) $validated['amount_paid'];
 
-            Payment::create([
-                'billing_id' => $billing->id,
-                'payment_method' => $validated['payment_method'],
-                'reference_number' => $validated['reference_number'],
-                'amount_paid' => $validated['amount_paid'],
-                'payment_status' => 'completed',
-                'payment_stage' => 'final',
-                'payment_date' => now(),
-            ]);
+            if ($amountPaid > 0) {
+                if (empty($validated['reference_number'])) {
+                    $validated['reference_number'] = 'PAY-' . strtoupper(Str::random(10));
+                }
+
+                Payment::create([
+                    'billing_id' => $billing->id,
+                    'payment_method' => $validated['payment_method'],
+                    'reference_number' => $validated['reference_number'],
+                    'amount_paid' => $amountPaid,
+                    'payment_status' => 'completed',
+                    'payment_stage' => 'final',
+                    'payment_date' => now(),
+                ]);
+            }
 
             $paid = (float) $billing->payments()
                 ->where('payment_status', 'completed')
@@ -178,20 +198,22 @@ class CheckOutController extends Controller
             $rooms = $booking->rooms->isNotEmpty() ? $booking->rooms : collect([$booking->room])->filter();
             $roomName = $rooms->pluck('room_name')->implode(', ');
 
-            if ($guest) {
-                $this->notificationService->notifyPaymentReceived(
-                    $guest,
-                    (float) $validated['amount_paid'],
-                    $roomName,
-                    $booking->reservation_id ?? $booking->id
+            if ($amountPaid > 0) {
+                if ($guest) {
+                    $this->notificationService->notifyPaymentReceived(
+                        $guest,
+                        $amountPaid,
+                        $roomName,
+                        $booking->reservation_id ?? $booking->id
+                    );
+                }
+
+                Activity::log(
+                    'Recorded payment',
+                    "Booking #{$booking->id} - ₱" . number_format($amountPaid, 2) . " ({$validated['payment_method']}) from " . ($guest->full_name ?? $booking->stay_guest_full_name ?? 'guest'),
+                    $booking
                 );
             }
-
-            Activity::log(
-                'Recorded payment',
-                "Booking #{$booking->id} - ₱" . number_format((float) $validated['amount_paid'], 2) . " ({$validated['payment_method']}) from " . ($guest->full_name ?? $booking->stay_guest_full_name ?? 'guest'),
-                $booking
-            );
 
             if ($completed) {
                 $booking->update(['booking_status' => Booking::STATUS_COMPLETED]);
@@ -213,7 +235,7 @@ class CheckOutController extends Controller
                 if ($guest) {
                     $this->notificationService->notifyManagerPayment(
                         $guest,
-                        (float) $validated['amount_paid'],
+                        $amountPaid,
                         $billing->billing_status,
                         $roomName,
                         $booking->reservation_id ?? $booking->id

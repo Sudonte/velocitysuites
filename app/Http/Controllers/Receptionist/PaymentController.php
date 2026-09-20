@@ -58,7 +58,18 @@ class PaymentController extends Controller
             abort(422, 'Cannot verify: the GCash number and receipt must both be on file first.');
         }
 
-        $payment->update(['verified_at' => now(), 'verified_by' => auth()->id()]);
+        // payment_status must move to 'completed' here too, not just
+        // verified_at/verified_by - every Amount Paid computation across
+        // the receptionist module (Receptionist\BookingController::show(),
+        // checkout billing) sums payments strictly by
+        // payment_status = 'completed', the same status the reservation
+        // auto-convert/manual-convert paths already set at conversion
+        // time (ReservationWorkflowService::tryAutoConvert()/
+        // convertToBooking()). Without this, a direct booking's GCash
+        // payment - which has no conversion step to pass through - stayed
+        // 'pending' forever after verification, so it verified successfully
+        // but never actually counted as paid.
+        $payment->update(['verified_at' => now(), 'verified_by' => auth()->id(), 'payment_status' => 'completed']);
 
         $this->logAndNotify($payment, verified: true);
         $this->autoCompleteBooking($payment);
