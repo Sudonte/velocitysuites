@@ -961,6 +961,72 @@ tbody tr:hover {
     font-weight: 500;
 }
 
+/* Booking/Reservation Details header - "BOOKING DETAILS" / "RESERVATION
+   DETAILS" eyebrow label above a bold, highly visible ID line, with the
+   status badge on the upper-right (see receptionist/bookings/show.blade.php
+   and receptionist/reservations/partials/details.blade.php). */
+.details-header-card {
+    background-color: var(--surface-color);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow-sm);
+    padding: 1.25rem 1.5rem;
+    margin-bottom: 1rem;
+}
+
+.details-header-eyebrow {
+    font-size: 0.8rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-light);
+}
+
+.details-header-eyebrow i {
+    color: var(--primary-color);
+}
+
+.details-header-id {
+    font-size: 1.5rem;
+}
+
+/* One bordered mini-card per selected room TYPE (never just the first type
+   of a genuine multi-room-type transaction) - each visually separated so
+   Deluxe/Executive/Family etc. never blur together into one ambiguous
+   list, per the required Room Information layout. */
+.room-type-card-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.room-type-card {
+    display: flex;
+    align-items: flex-start;
+    gap: 1rem;
+    background-color: var(--bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-card);
+    padding: 1rem;
+}
+
+.room-type-card-image {
+    width: 84px;
+    height: 84px;
+    object-fit: cover;
+    border-radius: var(--radius-btn);
+    flex-shrink: 0;
+}
+
+.room-type-card-image-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: var(--border-color);
+    color: var(--text-light);
+    font-size: 1.5rem;
+}
+
 /* Notifications */
 .alert {
     padding: 1rem;

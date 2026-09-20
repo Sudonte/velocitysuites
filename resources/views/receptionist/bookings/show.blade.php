@@ -21,8 +21,11 @@
     @endphp
 
     <!-- ===================== BOOKING DETAILS header ===================== -->
-    <div class="page-header d-flex flex-wrap align-items-center justify-content-between gap-2">
-        <h1 class="mb-0 fw-bold"><i class="fas fa-calendar-check"></i> Booking #{{ $booking->id }}</h1>
+    <div class="details-header-card d-flex flex-wrap align-items-start justify-content-between gap-2">
+        <div>
+            <p class="details-header-eyebrow mb-1"><i class="fas fa-calendar-check"></i> Booking Details</p>
+            <h1 class="mb-0 fw-bold details-header-id">Booking ID: {{ $booking->id }}</h1>
+        </div>
         <div class="d-flex align-items-center gap-2">
             <x-status-badge :status="$booking->display_status" domain="booking" class="fs-6" />
             @if($booking->verified_at)
@@ -47,66 +50,83 @@
 
     <div class="row mt-3">
         <div class="col-lg-8">
-            <!-- ===================== GUEST INFORMATION ===================== -->
-            <x-card title="Guest Information" icon="fas fa-user" bodyClass="card-body" class="mb-4">
-                <dl class="detail-list mb-0">
-                    <div><dt>Account Holder</dt><dd>{{ $booking->account_guest_full_name ?? 'N/A' }}</dd></div>
-                    <div><dt>Representative Name</dt><dd>{{ $booking->guest_display_name }}</dd></div>
-                    <div><dt>Email</dt><dd>{{ $booking->account_guest?->user?->email ?? 'N/A' }}</dd></div>
-                    <div><dt>Mobile Number</dt><dd>{{ $booking->account_guest?->mobile_number ?: 'Not provided' }}</dd></div>
-                    <div><dt>Adults</dt><dd>{{ $booking->adults }}</dd></div>
-                    <div><dt>Children</dt><dd>{{ $booking->children }}</dd></div>
-                    <div><dt>Total Guests</dt><dd>{{ $booking->number_of_guests }}</dd></div>
-                </dl>
-            </x-card>
+            <div class="row">
+                <!-- ===================== GUEST INFORMATION ===================== -->
+                <div class="col-md-6">
+                    <x-card title="Guest Information" icon="fas fa-user" bodyClass="card-body" class="mb-4 h-100">
+                        <dl class="detail-list mb-0">
+                            <div><dt>Account Holder</dt><dd>{{ $booking->account_guest_full_name ?? 'N/A' }}</dd></div>
+                            <div><dt>Representative Name</dt><dd>{{ $booking->guest_display_name }}</dd></div>
+                            <div><dt>Email</dt><dd>{{ $booking->account_guest?->user?->email ?? 'N/A' }}</dd></div>
+                            <div><dt>Mobile Number</dt><dd>{{ $booking->account_guest?->mobile_number ?: 'Not provided' }}</dd></div>
+                            <div><dt>Adults</dt><dd>{{ $booking->adults }}</dd></div>
+                            <div><dt>Children</dt><dd>{{ $booking->children }}</dd></div>
+                            <div><dt>Total Guests</dt><dd>{{ $booking->number_of_guests }}</dd></div>
+                        </dl>
+                    </x-card>
+                </div>
 
-            <!-- ===================== STAY INFORMATION ===================== -->
-            <x-card title="Stay Information" icon="fas fa-calendar-days" bodyClass="card-body" class="mb-4">
-                <dl class="detail-list mb-0">
-                    <div><dt>Check-In</dt><dd>{{ $booking->check_in->format('F d, Y') }}</dd></div>
-                    <div><dt>Check-Out</dt><dd>{{ $booking->check_out->format('F d, Y') }}</dd></div>
-                    <div><dt>Nights</dt><dd>{{ $nights }}</dd></div>
-                    <div><dt>Booking / Creation Date</dt><dd>{{ $booking->created_at?->format('F d, Y') ?? 'N/A' }}</dd></div>
-                    <div><dt>Creation Time</dt><dd>{{ $booking->created_at?->format('h:i A') ?? 'N/A' }}</dd></div>
-                </dl>
-            </x-card>
+                <!-- ===================== STAY INFORMATION ===================== -->
+                <div class="col-md-6">
+                    <x-card title="Stay Information" icon="fas fa-calendar-days" bodyClass="card-body" class="mb-4 h-100">
+                        <dl class="detail-list mb-0">
+                            <div><dt>Check-In</dt><dd>{{ $booking->check_in->format('F d, Y') }}</dd></div>
+                            <div><dt>Check-Out</dt><dd>{{ $booking->check_out->format('F d, Y') }}</dd></div>
+                            <div><dt>Nights</dt><dd>{{ $nights }}</dd></div>
+                            <div><dt>Booking / Creation Date</dt><dd>{{ $booking->created_at?->format('F d, Y') ?? 'N/A' }}</dd></div>
+                            <div><dt>Creation Time</dt><dd>{{ $booking->created_at?->format('h:i A') ?? 'N/A' }}</dd></div>
+                        </dl>
+                    </x-card>
+                </div>
+            </div>
 
-            <!-- ===================== ROOM INFORMATION ===================== -->
+            <!-- ===================== ROOM INFORMATION =====================
+                 One bordered mini-card per distinct selected room type - a
+                 genuine multi-room-type transaction (Deluxe x2 + Executive x1,
+                 etc.) must show every line, never just the first, and each
+                 line's own image must never be a broken-image icon when
+                 image_url is missing/null (falls back to a plain icon tile). -->
             <x-card title="Room Information" icon="fas fa-bed" bodyClass="card-body" class="mb-4">
-                @foreach($roomLines as $line)
-                    @php
-                        $lineRoomType = \App\Models\RoomType::find($line['room_type_id'] ?? null);
-                        $assigned = $line['assigned_room_numbers'] ?? [];
-                    @endphp
-                    <div class="d-flex align-items-start gap-3 {{ !$loop->last ? 'pb-3 mb-3 border-bottom' : '' }}">
-                        @if($lineRoomType)
-                            <img src="{{ $lineRoomType->image_url }}" alt="{{ $line['room_type'] }}"
-                                 class="rounded" style="width: 80px; height: 80px; object-fit: cover; flex-shrink: 0;">
-                        @endif
-                        <div class="flex-grow-1">
-                            <h6 class="mb-2">
-                                {{ $line['room_type'] }}
-                                <span class="badge bg-secondary">&times;{{ $line['quantity'] }}</span>
-                            </h6>
-                            <dl class="detail-list mb-0">
-                                <div><dt>Price / Room / Night</dt><dd>₱{{ number_format($line['price_per_night'], 2) }}</dd></div>
-                                <div><dt>Quantity</dt><dd>{{ $line['quantity'] }}</dd></div>
-                                <div><dt>Assigned Room Numbers</dt>
-                                    <dd>
-                                        @if(count($assigned))
-                                            {{ implode(', ', $assigned) }}
-                                        @else
-                                            <span class="text-muted">Not yet assigned</span>
-                                        @endif
-                                    </dd>
+                <div class="room-type-card-list">
+                    @foreach($roomLines as $line)
+                        @php
+                            $lineRoomType = \App\Models\RoomType::find($line['room_type_id'] ?? null);
+                            $assigned = $line['assigned_room_numbers'] ?? [];
+                            $lineImageUrl = $lineRoomType->image_url ?? null;
+                        @endphp
+                        <div class="room-type-card">
+                            @if($lineImageUrl)
+                                <img src="{{ $lineImageUrl }}" alt="{{ $line['room_type'] }}" class="room-type-card-image">
+                            @else
+                                <div class="room-type-card-image room-type-card-image-placeholder">
+                                    <i class="fas fa-bed"></i>
                                 </div>
-                                <div><dt>Room Subtotal ({{ $line['nights'] }} night{{ $line['nights'] == 1 ? '' : 's' }})</dt>
-                                    <dd class="fw-bold">₱{{ number_format($line['subtotal'], 2) }}</dd>
-                                </div>
-                            </dl>
+                            @endif
+                            <div class="flex-grow-1">
+                                <h6 class="mb-2">
+                                    {{ $line['room_type'] }}
+                                    <span class="badge bg-secondary">&times;{{ $line['quantity'] }}</span>
+                                </h6>
+                                <dl class="detail-list mb-0">
+                                    <div><dt>Price / Room / Night</dt><dd>₱{{ number_format($line['price_per_night'], 2) }}</dd></div>
+                                    <div><dt>Quantity</dt><dd>{{ $line['quantity'] }}</dd></div>
+                                    <div><dt>Assigned Room{{ $line['quantity'] > 1 ? ' Numbers' : ' Number' }}</dt>
+                                        <dd>
+                                            @if(count($assigned))
+                                                {{ implode(', ', $assigned) }}
+                                            @else
+                                                <span class="text-muted">Room assignment pending</span>
+                                            @endif
+                                        </dd>
+                                    </div>
+                                    <div><dt>Room Subtotal ({{ $line['nights'] }} night{{ $line['nights'] == 1 ? '' : 's' }})</dt>
+                                        <dd class="fw-bold">₱{{ number_format($line['subtotal'], 2) }}</dd>
+                                    </div>
+                                </dl>
+                            </div>
                         </div>
-                    </div>
-                @endforeach
+                    @endforeach
+                </div>
                 <div class="d-flex justify-content-between align-items-center pt-2 mt-1 border-top">
                     <span class="fw-bold">Room Total</span>
                     <span class="fw-bold text-brand">₱{{ number_format($roomTotal, 2) }}</span>
@@ -293,11 +313,6 @@
                     </dl>
                 </x-card>
             @endif
-
-            <!-- ===================== SPECIAL REQUESTS ===================== -->
-            <x-card title="Special Requests" icon="fas fa-comment-dots" bodyClass="card-body" class="mb-4">
-                <x-empty-state icon="fas fa-comment-dots" message="No special requests on file for this booking." />
-            </x-card>
 
             <!-- ===================== TRANSACTION / STATUS HISTORY ===================== -->
             @if($history->isNotEmpty())

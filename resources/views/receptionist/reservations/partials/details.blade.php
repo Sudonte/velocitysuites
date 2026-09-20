@@ -10,9 +10,10 @@
 @endphp
 
 <!-- ===================== Reservation header ===================== -->
-<div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3 pb-3 border-bottom">
+<div class="details-header-card d-flex flex-wrap align-items-start justify-content-between gap-2">
     <div>
-        <h4 class="mb-1 fw-bold">Reservation #{{ $reservation->id }}</h4>
+        <p class="details-header-eyebrow mb-1"><i class="fas fa-calendar-alt"></i> Reservation Details</p>
+        <h1 class="mb-1 fw-bold details-header-id">Reservation ID: {{ $reservation->id }}</h1>
         <p class="text-muted mb-0">
             {{ $reservation->guest_display_name }}
             &bull; {{ collect($roomLines)->pluck('room_type')->join(', ') }}
@@ -36,9 +37,8 @@
 <div class="row g-4">
     <!-- Left column: guest + stay + room -->
     <div class="col-lg-6">
-        <section class="detail-section">
-            <h6 class="detail-section-title"><i class="fas fa-user"></i> Guest Information</h6>
-            <dl class="detail-list">
+        <x-card title="Guest Information" icon="fas fa-user" bodyClass="card-body" class="mb-4">
+            <dl class="detail-list mb-0">
                 <div><dt>Account Holder</dt><dd>{{ $reservation->guest?->user?->full_name ?? 'Walk-in (no account)' }}</dd></div>
                 <div><dt>Representative Name</dt><dd>{{ $reservation->guest_display_name }}</dd></div>
                 <div><dt>Email</dt><dd>{{ $reservation->guest?->user?->email ?? 'N/A' }}</dd></div>
@@ -55,42 +55,50 @@
                     @endforeach
                 </ul>
             @endif
-        </section>
+        </x-card>
 
-        <section class="detail-section">
-            <h6 class="detail-section-title"><i class="fas fa-calendar-days"></i> Stay Information</h6>
-            <dl class="detail-list">
+        <x-card title="Stay Information" icon="fas fa-calendar-days" bodyClass="card-body" class="mb-4">
+            <dl class="detail-list mb-0">
                 <div><dt>Check-In</dt><dd>{{ $reservation->check_in->format('M d, Y') }}</dd></div>
                 <div><dt>Check-Out</dt><dd>{{ $reservation->check_out->format('M d, Y') }}</dd></div>
                 <div><dt>Nights</dt><dd>{{ $nights }}</dd></div>
                 <div><dt>Booking / Creation Date</dt><dd>{{ $reservation->created_at?->format('M d, Y') ?? 'N/A' }}</dd></div>
                 <div><dt>Creation Time</dt><dd>{{ $reservation->created_at?->format('h:i A') ?? 'N/A' }}</dd></div>
             </dl>
-        </section>
+        </x-card>
 
-        <section class="detail-section">
-            <h6 class="detail-section-title"><i class="fas fa-bed"></i> Room Information</h6>
-            @foreach($roomLines as $line)
-                <div class="d-flex align-items-start gap-3 {{ !$loop->last ? 'pb-3 mb-3 border-bottom' : '' }}">
-                    @php $lineRoomType = \App\Models\RoomType::find($line['room_type_id'] ?? null); @endphp
-                    @if($lineRoomType)
-                        <img src="{{ $lineRoomType->image_url }}" alt="{{ $line['room_type'] }}"
-                             class="rounded" style="width: 64px; height: 64px; object-fit: cover; flex-shrink: 0;">
-                    @endif
-                    <div class="flex-grow-1">
-                        <p class="mb-1 fw-bold">{{ $line['room_type'] }} <span class="badge bg-secondary">&times;{{ $line['quantity'] }}</span></p>
-                        <dl class="detail-list mb-0">
-                            <div><dt>Price / Room / Night</dt><dd>₱{{ number_format($line['price_per_night'], 2) }}</dd></div>
-                            <div><dt>Assigned Room{{ $line['quantity'] > 1 ? 's' : '' }}</dt>
-                                <dd class="text-muted">Not yet assigned - a receptionist assigns specific room(s) once this converts to a booking.</dd>
+        <!-- One bordered mini-card per selected room TYPE - never just the
+             first, for a genuine multi-room-type reservation. -->
+        <x-card title="Room Information" icon="fas fa-bed" bodyClass="card-body" class="mb-4">
+            <div class="room-type-card-list">
+                @foreach($roomLines as $line)
+                    @php
+                        $lineRoomType = \App\Models\RoomType::find($line['room_type_id'] ?? null);
+                        $lineImageUrl = $lineRoomType->image_url ?? null;
+                    @endphp
+                    <div class="room-type-card">
+                        @if($lineImageUrl)
+                            <img src="{{ $lineImageUrl }}" alt="{{ $line['room_type'] }}" class="room-type-card-image">
+                        @else
+                            <div class="room-type-card-image room-type-card-image-placeholder">
+                                <i class="fas fa-bed"></i>
                             </div>
-                            <div><dt>Room Subtotal</dt><dd>₱{{ number_format($line['subtotal'], 2) }}</dd></div>
-                        </dl>
+                        @endif
+                        <div class="flex-grow-1">
+                            <p class="mb-1 fw-bold">{{ $line['room_type'] }} <span class="badge bg-secondary">&times;{{ $line['quantity'] }}</span></p>
+                            <dl class="detail-list mb-0">
+                                <div><dt>Price / Room / Night</dt><dd>₱{{ number_format($line['price_per_night'], 2) }}</dd></div>
+                                <div><dt>Assigned Room{{ $line['quantity'] > 1 ? 's' : '' }}</dt>
+                                    <dd class="text-muted">Room assignment pending - a receptionist assigns specific room(s) once this converts to a booking.</dd>
+                                </div>
+                                <div><dt>Room Subtotal</dt><dd class="fw-bold">₱{{ number_format($line['subtotal'], 2) }}</dd></div>
+                            </dl>
+                        </div>
                     </div>
-                </div>
-            @endforeach
+                @endforeach
+            </div>
             @if(isset($available))
-                <p class="mb-0 mt-2">
+                <p class="mb-0 mt-3">
                     <strong>Availability:</strong>
                     @if($available >= $reservation->rooms_requested)
                         <span class="text-success"><i class="fas fa-check-circle"></i> {{ $available }} room(s) free for these dates</span>
@@ -99,10 +107,9 @@
                     @endif
                 </p>
             @endif
-        </section>
+        </x-card>
 
-        <section class="detail-section">
-            <h6 class="detail-section-title"><i class="fas fa-spa"></i> Amenities</h6>
+        <x-card title="Amenities" icon="fas fa-spa" bodyClass="card-body" class="mb-4">
             @if($amenityRows->isEmpty())
                 <x-empty-state icon="fas fa-spa" message="No amenities selected for this reservation." />
             @else
@@ -128,13 +135,12 @@
                     <span class="fw-bold text-brand">₱{{ number_format($amenitiesTotal, 2) }}</span>
                 </div>
             @endif
-        </section>
+        </x-card>
     </div>
 
     <!-- Right column: payment/billing + actions -->
     <div class="col-lg-6">
-        <section class="detail-section">
-            <h6 class="detail-section-title"><i class="fas fa-receipt"></i> Payment Summary</h6>
+        <x-card title="Payment Summary" icon="fas fa-receipt" bodyClass="card-body" class="mb-4">
             <dl class="detail-list mb-2">
                 <div><dt>Room Total ({{ $nights }} night{{ $nights == 1 ? '' : 's' }})</dt><dd>₱{{ number_format($roomTotal, 2) }}</dd></div>
                 <div><dt>Amenities Total</dt><dd>₱{{ number_format($amenitiesTotal, 2) }}</dd></div>
@@ -168,11 +174,10 @@
                     <small class="text-muted d-block">Unpaid past this deadline auto-cancels the reservation.</small>
                 </p>
             @endif
-        </section>
+        </x-card>
 
         @if($depositPayment && $depositPayment->payment_method === 'gcash')
-            <section class="detail-section">
-                <h6 class="detail-section-title"><i class="fas fa-qrcode"></i> GCash Payment Information</h6>
+            <x-card title="GCash Payment Information" icon="fas fa-qrcode" bodyClass="card-body" class="mb-4">
                 <dl class="detail-list mb-2">
                     <div><dt>GCash Mobile Number</dt><dd>{{ $depositPayment->gcash_number ?: 'Not provided' }}</dd></div>
                     <div><dt>GCash Reference Number</dt><dd>{{ $depositPayment->reference_number ?: 'Not provided' }}</dd></div>
@@ -223,11 +228,10 @@
                         </div>
                     @endif
                 </div>
-            </section>
+            </x-card>
         @endif
 
-        <section class="detail-section">
-            <h6 class="detail-section-title"><i class="fas fa-id-card"></i> Discount Request</h6>
+        <x-card title="Discount Request" icon="fas fa-id-card" bodyClass="card-body" class="mb-4">
             @if($reservation->discount_requested)
                 <p class="mb-1"><strong>Status:</strong> <x-status-badge :status="$reservation->discount_verification_status" domain="discount_verification" /></p>
                 @if($reservation->id_document_path)
@@ -246,23 +250,16 @@
             @else
                 <p class="text-muted mb-0">No discount requested.</p>
             @endif
-        </section>
-
-        <section class="detail-section">
-            <h6 class="detail-section-title"><i class="fas fa-comment-dots"></i> Special Requests</h6>
-            <x-empty-state icon="fas fa-comment-dots" message="No special requests on file for this reservation." />
-        </section>
+        </x-card>
 
         @if(in_array($reservation->status, [\App\Models\Reservation::STATUS_CANCELLED, \App\Models\Reservation::STATUS_REJECTED], true))
-            <section class="detail-section">
-                <h6 class="detail-section-title"><i class="fas fa-ban"></i> Cancellation Information</h6>
+            <x-card title="Cancellation Information" icon="fas fa-ban" bodyClass="card-body" class="mb-4">
                 <p class="mb-0">{{ $reservation->rejection_reason ?: 'No reason recorded.' }}</p>
-            </section>
+            </x-card>
         @endif
 
         @if($history->isNotEmpty())
-            <section class="detail-section">
-                <h6 class="detail-section-title"><i class="fas fa-clock-rotate-left"></i> Transaction / Status History</h6>
+            <x-card title="Transaction / Status History" icon="fas fa-clock-rotate-left" bodyClass="card-body" class="mb-4">
                 <ul class="list-unstyled mb-0">
                     @foreach($history as $entry)
                         <li class="pb-2 mb-2 border-bottom">
@@ -273,10 +270,13 @@
                             @if($entry->description)
                                 <div class="text-muted small">{{ $entry->description }}</div>
                             @endif
+                            @if($entry->user)
+                                <div class="text-muted small">by {{ $entry->user->full_name ?? $entry->user->email }}</div>
+                            @endif
                         </li>
                     @endforeach
                 </ul>
-            </section>
+            </x-card>
         @endif
     </div>
 </div>
@@ -286,7 +286,7 @@
      receptionist/reservations/index.blade.php's own <script> block - keep
      every id exactly as-is even when restyling around them. -->
 @if(in_array($reservation->status, \App\Models\Reservation::ACTIVE_STATUSES))
-    <hr>
+    <x-card title="Authorized Actions" icon="fas fa-user-shield" bodyClass="card-body">
     <div class="alert alert-danger d-none" id="detailsActionError"></div>
 
     <div id="detailsRejectForm" class="d-none">
@@ -363,4 +363,5 @@
         @endif
     </div>
     @endif
+    </x-card>
 @endif
