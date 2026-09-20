@@ -22,7 +22,7 @@
 
     <!-- ===================== BOOKING DETAILS header ===================== -->
     <div class="page-header d-flex flex-wrap align-items-center justify-content-between gap-2">
-        <h1 class="mb-0"><i class="fas fa-calendar-check"></i> Booking #{{ $booking->id }}</h1>
+        <h1 class="mb-0 fw-bold"><i class="fas fa-calendar-check"></i> Booking #{{ $booking->id }}</h1>
         <div class="d-flex align-items-center gap-2">
             <x-status-badge :status="$booking->display_status" domain="booking" class="fs-6" />
             @if($booking->verified_at)

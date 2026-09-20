@@ -539,6 +539,16 @@ class ReservationWorkflowService
             'id_card_image_path' => $reservation->id_card_image_path,
             'discount_requested' => $reservation->discount_requested,
             'discount_verification_status' => $reservation->discount_verification_status,
+            // Both guest-selected-at-creation-time metadata, not recomputed
+            // - previously omitted here entirely, so a receptionist opening
+            // Booking Details right after conversion saw "N/A" for Payment
+            // Percentage even though the guest had explicitly picked one
+            // (e.g. 30%) and Amount Paid/Remaining Balance were already
+            // correct (those are computed independently from the payments
+            // table, never from this column - only the display label was
+            // lost).
+            'selected_payment_percentage' => $reservation->selected_payment_percentage,
+            'required_payment_amount' => $reservation->required_payment_amount,
         ]);
 
         // Carry every itemized room-type line over to the new Booking - a

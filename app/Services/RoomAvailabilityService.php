@@ -58,6 +58,80 @@ class RoomAvailabilityService
     }
 
     /**
+     * Normalizes either request shape - a genuine multi-room-type `rooms`
+     * array (each a `room_type_id`/`quantity` pair) or the legacy singular
+     * room_type_id/rooms_requested pair - into an array of
+     * ['room_type' => RoomType, 'quantity' => int] lines, then validates
+     * every line's own availability for the given dates. Returns null on
+     * success (the resolved lines are written into &$roomLines) or a
+     * single guest-facing error string on the FIRST line that fails - all-
+     * or-nothing, the caller must not create anything on a partial
+     * failure. Shared by every receptionist creation flow that accepts a
+     * multi-room-type selection (New Booking, New Reservation, Walk-In
+     * Check-In - previously each was hard-limited to exactly one room
+     * type, unlike the guest-facing API's own `rooms[]` support) so the
+     * three can never validate availability differently. Mirrors
+     * DirectBookingService's identical guest-facing contract
+     * (validateRoomLinesAvailability()) but returns a friendly string
+     * instead of throwing, matching these controllers' existing
+     * back()->withInput()->with('error', ...) convention.
+     *
+     * Quantities are summed PER DISTINCT room_type_id before any
+     * availability check runs - a receptionist accidentally (or a raw
+     * crafted request deliberately) submitting the same room type across
+     * two separate rows (e.g. "Deluxe x2" twice) must never pass
+     * availableCount() twice against the same free inventory and end up
+     * assigning more rooms of that type than actually exist. This also
+     * means the resulting $roomLines/booking_room_lines never contain two
+     * rows for the same room type.
+     */
+    public function resolveAndValidateRoomLines(
+        array $rawRooms,
+        ?int $legacyRoomTypeId,
+        ?int $legacyRoomsRequested,
+        Carbon $checkIn,
+        Carbon $checkOut,
+        ?array &$roomLines = null
+    ): ?string {
+        $rawLines = !empty($rawRooms) ? $rawRooms : [[
+            'room_type_id' => $legacyRoomTypeId,
+            'quantity' => $legacyRoomsRequested ?? 1,
+        ]];
+
+        $quantitiesByRoomTypeId = [];
+        foreach ($rawLines as $line) {
+            $roomTypeId = $line['room_type_id'] ?? null;
+            if (!$roomTypeId) {
+                return 'One of the selected room types no longer exists.';
+            }
+            $quantity = max(1, (int) ($line['quantity'] ?? 1));
+            $quantitiesByRoomTypeId[$roomTypeId] = ($quantitiesByRoomTypeId[$roomTypeId] ?? 0) + $quantity;
+        }
+
+        $roomLines = [];
+        foreach ($quantitiesByRoomTypeId as $roomTypeId => $quantity) {
+            $roomType = RoomType::find($roomTypeId);
+            if (!$roomType) {
+                return 'One of the selected room types no longer exists.';
+            }
+            if ($roomType->status !== 'active') {
+                return "{$roomType->name} is not currently available.";
+            }
+
+            $available = $this->availableCount($roomType, $checkIn, $checkOut);
+            if ($available < $quantity) {
+                return $quantity > 1
+                    ? "Not enough {$roomType->name} rooms available for these dates (needs {$quantity}, only {$available} free)."
+                    : "{$roomType->name} is fully booked for the requested dates.";
+            }
+
+            $roomLines[] = ['room_type' => $roomType, 'quantity' => $quantity];
+        }
+
+        return null;
+    }
+
+    /**
      * Rooms of the booking's type that are physically available (not under
      * maintenance) and not already assigned (via the booking_rooms pivot)
      * to another overlapping booking that's still confirmed or already

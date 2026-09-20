@@ -53,21 +53,13 @@
                         </div>
                     </div>
 
-                    <h6 class="form-section-heading">Stay</h6>
-                    <div class="form-group mb-3">
-                        <label for="room_type_id">Room Type *</label>
-                        <select class="form-control @error('room_type_id') is-invalid @enderror" id="room_type_id" name="room_type_id" required>
-                            <option value="">-- Select a room type --</option>
-                            @foreach($roomTypes as $roomType)
-                                <option value="{{ $roomType->id }}" {{ (string) old('room_type_id') === (string) $roomType->id ? 'selected' : '' }}>
-                                    {{ $roomType->name }} - ₱{{ number_format($roomType->rate, 2) }}/night (sleeps {{ $roomType->capacity }})
-                                </option>
-                            @endforeach
-                        </select>
-                        @error('room_type_id')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                        <div id="availabilityNotice" class="form-text d-none"></div>
-                    </div>
+                    <h6 class="form-section-heading">Room(s)</h6>
+                    <p class="text-muted small mb-2">
+                        <i class="fas fa-info-circle"></i> Add one row per room type - e.g. Deluxe x1 + Executive x1 all land under this one reservation.
+                    </p>
+                    @include('receptionist.partials.room-lines-input')
 
+                    <h6 class="form-section-heading">Stay</h6>
                     <div class="row">
                         <div class="col-md-6">
                             <div class="form-group mb-3">
@@ -88,15 +80,7 @@
                     </div>
 
                     <div class="row">
-                        <div class="col-md-4">
-                            <div class="form-group mb-3">
-                                <label for="rooms_requested">Rooms *</label>
-                                <input type="number" min="1" max="50" class="form-control @error('rooms_requested') is-invalid @enderror"
-                                       id="rooms_requested" name="rooms_requested" value="{{ old('rooms_requested', 1) }}" required>
-                                @error('rooms_requested')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                            </div>
-                        </div>
-                        <div class="col-md-4">
+                        <div class="col-md-6">
                             <div class="form-group mb-3">
                                 <label for="adults">Adults *</label>
                                 <input type="number" min="1" class="form-control @error('adults') is-invalid @enderror"
@@ -104,7 +88,7 @@
                                 @error('adults')<div class="invalid-feedback">{{ $message }}</div>@enderror
                             </div>
                         </div>
-                        <div class="col-md-4">
+                        <div class="col-md-6">
                             <div class="form-group mb-3">
                                 <label for="children">Children</label>
                                 <input type="number" min="0" class="form-control @error('children') is-invalid @enderror"
@@ -150,66 +134,4 @@
     </div>
 </div>
 
-@push('scripts')
-<script>
-document.addEventListener('DOMContentLoaded', function () {
-    const roomTypeSelect = document.getElementById('room_type_id');
-    const checkInInput = document.getElementById('check_in');
-    const checkOutInput = document.getElementById('check_out');
-    const roomsInput = document.getElementById('rooms_requested');
-    const notice = document.getElementById('availabilityNotice');
-    const submitBtn = document.getElementById('createReservationSubmit');
-    const checkUrl = @json(route('receptionist.reservations.check-availability'));
-
-    let requestToken = 0;
-
-    async function checkAvailability() {
-        const roomTypeId = roomTypeSelect.value;
-        const checkIn = checkInInput.value;
-        const checkOut = checkOutInput.value;
-        const roomsRequested = parseInt(roomsInput.value, 10) || 1;
-
-        if (!roomTypeId || !checkIn || !checkOut || checkOut <= checkIn) {
-            notice.classList.add('d-none');
-            submitBtn.disabled = false;
-            return;
-        }
-
-        const thisRequest = ++requestToken;
-        const url = checkUrl + '?room_type_id=' + encodeURIComponent(roomTypeId)
-            + '&check_in=' + encodeURIComponent(checkIn)
-            + '&check_out=' + encodeURIComponent(checkOut);
-
-        try {
-            const response = await fetch(url, { headers: { 'Accept': 'application/json' } });
-            if (!response.ok || thisRequest !== requestToken) return;
-            const data = await response.json();
-            if (thisRequest !== requestToken) return;
-
-            if (data.available < roomsRequested) {
-                notice.textContent = 'Only ' + data.available + ' room(s) of this type are free for these dates (needs ' + roomsRequested + '). Pick a different room type, dates, or room count.';
-                notice.classList.remove('d-none', 'text-success');
-                notice.classList.add('text-danger');
-                submitBtn.disabled = true;
-            } else {
-                notice.textContent = data.available + ' room(s) of this type are free for these dates.';
-                notice.classList.remove('d-none', 'text-danger');
-                notice.classList.add('text-success');
-                submitBtn.disabled = false;
-            }
-        } catch (e) {
-            // Network hiccup - don't block submission over it, store()
-            // re-checks availability server-side regardless.
-            notice.classList.add('d-none');
-            submitBtn.disabled = false;
-        }
-    }
-
-    [roomTypeSelect, checkInInput, checkOutInput, roomsInput].forEach(function (el) {
-        el.addEventListener('change', checkAvailability);
-    });
-    checkAvailability();
-});
-</script>
-@endpush
 @endsection

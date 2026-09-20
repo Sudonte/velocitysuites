@@ -56,19 +56,11 @@
                         <i class="fas fa-info-circle"></i> Full registration details (permanent/current address, contact number) are collected in the next step, right before room assignment.
                     </p>
 
-                    <h6 class="form-section-heading">Room</h6>
-                    <div class="form-group mb-3">
-                        <label for="room_type_id">Room Type *</label>
-                        <select class="form-control @error('room_type_id') is-invalid @enderror" id="room_type_id" name="room_type_id" required>
-                            <option value="">-- Select a room type --</option>
-                            @foreach($roomTypes as $roomType)
-                                <option value="{{ $roomType->id }}" {{ (string) old('room_type_id') === (string) $roomType->id ? 'selected' : '' }}>
-                                    {{ $roomType->name }} - ₱{{ number_format($roomType->rate, 2) }}/night (sleeps {{ $roomType->capacity }})
-                                </option>
-                            @endforeach
-                        </select>
-                        @error('room_type_id')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                    </div>
+                    <h6 class="form-section-heading">Room(s)</h6>
+                    <p class="text-muted small mb-2">
+                        <i class="fas fa-info-circle"></i> Add one row per room type - e.g. Deluxe x2 + Family x1 all land under this one walk-in.
+                    </p>
+                    @include('receptionist.partials.room-lines-input')
 
                     <div class="row">
                         <div class="col-md-6">
@@ -88,15 +80,7 @@
                     </div>
 
                     <div class="row">
-                        <div class="col-md-4">
-                            <div class="form-group mb-3">
-                                <label for="rooms_requested">Rooms *</label>
-                                <input type="number" min="1" max="50" class="form-control @error('rooms_requested') is-invalid @enderror"
-                                       id="rooms_requested" name="rooms_requested" value="{{ old('rooms_requested', 1) }}" required>
-                                @error('rooms_requested')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                            </div>
-                        </div>
-                        <div class="col-md-4">
+                        <div class="col-md-6">
                             <div class="form-group mb-3">
                                 <label for="adults">Adults *</label>
                                 <input type="number" min="1" class="form-control @error('adults') is-invalid @enderror"
@@ -104,7 +88,7 @@
                                 @error('adults')<div class="invalid-feedback">{{ $message }}</div>@enderror
                             </div>
                         </div>
-                        <div class="col-md-4">
+                        <div class="col-md-6">
                             <div class="form-group mb-3">
                                 <label for="children">Children</label>
                                 <input type="number" min="0" class="form-control @error('children') is-invalid @enderror"

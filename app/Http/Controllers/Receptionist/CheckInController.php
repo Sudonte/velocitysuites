@@ -139,64 +139,101 @@ class CheckInController extends Controller
             'guest_first_name' => 'required|string|max:100',
             'guest_middle_name' => 'nullable|string|max:100',
             'guest_last_name' => 'required|string|max:100',
-            'room_type_id' => 'required|exists:room_types,id',
+            // Multi-room-type shape (see RoomAvailabilityService::
+            // resolveAndValidateRoomLines()) - 'rooms' present is
+            // authoritative; the legacy singular pair below is only used
+            // when 'rooms' isn't sent, matching Receptionist\
+            // BookingController::store()'s identical contract.
+            'rooms' => 'nullable|array|min:1',
+            'rooms.*.room_type_id' => 'required_with:rooms|exists:room_types,id',
+            'rooms.*.quantity' => 'required_with:rooms|integer|min:1|max:50',
+            'room_type_id' => 'required_without:rooms|exists:room_types,id',
             'check_out' => 'required|date|after:today',
-            'rooms_requested' => 'required|integer|min:1|max:50',
+            'rooms_requested' => 'nullable|integer|min:1|max:50',
             'adults' => 'required|integer|min:1',
             'children' => 'nullable|integer|min:0',
         ]);
 
-        $roomType = RoomType::findOrFail($validated['room_type_id']);
-        abort_unless($roomType->status === 'active', 422, 'This room type is not currently available.');
-
         $checkIn = Carbon::today();
         $checkOut = Carbon::parse($validated['check_out']);
 
-        $available = $this->availability->availableCount($roomType, $checkIn, $checkOut);
-        if ($available < $validated['rooms_requested']) {
-            return back()->withInput()->with('error', $validated['rooms_requested'] > 1
-                ? "Not enough {$roomType->name} rooms available for these dates (needs {$validated['rooms_requested']}, only {$available} free)."
-                : "This room type is fully booked for the requested dates.");
+        $error = $this->availability->resolveAndValidateRoomLines(
+            $validated['rooms'] ?? [],
+            isset($validated['room_type_id']) ? (int) $validated['room_type_id'] : null,
+            isset($validated['rooms_requested']) ? (int) $validated['rooms_requested'] : null,
+            $checkIn,
+            $checkOut,
+            $roomLines
+        );
+        if ($error !== null) {
+            return back()->withInput()->with('error', $error);
         }
 
         $children = (int) ($validated['children'] ?? 0);
+        $nights = max(1, $checkIn->diffInDays($checkOut));
+        $firstRoomType = $roomLines[0]['room_type'];
+        $totalRoomsRequested = collect($roomLines)->sum('quantity');
 
-        $booking = Booking::create([
-            'reservation_id' => null,
-            'guest_id' => null,
-            'guest_first_name' => $validated['guest_first_name'],
-            'guest_middle_name' => $validated['guest_middle_name'] ?? null,
-            'guest_last_name' => $validated['guest_last_name'],
-            'room_type_id' => $roomType->id,
-            'rooms_requested' => $validated['rooms_requested'],
-            'check_in' => $checkIn,
-            'check_out' => $checkOut,
-            'adults' => $validated['adults'],
-            'children' => $children,
-            'number_of_guests' => $validated['adults'] + $children,
-            'confirmed_at' => now(),
-            'booking_status' => Booking::STATUS_ACTIVE,
-            // Same walk-in/cash reasoning as Create Booking/Create
-            // Reservation - never GCash (no guest-submitted receipt exists
-            // for a receptionist-typed walk-in).
-            'payment_method' => 'cash',
-            // Whoever creates it has obviously already seen it - shouldn't
-            // show up as "new" (see index()'s ordering / the red-dot
-            // indicator in the view) the moment it's created. Also
-            // immediately opened via the redirect below, which would mark
-            // it anyway - stated here just for clarity/consistency with
-            // Create Reservation/Create Booking.
-            'viewed_at' => now(),
-            // No online (GCash) payment exists to verify here - a
-            // receptionist typed this in directly, same reasoning as
-            // Create Booking. Never lands in the "For Verification" tab.
-            'verified_at' => now(),
-            'verified_by' => auth()->id(),
-        ]);
+        $booking = DB::transaction(function () use (
+            $validated, $children, $checkIn, $checkOut, $firstRoomType, $totalRoomsRequested, $roomLines, $nights
+        ) {
+            $booking = Booking::create([
+                'reservation_id' => null,
+                'guest_id' => null,
+                'guest_first_name' => $validated['guest_first_name'],
+                'guest_middle_name' => $validated['guest_middle_name'] ?? null,
+                'guest_last_name' => $validated['guest_last_name'],
+                'room_type_id' => $firstRoomType->id,
+                'rooms_requested' => $totalRoomsRequested,
+                'check_in' => $checkIn,
+                'check_out' => $checkOut,
+                'adults' => $validated['adults'],
+                'children' => $children,
+                'number_of_guests' => $validated['adults'] + $children,
+                'confirmed_at' => now(),
+                'booking_status' => Booking::STATUS_ACTIVE,
+                // Same walk-in/cash reasoning as Create Booking/Create
+                // Reservation - never GCash (no guest-submitted receipt exists
+                // for a receptionist-typed walk-in).
+                'payment_method' => 'cash',
+                // Whoever creates it has obviously already seen it - shouldn't
+                // show up as "new" (see index()'s ordering / the red-dot
+                // indicator in the view) the moment it's created. Also
+                // immediately opened via the redirect below, which would mark
+                // it anyway - stated here just for clarity/consistency with
+                // Create Reservation/Create Booking.
+                'viewed_at' => now(),
+                // No online (GCash) payment exists to verify here - a
+                // receptionist typed this in directly, same reasoning as
+                // Create Booking. Never lands in the "For Verification" tab.
+                'verified_at' => now(),
+                'verified_by' => auth()->id(),
+            ]);
 
+            // Itemized multi-room-type breakdown - same shape/purpose as
+            // Receptionist\BookingController::store()'s identical addition,
+            // so a walk-in with several room types (e.g. Deluxe x2 +
+            // Family x1) gets the same per-room-type Assign Room grouping
+            // (RoomAvailabilityService::assignableRoomsByLine()) as any
+            // other multi-room-type booking.
+            foreach ($roomLines as $line) {
+                $booking->roomLines()->create([
+                    'room_type_id' => $line['room_type']->id,
+                    'room_type_name' => $line['room_type']->name,
+                    'quantity' => $line['quantity'],
+                    'price_per_night' => $line['room_type']->rate,
+                    'number_of_nights' => $nights,
+                    'subtotal' => round((float) $line['room_type']->rate * $nights * $line['quantity'], 2),
+                ]);
+            }
+
+            return $booking;
+        });
+
+        $roomTypeSummary = collect($roomLines)->map(fn ($l) => "{$l['room_type']->name} x{$l['quantity']}")->implode(', ');
         Activity::log(
             'Created walk-in booking',
-            "Booking #{$booking->id} for {$roomType->name} ({$booking->guest_display_name}) - walk-in, ready for room assignment",
+            "Booking #{$booking->id} for {$roomTypeSummary} ({$booking->guest_display_name}) - walk-in, ready for room assignment",
             $booking
         );
 

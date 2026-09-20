@@ -137,66 +137,108 @@ class BookingController extends Controller
             'guest_first_name' => 'required|string|max:100',
             'guest_middle_name' => 'nullable|string|max:100',
             'guest_last_name' => 'required|string|max:100',
-            'room_type_id' => 'required|exists:room_types,id',
+            // Multi-room-type shape (see RoomAvailabilityService::
+            // resolveAndValidateRoomLines()) - 'rooms' present is
+            // authoritative; the legacy singular pair below is only used
+            // when 'rooms' isn't sent, matching Api\BookingController::
+            // store()'s identical backward-compatible contract.
+            'rooms' => 'nullable|array|min:1',
+            'rooms.*.room_type_id' => 'required_with:rooms|exists:room_types,id',
+            'rooms.*.quantity' => 'required_with:rooms|integer|min:1|max:50',
+            'room_type_id' => 'required_without:rooms|exists:room_types,id',
             'check_in' => 'required|date|after_or_equal:today',
             'check_out' => 'required|date|after:check_in',
-            'rooms_requested' => 'required|integer|min:1|max:50',
+            'rooms_requested' => 'nullable|integer|min:1|max:50',
             'adults' => 'required|integer|min:1',
             'children' => 'nullable|integer|min:0',
         ]);
 
-        $roomType = RoomType::findOrFail($validated['room_type_id']);
-        abort_unless($roomType->status === 'active', 422, 'This room type is not currently available.');
+        $checkIn = Carbon::parse($validated['check_in']);
+        $checkOut = Carbon::parse($validated['check_out']);
 
-        $available = $this->availability->availableCount(
-            $roomType,
-            Carbon::parse($validated['check_in']),
-            Carbon::parse($validated['check_out'])
+        $error = $this->availability->resolveAndValidateRoomLines(
+            $validated['rooms'] ?? [],
+            isset($validated['room_type_id']) ? (int) $validated['room_type_id'] : null,
+            isset($validated['rooms_requested']) ? (int) $validated['rooms_requested'] : null,
+            $checkIn,
+            $checkOut,
+            $roomLines
         );
-        if ($available < $validated['rooms_requested']) {
-            return back()->withInput()->with('error', $validated['rooms_requested'] > 1
-                ? "Not enough {$roomType->name} rooms available for these dates (needs {$validated['rooms_requested']}, only {$available} free)."
-                : "This room type is fully booked for the requested dates.");
+        if ($error !== null) {
+            return back()->withInput()->with('error', $error);
         }
 
         $children = (int) ($validated['children'] ?? 0);
+        $nights = max(1, $checkIn->diffInDays($checkOut));
+        // Legacy room_type_id/rooms_requested kept in sync from the first
+        // line's type and the summed quantity across every line, purely
+        // for backward-compatible display - identical convention to
+        // DirectBookingService::create()/Api\ReservationController::
+        // update()'s patched multi-room path.
+        $firstRoomType = $roomLines[0]['room_type'];
+        $totalRoomsRequested = collect($roomLines)->sum('quantity');
 
-        $booking = Booking::create([
-            'reservation_id' => null,
-            'guest_id' => null,
-            'guest_first_name' => $validated['guest_first_name'],
-            'guest_middle_name' => $validated['guest_middle_name'] ?? null,
-            'guest_last_name' => $validated['guest_last_name'],
-            'room_type_id' => $roomType->id,
-            'rooms_requested' => $validated['rooms_requested'],
-            'check_in' => $validated['check_in'],
-            'check_out' => $validated['check_out'],
-            'adults' => $validated['adults'],
-            'children' => $children,
-            'number_of_guests' => $validated['adults'] + $children,
-            'confirmed_at' => now(),
-            'booking_status' => Booking::STATUS_ACTIVE,
-            // A receptionist typing this in directly is a walk-in, cash-
-            // paid scenario the same as any other Create Booking/Create
-            // Reservation flow - never GCash (that needs a guest-submitted
-            // receipt, which doesn't exist here).
-            'payment_method' => 'cash',
-            // Whoever creates it has obviously already seen it - shouldn't
-            // show up as "new" (see index()'s ordering / the red-dot
-            // indicator in the view) the moment it's created.
-            'viewed_at' => now(),
-            // No online (GCash) payment exists to verify here - a
-            // receptionist typed this in directly, same reasoning as a
-            // Cash reservation conversion (see ReservationWorkflowService::
-            // convertToBooking()'s identical auto-verify). Never lands in
-            // the "For Verification" tab.
-            'verified_at' => now(),
-            'verified_by' => auth()->id(),
-        ]);
+        $booking = DB::transaction(function () use (
+            $validated, $children, $checkIn, $checkOut, $firstRoomType, $totalRoomsRequested, $roomLines, $nights
+        ) {
+            $booking = Booking::create([
+                'reservation_id' => null,
+                'guest_id' => null,
+                'guest_first_name' => $validated['guest_first_name'],
+                'guest_middle_name' => $validated['guest_middle_name'] ?? null,
+                'guest_last_name' => $validated['guest_last_name'],
+                'room_type_id' => $firstRoomType->id,
+                'rooms_requested' => $totalRoomsRequested,
+                'check_in' => $checkIn,
+                'check_out' => $checkOut,
+                'adults' => $validated['adults'],
+                'children' => $children,
+                'number_of_guests' => $validated['adults'] + $children,
+                'confirmed_at' => now(),
+                'booking_status' => Booking::STATUS_ACTIVE,
+                // A receptionist typing this in directly is a walk-in, cash-
+                // paid scenario the same as any other Create Booking/Create
+                // Reservation flow - never GCash (that needs a guest-submitted
+                // receipt, which doesn't exist here).
+                'payment_method' => 'cash',
+                // Whoever creates it has obviously already seen it - shouldn't
+                // show up as "new" (see index()'s ordering / the red-dot
+                // indicator in the view) the moment it's created.
+                'viewed_at' => now(),
+                // No online (GCash) payment exists to verify here - a
+                // receptionist typed this in directly, same reasoning as a
+                // Cash reservation conversion (see ReservationWorkflowService::
+                // convertToBooking()'s identical auto-verify). Never lands in
+                // the "For Verification" tab.
+                'verified_at' => now(),
+                'verified_by' => auth()->id(),
+            ]);
 
+            // Itemized multi-room-type breakdown - one line per distinct
+            // room type, same shape ReservationWorkflowService::
+            // createBookingFromReservation() writes on conversion, so
+            // Booking::getTotalAmountDueAttribute()/getRoomLinesAttribute()
+            // (and the Android app's per-room-type image cards) work
+            // identically for a receptionist-created multi-room-type
+            // booking as for a guest-submitted one.
+            foreach ($roomLines as $line) {
+                $booking->roomLines()->create([
+                    'room_type_id' => $line['room_type']->id,
+                    'room_type_name' => $line['room_type']->name,
+                    'quantity' => $line['quantity'],
+                    'price_per_night' => $line['room_type']->rate,
+                    'number_of_nights' => $nights,
+                    'subtotal' => round((float) $line['room_type']->rate * $nights * $line['quantity'], 2),
+                ]);
+            }
+
+            return $booking;
+        });
+
+        $roomTypeSummary = collect($roomLines)->map(fn ($l) => "{$l['room_type']->name} x{$l['quantity']}")->implode(', ');
         Activity::log(
             'Created booking',
-            "Booking #{$booking->id} for {$roomType->name} ({$booking->guest_display_name}) - created directly by staff",
+            "Booking #{$booking->id} for {$roomTypeSummary} ({$booking->guest_display_name}) - created directly by staff",
             $booking
         );
 
