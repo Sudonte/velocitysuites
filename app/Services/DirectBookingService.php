@@ -75,11 +75,32 @@ class DirectBookingService
      * class's own doc for the `$roomLines` shape. All-or-nothing: throws on
      * the first line that fails (never creates a booking containing only
      * the room types that happened to pass).
+     *
+     * Quantities are summed PER DISTINCT room_type_id before any single
+     * availability check runs - previously each raw line was checked
+     * independently, so a request submitting the same room type across two
+     * separate lines (e.g. "Deluxe x3" twice, with only 3 Deluxe rooms
+     * physically existing) passed availableCount() twice against the same
+     * free inventory and created a direct Booking with rooms_requested=6
+     * for a type with only 3 real rooms - confirmed live. A direct Booking
+     * consumes inventory immediately (see validateRoomTypeAvailability()'s
+     * own doc), so this must never under-validate the true combined
+     * requirement, exactly like RoomAvailabilityService::
+     * resolveAndValidateRoomLines()'s identical fix on the receptionist
+     * side.
      */
     public function validateRoomLinesAvailability(array $roomLines, Carbon $checkIn, Carbon $checkOut): void
     {
+        $quantitiesByRoomTypeId = [];
+        $roomTypesById = [];
         foreach ($roomLines as $line) {
-            $this->validateRoomTypeAvailability($line['room_type'], $checkIn, $checkOut, $line['quantity']);
+            $roomTypeId = $line['room_type']->id;
+            $roomTypesById[$roomTypeId] = $line['room_type'];
+            $quantitiesByRoomTypeId[$roomTypeId] = ($quantitiesByRoomTypeId[$roomTypeId] ?? 0) + (int) $line['quantity'];
+        }
+
+        foreach ($quantitiesByRoomTypeId as $roomTypeId => $quantity) {
+            $this->validateRoomTypeAvailability($roomTypesById[$roomTypeId], $checkIn, $checkOut, $quantity);
         }
     }
 
