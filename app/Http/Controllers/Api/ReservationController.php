@@ -500,10 +500,33 @@ class ReservationController extends Controller
         // every other reservation-lifecycle action in this controller.
         $before = "{$reservation->roomType->name} x{$reservation->rooms_requested}, {$reservation->check_in} to {$reservation->check_out}, {$reservation->adults} adult(s)/{$reservation->children} child(ren)";
 
-        // Everything below - the reservation's own fields, its room lines,
-        // and its amenities - is one atomic unit: if any step fails (e.g.
-        // an amenity snapshot error), nothing partially applies.
-        DB::transaction(function () use ($reservation, $updates, $roomLines, $resolvedAmenities) {
+        // Everything below - the one-time-edit decision itself, the
+        // reservation's own fields, its room lines, and its amenities - is
+        // one atomic unit. The plain `$reservation->edited_at !== null`
+        // check above ran against a copy read before this request's own
+        // validation/availability queries - two requests for the same
+        // reservation can both pass it while both still see edited_at as
+        // null, then both reach here and both call $reservation->update(),
+        // silently letting the second one to commit overwrite the first
+        // (a lost update, not merely a display bug - the loser's own HTTP
+        // response would then lie about what's actually saved). The
+        // earlier check stays as a cheap fast-path (skips the room-type/
+        // availability validation above for the common, non-racing case of
+        // an already-edited reservation) but is NOT the authoritative
+        // guard - re-reading the row WITH a row lock here, and re-checking
+        // edited_at on that locked read, is: a second request racing in
+        // blocks on the SELECT ... FOR UPDATE until the first request's
+        // transaction commits, then sees the first request's own edited_at
+        // write and safely no-ops instead of overwriting it.
+        $alreadyModified = false;
+        DB::transaction(function () use ($reservation, $updates, $roomLines, $resolvedAmenities, &$alreadyModified) {
+            $locked = Reservation::whereKey($reservation->id)->lockForUpdate()->first();
+            if (! $locked || $locked->edited_at !== null) {
+                $alreadyModified = true;
+
+                return;
+            }
+
             $reservation->update($updates);
 
             if ($roomLines !== null) {
@@ -540,6 +563,10 @@ class ReservationController extends Controller
                 $this->amenityService->snapshot($reservation, $resolvedAmenities);
             }
         });
+
+        if ($alreadyModified) {
+            return response()->json(['message' => 'This reservation has already been modified and cannot be edited again.'], 422);
+        }
 
         $reservation->refresh();
 
