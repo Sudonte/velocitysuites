@@ -5,9 +5,11 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Billing;
 use App\Models\Booking;
+use App\Models\Guest;
 use App\Models\Payment;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
@@ -24,7 +26,41 @@ class ProfileController extends Controller
         return response()->json([
             'user' => $user,
             'guest' => $user->guest,
+            'profile_update' => $this->profileUpdateState($user->guest),
         ]);
+    }
+
+    /**
+     * Computed Personal Information / Contact & Address cooldown state -
+     * shared shape for show()/update() so Android never has to re-derive
+     * the 30-day window from a raw timestamp itself (device clock isn't
+     * trusted for this; the server's own clock always is).
+     */
+    private function profileUpdateState(?Guest $guest): array
+    {
+        if (! $guest) {
+            return [
+                'can_update' => true,
+                'last_updated_at' => null,
+                'next_update_at' => null,
+                'days_remaining' => 0,
+            ];
+        }
+
+        $nextUpdateAt = $guest->nextProfileUpdateDate();
+
+        // nextProfileUpdateDate() already returns null once the cooldown has
+        // lifted, so $nextUpdateAt is guaranteed to be in the future here -
+        // rounded up (not truncated) so "1 day remaining" never flashes to
+        // "0" hours before the guest is actually eligible again.
+        $daysRemaining = $nextUpdateAt ? (int) ceil(now()->diffInHours($nextUpdateAt) / 24) : 0;
+
+        return [
+            'can_update' => $guest->canUpdateProfile(),
+            'last_updated_at' => $guest->profile_last_updated_at?->toIso8601String(),
+            'next_update_at' => $nextUpdateAt?->toIso8601String(),
+            'days_remaining' => $daysRemaining,
+        ];
     }
 
     /**
@@ -106,32 +142,67 @@ class ProfileController extends Controller
             }
         }
 
-        $user->update([
-            'first_name' => $validated['first_name'],
-            'last_name' => $validated['last_name'],
-            'middle_name' => $validated['middle_name'] ?? null,
-            'email' => $validated['email'],
-        ]);
-
-        if ($guest) {
-            $guest->update([
-                'mobile_number' => $validated['mobile_number'] ?? $guest->mobile_number,
-                'gender' => array_key_exists('gender', $validated) ? $validated['gender'] : $guest->gender,
-                'date_of_birth' => array_key_exists('date_of_birth', $validated) ? $validated['date_of_birth'] : $guest->date_of_birth,
-                'age' => array_key_exists('age', $validated) ? $validated['age'] : $guest->age,
-                'address' => $validated['address'] ?? $guest->address,
-                'country' => array_key_exists('country', $validated) ? $validated['country'] : $guest->country,
-                'region' => array_key_exists('region', $validated) ? $validated['region'] : $guest->region,
-                'province' => array_key_exists('province', $validated) ? $validated['province'] : $guest->province,
-                'city' => array_key_exists('city', $validated) ? $validated['city'] : $guest->city,
-                'barangay' => array_key_exists('barangay', $validated) ? $validated['barangay'] : $guest->barangay,
-                'street' => array_key_exists('street', $validated) ? $validated['street'] : $guest->street,
-                'zip_code' => array_key_exists('zip_code', $validated) ? $validated['zip_code'] : $guest->zip_code,
-                'timezone' => array_key_exists('timezone', $validated) ? $validated['timezone'] : $guest->timezone,
-            ]);
+        // 30-day Personal Information / Contact & Address cooldown - the
+        // server is the sole source of truth (a modified/replayed request
+        // must never bypass this just because the Android UI's own Edit
+        // button happened to be disabled or re-enabled). Re-checked again
+        // inside the transaction below under a row lock, so two
+        // near-simultaneous requests can't both pass this same check
+        // before either one's write commits.
+        if ($guest && ! $guest->canUpdateProfile()) {
+            return response()->json([
+                'message' => 'You can update your profile again on ' . $guest->nextProfileUpdateDate()->format('F j, Y') . '.',
+                'profile_update' => $this->profileUpdateState($guest),
+            ], 422);
         }
 
-        return response()->json(['user' => $user->fresh(), 'guest' => $guest?->fresh()]);
+        $freshUser = null;
+        $freshGuest = null;
+
+        DB::transaction(function () use ($user, $guest, $validated, &$freshUser, &$freshGuest) {
+            $lockedGuest = $guest ? Guest::whereKey($guest->id)->lockForUpdate()->first() : null;
+            if ($lockedGuest && ! $lockedGuest->canUpdateProfile()) {
+                abort(422, 'You can update your profile again on ' . $lockedGuest->nextProfileUpdateDate()->format('F j, Y') . '.');
+            }
+
+            $user->update([
+                'first_name' => $validated['first_name'],
+                'last_name' => $validated['last_name'],
+                'middle_name' => $validated['middle_name'] ?? null,
+                'email' => $validated['email'],
+            ]);
+
+            if ($lockedGuest) {
+                $lockedGuest->update([
+                    'mobile_number' => $validated['mobile_number'] ?? $lockedGuest->mobile_number,
+                    'gender' => array_key_exists('gender', $validated) ? $validated['gender'] : $lockedGuest->gender,
+                    'date_of_birth' => array_key_exists('date_of_birth', $validated) ? $validated['date_of_birth'] : $lockedGuest->date_of_birth,
+                    'age' => array_key_exists('age', $validated) ? $validated['age'] : $lockedGuest->age,
+                    'address' => $validated['address'] ?? $lockedGuest->address,
+                    'country' => array_key_exists('country', $validated) ? $validated['country'] : $lockedGuest->country,
+                    'region' => array_key_exists('region', $validated) ? $validated['region'] : $lockedGuest->region,
+                    'province' => array_key_exists('province', $validated) ? $validated['province'] : $lockedGuest->province,
+                    'city' => array_key_exists('city', $validated) ? $validated['city'] : $lockedGuest->city,
+                    'barangay' => array_key_exists('barangay', $validated) ? $validated['barangay'] : $lockedGuest->barangay,
+                    'street' => array_key_exists('street', $validated) ? $validated['street'] : $lockedGuest->street,
+                    'zip_code' => array_key_exists('zip_code', $validated) ? $validated['zip_code'] : $lockedGuest->zip_code,
+                    'timezone' => array_key_exists('timezone', $validated) ? $validated['timezone'] : $lockedGuest->timezone,
+                    // Only set once the rest of this same update has
+                    // actually committed - never on load, cancel, a
+                    // validation failure, or a failed/rolled-back request.
+                    'profile_last_updated_at' => now(),
+                ]);
+            }
+
+            $freshUser = $user->fresh();
+            $freshGuest = $lockedGuest?->fresh();
+        });
+
+        return response()->json([
+            'user' => $freshUser,
+            'guest' => $freshGuest,
+            'profile_update' => $this->profileUpdateState($freshGuest),
+        ]);
     }
 
     /**
@@ -162,17 +233,19 @@ class ProfileController extends Controller
     }
 
     /**
-     * Soft-deletes the account into a 30-day restorable state - does not
-     * erase any data immediately. Requires the current password as a
-     * safety confirmation, same pattern as changePassword(). The guest
-     * can still log back in during the window (see
-     * AuthController::login(), which still issues a token for a
-     * pending-deletion account inside its window) to call restoreAccount()
-     * below; once restore_deadline passes, login refuses the account and
-     * the scheduled Console\Commands\PurgeExpiredDeletedAccounts command
-     * removes it for good.
+     * Voluntary self-deactivation - sets users.status = 'deactivated' and
+     * revokes every API token, but never touches guest/booking/reservation/
+     * payment/notification data and never sets deleted_at/restore_deadline
+     * (that's a separate, unrelated legacy mechanism - see
+     * 2026_08_10_120000_add_account_deletion_fields_to_users_table.php -
+     * left untouched). Reactivation has no expiry and is entirely guest-
+     * controlled: signing back in with the correct password triggers an
+     * OTP reactivation challenge (see AuthController::login()/
+     * reactivateVerify()). Requires the current password as a safety
+     * confirmation against an unattended/unlocked device, same pattern the
+     * old deleteAccount() used.
      */
-    public function deleteAccount(Request $request): JsonResponse
+    public function deactivateAccount(Request $request): JsonResponse
     {
         $user = auth()->user();
 
@@ -184,15 +257,18 @@ class ProfileController extends Controller
             return response()->json(['message' => 'The password you entered is incorrect.'], 422);
         }
 
+        if ($user->status === 'deactivated') {
+            return response()->json(['message' => 'Your account is already deactivated.'], 422);
+        }
+
         $user->update([
-            'deleted_at' => now(),
-            'restore_deadline' => now()->addDays(30),
+            'status' => 'deactivated',
+            'deactivated_at' => now(),
         ]);
         $user->apiTokens()->delete();
 
         return response()->json([
-            'message' => 'Your account has been deactivated. You can restore it by logging in again within 30 days.',
-            'restore_deadline' => $user->restore_deadline->toIso8601String(),
+            'message' => 'Your account has been deactivated. Sign in again anytime to reactivate it.',
         ]);
     }
 

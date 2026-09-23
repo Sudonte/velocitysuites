@@ -7,6 +7,7 @@ use App\Models\ApiToken;
 use App\Models\Guest;
 use App\Models\RegistrationOtp;
 use App\Models\User;
+use App\Services\AccountReactivationService;
 use App\Services\PasswordResetService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -19,8 +20,10 @@ use Illuminate\Validation\Rules\Password;
 
 class AuthController extends Controller
 {
-    public function __construct(private PasswordResetService $passwordReset)
-    {
+    public function __construct(
+        private PasswordResetService $passwordReset,
+        private AccountReactivationService $reactivation,
+    ) {
     }
 
     /**
@@ -63,6 +66,26 @@ class AuthController extends Controller
         // than silently handing out a token nothing in the app can use.
         if ($user->role !== 'guest') {
             return response()->json(['message' => 'This app is for guest accounts only. Staff should use the website.'], 403);
+        }
+
+        // Voluntary self-deactivation (see ProfileController::deactivateAccount())
+        // - credentials are correct, but the guest must verify a fresh OTP
+        // emailed to their registered address before a real session is
+        // issued. Deliberately checked only after the password/role checks
+        // above succeed, so a wrong password never reveals that an account
+        // is deactivated (same generic "Invalid credentials." either way).
+        if ($user->status === 'deactivated') {
+            $user->update(['failed_login_attempts' => 0]);
+            $challenge = $this->reactivation->issue($user);
+
+            return response()->json([
+                'success' => false,
+                'code' => 'ACCOUNT_DEACTIVATED',
+                'message' => 'Your account is deactivated. Enter the verification code sent to your email to reactivate it.',
+                'reactivation_required' => true,
+                'masked_email' => $this->maskEmail($user->email),
+                'reactivation_token' => $challenge->reactivation_token,
+            ]);
         }
 
         $user->update([
@@ -386,6 +409,95 @@ class AuthController extends Controller
             'token' => $plainToken,
             'user' => $this->formatUser($user),
         ]);
+    }
+
+    /**
+     * Resend the reactivation OTP for a pending deactivated-account login
+     * attempt. Rate-limited server-side (see
+     * AccountReactivationService::RESEND_COOLDOWN_SECONDS) - an Android-side
+     * countdown alone is never trusted.
+     */
+    public function reactivateResend(Request $request): JsonResponse
+    {
+        $validated = $request->validate(['reactivation_token' => 'required|string']);
+
+        $result = $this->reactivation->resend($validated['reactivation_token']);
+
+        if (! $result['ok']) {
+            return match ($result['error']) {
+                'throttled' => response()->json([
+                    'message' => 'Please wait before requesting another code.',
+                    'retry_after' => $result['retry_after'],
+                ], 429),
+                default => response()->json([
+                    'message' => 'This reactivation request is no longer valid. Please sign in again.',
+                ], 422),
+            };
+        }
+
+        return response()->json(['message' => 'A new verification code has been sent to your email.']);
+    }
+
+    /**
+     * Verifies the reactivation OTP and, on success, reactivates the
+     * account and issues a real bearer token (same shape as login()) so
+     * the app can go straight to the Dashboard. Never accepts a raw user
+     * id/email - only the opaque reactivation_token issued by login().
+     */
+    public function reactivateVerify(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'reactivation_token' => 'required|string',
+            'otp' => 'required|string|size:6',
+        ]);
+
+        $result = $this->reactivation->verify($validated['reactivation_token'], $validated['otp']);
+
+        if (! $result['ok']) {
+            return response()->json([
+                'message' => match ($result['error']) {
+                    'expired' => 'This verification code has expired. Please sign in again to request a new one.',
+                    'too_many_attempts' => 'Too many incorrect attempts. Please sign in again to request a new code.',
+                    'not_deactivated' => 'This account can no longer be reactivated this way. Please contact support.',
+                    'incorrect' => 'The verification code is incorrect.',
+                    default => 'This reactivation request is no longer valid. Please sign in again.',
+                },
+            ], 422);
+        }
+
+        $user = $result['user'];
+        $user->update([
+            'status' => 'active',
+            'deactivated_at' => null,
+            'failed_login_attempts' => 0,
+            'last_login_at' => now(),
+        ]);
+
+        $plainToken = Str::random(60);
+        $user->apiTokens()->create([
+            'token' => hash('sha256', $plainToken),
+            'device_name' => $request->input('device_name') ?? $request->userAgent(),
+            'last_used_at' => now(),
+        ]);
+
+        Log::info("Account #{$user->id} reactivated via OTP.");
+
+        return response()->json([
+            'message' => 'Your account has been reactivated. Welcome back!',
+            'token' => $plainToken,
+            'user' => $this->formatUser($user),
+        ]);
+    }
+
+    /** "juan@example.com" -> "j***@example.com" - never the full address, on an OTP-verification screen the guest hasn't proven themselves on yet. */
+    private function maskEmail(string $email): string
+    {
+        [$local, $domain] = array_pad(explode('@', $email, 2), 2, '');
+        if ($local === '' || $domain === '') {
+            return $email;
+        }
+
+        return mb_substr($local, 0, 1) . '***@' . $domain;
     }
 
     /**

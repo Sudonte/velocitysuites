@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Guest;
 
 use App\Http\Controllers\Controller;
 use App\Models\Billing;
+use App\Models\Guest;
 use App\Models\Payment;
 use App\Models\Reservation;
 use App\Services\PsgcHierarchyValidator;
@@ -264,9 +265,17 @@ class GuestController extends Controller
      */
     public function profile(): View
     {
+        $guest = auth()->user()->guest;
+
         return view('guest.profile.show', [
             'user' => auth()->user(),
-            'guest' => auth()->user()->guest,
+            'guest' => $guest,
+            // Same 30-day Personal Information / Contact & Address cooldown
+            // state as the mobile API's Api\ProfileController@profileUpdateState() -
+            // this view can use it to disable the edit form / show the
+            // next-eligible date, matching what the app shows.
+            'canUpdateProfile' => $guest ? $guest->canUpdateProfile() : true,
+            'profileNextUpdateAt' => $guest?->nextProfileUpdateDate(),
         ]);
     }
 
@@ -352,46 +361,73 @@ class GuestController extends Controller
             }
         }
 
-        $user->update([
-            'first_name' => $validated['first_name'],
-            'last_name' => $validated['last_name'],
-            'middle_name' => $validated['middle_name'] ?? null,
-            'email' => $validated['email'],
-        ]);
-
-        if ($guest) {
-            // address stays a composed display string, recomputed from the structured
-            // fields when any are present - same convention as RegisterController - so it
-            // never drifts out of sync with country/region/province/city/barangay/street.
-            // Every field below uses array_key_exists (not ??) so an explicit null forced
-            // above (non-PH tamper-defense) actually clears the stored value instead of
-            // silently falling back to whatever was already saved.
-            $address = $addressFieldsTouched || array_key_exists('street', $validated)
-                ? implode(', ', array_filter([
-                    array_key_exists('street', $validated) ? $validated['street'] : $guest->street,
-                    array_key_exists('barangay', $validated) ? $validated['barangay'] : $guest->barangay,
-                    array_key_exists('city', $validated) ? $validated['city'] : $guest->city,
-                    array_key_exists('province', $validated) ? $validated['province'] : $guest->province,
-                    array_key_exists('region', $validated) ? $validated['region'] : $guest->region,
-                    array_key_exists('country', $validated) ? $validated['country'] : $guest->country,
-                ]))
-                : ($validated['address'] ?? $guest->address);
-
-            $guest->update([
-                'mobile_number' => $validated['mobile_number'] ?? $guest->mobile_number,
-                'gender' => array_key_exists('gender', $validated) ? $validated['gender'] : $guest->gender,
-                'date_of_birth' => array_key_exists('date_of_birth', $validated) ? $validated['date_of_birth'] : $guest->date_of_birth,
-                'age' => array_key_exists('age', $validated) ? $validated['age'] : $guest->age,
-                'address' => $address,
-                'country' => array_key_exists('country', $validated) ? $validated['country'] : $guest->country,
-                'region' => array_key_exists('region', $validated) ? $validated['region'] : $guest->region,
-                'province' => array_key_exists('province', $validated) ? $validated['province'] : $guest->province,
-                'city' => array_key_exists('city', $validated) ? $validated['city'] : $guest->city,
-                'barangay' => array_key_exists('barangay', $validated) ? $validated['barangay'] : $guest->barangay,
-                'street' => array_key_exists('street', $validated) ? $validated['street'] : $guest->street,
-                'zip_code' => array_key_exists('zip_code', $validated) ? $validated['zip_code'] : $guest->zip_code,
-                'timezone' => array_key_exists('timezone', $validated) ? $validated['timezone'] : $guest->timezone,
+        // Same 30-day Personal Information / Contact & Address cooldown as
+        // the mobile API's Api\ProfileController@update() - enforced here
+        // too so this web form can never be used to bypass the app's
+        // restriction. See that controller's identical check for why this
+        // is re-verified again under a row lock inside the transaction.
+        if ($guest && ! $guest->canUpdateProfile()) {
+            return back()->withInput()->withErrors([
+                'profile' => 'You can update your profile again on ' . $guest->nextProfileUpdateDate()->format('F j, Y') . '.',
             ]);
+        }
+
+        try {
+            DB::transaction(function () use ($user, $guest, $validated, $addressFieldsTouched) {
+            $lockedGuest = $guest ? Guest::whereKey($guest->id)->lockForUpdate()->first() : null;
+            if ($lockedGuest && ! $lockedGuest->canUpdateProfile()) {
+                // Lost a race against another near-simultaneous submission -
+                // caught below and turned into the same redirect-with-error
+                // shape as the pre-transaction check above, rather than a
+                // raw 422 error page.
+                throw new \RuntimeException('You can update your profile again on ' . $lockedGuest->nextProfileUpdateDate()->format('F j, Y') . '.');
+            }
+
+            $user->update([
+                'first_name' => $validated['first_name'],
+                'last_name' => $validated['last_name'],
+                'middle_name' => $validated['middle_name'] ?? null,
+                'email' => $validated['email'],
+            ]);
+
+            if ($lockedGuest) {
+                // address stays a composed display string, recomputed from the structured
+                // fields when any are present - same convention as RegisterController - so it
+                // never drifts out of sync with country/region/province/city/barangay/street.
+                // Every field below uses array_key_exists (not ??) so an explicit null forced
+                // above (non-PH tamper-defense) actually clears the stored value instead of
+                // silently falling back to whatever was already saved.
+                $address = $addressFieldsTouched || array_key_exists('street', $validated)
+                    ? implode(', ', array_filter([
+                        array_key_exists('street', $validated) ? $validated['street'] : $lockedGuest->street,
+                        array_key_exists('barangay', $validated) ? $validated['barangay'] : $lockedGuest->barangay,
+                        array_key_exists('city', $validated) ? $validated['city'] : $lockedGuest->city,
+                        array_key_exists('province', $validated) ? $validated['province'] : $lockedGuest->province,
+                        array_key_exists('region', $validated) ? $validated['region'] : $lockedGuest->region,
+                        array_key_exists('country', $validated) ? $validated['country'] : $lockedGuest->country,
+                    ]))
+                    : ($validated['address'] ?? $lockedGuest->address);
+
+                $lockedGuest->update([
+                    'mobile_number' => $validated['mobile_number'] ?? $lockedGuest->mobile_number,
+                    'gender' => array_key_exists('gender', $validated) ? $validated['gender'] : $lockedGuest->gender,
+                    'date_of_birth' => array_key_exists('date_of_birth', $validated) ? $validated['date_of_birth'] : $lockedGuest->date_of_birth,
+                    'age' => array_key_exists('age', $validated) ? $validated['age'] : $lockedGuest->age,
+                    'address' => $address,
+                    'country' => array_key_exists('country', $validated) ? $validated['country'] : $lockedGuest->country,
+                    'region' => array_key_exists('region', $validated) ? $validated['region'] : $lockedGuest->region,
+                    'province' => array_key_exists('province', $validated) ? $validated['province'] : $lockedGuest->province,
+                    'city' => array_key_exists('city', $validated) ? $validated['city'] : $lockedGuest->city,
+                    'barangay' => array_key_exists('barangay', $validated) ? $validated['barangay'] : $lockedGuest->barangay,
+                    'street' => array_key_exists('street', $validated) ? $validated['street'] : $lockedGuest->street,
+                    'zip_code' => array_key_exists('zip_code', $validated) ? $validated['zip_code'] : $lockedGuest->zip_code,
+                    'timezone' => array_key_exists('timezone', $validated) ? $validated['timezone'] : $lockedGuest->timezone,
+                    'profile_last_updated_at' => now(),
+                ]);
+            }
+            });
+        } catch (\RuntimeException $e) {
+            return back()->withInput()->withErrors(['profile' => $e->getMessage()]);
         }
 
         return back()->with('success', 'Profile updated successfully!');

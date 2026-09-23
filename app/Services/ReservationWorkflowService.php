@@ -168,6 +168,16 @@ class ReservationWorkflowService
      * awaiting-GCash for a receptionist to resolve manually via
      * convertToBooking() - the payment itself is never blocked or rolled
      * back over an availability race.
+     *
+     * Defense-in-depth against duplicate conversion: Api\PaymentController::
+     * store() (this method's only current caller) already re-fetches the
+     * reservation with lockForUpdate() before calling recordDepositPayment()
+     * -> this method, so two concurrent payment submissions for the same
+     * reservation are already fully serialized before either reaches here.
+     * The re-lock and existing-Booking check below are a second,
+     * independent safety net - correct even if a future caller ever
+     * invokes recordDepositPayment()/tryAutoConvert() outside that locked
+     * context - rather than relying on the caller's lock alone.
      */
     private function tryAutoConvert(Reservation $reservation, Payment $payment): void
     {
@@ -180,7 +190,27 @@ class ReservationWorkflowService
         }
 
         DB::transaction(function () use ($reservation, $payment) {
-            $this->createBookingFromReservation($reservation);
+            $locked = Reservation::whereKey($reservation->id)->lockForUpdate()->first();
+
+            if (! $locked || $locked->status !== Reservation::STATUS_AWAITING_GCASH) {
+                // Already converted (or otherwise moved on) by another
+                // request that won the race between the unlocked check
+                // above and this lock - nothing left to convert. Still
+                // mark this specific payment completed so it isn't left
+                // permanently 'pending' just because it lost the race.
+                $payment->update(['payment_status' => 'completed']);
+
+                return;
+            }
+
+            $existingBooking = Booking::where('reservation_id', $locked->id)->first();
+            if ($existingBooking) {
+                $payment->update(['payment_status' => 'completed']);
+
+                return;
+            }
+
+            $this->createBookingFromReservation($locked);
             $payment->update(['payment_status' => 'completed']);
         });
     }
@@ -661,6 +691,23 @@ class ReservationWorkflowService
      * (Api\PaymentController::store()) becomes available immediately - no separate
      * unlock step needed, since eligibility there is just payment_method/status, which
      * this already updates.
+     *
+     * Also updates `status` to STATUS_AWAITING_GCASH, mirroring exactly what
+     * Api\ReservationController::store() sets at creation time for a
+     * reservation that started as GCash - previously this method only
+     * updated payment_method, leaving `status` at STATUS_AWAITING_CASH.
+     * tryAutoConvert() (called from recordDepositPayment() the moment the
+     * guest's GCash payment is submitted) gates on
+     * `$reservation->status !== Reservation::STATUS_AWAITING_GCASH` and
+     * returns early otherwise - so a Cash reservation switched to GCash via
+     * this method could complete a real GCash payment and still never
+     * auto-convert to a Booking, silently, with no error surfaced to the
+     * guest (confirmed live: payment recorded successfully, `status`
+     * remained AWAITING_CASH_CONFIRMATION, `booking` stayed null). Android's
+     * own post-payment navigation already correctly branches on the
+     * server-reported converted-booking state and only falls back to
+     * Transaction History when the server didn't report one - so this was
+     * the entire root cause, not an Android defect.
      */
     public function switchToGcash(Reservation $reservation): void
     {
@@ -674,6 +721,7 @@ class ReservationWorkflowService
 
         $reservation->update([
             'payment_method' => 'gcash',
+            'status' => Reservation::STATUS_AWAITING_GCASH,
             'payment_method_locked_at' => now(),
         ]);
     }
@@ -686,6 +734,12 @@ class ReservationWorkflowService
      * pay walk-in instead; unlike switchToGcash(), this doesn't unlock a Pay Now flow -
      * the reservation simply becomes eligible for walk-in cash settlement like any
      * other Cash reservation.
+     *
+     * Also updates `status` to STATUS_AWAITING_CASH, mirroring
+     * switchToGcash()'s identical fix and creation-time convention - keeps
+     * `status` and `payment_method` from ever disagreeing in either
+     * direction, even though nothing currently gates auto-conversion on
+     * this side (Cash never auto-converts).
      */
     public function switchToCash(Reservation $reservation): void
     {
@@ -699,6 +753,7 @@ class ReservationWorkflowService
 
         $reservation->update([
             'payment_method' => 'cash',
+            'status' => Reservation::STATUS_AWAITING_CASH,
             'payment_method_locked_at' => now(),
         ]);
     }

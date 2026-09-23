@@ -20,6 +20,14 @@ Route::post('/forgot-password', [AuthController::class, 'forgotPassword']);
 Route::post('/verify-reset-otp', [AuthController::class, 'verifyResetOtp']);
 Route::post('/reset-password', [AuthController::class, 'resetPassword']);
 
+// Voluntary-deactivation OTP reactivation - reached only after login()
+// returns reactivation_required (correct credentials, deactivated account),
+// so these stay public/unauthenticated like the routes above; the opaque
+// reactivation_token (not a bearer token) is what ties a request to a
+// specific login attempt (see AccountReactivationService).
+Route::post('/reactivate-resend', [AuthController::class, 'reactivateResend']);
+Route::post('/reactivate-verify', [AuthController::class, 'reactivateVerify']);
+
 Route::get('/rooms', [RoomController::class, 'index']);
 Route::get('/rooms/{roomType}', [RoomController::class, 'show']);
 
@@ -88,7 +96,16 @@ Route::middleware(['auth.api', 'role:guest'])->group(function () {
         // /reset-password, same as the website) - the current-password-gated
         // changePassword() this route used to point at was never actually
         // called by the Android app's UI, only ever reachable by hand.
-        Route::post('/guest/account/delete', [ProfileController::class, 'deleteAccount']);
+        // Guest self-deactivation (replaces the old permanent-sounding
+        // "delete account" - see ProfileController::deactivateAccount()'s
+        // own docblock). Reactivation happens through login() + the public
+        // /reactivate-* routes above, not an authenticated endpoint.
+        Route::post('/guest/account/deactivate', [ProfileController::class, 'deactivateAccount']);
+        // Unrelated legacy mechanism (deleted_at/restore_deadline, still
+        // used by the web guest portal's own Delete Account feature) - left
+        // in place; no route in this API triggers it anymore now that
+        // deleteAccount() above is gone, but restoreAccount() stays
+        // reachable in case a token from that other flow is ever presented.
         Route::post('/guest/account/restore', [ProfileController::class, 'restoreAccount']);
     });
 

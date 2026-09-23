@@ -1,6 +1,6 @@
 @extends('layouts.public')
 
-@section('title', 'Velocity Suites - Luxury Hotel Booking')
+@section('title', 'Velocity Suites - Home')
 
 @push('styles')
 <style>

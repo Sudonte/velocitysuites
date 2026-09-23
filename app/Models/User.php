@@ -33,6 +33,7 @@ class User extends Authenticatable
         'email_verified_at',
         'deleted_at',
         'restore_deadline',
+        'deactivated_at',
         'age',
         'gender',
         'date_of_birth',
@@ -79,6 +80,7 @@ class User extends Authenticatable
             'last_login_at' => 'datetime',
             'deleted_at' => 'datetime',
             'restore_deadline' => 'datetime',
+            'deactivated_at' => 'datetime',
             'date_of_birth' => 'date',
             'profile_picture_changed_at' => 'datetime',
         ];

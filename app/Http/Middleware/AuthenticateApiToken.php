@@ -32,8 +32,13 @@ class AuthenticateApiToken
 
         $user = $apiToken->user;
 
-        if (! $user || $user->status === 'suspended') {
-            return response()->json(['message' => 'Account suspended.'], 403);
+        // Rejects a stale token from before suspension/deactivation too -
+        // deactivateAccount() already revokes every token at the moment of
+        // deactivation, but this is the actual enforcement boundary all
+        // protected guest routes share, so it must never trust a token's
+        // mere existence as proof the account is still usable.
+        if (! $user || in_array($user->status, ['suspended', 'deactivated'], true)) {
+            return response()->json(['message' => 'This account is no longer active.'], 403);
         }
 
         $apiToken->update(['last_used_at' => now()]);

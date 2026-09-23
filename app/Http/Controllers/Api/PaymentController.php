@@ -10,6 +10,7 @@ use App\Services\ReservationWorkflowService;
 use App\Support\Activity;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
 /**
@@ -107,17 +108,6 @@ class PaymentController extends Controller
 
         $paymentStageForDupeCheck = $validated['payment_type'] === 'full' ? 'final' : 'deposit';
 
-        // Without this guard, repeated submissions (e.g. cash intent, then GCash, then
-        // cash again, all before any of them is verified) would each create a brand-new
-        // Payment row with nothing ever superseding the earlier ones - the guest's own
-        // existing cancel/void endpoints are the correct way to clear a stuck attempt
-        // before trying again.
-        if ($reservation->payments()->where('payment_stage', $paymentStageForDupeCheck)->where('payment_status', 'pending')->exists()) {
-            return response()->json([
-                'message' => 'A payment for this reservation is already awaiting verification. Cancel or void it before submitting another.',
-            ], 422);
-        }
-
         if ($validated['payment_type'] === 'full') {
             if (abs((float) $validated['amount_paid'] - $range['total']) > 0.01) {
                 return response()->json([
@@ -136,32 +126,97 @@ class PaymentController extends Controller
 
         $paymentStage = $validated['payment_type'] === 'full' ? 'final' : 'deposit';
 
-        if ($validated['payment_method'] === 'gcash') {
-            $path = $request->file('receipt')->store('payment-receipts', 'public');
+        // Receipt upload (disk I/O) happens BEFORE the locked transaction
+        // below, not inside it - a slow upload should never extend how
+        // long another concurrent request for this same reservation has to
+        // wait for the row lock.
+        $receiptPath = $validated['payment_method'] === 'gcash'
+            ? $request->file('receipt')->store('payment-receipts', 'public')
+            : null;
 
-            $payment = $this->workflow->recordDepositPayment($reservation, [
-                'payment_method' => 'gcash',
-                'reference_number' => $validated['reference_number'],
-                'gcash_number' => $validated['gcash_number'],
-                'receipt_path' => $path,
-                'amount_paid' => $validated['amount_paid'],
-            ], $paymentStage);
-        } else {
-            $payment = $this->workflow->recordCashIntent($reservation, (float) $validated['amount_paid'], $paymentStage);
+        // Everything from here must be atomic with respect to another
+        // near-simultaneous submission for this SAME reservation - the
+        // pending-payment-exists check, persisting selected_payment_percentage/
+        // required_payment_amount, creating the Payment row, and (for GCash)
+        // ReservationWorkflowService::tryAutoConvert()'s auto-conversion all
+        // used to run as separate, individually-unlocked steps against a
+        // Reservation instance fetched before this request's own validation
+        // even ran. Two requests could both pass the unlocked
+        // "no pending payment yet" check and both pass the unlocked
+        // "status === AWAITING_GCASH" check before either committed,
+        // letting both create a Payment row and both call
+        // createBookingFromReservation() - two Booking rows for one
+        // Reservation, confirmed possible by source inspection (no
+        // lockForUpdate() anywhere in this path, no unique constraint on
+        // bookings.reservation_id at the time). Re-fetching the reservation
+        // WITH a row lock here, and re-running both checks against that
+        // locked row, means a second request racing in blocks on the lock
+        // until the first's entire transaction (including any auto-convert)
+        // commits, then correctly sees the first request's own result
+        // (a pending payment, or status already CONVERTED_TO_BOOKING) and
+        // safely no-ops instead of duplicating it.
+        $outcome = DB::transaction(function () use ($reservation, $validated, $paymentStageForDupeCheck, $paymentStage, $receiptPath) {
+            $locked = Reservation::whereKey($reservation->id)->lockForUpdate()->first();
+
+            if (! $locked || ! in_array($locked->status, Reservation::ACTIVE_STATUSES, true)) {
+                return ['error' => 'not_payable'];
+            }
+
+            // Without this guard, repeated submissions (e.g. cash intent, then GCash, then
+            // cash again, all before any of them is verified) would each create a brand-new
+            // Payment row with nothing ever superseding the earlier ones - the guest's own
+            // existing cancel/void endpoints are the correct way to clear a stuck attempt
+            // before trying again.
+            if ($locked->payments()->where('payment_stage', $paymentStageForDupeCheck)->where('payment_status', 'pending')->exists()) {
+                return ['error' => 'duplicate_pending'];
+            }
+
+            // Persist the percentage/amount for this submission onto the
+            // reservation BEFORE recording the payment - overwritten on every
+            // new submission (never accumulated), matching the guest-facing
+            // contract that these two fields always reflect the most recent
+            // payment attempt, not a running history (see Android's
+            // renderStoredPaymentPercentageIfPresent() doc: the read-only lock
+            // only applies while that latest submission is still pending
+            // verification; once verified/rejected, a further submission's own
+            // values simply replace these again).
+            //
+            // Must happen BEFORE recordDepositPayment() below, not after: a
+            // GCash payment synchronously auto-converts the reservation into a
+            // Booking via ReservationWorkflowService::tryAutoConvert() ->
+            // createBookingFromReservation(), which snapshots
+            // $locked->selected_payment_percentage/required_payment_amount
+            // onto the new Booking row at that exact moment.
+            $locked->update([
+                'selected_payment_percentage' => $validated['selected_payment_percentage'] ?? null,
+                'required_payment_amount' => (float) $validated['amount_paid'],
+            ]);
+
+            if ($validated['payment_method'] === 'gcash') {
+                $payment = $this->workflow->recordDepositPayment($locked, [
+                    'payment_method' => 'gcash',
+                    'reference_number' => $validated['reference_number'],
+                    'gcash_number' => $validated['gcash_number'],
+                    'receipt_path' => $receiptPath,
+                    'amount_paid' => $validated['amount_paid'],
+                ], $paymentStage);
+            } else {
+                $payment = $this->workflow->recordCashIntent($locked, (float) $validated['amount_paid'], $paymentStage);
+            }
+
+            return ['payment' => $payment, 'reservation' => $locked];
+        });
+
+        if (isset($outcome['error'])) {
+            $message = $outcome['error'] === 'not_payable'
+                ? 'This reservation is not payable.'
+                : 'A payment for this reservation is already awaiting verification. Cancel or void it before submitting another.';
+
+            return response()->json(['message' => $message], 422);
         }
 
-        // Persist the percentage/amount for this submission onto the
-        // reservation - overwritten on every new submission (never
-        // accumulated), matching the guest-facing contract that these two
-        // fields always reflect the most recent payment attempt, not a
-        // running history (see Android's renderStoredPaymentPercentageIfPresent()
-        // doc: the read-only lock only applies while that latest submission
-        // is still pending verification; once verified/rejected, a further
-        // submission's own values simply replace these again).
-        $reservation->update([
-            'selected_payment_percentage' => $validated['selected_payment_percentage'] ?? null,
-            'required_payment_amount' => (float) $validated['amount_paid'],
-        ]);
+        $payment = $outcome['payment'];
+        $reservation = $outcome['reservation'];
 
         $user = auth()->user();
         $reservation->refresh()->loadMissing(['roomType', 'booking']);
