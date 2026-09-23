@@ -3,31 +3,31 @@
 namespace Tests\Unit;
 
 use App\Models\Payment;
-use Carbon\Carbon;
 use PHPUnit\Framework\TestCase;
 
 /**
- * Pure unit tests for Payment::preCheckoutReceiptType()/
- * isPartialReceiptEligible()/isFullPaymentReceiptEligible() - deliberately
- * plain PHPUnit\Framework\TestCase (no Laravel app boot, no database).
- * Every Payment instance below is built via a bare Payment instance +
- * setRawAttributes() (see payment()'s own doc) with billing_id left
- * unset/null throughout, so isEligibleForFirstIssuance() returns on its
- * own `$this->billing_id === null` check and never touches the billing()
- * relation at all - merely CONSTRUCTING a belongsTo() relation object
- * requires resolving the model's DB connection (confirmed the hard way:
- * it throws even when the FK is null), so this is not just an
- * optimization, it's what makes calling these methods safe on an
- * unsaved/unconnected model outside a booted app. This is exactly the
- * DB-free coverage promised for §21 (Partial Receipt availability) and the
- * review-checkpoint correction that a 100% pre-checkout payment must never
- * be mislabeled "Partial".
+ * Pure unit tests for Payment::receiptType()/isPartialReceiptEligible()/
+ * isFullPaymentReceiptEligible() (PURE READS - reflect only the stored
+ * receipt_number, never compute eligibility or mint anything) and for
+ * Payment::ensureReceiptNumber()'s side-effect-free NEGATIVE paths (the
+ * WRITE-path method, but every branch that returns null/already-stored
+ * does so WITHOUT ever touching DB::transaction()/lockForUpdate() - see
+ * each test's own comment for why that's provable here).
  *
- * The one case NOT covered here - a payment that WOULD otherwise qualify,
- * but the booking's Billing has already reached 'paid' (isEligibleForFirstIssuance()'s
- * last branch, only reachable when billing_id is actually set) - needs a
- * real, loaded/queried Billing relation, which requires a database;
- * deferred to the MySQL-backed integration phase per explicit instruction.
+ * Deliberately plain PHPUnit\Framework\TestCase (no Laravel app boot, no
+ * database). Every Payment instance below is built via a bare instance +
+ * setRawAttributes() (see payment()'s own doc) with billing_id left
+ * unset/null throughout, so nothing here ever touches the billing()
+ * relation (constructing a belongsTo() relation object requires
+ * resolving the model's DB connection, even when the FK is null - see the
+ * historical note in payment()'s doc).
+ *
+ * What this file does NOT cover (needs a real database, deferred to the
+ * MySQL-backed integration phase per explicit instruction):
+ * - ensureReceiptNumber() actually minting and persisting a NEW number
+ *   (the one branch that genuinely calls DB::transaction()).
+ * - qualifiesForNewPreCheckoutReceipt()'s "billing_id set AND billing
+ *   already paid" exclusion branch (touches the billing() relation).
  */
 class PaymentReceiptEligibilityTest extends TestCase
 {
@@ -55,50 +55,132 @@ class PaymentReceiptEligibilityTest extends TestCase
             'amount_paid' => 2000.00,
             'verified_at' => null,
             'rejected_at' => null,
+            'receipt_number' => null,
+            'billing_id' => null,
         ], $attributes));
 
         return $payment;
     }
 
     /** Converts a plain date string into an already-instantiated Carbon instance - see payment()'s own doc for why this matters here. */
-    private function at(string $dateTime): Carbon
+    private function at(string $dateTime): \Carbon\Carbon
     {
-        return Carbon::parse($dateTime);
+        return \Carbon\Carbon::parse($dateTime);
     }
 
-    public function test_pending_payment_is_not_eligible_for_any_receipt(): void
-    {
-        $payment = $this->payment(['payment_status' => 'pending', 'verified_at' => null]);
+    // ---- receiptType() / isPartialReceiptEligible() / isFullPaymentReceiptEligible() - PURE READS ----
 
-        $this->assertNull($payment->preCheckoutReceiptType());
+    public function test_receipt_type_is_null_when_no_receipt_number_stored(): void
+    {
+        // Looks fully "eligible" (completed, verified, deposit, real
+        // amount) but was NEVER actually issued a receipt_number - this
+        // must stay null, not be computed on the fly. This is the exact
+        // §8 "historical null receipt_number stays null after reads" rule.
+        $payment = $this->payment([
+            'payment_status' => 'completed',
+            'verified_at' => $this->at('2026-09-20 10:00:00'),
+            'payment_stage' => 'deposit',
+            'amount_paid' => 2000.00,
+        ]);
+
+        $this->assertNull($payment->receiptType());
         $this->assertFalse($payment->isPartialReceiptEligible());
         $this->assertFalse($payment->isFullPaymentReceiptEligible());
     }
 
-    public function test_rejected_payment_is_not_eligible_for_any_receipt(): void
+    public function test_receipt_type_reads_pr_prefix_as_partial(): void
+    {
+        $payment = $this->payment(['receipt_number' => 'PR-20260920-000501']);
+
+        $this->assertSame('PARTIAL_RECEIPT', $payment->receiptType());
+        $this->assertTrue($payment->isPartialReceiptEligible());
+        $this->assertFalse($payment->isFullPaymentReceiptEligible());
+    }
+
+    public function test_receipt_type_reads_fr_prefix_as_full_payment(): void
+    {
+        $payment = $this->payment(['receipt_number' => 'FR-20260920-000502']);
+
+        $this->assertSame('FULL_PAYMENT_RECEIPT', $payment->receiptType());
+        $this->assertTrue($payment->isFullPaymentReceiptEligible());
+        $this->assertFalse($payment->isPartialReceiptEligible());
+    }
+
+    public function test_receipt_type_unknown_prefix_is_null(): void
+    {
+        // Should never happen given ensureReceiptNumber() is the only
+        // writer, but must never be silently guessed as either type -
+        // e.g. an 'OR-' number (Billing's, never Payment's) or garbage.
+        $payment = $this->payment(['receipt_number' => 'OR-20260920-000210']);
+
+        $this->assertNull($payment->receiptType());
+
+        $payment2 = $this->payment(['receipt_number' => 'GARBAGE-VALUE']);
+        $this->assertNull($payment2->receiptType());
+    }
+
+    // ---- ensureReceiptNumber() - side-effect-free negative paths -------
+    //
+    // Every assertion below proves "no write was attempted" simply by NOT
+    // throwing: a plain PHPUnit\Framework\TestCase has no DB connection
+    // resolver at all, so DB::transaction()/lockForUpdate()/save() would
+    // throw "Call to a member function connection() on null" immediately
+    // if reached. A clean return (even null) is direct proof those calls
+    // were never made.
+
+    public function test_ensure_receipt_number_returns_existing_number_without_touching_the_database(): void
+    {
+        $payment = $this->payment(['receipt_number' => 'PR-20260920-000501']);
+
+        $this->assertSame('PR-20260920-000501', $payment->ensureReceiptNumber());
+    }
+
+    public function test_ensure_receipt_number_is_null_for_a_pending_payment_without_touching_the_database(): void
+    {
+        $payment = $this->payment(['payment_status' => 'pending', 'verified_at' => null]);
+
+        $this->assertNull($payment->ensureReceiptNumber());
+    }
+
+    public function test_ensure_receipt_number_is_null_for_a_rejected_payment_without_touching_the_database(): void
     {
         $payment = $this->payment(['payment_status' => 'rejected', 'rejected_at' => $this->at('2026-09-20 10:00:00'), 'verified_at' => null]);
 
-        $this->assertNull($payment->preCheckoutReceiptType());
+        $this->assertNull($payment->ensureReceiptNumber());
     }
 
-    public function test_failed_payment_is_not_eligible_for_any_receipt(): void
+    public function test_ensure_receipt_number_is_null_for_a_failed_payment_without_touching_the_database(): void
     {
         $payment = $this->payment(['payment_status' => 'failed', 'verified_at' => null]);
 
-        $this->assertNull($payment->preCheckoutReceiptType());
+        $this->assertNull($payment->ensureReceiptNumber());
     }
 
-    public function test_completed_but_not_yet_verified_payment_is_not_eligible(): void
+    public function test_ensure_receipt_number_is_null_for_completed_but_not_yet_verified_without_touching_the_database(): void
     {
-        // Still sitting in the receptionist's verification queue - see
-        // Payment::isPendingVerification().
         $payment = $this->payment(['payment_status' => 'completed', 'verified_at' => null, 'payment_stage' => 'deposit']);
 
-        $this->assertNull($payment->preCheckoutReceiptType());
+        $this->assertNull($payment->ensureReceiptNumber());
     }
 
-    public function test_zero_amount_payment_is_never_eligible_even_if_verified(): void
+    public function test_ensure_receipt_number_is_null_for_a_checkout_collected_payment_without_touching_the_database(): void
+    {
+        // Receptionist\CheckOutController::recordPayment() creates its
+        // Payment row already 'completed' but NEVER sets verified_at -
+        // this must never mint a standalone pre-checkout receipt.
+        $payment = $this->payment([
+            'payment_method' => 'cash',
+            'payment_status' => 'completed',
+            'verified_at' => null,
+            'payment_stage' => 'final',
+            'billing_id' => 82,
+            'amount_paid' => 8000.00,
+        ]);
+
+        $this->assertNull($payment->ensureReceiptNumber());
+    }
+
+    public function test_ensure_receipt_number_is_null_for_zero_amount_without_touching_the_database(): void
     {
         $payment = $this->payment([
             'payment_status' => 'completed',
@@ -107,158 +189,6 @@ class PaymentReceiptEligibilityTest extends TestCase
             'amount_paid' => 0,
         ]);
 
-        $this->assertNull($payment->preCheckoutReceiptType());
-    }
-
-    public function test_verified_deposit_stage_payment_is_a_partial_receipt(): void
-    {
-        $payment = $this->payment([
-            'payment_status' => 'completed',
-            'verified_at' => $this->at('2026-09-20 10:00:00'),
-            'payment_stage' => 'deposit',
-            'amount_paid' => 2000.00,
-        ]);
-
-        $this->assertSame('PARTIAL_RECEIPT', $payment->preCheckoutReceiptType());
-        $this->assertTrue($payment->isPartialReceiptEligible());
-        $this->assertFalse($payment->isFullPaymentReceiptEligible());
-    }
-
-    /**
-     * The exact bug the review checkpoint flagged: a verified 100%
-     * pre-checkout payment (payment_stage 'final', but guest-submitted and
-     * receptionist-verified - never a receptionist-recorded checkout
-     * payment, which never sets verified_at at all) must NOT be classified
-     * as a Partial Receipt.
-     */
-    public function test_verified_full_payment_before_checkout_is_never_a_partial_receipt(): void
-    {
-        $payment = $this->payment([
-            'payment_status' => 'completed',
-            'verified_at' => $this->at('2026-09-20 10:00:00'),
-            'payment_stage' => 'final',
-            'amount_paid' => 10000.00,
-        ]);
-
-        $this->assertSame('FULL_PAYMENT_RECEIPT', $payment->preCheckoutReceiptType());
-        $this->assertFalse($payment->isPartialReceiptEligible());
-        $this->assertTrue($payment->isFullPaymentReceiptEligible());
-    }
-
-    /**
-     * A receptionist-recorded checkout payment (Receptionist\
-     * CheckOutController::recordPayment()) is created already 'completed'
-     * but NEVER sets verified_at - it must never generate a standalone
-     * pre-checkout receipt of either kind, only appear inside the Official
-     * Receipt's own transaction history (see ReceiptService::transactionType()).
-     */
-    public function test_checkout_collected_payment_with_no_verified_at_is_not_eligible(): void
-    {
-        $payment = $this->payment([
-            'payment_method' => 'cash',
-            'payment_status' => 'completed',
-            'verified_at' => null,
-            'payment_stage' => 'final',
-            'amount_paid' => 8000.00,
-        ]);
-
-        $this->assertNull($payment->preCheckoutReceiptType());
-    }
-
-    /** @dataProvider partialDepositPercentageProvider */
-    public function test_20_30_40_50_percent_deposits_are_all_partial_receipts(float $percentOfTenThousand): void
-    {
-        $payment = $this->payment([
-            'payment_status' => 'completed',
-            'verified_at' => $this->at('2026-09-20 10:00:00'),
-            'payment_stage' => 'deposit',
-            'amount_paid' => 10000.00 * ($percentOfTenThousand / 100),
-        ]);
-
-        $this->assertSame('PARTIAL_RECEIPT', $payment->preCheckoutReceiptType());
-    }
-
-    public static function partialDepositPercentageProvider(): array
-    {
-        return [
-            '20 percent' => [20.0],
-            '30 percent' => [30.0],
-            '40 percent' => [40.0],
-            '50 percent' => [50.0],
-        ];
-    }
-
-    public function test_already_issued_partial_receipt_stays_partial_regardless_of_current_mutable_state(): void
-    {
-        // receipt_number is deliberately NOT fillable (system-generated
-        // only) - set directly, the same way Payment::ensureReceiptNumber()
-        // itself does after persisting.
-        $payment = $this->payment(['payment_stage' => 'deposit']);
-        $payment->receipt_number = Payment::formatReceiptNumber('PR', 501, Carbon::create(2026, 9, 20));
-
-        $this->assertSame('PARTIAL_RECEIPT', $payment->preCheckoutReceiptType());
-        $this->assertTrue($payment->isPartialReceiptEligible());
-    }
-
-    public function test_already_issued_full_payment_receipt_stays_full_regardless_of_current_mutable_state(): void
-    {
-        $payment = $this->payment(['payment_stage' => 'final']);
-        $payment->receipt_number = Payment::formatReceiptNumber('FR', 502, Carbon::create(2026, 9, 20));
-
-        $this->assertSame('FULL_PAYMENT_RECEIPT', $payment->preCheckoutReceiptType());
-        $this->assertTrue($payment->isFullPaymentReceiptEligible());
-        $this->assertFalse($payment->isPartialReceiptEligible());
-    }
-
-    // ---- Explicit prefix handling (hardening correction) ----------------
-    //
-    // preCheckoutReceiptType() must use an explicit PR-/FR- match, never
-    // an "anything not PR- is FR-" fallback - an unknown/malformed
-    // receipt_number must report null/unsupported, not be silently
-    // guessed as a Full Payment Receipt.
-
-    public function test_pr_prefix_is_partial_receipt(): void
-    {
-        $payment = $this->payment([]);
-        $payment->receipt_number = 'PR-20260920-000501';
-
-        $this->assertSame('PARTIAL_RECEIPT', $payment->preCheckoutReceiptType());
-        $this->assertTrue($payment->isPartialReceiptEligible());
-        $this->assertFalse($payment->isFullPaymentReceiptEligible());
-    }
-
-    public function test_fr_prefix_is_full_payment_receipt(): void
-    {
-        $payment = $this->payment([]);
-        $payment->receipt_number = 'FR-20260920-000502';
-
-        $this->assertSame('FULL_PAYMENT_RECEIPT', $payment->preCheckoutReceiptType());
-        $this->assertTrue($payment->isFullPaymentReceiptEligible());
-        $this->assertFalse($payment->isPartialReceiptEligible());
-    }
-
-    public function test_unknown_prefix_is_null_not_full_payment_receipt(): void
-    {
-        // Should never happen given ensureReceiptNumber() is the only
-        // writer of this column, but a defensive guarantee: an
-        // unrecognized prefix (or an 'OR-' Official Receipt number, which
-        // belongs to Billing, never Payment) must never be silently
-        // treated as a Full Payment Receipt just because it isn't 'PR-'.
-        $payment = $this->payment([]);
-        $payment->receipt_number = 'OR-20260920-000210';
-
-        $this->assertNull($payment->preCheckoutReceiptType());
-        $this->assertFalse($payment->isPartialReceiptEligible());
-        $this->assertFalse($payment->isFullPaymentReceiptEligible());
-    }
-
-    public function test_malformed_prefix_is_null_not_full_payment_receipt(): void
-    {
-        $payment = $this->payment([]);
-        $payment->receipt_number = 'GARBAGE-VALUE';
-
-        $this->assertNull($payment->preCheckoutReceiptType());
-        $this->assertFalse($payment->isPartialReceiptEligible());
-        $this->assertFalse($payment->isFullPaymentReceiptEligible());
+        $this->assertNull($payment->ensureReceiptNumber());
     }
 }

@@ -422,9 +422,9 @@ class NotificationService
         // all (e.g. a ₱0 payment) - see Payment::ensureReceiptNumber().
         // $receiptLabel lets the caller (Receptionist\PaymentController::
         // verify()) say "Partial Payment Receipt" or the generic "Payment
-        // Receipt" depending on Payment::preCheckoutReceiptType() - a
+        // Receipt" depending on Payment::isFullPaymentReceiptEligible() - a
         // verified 100% pre-checkout payment must never be announced as
-        // "Partial" (see that method's own doc).
+        // "Partial" (see Payment::qualifiesForNewPreCheckoutReceipt()'s doc).
         if ($receiptNumber) {
             $message .= " Your {$receiptLabel} ({$receiptNumber}) is now available.";
         }

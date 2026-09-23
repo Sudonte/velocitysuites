@@ -16,11 +16,25 @@
         .total-row td { border-top: 1px solid #333; font-weight: bold; font-size: 15px; color: #D6414B; padding-top: 10px; }
         .remaining { color: #666; font-size: 11px; }
         .footer { margin-top: 30px; color: #666; font-size: 9px; }
+        table.history { width: 100%; border-collapse: collapse; margin-top: 6px; }
+        table.history th { background-color: #f7d7d9; text-align: left; padding: 6px; font-size: 10px; }
+        table.history td { padding: 6px; font-size: 10px; border-bottom: 1px solid #eee; }
+        table.history th:last-child, table.history td:last-child { text-align: right; }
+        .badge-verified { color: #1a7f37; }
+        .badge-pending { color: #9a6700; }
+        .badge-rejected, .badge-failed { color: #b91c1c; }
     </style>
 </head>
 <body>
     <h1>Velocity Suites</h1>
-    <p class="subtitle">Official Payment Receipt</p>
+    {{--
+        Reflects the backend's own official_receipt_available rule
+        (billing_status=paid AND booking_status=COMPLETED_BOOKING) -
+        never assumed. A 20-50% deposit or a verified 100% pre-checkout
+        payment must never print as "Official Payment Receipt" - see
+        PAYMENT_RECEIPT_HISTORY_BACKEND_SPEC.md §7.
+    --}}
+    <p class="subtitle">{{ $paymentSummary['official_receipt_available'] ? 'Official Payment Receipt' : 'Payment Receipt' }}</p>
     <hr>
 
     <h2>Booking Information</h2>
@@ -38,30 +52,55 @@
     <p>Payment Method: {{ $latestPayment ? ucfirst($latestPayment->payment_method) : ($reservation->payment_method ? ucfirst($reservation->payment_method) : 'N/A') }}</p>
     <p>Payment Date: {{ $latestPayment && $latestPayment->payment_date ? $latestPayment->payment_date->format('M d, Y') : 'N/A' }}</p>
 
-    <?php
-        $nights = abs($reservation->check_out->diffInDays($reservation->check_in));
-        $baseAmount = $reservation->roomType->rate * $nights;
-        $billing = $reservation->booking->billing ?? null;
-        $totalAmount = $billing->total_amount ?? $baseAmount;
-        $totalPaid = $reservation->payments->where('payment_status', 'completed')->sum('amount_paid');
-        if ($billing) {
-            $totalPaid += $billing->payments->where('payment_status', 'completed')->sum('amount_paid') ?? 0;
-        }
-        $remaining = max(0, $totalAmount - $totalPaid);
-    ?>
-
+    {{--
+        Grand Total / Total Amount Paid / Remaining Balance come from
+        $paymentSummary (Reservation::paymentSummary(), ReceiptService-
+        backed) - not a second, independent calculation in this template.
+        Previously this block fell back to showing the full Grand Total
+        as "TOTAL PAID" whenever nothing had actually been paid yet
+        ($totalPaid > 0 ? $totalPaid : $totalAmount) - a real "shows an
+        incorrect total" bug (Total Amount Paid must only reflect
+        completed payments, never the Grand Total itself). Fixed by
+        always showing the real total_amount_paid, even when it's ₱0.
+    --}}
     <table class="summary">
         <thead>
             <tr><th>Description</th><th>Amount</th></tr>
         </thead>
         <tbody>
-            <tr><td>Accommodation Charges</td><td>&#8369;{{ number_format($totalAmount, 2) }}</td></tr>
-            <tr class="total-row"><td>TOTAL PAID</td><td>&#8369;{{ number_format($totalPaid > 0 ? $totalPaid : $totalAmount, 2) }}</td></tr>
-            @if($remaining > 0.009 && $totalPaid > 0)
-                <tr><td colspan="2" class="remaining">Remaining Balance: &#8369;{{ number_format($remaining, 2) }}</td></tr>
+            <tr><td>Accommodation Charges</td><td>&#8369;{{ number_format($paymentSummary['grand_total'], 2) }}</td></tr>
+            <tr class="total-row"><td>TOTAL PAID</td><td>&#8369;{{ number_format($paymentSummary['total_amount_paid'], 2) }}</td></tr>
+            @if($paymentSummary['remaining_balance'] > 0.009)
+                <tr><td colspan="2" class="remaining">Remaining Balance: &#8369;{{ number_format($paymentSummary['remaining_balance'], 2) }}</td></tr>
             @endif
         </tbody>
     </table>
+
+    @if(!empty($paymentTransactions))
+        <h2 style="margin-top: 16px;">Payment Transaction History</h2>
+        <table class="history">
+            <thead>
+                <tr><th>Date</th><th>Method</th><th>Type</th><th>Status</th><th>Amount</th></tr>
+            </thead>
+            <tbody>
+                @foreach($paymentTransactions as $tx)
+                    @php
+                        $statusLabel = $tx['verification_status']
+                            ? ucfirst(str_replace('_', ' ', $tx['verification_status']))
+                            : ucfirst($tx['payment_status']);
+                        $statusClass = 'badge-' . ($tx['verification_status'] ?? $tx['payment_status']);
+                    @endphp
+                    <tr>
+                        <td>{{ $tx['payment_date'] ? \Carbon\Carbon::parse($tx['payment_date'])->format('M d, Y') : 'N/A' }}</td>
+                        <td>{{ ucfirst($tx['payment_method']) }}</td>
+                        <td>{{ ucwords(str_replace('_', ' ', $tx['transaction_type'])) }}</td>
+                        <td class="{{ $statusClass }}">{{ $statusLabel }}</td>
+                        <td>&#8369;{{ number_format($tx['amount_paid'], 2) }}</td>
+                    </tr>
+                @endforeach
+            </tbody>
+        </table>
+    @endif
 
     <p class="footer">
         Thank you for choosing Velocity Suites. Your comfort is our service.<br>

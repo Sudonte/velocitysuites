@@ -12,7 +12,12 @@
                 </a>
             @endif
             <h1 class="mb-0">
-                <i class="fas fa-receipt"></i> Receipt
+                <i class="fas fa-receipt"></i>
+                {{-- Reflects the backend's own official_receipt_available
+                     rule (billing_status=paid AND booking_status=
+                     COMPLETED_BOOKING) - never assumed "Official" just
+                     because this page happens to be reachable. --}}
+                {{ $paymentSummary['official_receipt_available'] ? 'Official Payment Receipt' : 'Payment Receipt' }}
             </h1>
             @if($billing->booking)
                 <p class="text-muted">
@@ -62,51 +67,34 @@
                     </tr>
                     <tr class="fw-bold fs-5">
                         <td>Total</td>
-                        <td class="text-end text-brand">₱{{ number_format($billing->running_total, 2) }}</td>
+                        <td class="text-end text-brand">₱{{ number_format($paymentSummary['grand_total'], 2) }}</td>
                     </tr>
                 </table>
             </x-card>
 
-            <x-card title="Payment History" icon="fas fa-history" variant="info" bodyClass="table-responsive">
-                <table class="table table-hover mb-0">
-                    <thead>
-                        <tr>
-                            <th>Date</th>
-                            <th>Method</th>
-                            <th>Reference</th>
-                            <th>Status</th>
-                            <th class="text-end">Amount</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @forelse($billing->payments as $payment)
-                            <tr>
-                                <td>{{ $payment->payment_date->format('M d, Y h:i A') }}</td>
-                                <td>{{ ucfirst($payment->payment_method) }}</td>
-                                <td>{{ $payment->reference_number ?? '—' }}</td>
-                                <td><x-status-badge :status="$payment->payment_status" domain="payment" /></td>
-                                <td class="text-end">₱{{ number_format($payment->amount_paid, 2) }}</td>
-                            </tr>
-                        @empty
-                            <tr><td colspan="5"><x-empty-state icon="fas fa-history" message="No payments recorded." /></td></tr>
-                        @endforelse
-                        @if($billing->payments->count() > 0)
-                            <tr class="table-light">
-                                <td colspan="4"><strong>Total Verified Paid</strong></td>
-                                <td class="text-end"><strong>₱{{ number_format($amountPaid, 2) }}</strong></td>
-                            </tr>
-                        @endif
-                    </tbody>
-                </table>
+            {{-- Shared with the Receptionist checkout Payment Panel - see
+                 resources/views/receptionist/partials/payment-history.blade.php.
+                 Fed by the exact same paymentSummary/paymentTransactions
+                 arrays (Booking::paymentSummary()/paymentTransactionsPayload(),
+                 pure reads - never mints a receipt number just by being
+                 viewed), so a guest and a receptionist looking at the same
+                 booking always see identical figures/history. Contains no
+                 staff-only field (no verifier name, no rejection reason) -
+                 safe for this guest-reachable route. --}}
+            <x-card title="Payment History" icon="fas fa-history" variant="info" bodyClass="p-3">
+                @include('receptionist.partials.payment-history', [
+                    'paymentSummary' => $paymentSummary,
+                    'paymentTransactions' => $paymentTransactions,
+                ])
             </x-card>
         </div>
 
         <div class="col-lg-4">
             <x-card title="Balance" icon="fas fa-wallet" bodyClass="card-body text-center">
-                <h2 class="mb-0" style="color: {{ $balance > 0 ? 'var(--danger-color)' : 'var(--success-color)' }};">
-                    ₱{{ number_format($balance, 2) }}
+                <h2 class="mb-0" style="color: {{ $paymentSummary['remaining_balance'] > 0 ? 'var(--danger-color)' : 'var(--success-color)' }};">
+                    ₱{{ number_format($paymentSummary['remaining_balance'], 2) }}
                 </h2>
-                @if($balance <= 0)
+                @if($paymentSummary['remaining_balance'] <= 0)
                     <p class="text-success mb-0 mt-2"><i class="fas fa-check-circle"></i> Fully paid</p>
                 @else
                     <p class="text-muted mb-0 mt-2">Remaining balance</p>

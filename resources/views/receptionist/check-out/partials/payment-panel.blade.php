@@ -36,12 +36,12 @@
         @endif
         <tr class="fw-bold">
             <td>Grand Total</td>
-            <td class="text-end">₱{{ number_format($billing->running_total, 2) }}</td>
+            <td class="text-end">₱{{ number_format($paymentSummary['grand_total'], 2) }}</td>
         </tr>
-        @if($amountPaidSoFar > 0)
+        @if($paymentSummary['total_amount_paid'] > 0)
             <tr>
-                <td>Already Paid</td>
-                <td class="text-end">₱{{ number_format($amountPaidSoFar, 2) }}</td>
+                <td>Total Amount Already Paid</td>
+                <td class="text-end">₱{{ number_format($paymentSummary['total_amount_paid'], 2) }}</td>
             </tr>
         @endif
         <tr class="fw-bold fs-5">
@@ -51,7 +51,18 @@
     </table>
     </div>
 
-    <div class="alert alert-danger d-none" id="paymentErrorAlert"></div>
+    {{-- Full Payment Transaction History - reservation-originated,
+         direct-booking, and checkout-collected payments alike, whatever
+         Booking::allPayments() already merged for this booking - see that
+         partial's own doc. Fed by the exact same paymentSummary/
+         paymentTransactions arrays as the Bill Summary table above, never
+         recalculated separately here. --}}
+    @include('receptionist.partials.payment-history', [
+        'paymentSummary' => $paymentSummary,
+        'paymentTransactions' => $paymentTransactions,
+    ])
+
+    <div class="alert alert-danger d-none mt-3" id="paymentErrorAlert"></div>
 
     <form id="paymentForm">
         @if($balance > 0.009)

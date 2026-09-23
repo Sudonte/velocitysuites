@@ -118,17 +118,32 @@ class CheckOutController extends Controller
 
     /**
      * Open the Payment Panel for a locked billing.
+     *
+     * Grand Total / Total Amount Paid / Remaining Balance / Payment Status
+     * come from Booking::paymentSummary() (ReceiptService - the same
+     * authoritative source the guest-facing API and the Payment
+     * Transaction History below both read) rather than this controller
+     * computing its own $billing->balance/completed-payments-sum
+     * aggregate a second, independent way - see
+     * PAYMENT_RECEIPT_HISTORY_BACKEND_SPEC.md §17 ("do not calculate
+     * critical payment data differently" across surfaces). $balance is
+     * kept as its own variable only because payment-panel.blade.php's
+     * existing amount-input/change-due JS already reads it via a
+     * data-balance attribute - same value, just still exposed under its
+     * pre-existing name so that JS doesn't need to change.
      */
     public function checkOutPaymentPanel(Billing $billing)
     {
         $billing->load(['booking.reservation.guest.user', 'booking.rooms', 'payments', 'additionalCharges', 'discountApplied']);
 
-        $balance = $billing->balance;
-        $amountPaidSoFar = (float) $billing->payments()
-            ->where('payment_status', 'completed')
-            ->sum('amount_paid');
+        $booking = $billing->booking;
+        $paymentSummary = $booking->paymentSummary();
+        $paymentTransactions = $booking->paymentTransactionsPayload();
+        $balance = $paymentSummary['remaining_balance'];
 
-        return view('receptionist.check-out.partials.payment-panel', compact('billing', 'balance', 'amountPaidSoFar'));
+        return view('receptionist.check-out.partials.payment-panel', compact(
+            'billing', 'booking', 'balance', 'paymentSummary', 'paymentTransactions'
+        ));
     }
 
     /**

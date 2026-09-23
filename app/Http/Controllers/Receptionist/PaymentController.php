@@ -11,6 +11,7 @@ use App\Services\ReservationWorkflowService;
 use App\Support\Activity;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Payment-level verification/rejection - separate from the existing
@@ -69,19 +70,29 @@ class PaymentController extends Controller
         // payment - which has no conversion step to pass through - stayed
         // 'pending' forever after verification, so it verified successfully
         // but never actually counted as paid.
-        $payment->update(['verified_at' => now(), 'verified_by' => auth()->id(), 'payment_status' => 'completed']);
+        //
+        // The receipt-number mint (Payment::ensureReceiptNumber() - a
+        // WRITE-path-only method, see its own doc) happens INSIDE this
+        // same transaction as the verification update itself - this is
+        // one of exactly two places in the whole codebase allowed to call
+        // it (the other is Receptionist\CheckOutController::recordPayment()'s
+        // checkout-completion branch). A read/display path must never
+        // call it - see Payment::receiptType() for the side-effect-free
+        // equivalent every read path uses instead.
+        $receiptNumber = DB::transaction(function () use ($payment) {
+            $payment->update(['verified_at' => now(), 'verified_by' => auth()->id(), 'payment_status' => 'completed']);
 
-        // Mint this payment's own pre-checkout receipt number now,
-        // synchronously, so it's already on file the moment the guest-
-        // facing notification below fires - see Payment::
-        // ensureReceiptNumber()/preCheckoutReceiptType(). Returns null,
-        // harmlessly, if this payment somehow isn't eligible (e.g. a ₱0
-        // payment). The wording of the notification itself must match
-        // which of the two pre-checkout receipt types this actually is -
-        // a verified 100% payment made before checkout gets a plain
-        // "Payment Receipt", never mislabeled "Partial Payment Receipt"
-        // (see Payment::preCheckoutReceiptType()'s own doc).
-        $receiptNumber = $payment->ensureReceiptNumber();
+            return $payment->ensureReceiptNumber();
+        });
+
+        // The wording of the notification below must match which of the
+        // two pre-checkout receipt types this actually is - a verified
+        // 100% payment made before checkout gets a plain "Payment
+        // Receipt", never mislabeled "Partial Payment Receipt" (see
+        // Payment::qualifiesForNewPreCheckoutReceipt()'s own doc).
+        // isFullPaymentReceiptEligible() is a pure read here - $payment's
+        // in-memory receipt_number was already set by ensureReceiptNumber()
+        // above, so this just reads it back, it does not mint anything.
         $receiptLabel = $payment->isFullPaymentReceiptEligible() ? 'Payment Receipt' : 'Partial Payment Receipt';
 
         $this->logAndNotify($payment, verified: true, receiptNumber: $receiptNumber, receiptLabel: $receiptLabel);

@@ -130,10 +130,22 @@ class GuestController extends Controller
     {
         abort_unless($reservation->guest_id === auth()->user()->guest->id, 403);
 
-        $reservation->load(['roomType', 'booking.room', 'booking.billing', 'payments']);
+        $reservation->load(['roomType', 'booking.room', 'booking.billing.payments', 'booking.reservation.payments', 'payments']);
+
+        // Grand Total / Total Amount Paid / Remaining Balance / Payment
+        // Status / Payment Transaction History all come from
+        // Reservation::paymentSummary()/paymentTransactionsPayload() -
+        // which delegate to the converted Booking's own authoritative
+        // ReceiptService-backed values once one exists - not a second,
+        // independent calculation inside the PDF template. Both are pure
+        // reads; downloading this PDF never mints a receipt number.
+        $paymentSummary = $reservation->paymentSummary();
+        $paymentTransactions = $reservation->paymentTransactionsPayload();
 
         $pdf = Pdf::loadView('guest.reservations.receipt-pdf', [
             'reservation' => $reservation,
+            'paymentSummary' => $paymentSummary,
+            'paymentTransactions' => $paymentTransactions,
         ])->setPaper('a4', 'portrait');
 
         return $pdf->download('Receipt_Reservation_' . $reservation->id . '.pdf');

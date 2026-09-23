@@ -109,14 +109,22 @@ class ReceiptService
                 'payment_percentage' => $payment->payment_stage === 'deposit'
                     ? PaymentMath::normalizePercentage($booking->selected_payment_percentage)
                     : null,
-                'verified_by' => $payment->verifier?->full_name,
+                'verified_by' => $payment->verifierName(),
                 'verified_at' => $payment->verified_at?->toIso8601String(),
                 'rejection_reason' => $payment->rejection_reason,
                 'payment_date' => $payment->payment_date?->toIso8601String(),
                 'total_paid_after_transaction' => $runningTotal,
                 'remaining_balance_after_transaction' => PaymentMath::remainingBalance($grandTotal, $runningTotal),
-                'receipt_type' => $payment->preCheckoutReceiptType(),
-                'receipt_number' => $payment->preCheckoutReceiptType() !== null ? $payment->ensureReceiptNumber() : null,
+                // Pure reads - receiptType()/receipt_number reflect only
+                // what's ALREADY stored. A historically-eligible payment
+                // that never had a receipt minted (verified before this
+                // feature shipped, or its window closed before a read
+                // ever triggered issuance) correctly shows null here
+                // forever - this method must NEVER call
+                // ensureReceiptNumber() (see that method's own doc: write-
+                // path only, and PAYMENT_RECEIPT_HISTORY_BACKEND_SPEC.md §8).
+                'receipt_type' => $payment->receiptType(),
+                'receipt_number' => $payment->receipt_number,
             ];
         })->values()->all();
     }
@@ -129,7 +137,7 @@ class ReceiptService
      * recordPayment() - billing_id set, verified_at always null, since that
      * path has no separate verification step). This is a display
      * classification of the payment EVENT itself - distinct from, but
-     * related to, preCheckoutReceiptType()'s classification of which
+     * related to, receiptType()'s classification of which
      * RECEIPT DOCUMENT (if any) it produces. Derived entirely from
      * existing columns - no new schema.
      */
@@ -143,28 +151,32 @@ class ReceiptService
     }
 
     /**
-     * Every receipt currently available for this booking - one Partial or
-     * Full-Payment (pre-checkout) Receipt per receptionist-verified
-     * qualifying payment (see Payment::preCheckoutReceiptType()), plus one
-     * Official Receipt once (and permanently once) the booking's checkout
-     * has actually completed (see Billing::isOfficialReceiptAvailable()).
-     * A receipt already issued is never removed from this list just
-     * because the Official Receipt now also exists - see
-     * Payment::preCheckoutReceiptType()'s own "already issued stays
-     * eligible forever" rule.
+     * PURE READ - every receipt that has ALREADY been issued for this
+     * booking (a stored receipt_number exists), never one this call
+     * itself mints. One Partial or Full-Payment (pre-checkout) Receipt
+     * per payment whose receipt_number is already on file (see
+     * Payment::receiptType()), plus the Official Receipt if the billing's
+     * receipt_number is already on file. A payment/billing that would be
+     * "eligible" in principle but has never actually had a number minted
+     * (e.g. a historical payment verified before this feature shipped -
+     * see PAYMENT_RECEIPT_HISTORY_BACKEND_SPEC.md §8) is correctly
+     * omitted, not backfilled. A receipt already issued is never removed
+     * from this list just because the Official Receipt now also exists -
+     * see Payment::receiptType()'s own "reflects stored state forever"
+     * rule.
      */
     public function receiptsList(Booking $booking): array
     {
         $receipts = [];
 
         foreach ($this->chronologicalPayments($booking) as $payment) {
-            $type = $payment->preCheckoutReceiptType();
+            $type = $payment->receiptType();
             if ($type === null) {
                 continue;
             }
 
             $receipts[] = [
-                'receipt_number' => $payment->ensureReceiptNumber(),
+                'receipt_number' => $payment->receipt_number,
                 'receipt_type' => $type,
                 'status' => 'VERIFIED',
                 'amount' => (float) $payment->amount_paid,
@@ -176,9 +188,9 @@ class ReceiptService
         }
 
         $billing = $this->billingOf($booking);
-        if ($billing?->isOfficialReceiptAvailable()) {
+        if ($billing && $billing->receipt_number !== null) {
             $receipts[] = [
-                'receipt_number' => $billing->ensureOfficialReceiptNumber(),
+                'receipt_number' => $billing->receipt_number,
                 'receipt_type' => 'OFFICIAL_RECEIPT',
                 'status' => 'PAID',
                 'amount' => (float) $billing->total_amount,
@@ -199,6 +211,16 @@ class ReceiptService
      * exists at all (see PAYMENT_RECEIPT_HISTORY_BACKEND_SPEC.md §19 -
      * the backend must reject this, not just hide an Android button).
      */
+    /**
+     * PURE LOOKUP ONLY. Looks up an ALREADY-STORED receipt_number,
+     * verifies ownership, and returns the receipt if authorized - never
+     * generates a missing receipt, regardless of whether the underlying
+     * payment/billing would otherwise "qualify". Both branches query
+     * Payment/Billing BY their receipt_number column directly (`where
+     * ('receipt_number', $receiptNumber)`), so the row returned - if any -
+     * is, by construction, one that already has that exact number stored;
+     * there is no code path here that could ever mint one.
+     */
     public function findReceiptPayload(string $receiptNumber, Guest $guest): ?array
     {
         if (str_starts_with($receiptNumber, 'PR-') || str_starts_with($receiptNumber, 'FR-')) {
@@ -207,7 +229,12 @@ class ReceiptService
                 return null;
             }
 
-            $type = $payment->preCheckoutReceiptType();
+            // receiptType() here is a pure read of the row we just fetched
+            // BY its own receipt_number - always non-null by construction.
+            // Kept as an explicit, defensive check rather than assumed, and
+            // deliberately calls the read-only accessor, never
+            // ensureReceiptNumber().
+            $type = $payment->receiptType();
             if ($type === null) {
                 return null;
             }
@@ -232,7 +259,13 @@ class ReceiptService
             }
             $billing->setRelation('booking', $booking);
 
-            if (!$billing->isOfficialReceiptAvailable() || !$this->ownedBy($booking, $guest)) {
+            // $billing->receipt_number is guaranteed non-null (we just
+            // queried BY it) - this is a defensive read, not an
+            // eligibility computation; isOfficialReceiptAvailable() is
+            // deliberately NOT called here (this must be a pure lookup,
+            // not a re-derivation of the business rule that originally
+            // gated issuance).
+            if ($billing->receipt_number === null || !$this->ownedBy($booking, $guest)) {
                 return null;
             }
 
@@ -266,9 +299,95 @@ class ReceiptService
         return $payment->billing?->booking;
     }
 
+    /**
+     * The money/history half of a receipt payload - extracted out of
+     * buildReceiptPayload() specifically so it can be unit tested without
+     * touching room_lines/roomType/rooms (which need a real DB connection
+     * to resolve even when cached - see tests/Unit/ReceiptServiceReadOnlyTest.php).
+     * Returns [paymentSummary, paymentTransactions].
+     *
+     * For OFFICIAL_RECEIPT ($anchorPayment null), both are the booking's
+     * LIVE, current totals and complete history - correct, since the
+     * Official Receipt exists specifically to represent the final,
+     * fully-settled checkout state.
+     *
+     * For PARTIAL_RECEIPT/FULL_PAYMENT_RECEIPT ($anchorPayment set),
+     * paymentSummary is instead a POINT-IN-TIME SNAPSHOT of what was true
+     * the moment THIS SPECIFIC payment was made - reusing
+     * total_paid_after_transaction/remaining_balance_after_transaction
+     * already computed for that exact row by paymentTransactions(), never
+     * the booking's current live totals. Without this, re-opening an old
+     * Partial Receipt after the guest later pays the remaining balance (or
+     * after checkout completes) would silently rewrite its own numbers
+     * into today's totals - e.g. a 50%-paid receipt suddenly claiming
+     * "Total Paid ₱10,000 / Remaining ₱0" just because checkout happened
+     * LATER. paymentTransactions is likewise trimmed to only the rows up
+     * to and including the anchor payment - "the history as it stood at
+     * that point," not payments that happened afterward. grand_total is
+     * derived as total_paid_after_transaction + remaining_balance_after_transaction
+     * for that same row (self-consistent by construction) rather than a
+     * separately-recomputed live figure, which could have since changed
+     * (e.g. an additional charge added at checkout) and would otherwise
+     * disagree with the frozen paid/remaining figures on the same receipt.
+     * official_receipt_available is deliberately still the LIVE flag - it
+     * answers "is a separate Official Receipt also available now", not a
+     * frozen fact about this receipt's own finances (see
+     * PAYMENT_RECEIPT_HISTORY_BACKEND_SPEC.md §4/§5/§9 - PR/FR/OR must be
+     * able to coexist as distinct, independently-accurate documents).
+     */
+    public function summaryAndHistoryForReceipt(Booking $booking, ?Payment $anchorPayment): array
+    {
+        $allTransactions = $this->paymentTransactions($booking);
+        $liveSummary = $this->paymentSummary($booking);
+
+        if ($anchorPayment === null) {
+            return [$liveSummary, $allTransactions];
+        }
+
+        $anchorIndex = null;
+        foreach ($allTransactions as $index => $row) {
+            if ($row['id'] === $anchorPayment->id) {
+                $anchorIndex = $index;
+                break;
+            }
+        }
+
+        $paymentTransactionsForReceipt = $anchorIndex !== null
+            ? array_slice($allTransactions, 0, $anchorIndex + 1)
+            : $allTransactions;
+
+        $anchorRow = $anchorIndex !== null ? $allTransactions[$anchorIndex] : null;
+        $snapshotPaid = $anchorRow['total_paid_after_transaction'] ?? (float) $anchorPayment->amount_paid;
+        $snapshotRemaining = $anchorRow['remaining_balance_after_transaction'] ?? 0.0;
+        $snapshotGrandTotal = round($snapshotPaid + $snapshotRemaining, 2);
+
+        $paymentSummary = [
+            'grand_total' => $snapshotGrandTotal,
+            'total_amount_paid' => $snapshotPaid,
+            'remaining_balance' => $snapshotRemaining,
+            'payment_status' => PaymentMath::paymentStatus($snapshotGrandTotal, $snapshotPaid),
+            'payment_percentage' => $anchorRow['payment_percentage'] ?? null,
+            'official_receipt_available' => $liveSummary['official_receipt_available'],
+        ];
+
+        return [$paymentSummary, $paymentTransactionsForReceipt];
+    }
+
     public function buildReceiptPayload(Booking $booking, string $receiptType, ?Payment $anchorPayment = null, ?Billing $billing = null): array
     {
-        $booking->loadMissing(['roomType', 'rooms', 'reservation']);
+        // Deliberately no loadMissing() here (removed - see git history):
+        // Eloquent's Collection::loadMissing() unconditionally builds a
+        // throwaway query object via newQueryWithoutRelationships() BEFORE
+        // it ever checks relationLoaded(), so it needs a live DB
+        // connection regardless of whether the relations are already
+        // cached. Eager-loading roomType/rooms/reservation is the
+        // caller's responsibility where it matters for performance
+        // (every current caller already does - Api\BookingController/
+        // ReservationController's show(), the Receptionist/Guest Blade
+        // controllers) - a caller that forgets just gets a normal
+        // lazy-load per relation instead of a batched one, never a
+        // correctness issue.
+        [$paymentSummary, $paymentTransactionsForReceipt] = $this->summaryAndHistoryForReceipt($booking, $anchorPayment);
 
         return [
             'receipt_type' => $receiptType,
@@ -283,8 +402,8 @@ class ReceiptService
             'check_out' => $booking->check_out?->toIso8601String(),
             'number_of_nights' => $booking->number_of_nights,
             'assigned_room_numbers' => $booking->rooms->pluck('room_number')->values()->all(),
-            'payment_summary' => $this->paymentSummary($booking),
-            'payment_transactions' => $this->paymentTransactions($booking),
+            'payment_summary' => $paymentSummary,
+            'payment_transactions' => $paymentTransactionsForReceipt,
             'anchor_payment' => $anchorPayment ? [
                 'amount_paid' => (float) $anchorPayment->amount_paid,
                 'payment_method' => $anchorPayment->payment_method,
@@ -294,7 +413,7 @@ class ReceiptService
                 'gcash_number' => $anchorPayment->gcash_number,
                 'gcash_reference_number' => $anchorPayment->reference_number,
                 'verified_at' => $anchorPayment->verified_at?->toIso8601String(),
-                'verified_by' => $anchorPayment->verifier?->full_name,
+                'verified_by' => $anchorPayment->verifierName(),
             ] : null,
             'issued_at' => ($anchorPayment?->verified_at ?? $billing?->updated_at)?->toIso8601String(),
         ];

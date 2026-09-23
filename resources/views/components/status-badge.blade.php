@@ -47,6 +47,27 @@ $maps = [
     'announcement_status' => [
         'draft' => 'secondary', 'published' => 'success', 'archived' => 'dark',
     ],
+    // The Booking-level Payment Summary status (PaymentMath::paymentStatus())
+    // - distinct from the 'billing'/'payment' domains above, which are the
+    // raw DB enum values on billings.billing_status/payments.payment_status.
+    'booking_payment_status' => [
+        'PENDING' => 'secondary', 'PARTIALLY_PAID' => 'warning', 'PAID' => 'success',
+    ],
+    // Which receipt document a payment/billing qualifies for - see
+    // Payment::preCheckoutReceiptType()/Billing::isOfficialReceiptAvailable().
+    // Deliberately 3 distinct colors so a receptionist never mistakes a
+    // pre-checkout Partial/Full-Payment receipt for the checkout-only
+    // Official one.
+    'receipt_type' => [
+        'PARTIAL_RECEIPT' => 'info', 'FULL_PAYMENT_RECEIPT' => 'primary', 'OFFICIAL_RECEIPT' => 'success',
+    ],
+    // Payment::$appends['verification_status'] - only meaningful for a
+    // guest-submitted GCash payment; a receptionist-recorded checkout
+    // payment has none (falls back to the 'payment' domain's plain
+    // payment_status badge instead - see payment-history.blade.php).
+    'verification_status' => [
+        'verified' => 'success', 'pending_verification' => 'warning', 'rejected' => 'danger',
+    ],
 ];
 $labels = [
     'reservation' => [
@@ -60,6 +81,20 @@ $labels = [
     ],
     'announcement_status' => [
         'archived' => 'Unpublished',
+    ],
+    'booking_payment_status' => [
+        'PENDING' => 'Pending', 'PARTIALLY_PAID' => 'Partially Paid', 'PAID' => 'Paid',
+    ],
+    // Required labels per PAYMENT_RECEIPT_HISTORY_BACKEND_SPEC.md - a
+    // verified 100% payment made before checkout is a "Payment Receipt",
+    // NEVER "Official Payment Receipt" (that label is checkout-only).
+    'receipt_type' => [
+        'PARTIAL_RECEIPT' => 'Partial Payment Receipt',
+        'FULL_PAYMENT_RECEIPT' => 'Payment Receipt',
+        'OFFICIAL_RECEIPT' => 'Official Payment Receipt',
+    ],
+    'verification_status' => [
+        'verified' => 'Verified', 'pending_verification' => 'Pending Verification', 'rejected' => 'Rejected',
     ],
 ];
 $color = $maps[$domain][$status] ?? 'secondary';
