@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\PaymentMath;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
@@ -390,5 +391,51 @@ class Reservation extends Model
         return $this->created_at->copy()
             ->addHours((int) config('hotel.payment_deadline_hours', 48))
             ->toIso8601String();
+    }
+
+    /**
+     * Payment summary for a still-unconverted reservation - delegates
+     * entirely to the resulting Booking's own authoritative summary once
+     * one exists (the overwhelming majority of the time in practice - a
+     * GCash reservation auto-converts the moment payment is submitted, and
+     * a Cash reservation converts and is verified in the same receptionist
+     * action - see ReservationWorkflowService::tryAutoConvert()/
+     * convertToBooking()). Falls back to an all-zero/PENDING default only
+     * for the narrow pre-conversion window itself, since nothing can be
+     * receptionist-verified against a reservation with no Booking yet.
+     */
+    public function paymentSummary(): array
+    {
+        if ($this->booking) {
+            return $this->booking->paymentSummary();
+        }
+
+        $total = (float) $this->total_amount_due;
+
+        return [
+            'grand_total' => $total,
+            'total_amount_paid' => 0.0,
+            'remaining_balance' => $total,
+            'payment_status' => 'PENDING',
+            'payment_percentage' => PaymentMath::normalizePercentage($this->selected_payment_percentage),
+            'official_receipt_available' => false,
+        ];
+    }
+
+    /**
+     * See Booking::paymentTransactionsPayload() - empty before conversion.
+     */
+    public function paymentTransactionsPayload(): array
+    {
+        return $this->booking ? $this->booking->paymentTransactionsPayload() : [];
+    }
+
+    /**
+     * See Booking::receiptsPayload() - empty before conversion (nothing
+     * can be receptionist-verified without a Booking yet).
+     */
+    public function receiptsPayload(): array
+    {
+        return $this->booking ? $this->booking->receiptsPayload() : [];
     }
 }

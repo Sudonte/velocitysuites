@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Services\ReceiptService;
+use App\Support\PaymentMath;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -121,10 +123,12 @@ class Booking extends Model
     /**
      * Payments made directly against this booking (payments.booking_id) -
      * only ever populated for a direct "New Booking" transaction
-     * (reservation_id null). A reservation-derived booking's payments
-     * still live on payments.reservation_id via reservation->payments, as
-     * they always have - see allPayments()/latestGcashPayment() below for
-     * the one accessor that transparently reads whichever applies.
+     * (reservation_id null). A reservation-derived booking's deposit-stage
+     * payments still live on payments.reservation_id via
+     * reservation->payments, as they always have - see allPayments()/
+     * latestGcashPayment() below for the one accessor that transparently
+     * reads whichever applies, merged with any checkout-collected payment
+     * (see allPayments()'s own doc for why that merge is necessary).
      */
     public function payments()
     {
@@ -132,15 +136,51 @@ class Booking extends Model
     }
 
     /**
-     * The right payments collection for this booking regardless of type -
-     * reservation->payments for a reservation-derived booking (unchanged
-     * from before), payments() directly for a direct "New Booking". Works
-     * whether or not the caller eager-loaded anything (falls back to a
-     * lazy load), so no existing call site's eager-loading needs to change.
+     * The complete, de-duplicated set of every real payment ever made
+     * against this booking, regardless of how it got there.
+     *
+     * Merges THREE independent sources unconditionally - reservation-
+     * scoped (reservation->payments, when a reservation exists),
+     * booking-scoped (payments(), booking_id-scoped), and billing-scoped
+     * (billing->payments) - rather than an either/or choice between
+     * reservation and booking. The original version of this fix used
+     * `$this->reservation_id ? $this->reservation->payments : $this->payments`,
+     * which is still an exclusive choice: for a converted, reservation-
+     * derived booking, ANY payment that ever gets recorded directly
+     * against payments.booking_id (nothing does today, but nothing
+     * structurally prevents it either - booking_id is a real, independent
+     * FK on payments, not exclusive with reservation_id) would silently
+     * never be read. Reading all three sources unconditionally means a
+     * future payment recorded either way is never lost, without this
+     * method needing to know which paths are "supposed" to be mutually
+     * exclusive today.
+     *
+     * A deposit-stage payment already re-parented onto the billing
+     * (Receptionist\CheckOutController::refreshStayCharges() sets its
+     * billing_id without ever clearing reservation_id/booking_id) would
+     * otherwise appear in two of the three sources - merging is delegated
+     * to PaymentMath::mergeAndDeduplicate(), which keeps only the first
+     * occurrence of each id, so this can never double-count. See that
+     * method's own doc and tests/Unit/PaymentMathTest.php for the
+     * DB-free proof of the dedup rule itself.
+     *
+     * Returns a plain Collection (not a query builder), matching this
+     * method's pre-existing return contract - every current call site
+     * already chains Collection methods (->where()/->sum()/->sortByDesc()/
+     * ->first(callback)) against its result, so nothing else needed to
+     * change at any call site.
      */
     public function allPayments()
     {
-        return $this->reservation_id ? $this->reservation->payments : $this->payments;
+        $reservationPayments = $this->reservation_id ? ($this->reservation?->payments ?? collect()) : collect();
+        $bookingPayments = $this->payments;
+        $billingPayments = $this->billing?->payments ?? collect();
+
+        return collect(PaymentMath::mergeAndDeduplicate(
+            $reservationPayments->all(),
+            $bookingPayments->all(),
+            $billingPayments->all(),
+        ));
     }
 
     /**
@@ -460,5 +500,39 @@ class Booking extends Model
     public function setGuestLastNameAttribute(?string $value): void
     {
         $this->attributes['guest_last_name'] = $value ? ucwords(strtolower($value)) : $value;
+    }
+
+    /**
+     * Grand Total / Total Amount Paid / Remaining Balance / Payment
+     * Status / Payment Percentage / Official Receipt availability - the
+     * one authoritative summary every guest/receptionist-facing surface
+     * should read instead of recomputing its own. Delegates to
+     * ReceiptService so this stays the single source of truth (see
+     * PAYMENT_RECEIPT_HISTORY_BACKEND_SPEC.md §17) - not an accessor/
+     * $appends entry, matching getTotalAmountDueAttribute()'s identical
+     * "attach explicitly only where needed" convention, since resolving
+     * this pulls in payments/billing and would add cost to every listing.
+     */
+    public function paymentSummary(): array
+    {
+        return app(ReceiptService::class)->paymentSummary($this);
+    }
+
+    /**
+     * The complete, chronological Payment Transaction History for this
+     * booking - see ReceiptService::paymentTransactions().
+     */
+    public function paymentTransactionsPayload(): array
+    {
+        return app(ReceiptService::class)->paymentTransactions($this);
+    }
+
+    /**
+     * Every receipt (Partial and/or Official) currently available for
+     * this booking - see ReceiptService::receiptsList().
+     */
+    public function receiptsPayload(): array
+    {
+        return app(ReceiptService::class)->receiptsList($this);
     }
 }

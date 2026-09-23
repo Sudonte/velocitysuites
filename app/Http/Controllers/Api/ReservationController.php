@@ -105,7 +105,18 @@ class ReservationController extends Controller
         $this->workflow->expireUnpaid($reservation);
         $this->workflow->processNoShow($reservation);
 
-        return response()->json($reservation->append(['total_amount_due', 'amenities']));
+        // payment_summary/payment_transactions/receipts delegate to the
+        // converted Booking's own authoritative values once one exists
+        // (the normal case), or a safe zero/PENDING default before that -
+        // see Reservation::paymentSummary() and
+        // PAYMENT_RECEIPT_HISTORY_BACKEND_SPEC.md §10 (Reservation ->
+        // Booking payment-history preservation).
+        $payload = $reservation->append(['total_amount_due', 'amenities'])->toArray();
+        $payload['payment_summary'] = $reservation->paymentSummary();
+        $payload['payment_transactions'] = $reservation->paymentTransactionsPayload();
+        $payload['receipts'] = $reservation->receiptsPayload();
+
+        return response()->json($payload);
     }
 
     /**

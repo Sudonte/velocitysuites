@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\DB;
 
 class Billing extends Model
 {
@@ -31,6 +32,9 @@ class Billing extends Model
         'discount_verified_at',
         'total_amount',
         'billing_status',
+        // receipt_number is deliberately NOT fillable - see
+        // Payment::$fillable's identical note; it's system-generated,
+        // lazily assigned by ensureOfficialReceiptNumber() below.
     ];
 
     protected $casts = [
@@ -158,5 +162,89 @@ class Billing extends Model
 
         $this->total_amount = max(0, $baseTotal - (float) $this->discount);
         $this->save();
+    }
+
+    /**
+     * True once checkout has ACTUALLY completed for this billing - the
+     * one authoritative rule for "the Official Payment Receipt is
+     * available" (PAYMENT_RECEIPT_HISTORY_BACKEND_SPEC.md §20).
+     *
+     * Deliberately checks BOTH billing_status === 'paid' AND
+     * booking.booking_status === Booking::STATUS_COMPLETED, not
+     * billing_status alone - a real, confirmed gap was found in the first
+     * draft of this predicate: Receptionist\CheckOutController::
+     * refreshStayCharges() (run every time the Billing Panel is merely
+     * OPENED, at checkout-start, and again at generateBilling()'s initial
+     * creation - see that method's own doc) independently recomputes
+     * billing_status straight from the paid-vs-total sum:
+     *
+     *     $billing->update(['billing_status' => $paid <= 0 ? 'pending'
+     *         : ($paid >= (float) $billing->total_amount ? 'paid' : 'partial')]);
+     *
+     * So a booking that already had a 100%-covering payment BEFORE
+     * checkout (Scenario C - a guest-submitted, receptionist-verified
+     * full GCash payment) gets billing_status flipped to 'paid' the
+     * MOMENT the receptionist merely opens the checkout Billing Panel -
+     * before the Payment Panel's recordPayment() ever runs, before
+     * checkout has actually completed, and before booking_status has
+     * moved off Booking::STATUS_CHECKED_IN. Only recordPayment()'s own
+     * $completed branch ever moves booking_status to
+     * Booking::STATUS_COMPLETED, and it does so in the very same DB
+     * transaction as the billing_status='paid' write that settles the
+     * balance - the two are only ever genuinely synchronized there. This
+     * second condition is what actually distinguishes "the sums happen to
+     * balance" from "the receptionist actually finished checkout".
+     */
+    public function isOfficialReceiptAvailable(): bool
+    {
+        return $this->billing_status === 'paid'
+            && $this->booking?->booking_status === Booking::STATUS_COMPLETED;
+    }
+
+    /**
+     * Lazily assigns (once) and returns this billing's Official Receipt
+     * number, or null if checkout hasn't fully settled yet. Same
+     * collision-free-by-construction, lock-and-recheck idempotency as
+     * Payment::ensureReceiptNumber() - see that method's own doc.
+     */
+    public function ensureOfficialReceiptNumber(): ?string
+    {
+        if ($this->receipt_number) {
+            return $this->receipt_number;
+        }
+
+        if (!$this->isOfficialReceiptAvailable()) {
+            return null;
+        }
+
+        return DB::transaction(function () {
+            $locked = static::whereKey($this->id)->lockForUpdate()->first();
+            if (!$locked) {
+                return null;
+            }
+
+            if ($locked->receipt_number) {
+                $this->receipt_number = $locked->receipt_number;
+
+                return $locked->receipt_number;
+            }
+
+            $number = static::formatReceiptNumber($locked->id, now());
+            $locked->forceFill(['receipt_number' => $number])->save();
+            $this->receipt_number = $number;
+
+            return $number;
+        });
+    }
+
+    /**
+     * Pure formatting - OR-{issued date}-{zero-padded billing id}. See
+     * Payment::formatReceiptNumber()'s identical doc/rationale.
+     */
+    public static function formatReceiptNumber(int $id, $date): string
+    {
+        $date = $date instanceof \DateTimeInterface ? $date : now();
+
+        return 'OR-' . $date->format('Ymd') . '-' . str_pad((string) $id, 6, '0', STR_PAD_LEFT);
     }
 }

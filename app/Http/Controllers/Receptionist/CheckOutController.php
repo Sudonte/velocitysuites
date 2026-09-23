@@ -167,8 +167,9 @@ class CheckOutController extends Controller
         }
 
         $completed = false;
+        $officialReceiptNumber = null;
 
-        DB::transaction(function () use ($validated, $billing, $booking, &$completed) {
+        DB::transaction(function () use ($validated, $billing, $booking, &$completed, &$officialReceiptNumber) {
             $amountPaid = (float) $validated['amount_paid'];
 
             if ($amountPaid > 0) {
@@ -221,9 +222,18 @@ class CheckOutController extends Controller
                     $room->update(['status' => 'available']);
                 }
 
+                // Mint the Official Payment Receipt number now, inside the
+                // same transaction that just settled the balance, so it's
+                // already on file the moment the guest-facing notification
+                // below fires - see Billing::ensureOfficialReceiptNumber().
+                // This is also the first moment this booking's
+                // billing_status is actually 'paid' - the one rule that
+                // gates the Official Receipt (PAYMENT_RECEIPT_HISTORY_BACKEND_SPEC.md §20).
+                $officialReceiptNumber = $billing->ensureOfficialReceiptNumber();
+
                 if ($guest) {
                     $this->notificationService->notifyCheckOut($guest, $roomName, $booking->reservation_id ?? $booking->id);
-                    $this->notificationService->notifyPaymentComplete($guest, $booking->reservation_id ?? $booking->id);
+                    $this->notificationService->notifyPaymentComplete($guest, $booking->reservation_id ?? $booking->id, $officialReceiptNumber);
                 }
 
                 Activity::log(
@@ -251,6 +261,7 @@ class CheckOutController extends Controller
             'balance' => $billing->balance,
             'message' => $completed ? 'Payment complete. Guest checked out.' : 'Partial payment recorded.',
             'receipt_url' => $completed ? route('receptionist.billing.receipt', $billing) : null,
+            'official_receipt_number' => $completed ? $billing->receipt_number : null,
         ]);
     }
 

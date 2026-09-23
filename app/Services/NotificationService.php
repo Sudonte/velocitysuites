@@ -365,15 +365,13 @@ class NotificationService
     /**
      * Notify about full payment (receipt available).
      */
-    public function notifyPaymentComplete(User $guest, ?int $referenceId = null): void
+    public function notifyPaymentComplete(User $guest, ?int $referenceId = null, ?string $receiptNumber = null): void
     {
-        $this->toUser(
-            $guest,
-            'Payment Complete',
-            'Your payment is complete. Thank you for staying with us! Your digital receipt is now available.',
-            'payment',
-            $referenceId
-        );
+        $message = 'Your payment is complete. Thank you for staying with us! Your Official Payment Receipt'
+            . ($receiptNumber ? " ({$receiptNumber})" : '')
+            . ' is now available.';
+
+        $this->toUser($guest, 'Payment Complete', $message, 'payment', $referenceId);
 
         $this->toRole(
             'manager',
@@ -416,15 +414,22 @@ class NotificationService
      * (substring match on the title) resolves the correct status pill
      * without needing a structured notification type field.
      */
-    public function notifyPaymentVerified(User $guest, float $amount, string $roomName, ?int $referenceId = null): void
+    public function notifyPaymentVerified(User $guest, float $amount, string $roomName, ?int $referenceId = null, ?string $receiptNumber = null, string $receiptLabel = 'Partial Payment Receipt'): void
     {
-        $this->toUser(
-            $guest,
-            'Payment Verified',
-            'Your GCash payment of ₱' . number_format($amount, 2) . " for {$roomName} has been verified. Thank you!",
-            'payment',
-            $referenceId
-        );
+        $message = 'Your GCash payment of ₱' . number_format($amount, 2) . " for {$roomName} has been verified. Thank you!";
+        // $receiptNumber is optional/backward-compatible - stays plain
+        // wording if this payment somehow wasn't eligible for a receipt at
+        // all (e.g. a ₱0 payment) - see Payment::ensureReceiptNumber().
+        // $receiptLabel lets the caller (Receptionist\PaymentController::
+        // verify()) say "Partial Payment Receipt" or the generic "Payment
+        // Receipt" depending on Payment::preCheckoutReceiptType() - a
+        // verified 100% pre-checkout payment must never be announced as
+        // "Partial" (see that method's own doc).
+        if ($receiptNumber) {
+            $message .= " Your {$receiptLabel} ({$receiptNumber}) is now available.";
+        }
+
+        $this->toUser($guest, 'Payment Verified', $message, 'payment', $referenceId);
     }
 
     /**

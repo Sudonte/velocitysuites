@@ -81,9 +81,22 @@ class BookingController extends Controller
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 
-        $booking->load(['roomType', 'payments']);
+        $booking->load(['roomType', 'payments', 'billing.payments']);
 
-        return response()->json($booking->append(['total_amount_due', 'amenities']));
+        // payment_summary/payment_transactions/receipts are the
+        // authoritative Grand Total/Total Amount Paid/Remaining Balance/
+        // Payment Status/Payment Transaction History/available-receipts
+        // block - see ReceiptService and PAYMENT_RECEIPT_HISTORY_BACKEND_SPEC.md
+        // §17-18. Attached explicitly here (not $appends), same
+        // "don't add cost to every listing" convention as total_amount_due/
+        // amenities above - only a single Booking Details/Payment Receipt
+        // fetch actually needs this.
+        $payload = $booking->append(['total_amount_due', 'amenities'])->toArray();
+        $payload['payment_summary'] = $booking->paymentSummary();
+        $payload['payment_transactions'] = $booking->paymentTransactionsPayload();
+        $payload['receipts'] = $booking->receiptsPayload();
+
+        return response()->json($payload);
     }
 
     /**

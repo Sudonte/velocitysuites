@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\CatalogController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\PaymentController;
 use App\Http\Controllers\Api\ProfileController;
+use App\Http\Controllers\Api\ReceiptController;
 use App\Http\Controllers\Api\ReservationController;
 use App\Http\Controllers\Api\RoomController;
 use Illuminate\Support\Facades\Route;
@@ -85,6 +86,14 @@ Route::middleware(['auth.api', 'role:guest'])->group(function () {
 
     Route::get('/guest/payments', [ProfileController::class, 'payments']);
     Route::get('/guest/profile', [ProfileController::class, 'show']);
+
+    // Partial/Official Payment Receipt detail by receipt_number
+    // (PR-.../OR-...) - see Api\ReceiptController and ReceiptService.
+    // Ownership is enforced server-side (never just an Android-hidden
+    // button) - a receipt belonging to another guest, or not yet
+    // available (e.g. an Official Receipt requested before checkout
+    // completed), returns the same 404 as a genuinely unknown number.
+    Route::get('/guest/receipts/{receiptNumber}', [ReceiptController::class, 'show']);
 
     // Logged specifically (not the whole guest group) so the admin's
     // "profile update history" only shows real profile changes, not

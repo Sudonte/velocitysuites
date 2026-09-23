@@ -71,7 +71,20 @@ class PaymentController extends Controller
         // but never actually counted as paid.
         $payment->update(['verified_at' => now(), 'verified_by' => auth()->id(), 'payment_status' => 'completed']);
 
-        $this->logAndNotify($payment, verified: true);
+        // Mint this payment's own pre-checkout receipt number now,
+        // synchronously, so it's already on file the moment the guest-
+        // facing notification below fires - see Payment::
+        // ensureReceiptNumber()/preCheckoutReceiptType(). Returns null,
+        // harmlessly, if this payment somehow isn't eligible (e.g. a ₱0
+        // payment). The wording of the notification itself must match
+        // which of the two pre-checkout receipt types this actually is -
+        // a verified 100% payment made before checkout gets a plain
+        // "Payment Receipt", never mislabeled "Partial Payment Receipt"
+        // (see Payment::preCheckoutReceiptType()'s own doc).
+        $receiptNumber = $payment->ensureReceiptNumber();
+        $receiptLabel = $payment->isFullPaymentReceiptEligible() ? 'Payment Receipt' : 'Partial Payment Receipt';
+
+        $this->logAndNotify($payment, verified: true, receiptNumber: $receiptNumber, receiptLabel: $receiptLabel);
         $this->autoCompleteBooking($payment);
 
         return back()->with('success', 'Payment verified and booking completed.');
@@ -187,7 +200,7 @@ class PaymentController extends Controller
      * converted), falling back to the reservation directly for the rare
      * not-yet-converted case where no Booking exists yet at all.
      */
-    private function logAndNotify(Payment $payment, bool $verified, ?string $reason = null): void
+    private function logAndNotify(Payment $payment, bool $verified, ?string $reason = null, ?string $receiptNumber = null, string $receiptLabel = 'Partial Payment Receipt'): void
     {
         $booking = $this->resolveBooking($payment);
         $reservation = $booking?->reservation ?? ($payment->reservation_id ? $payment->reservation : null);
@@ -219,7 +232,7 @@ class PaymentController extends Controller
         );
 
         if ($verified) {
-            $this->notificationService->notifyPaymentVerified($guest, $amount, $roomName, $referenceId);
+            $this->notificationService->notifyPaymentVerified($guest, $amount, $roomName, $referenceId, $receiptNumber, $receiptLabel);
         } else {
             $this->notificationService->notifyPaymentRejected($guest, $amount, $roomName, $reason, $referenceId);
         }
