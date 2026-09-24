@@ -160,6 +160,24 @@ class CheckOutController extends Controller
      * the billing's balance is already covered by prior completed
      * payments - it must never be a way to skip a genuine outstanding
      * balance, so that's checked explicitly before anything else runs.
+     *
+     * CONCURRENCY: the route-model-bound $billing/its ->booking are only
+     * used to resolve which row to lock - every decision below (is this
+     * still awaiting checkout, what's the real remaining balance, does a
+     * new Payment need creating) is made from a FRESH copy re-read INSIDE
+     * the transaction while holding lockForUpdate() on both the Billing
+     * and Booking rows. Two simultaneous requests for the same billing
+     * both attempt this lock; the database itself serializes them (the
+     * second blocks until the first's transaction commits or rolls back),
+     * and the second then sees the first's already-committed state (no
+     * longer STATUS_CHECKED_IN, or balance already covered) and exits
+     * with no writes at all - never a second checkout Payment row, never
+     * a second booking_status transition, never a second OR (see
+     * Billing::ensureOfficialReceiptNumber()'s own lock-and-recheck for
+     * why that part was already safe even before this fix). A plain
+     * status re-check without a lock would not be enough - two requests
+     * could both pass that check before either commits; the lock is what
+     * actually prevents that.
      */
     public function recordPayment(Request $request, Billing $billing)
     {
@@ -169,33 +187,48 @@ class CheckOutController extends Controller
             'amount_paid' => 'required|numeric|min:0',
         ]);
 
-        $booking = $billing->booking;
+        $result = DB::transaction(function () use ($validated, $billing) {
+            // Re-fetch WITH a row lock - the $billing the route model binder
+            // handed in was read before this transaction started and before
+            // any lock was held, so it may already be stale by the time we
+            // get here (a concurrent request could have committed in between).
+            $lockedBilling = Billing::whereKey($billing->id)->lockForUpdate()->first();
+            if (!$lockedBilling) {
+                return ['status' => 'not_found'];
+            }
 
-        if (!$booking || $booking->booking_status !== Booking::STATUS_CHECKED_IN) {
-            return response()->json(['message' => 'This booking is not awaiting checkout.'], 422);
-        }
+            $lockedBooking = Booking::whereKey($lockedBilling->booking_id)->lockForUpdate()->first();
+            if (!$lockedBooking || $lockedBooking->booking_status !== Booking::STATUS_CHECKED_IN) {
+                // Authoritative re-check while holding the lock - this is what
+                // actually catches a concurrent duplicate submit (or a request
+                // that arrived after checkout already completed), not just a
+                // sequential double-click. No write has happened yet, so this
+                // exits cleanly with nothing to roll back.
+                return ['status' => 'not_awaiting_checkout'];
+            }
 
-        if ((float) $validated['amount_paid'] <= 0 && (float) $billing->balance > 0.009) {
-            return response()->json([
-                'message' => 'A payment amount is required - the remaining balance is ₱' . number_format($billing->balance, 2) . '.',
-            ], 422);
-        }
+            // Re-derive the balance from the LOCKED billing's own fresh
+            // payment sum - never the pre-transaction $billing->balance,
+            // which could be stale relative to a payment another request
+            // just committed.
+            $currentPaid = (float) $lockedBilling->payments()->where('payment_status', 'completed')->sum('amount_paid');
+            $currentBalance = max(0, (float) $lockedBilling->total_amount - $currentPaid);
 
-        $completed = false;
-        $officialReceiptNumber = null;
-
-        DB::transaction(function () use ($validated, $billing, $booking, &$completed, &$officialReceiptNumber) {
             $amountPaid = (float) $validated['amount_paid'];
+            if ($amountPaid <= 0 && $currentBalance > 0.009) {
+                return ['status' => 'amount_required', 'balance' => $currentBalance];
+            }
 
             if ($amountPaid > 0) {
-                if (empty($validated['reference_number'])) {
-                    $validated['reference_number'] = 'PAY-' . strtoupper(Str::random(10));
+                $referenceNumber = $validated['reference_number'] ?? null;
+                if (empty($referenceNumber)) {
+                    $referenceNumber = 'PAY-' . strtoupper(Str::random(10));
                 }
 
                 Payment::create([
-                    'billing_id' => $billing->id,
+                    'billing_id' => $lockedBilling->id,
                     'payment_method' => $validated['payment_method'],
-                    'reference_number' => $validated['reference_number'],
+                    'reference_number' => $referenceNumber,
                     'amount_paid' => $amountPaid,
                     'payment_status' => 'completed',
                     'payment_stage' => 'final',
@@ -203,15 +236,15 @@ class CheckOutController extends Controller
                 ]);
             }
 
-            $paid = (float) $billing->payments()
+            $paid = (float) $lockedBilling->payments()
                 ->where('payment_status', 'completed')
                 ->sum('amount_paid');
 
-            $completed = $paid >= (float) $billing->total_amount;
-            $billing->update(['billing_status' => $completed ? 'paid' : 'partial']);
+            $completed = $paid >= (float) $lockedBilling->total_amount;
+            $lockedBilling->update(['billing_status' => $completed ? 'paid' : 'partial']);
 
-            $guest = $booking->account_guest?->user;
-            $rooms = $booking->rooms->isNotEmpty() ? $booking->rooms : collect([$booking->room])->filter();
+            $guest = $lockedBooking->account_guest?->user;
+            $rooms = $lockedBooking->rooms->isNotEmpty() ? $lockedBooking->rooms : collect([$lockedBooking->room])->filter();
             $roomName = $rooms->pluck('room_name')->implode(', ');
 
             if ($amountPaid > 0) {
@@ -220,19 +253,20 @@ class CheckOutController extends Controller
                         $guest,
                         $amountPaid,
                         $roomName,
-                        $booking->reservation_id ?? $booking->id
+                        $lockedBooking->reservation_id ?? $lockedBooking->id
                     );
                 }
 
                 Activity::log(
                     'Recorded payment',
-                    "Booking #{$booking->id} - ₱" . number_format($amountPaid, 2) . " ({$validated['payment_method']}) from " . ($guest->full_name ?? $booking->stay_guest_full_name ?? 'guest'),
-                    $booking
+                    "Booking #{$lockedBooking->id} - ₱" . number_format($amountPaid, 2) . " ({$validated['payment_method']}) from " . ($guest->full_name ?? $lockedBooking->stay_guest_full_name ?? 'guest'),
+                    $lockedBooking
                 );
             }
 
+            $officialReceiptNumber = null;
             if ($completed) {
-                $booking->update(['booking_status' => Booking::STATUS_COMPLETED]);
+                $lockedBooking->update(['booking_status' => Booking::STATUS_COMPLETED]);
                 foreach ($rooms as $room) {
                     $room->update(['status' => 'available']);
                 }
@@ -244,39 +278,61 @@ class CheckOutController extends Controller
                 // This is also the first moment this booking's
                 // billing_status is actually 'paid' - the one rule that
                 // gates the Official Receipt (PAYMENT_RECEIPT_HISTORY_BACKEND_SPEC.md §20).
-                $officialReceiptNumber = $billing->ensureOfficialReceiptNumber();
+                // Still idempotent on its own (lock-and-recheck) even though
+                // this whole method can now only ever reach here once per
+                // booking - defense in depth, not load-bearing anymore.
+                $officialReceiptNumber = $lockedBilling->ensureOfficialReceiptNumber();
 
                 if ($guest) {
-                    $this->notificationService->notifyCheckOut($guest, $roomName, $booking->reservation_id ?? $booking->id);
-                    $this->notificationService->notifyPaymentComplete($guest, $booking->reservation_id ?? $booking->id, $officialReceiptNumber);
+                    $this->notificationService->notifyCheckOut($guest, $roomName, $lockedBooking->reservation_id ?? $lockedBooking->id);
+                    $this->notificationService->notifyPaymentComplete($guest, $lockedBooking->reservation_id ?? $lockedBooking->id, $officialReceiptNumber);
                 }
 
                 Activity::log(
                     'Checked out guest',
-                    "Booking #{$booking->id} - " . ($guest->full_name ?? $booking->stay_guest_full_name ?? 'guest') . " from {$roomName}",
-                    $booking
+                    "Booking #{$lockedBooking->id} - " . ($guest->full_name ?? $lockedBooking->stay_guest_full_name ?? 'guest') . " from {$roomName}",
+                    $lockedBooking
                 );
             } else {
                 if ($guest) {
                     $this->notificationService->notifyManagerPayment(
                         $guest,
                         $amountPaid,
-                        $billing->billing_status,
+                        $lockedBilling->billing_status,
                         $roomName,
-                        $booking->reservation_id ?? $booking->id
+                        $lockedBooking->reservation_id ?? $lockedBooking->id
                     );
                 }
             }
+
+            return [
+                'status' => 'ok',
+                'completed' => $completed,
+                'balance' => max(0, (float) $lockedBilling->total_amount - $paid),
+                'billing' => $lockedBilling,
+            ];
         });
 
-        $billing->refresh();
+        if ($result['status'] === 'not_found') {
+            return response()->json(['message' => 'Billing not found.'], 404);
+        }
+        if ($result['status'] === 'not_awaiting_checkout') {
+            return response()->json(['message' => 'This booking is not awaiting checkout.'], 422);
+        }
+        if ($result['status'] === 'amount_required') {
+            return response()->json([
+                'message' => 'A payment amount is required - the remaining balance is ₱' . number_format($result['balance'], 2) . '.',
+            ], 422);
+        }
+
+        $lockedBilling = $result['billing'];
 
         return response()->json([
-            'completed' => $completed,
-            'balance' => $billing->balance,
-            'message' => $completed ? 'Payment complete. Guest checked out.' : 'Partial payment recorded.',
-            'receipt_url' => $completed ? route('receptionist.billing.receipt', $billing) : null,
-            'official_receipt_number' => $completed ? $billing->receipt_number : null,
+            'completed' => $result['completed'],
+            'balance' => $result['balance'],
+            'message' => $result['completed'] ? 'Payment complete. Guest checked out.' : 'Partial payment recorded.',
+            'receipt_url' => $result['completed'] ? route('receptionist.billing.receipt', $lockedBilling) : null,
+            'official_receipt_number' => $result['completed'] ? $lockedBilling->receipt_number : null,
         ]);
     }
 
