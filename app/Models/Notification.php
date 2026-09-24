@@ -16,6 +16,8 @@ class Notification extends Model
         'category',
         'reference_id',
         'target_audience',
+        'receipt_number',
+        'receipt_type',
         'is_read',
     ];
 

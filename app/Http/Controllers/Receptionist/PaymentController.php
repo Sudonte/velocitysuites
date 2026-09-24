@@ -94,8 +94,13 @@ class PaymentController extends Controller
         // in-memory receipt_number was already set by ensureReceiptNumber()
         // above, so this just reads it back, it does not mint anything.
         $receiptLabel = $payment->isFullPaymentReceiptEligible() ? 'Payment Receipt' : 'Partial Payment Receipt';
+        // Same pure read as $receiptLabel above (Payment::receiptType() -
+        // reads $payment's now-set in-memory receipt_number, mints
+        // nothing) - the machine-readable PARTIAL_RECEIPT/FULL_PAYMENT_RECEIPT
+        // counterpart threaded onto the notification itself.
+        $receiptType = $payment->receiptType();
 
-        $this->logAndNotify($payment, verified: true, receiptNumber: $receiptNumber, receiptLabel: $receiptLabel);
+        $this->logAndNotify($payment, verified: true, receiptNumber: $receiptNumber, receiptLabel: $receiptLabel, receiptType: $receiptType);
         $this->autoCompleteBooking($payment);
 
         return back()->with('success', 'Payment verified and booking completed.');
@@ -211,7 +216,7 @@ class PaymentController extends Controller
      * converted), falling back to the reservation directly for the rare
      * not-yet-converted case where no Booking exists yet at all.
      */
-    private function logAndNotify(Payment $payment, bool $verified, ?string $reason = null, ?string $receiptNumber = null, string $receiptLabel = 'Partial Payment Receipt'): void
+    private function logAndNotify(Payment $payment, bool $verified, ?string $reason = null, ?string $receiptNumber = null, string $receiptLabel = 'Partial Payment Receipt', ?string $receiptType = null): void
     {
         $booking = $this->resolveBooking($payment);
         $reservation = $booking?->reservation ?? ($payment->reservation_id ? $payment->reservation : null);
@@ -243,7 +248,7 @@ class PaymentController extends Controller
         );
 
         if ($verified) {
-            $this->notificationService->notifyPaymentVerified($guest, $amount, $roomName, $referenceId, $receiptNumber, $receiptLabel);
+            $this->notificationService->notifyPaymentVerified($guest, $amount, $roomName, $referenceId, $receiptNumber, $receiptLabel, $receiptType);
         } else {
             $this->notificationService->notifyPaymentRejected($guest, $amount, $roomName, $reason, $referenceId);
         }

@@ -13,8 +13,18 @@ class NotificationService
 {
     /**
      * Send notification to a single user.
+     *
+     * $receiptNumber/$receiptType are additive, optional metadata - always an
+     * already-minted receipt_number (Payment::ensureReceiptNumber()/
+     * Billing::ensureOfficialReceiptNumber(), called by the caller BEFORE
+     * reaching here) and its matching PARTIAL_RECEIPT/FULL_PAYMENT_RECEIPT/
+     * OFFICIAL_RECEIPT type string - this method never generates or infers
+     * either. Both stay null for every non-payment notification and for a
+     * payment notification whose payment wasn't receipt-eligible, exactly as
+     * before this metadata existed - see PAYMENT_RECEIPT_HISTORY_BACKEND_SPEC.md
+     * Phase 5 notification-integration section.
      */
-    public function toUser(User $user, string $title, string $message, string $category = 'general', ?int $referenceId = null, ?array $targetAudience = null): Notification
+    public function toUser(User $user, string $title, string $message, string $category = 'general', ?int $referenceId = null, ?array $targetAudience = null, ?string $receiptNumber = null, ?string $receiptType = null): Notification
     {
         return Notification::create([
             'user_id' => $user->id,
@@ -23,6 +33,8 @@ class NotificationService
             'category' => $category,
             'reference_id' => $referenceId,
             'target_audience' => $targetAudience,
+            'receipt_number' => $receiptNumber,
+            'receipt_type' => $receiptType,
         ]);
     }
 
@@ -363,7 +375,11 @@ class NotificationService
     }
 
     /**
-     * Notify about full payment (receipt available).
+     * Notify about full payment (receipt available). Always OFFICIAL_RECEIPT
+     * when $receiptNumber is present - this only ever fires from
+     * Receptionist\CheckOutController::recordPayment()'s checkout-completion
+     * branch, right after Billing::ensureOfficialReceiptNumber() mints it, so
+     * there is no other receipt type this call site could ever mean.
      */
     public function notifyPaymentComplete(User $guest, ?int $referenceId = null, ?string $receiptNumber = null): void
     {
@@ -371,7 +387,8 @@ class NotificationService
             . ($receiptNumber ? " ({$receiptNumber})" : '')
             . ' is now available.';
 
-        $this->toUser($guest, 'Payment Complete', $message, 'payment', $referenceId);
+        $this->toUser($guest, 'Payment Complete', $message, 'payment', $referenceId, null,
+            $receiptNumber, $receiptNumber ? 'OFFICIAL_RECEIPT' : null);
 
         $this->toRole(
             'manager',
@@ -414,7 +431,7 @@ class NotificationService
      * (substring match on the title) resolves the correct status pill
      * without needing a structured notification type field.
      */
-    public function notifyPaymentVerified(User $guest, float $amount, string $roomName, ?int $referenceId = null, ?string $receiptNumber = null, string $receiptLabel = 'Partial Payment Receipt'): void
+    public function notifyPaymentVerified(User $guest, float $amount, string $roomName, ?int $referenceId = null, ?string $receiptNumber = null, string $receiptLabel = 'Partial Payment Receipt', ?string $receiptType = null): void
     {
         $message = 'Your GCash payment of ₱' . number_format($amount, 2) . " for {$roomName} has been verified. Thank you!";
         // $receiptNumber is optional/backward-compatible - stays plain
@@ -425,11 +442,15 @@ class NotificationService
         // Receipt" depending on Payment::isFullPaymentReceiptEligible() - a
         // verified 100% pre-checkout payment must never be announced as
         // "Partial" (see Payment::qualifiesForNewPreCheckoutReceipt()'s doc).
+        // $receiptType is the same eligibility result's machine-readable form
+        // (Payment::receiptType() - 'PARTIAL_RECEIPT'/'FULL_PAYMENT_RECEIPT'),
+        // computed by the caller from the same already-minted receipt_number -
+        // never re-derived here from $receiptLabel's free text.
         if ($receiptNumber) {
             $message .= " Your {$receiptLabel} ({$receiptNumber}) is now available.";
         }
 
-        $this->toUser($guest, 'Payment Verified', $message, 'payment', $referenceId);
+        $this->toUser($guest, 'Payment Verified', $message, 'payment', $referenceId, null, $receiptNumber, $receiptType);
     }
 
     /**
