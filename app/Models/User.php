@@ -29,6 +29,7 @@ class User extends Authenticatable
         'role',
         'status',
         'failed_login_attempts',
+        'must_change_password',
         'last_login_at',
         'email_verified_at',
         'deleted_at',
@@ -77,6 +78,7 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'must_change_password' => 'boolean',
             'last_login_at' => 'datetime',
             'deleted_at' => 'datetime',
             'restore_deadline' => 'datetime',

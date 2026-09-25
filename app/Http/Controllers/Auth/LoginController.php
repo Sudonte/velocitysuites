@@ -63,10 +63,7 @@ class LoginController extends Controller
             // Still on the shared default password (set at account creation
             // or by an admin's reset) - make them choose a permanent one
             // before they can reach any dashboard.
-            if (\Illuminate\Support\Facades\Hash::check(
-                \App\Http\Controllers\Admin\UserManagementController::DEFAULT_STAFF_PASSWORD,
-                auth()->user()->password
-            )) {
+            if (auth()->user()->must_change_password) {
                 return redirect()->route('force-password-change.show');
             }
 

@@ -9,11 +9,19 @@ use App\Support\Activity;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
 use Illuminate\View\View;
 
 class UserManagementController extends Controller
 {
-    /** Every newly-created or admin-reset manager/receptionist account starts on this password. */
+    /**
+     * Legacy shared temporary password - no longer assigned to new/reset
+     * accounts (see store()/resetPassword() below, which now generate a
+     * random per-account temporary password instead and set
+     * must_change_password=true). Kept only so the migration that
+     * introduced must_change_password can identify which existing
+     * accounts were still sitting on this value at the time it ran.
+     */
     public const DEFAULT_STAFF_PASSWORD = 'velocitysuites123';
 
     /**
@@ -97,13 +105,15 @@ class UserManagementController extends Controller
         ]);
 
         $email = $this->generateStaffEmail($validated['last_name'], $validated['role']);
+        $temporaryPassword = Str::password(12);
 
         $user = User::create([
             'first_name' => $validated['first_name'],
             'last_name' => $validated['last_name'],
             'middle_name' => $validated['middle_name'] ?? null,
             'email' => $email,
-            'password' => self::DEFAULT_STAFF_PASSWORD,
+            'password' => $temporaryPassword,
+            'must_change_password' => true,
             'role' => $validated['role'],
             'status' => 'active',
             'email_verified_at' => now(),
@@ -112,7 +122,7 @@ class UserManagementController extends Controller
         Activity::log('Created staff account', "{$user->full_name} ({$validated['role']}, {$email})", $user);
 
         return redirect()->route('admin.users.index')
-            ->with('success', "Account created! Login email: {$email} - default password: " . self::DEFAULT_STAFF_PASSWORD);
+            ->with('success', "Account created! Login email: {$email} - temporary password: {$temporaryPassword} (unique to this account - they'll be asked to set a new one on first login).");
     }
 
     /**
@@ -158,7 +168,8 @@ class UserManagementController extends Controller
     {
         abort_unless($this->isElevatedStaff($user), 404);
 
-        $user->update(['password' => self::DEFAULT_STAFF_PASSWORD, 'failed_login_attempts' => 0]);
+        $temporaryPassword = Str::password(12);
+        $user->update(['password' => $temporaryPassword, 'must_change_password' => true, 'failed_login_attempts' => 0]);
 
         // Keep the two reset paths from ever showing contradictory state -
         // this direct button is effectively an approval too, so any request
@@ -173,7 +184,7 @@ class UserManagementController extends Controller
         Activity::log('Reset staff password', $user->full_name, $user);
 
         return redirect()->route('admin.users.index')
-            ->with('success', 'Password reset to the default (' . self::DEFAULT_STAFF_PASSWORD . '). They\'ll be asked to set a new one on next login.');
+            ->with('success', "Password reset. Temporary password: {$temporaryPassword} (unique to this account - they'll be asked to set a new one on next login).");
     }
 
     /**

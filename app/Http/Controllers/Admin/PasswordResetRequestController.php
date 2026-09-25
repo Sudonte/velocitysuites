@@ -9,6 +9,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Str;
 use Illuminate\View\View;
 
 /**
@@ -40,9 +41,11 @@ class PasswordResetRequestController extends Controller
         abort_unless($staffPasswordResetRequest->status === 'pending', 422, 'Only a pending request can be approved.');
 
         $user = $staffPasswordResetRequest->user;
+        $temporaryPassword = Str::password(12);
 
         $user->update([
-            'password' => \App\Http\Controllers\Admin\UserManagementController::DEFAULT_STAFF_PASSWORD,
+            'password' => $temporaryPassword,
+            'must_change_password' => true,
             'failed_login_attempts' => 0,
         ]);
 
@@ -65,7 +68,7 @@ class PasswordResetRequestController extends Controller
         );
 
         return redirect()->route('admin.users.password-requests.index')
-            ->with('success', "Request approved. {$user->full_name}'s temporary password is: " . \App\Http\Controllers\Admin\UserManagementController::DEFAULT_STAFF_PASSWORD . ' - they\'ll be asked to set a new one on next login.');
+            ->with('success', "Request approved. {$user->full_name}'s temporary password is: {$temporaryPassword} - they'll be asked to set a new one on next login.");
     }
 
     public function reject(Request $request, StaffPasswordResetRequest $staffPasswordResetRequest): RedirectResponse
