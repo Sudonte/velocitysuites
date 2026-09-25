@@ -63,7 +63,12 @@ class PasswordResetService
             return false;
         }
 
-        if (now()->diffInMinutes($row->created_at) > 15) {
+        // now()->diffInMinutes() returns a value signed the opposite of
+        // what it looks like here (confirmed against production: a
+        // genuinely-past created_at came back NEGATIVE), so "> 15" was
+        // never true for any real expired row - this OTP effectively
+        // never expired. isPast() has no such sign ambiguity.
+        if (\Carbon\Carbon::parse($row->created_at)->addMinutes(15)->isPast()) {
             DB::table('password_reset_tokens')->where('email', $email)->delete();
             return false;
         }
