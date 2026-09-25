@@ -67,8 +67,10 @@ Route::get('/dashboard', function () {
     };
 });
 
-// Authentication Routes
-Route::middleware('guest')->group(function () {
+// Authentication Routes. Rate-limited (throttle:20,1 = 20 req/min per IP) -
+// defense in depth against scripted brute-force on top of the per-account
+// failed_login_attempts lockout and per-OTP expiry.
+Route::middleware(['guest', 'throttle:20,1'])->group(function () {
     // Login
     Route::get('/login', [LoginController::class, 'showLoginForm'])->name('login');
     Route::post('/login', [LoginController::class, 'login'])->name('login.post');

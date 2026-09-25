@@ -56,8 +56,22 @@ class AuthController extends Controller
         }
 
         if (! Hash::check($credentials['password'], $user->password)) {
+            // Increment, then re-check the threshold within THIS SAME
+            // request - the pre-check above only ever sees the count from
+            // a PRIOR request, so without this the account doesn't
+            // actually lock until a 4th attempt instead of the intended 3rd.
             $user->increment('failed_login_attempts');
-            return response()->json(['message' => 'Invalid credentials.'], 401);
+            $user->refresh();
+
+            if ($user->failed_login_attempts >= 3) {
+                return response()->json(['message' => 'Account locked due to multiple failed login attempts. Check your email to verify and reset your password.'], 423);
+            }
+
+            $message = $user->failed_login_attempts === 2
+                ? 'Invalid credentials. One more failed attempt will require you to verify your account by email.'
+                : 'Invalid credentials.';
+
+            return response()->json(['message' => $message], 401);
         }
 
         // This API/app is guest-facing only - staff (admin/manager/

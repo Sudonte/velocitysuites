@@ -17,10 +17,12 @@ return new class extends Migration
         });
 
         // Backfill from each reservation's currently assigned room's type.
+        // Correlated subquery instead of MySQL's UPDATE...JOIN syntax so
+        // this also runs on the sqlite connection used by the test suite
+        // (phpunit.xml) - identical result on MySQL too, just portable.
         DB::statement('
             UPDATE reservations
-            JOIN rooms ON rooms.id = reservations.room_id
-            SET reservations.room_type_id = rooms.room_type_id
+            SET room_type_id = (SELECT rooms.room_type_id FROM rooms WHERE rooms.id = reservations.room_id)
         ');
 
         Schema::table('reservations', function (Blueprint $table) {

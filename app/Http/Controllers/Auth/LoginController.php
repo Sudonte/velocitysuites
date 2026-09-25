@@ -114,10 +114,25 @@ class LoginController extends Controller
                 ->with('success', 'Login successful! Welcome back.');
         }
 
-        // Increment failed login attempts
+        // Increment failed login attempts, then immediately re-check the
+        // threshold within THIS SAME request - the pre-check above only
+        // ever sees the count from a PRIOR request, so without this the
+        // account doesn't actually lock until a 4th attempt instead of the
+        // intended 3rd.
         $user->increment('failed_login_attempts');
+        $user->refresh();
 
-        return back()->withInput($request->only('email'))->with('error', 'Invalid credentials.');
+        if ($user->failed_login_attempts >= 3) {
+            return redirect()->route('password.request')
+                ->with('error', 'Too many failed login attempts. Please reset your password to continue.')
+                ->withInput(['email' => $credentials['email']]);
+        }
+
+        $message = $user->failed_login_attempts === 2
+            ? 'Invalid credentials. One more failed attempt will require you to verify your account by email.'
+            : 'Invalid credentials.';
+
+        return back()->withInput($request->only('email'))->with('error', $message);
     }
 
     /**

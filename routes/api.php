@@ -12,14 +12,19 @@ use App\Http\Controllers\Api\ReservationController;
 use App\Http\Controllers\Api\RoomController;
 use Illuminate\Support\Facades\Route;
 
-// Public - no token required
-Route::post('/register', [AuthController::class, 'register']);
-Route::post('/verify-otp', [AuthController::class, 'verifyOtp']);
-Route::post('/resend-otp', [AuthController::class, 'resendOtp']);
-Route::post('/login', [AuthController::class, 'login']);
-Route::post('/forgot-password', [AuthController::class, 'forgotPassword']);
-Route::post('/verify-reset-otp', [AuthController::class, 'verifyResetOtp']);
-Route::post('/reset-password', [AuthController::class, 'resetPassword']);
+// Public - no token required. Rate-limited (throttle:20,1 = 20 req/min per
+// IP) since these are all pre-auth credential/OTP endpoints - defense in
+// depth against scripted brute-force, on top of the per-account
+// failed_login_attempts lockout and per-OTP expiry already enforced below.
+Route::middleware('throttle:20,1')->group(function () {
+    Route::post('/register', [AuthController::class, 'register']);
+    Route::post('/verify-otp', [AuthController::class, 'verifyOtp']);
+    Route::post('/resend-otp', [AuthController::class, 'resendOtp']);
+    Route::post('/login', [AuthController::class, 'login']);
+    Route::post('/forgot-password', [AuthController::class, 'forgotPassword']);
+    Route::post('/verify-reset-otp', [AuthController::class, 'verifyResetOtp']);
+    Route::post('/reset-password', [AuthController::class, 'resetPassword']);
+});
 
 // Voluntary-deactivation OTP reactivation - reached only after login()
 // returns reactivation_required (correct credentials, deactivated account),
