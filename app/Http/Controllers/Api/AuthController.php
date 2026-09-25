@@ -234,7 +234,15 @@ class AuthController extends Controller
             ], 422);
         }
 
-        $otp = $this->issueOtp($validated['email'], $validated);
+        $sent = $this->issueOtp($validated['email'], $validated);
+
+        if (! $sent) {
+            return response()->json([
+                'message' => $validated['otp_channel'] === 'mobile'
+                    ? "We couldn't send the verification code to your mobile number right now. Please try again in a few minutes."
+                    : "We couldn't send the verification email right now. Please try again in a few minutes.",
+            ], 422);
+        }
 
         return response()->json([
             'message' => $validated['otp_channel'] === 'mobile'
@@ -332,7 +340,9 @@ class AuthController extends Controller
             return response()->json(['message' => 'No pending registration for this email. Please register again.'], 404);
         }
 
-        $this->issueOtp($validated['email'], $pending->payload);
+        if (! $this->issueOtp($validated['email'], $pending->payload)) {
+            return response()->json(['message' => "We couldn't resend the verification code right now. Please try again in a few minutes."], 422);
+        }
 
         return response()->json(['message' => 'OTP resent.']);
     }
@@ -520,7 +530,7 @@ class AuthController extends Controller
      * registration (payload['otp_channel'], defaulting to email for
      * forgot-password/older payloads that predate the channel choice).
      */
-    private function issueOtp(string $email, array $payload): string
+    private function issueOtp(string $email, array $payload): bool
     {
         $otp = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
 
@@ -537,16 +547,12 @@ class AuthController extends Controller
 
         $channel = $payload['otp_channel'] ?? 'email';
 
-        if ($channel === 'mobile' && ! empty($payload['mobile_number'])) {
-            $this->sendOtpSms($payload['mobile_number'], $otp);
-        } else {
-            $this->sendOtpEmail($email, $otp);
-        }
-
-        return $otp;
+        return ($channel === 'mobile' && ! empty($payload['mobile_number']))
+            ? $this->sendOtpSms($payload['mobile_number'], $otp)
+            : $this->sendOtpEmail($email, $otp);
     }
 
-    private function sendOtpEmail(string $email, string $otp): void
+    private function sendOtpEmail(string $email, string $otp): bool
     {
         try {
             $body = "Hi,\n\n"
@@ -557,8 +563,12 @@ class AuthController extends Controller
             Mail::raw($body, function ($message) use ($email, $otp) {
                 $message->to($email)->subject("Your VelocitySuites verification code: {$otp}");
             });
+
+            return true;
         } catch (\Throwable $e) {
             Log::error("Failed to email OTP to {$email}: " . $e->getMessage());
+
+            return false;
         }
     }
 
@@ -570,11 +580,11 @@ class AuthController extends Controller
      * already refuses mobile-channel signups before reaching here in
      * that case, so this path only runs with a real key.
      */
-    private function sendOtpSms(string $mobileNumber, string $otp): void
+    private function sendOtpSms(string $mobileNumber, string $otp): bool
     {
         $apiKey = config('services.semaphore.key');
         if (! $apiKey) {
-            return;
+            return false;
         }
 
         try {
@@ -587,9 +597,15 @@ class AuthController extends Controller
 
             if (! $response->successful()) {
                 Log::error("Semaphore SMS failed for {$mobileNumber}: " . $response->body());
+
+                return false;
             }
+
+            return true;
         } catch (\Throwable $e) {
             Log::error("Semaphore SMS exception for {$mobileNumber}: " . $e->getMessage());
+
+            return false;
         }
     }
 

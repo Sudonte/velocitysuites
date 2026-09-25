@@ -55,7 +55,9 @@ class ForgotPasswordController extends Controller
             return $this->handleStaffRequest($user);
         }
 
-        $this->passwordReset->sendOtp($user);
+        if (! $this->passwordReset->sendOtp($user)) {
+            return back()->withInput()->with('error', "We couldn't send the verification email right now. Please try again in a few minutes.");
+        }
 
         return redirect()->route('password.otp.form', ['email' => $user->email])
             ->with('status', 'A verification code has been sent to your email.');
@@ -163,7 +165,10 @@ class ForgotPasswordController extends Controller
             return back()->withInput()->with('error', 'Managers and receptionists don\'t self-reset - please contact the System Administrator to reset your password.');
         }
 
-        $this->passwordReset->sendOtp($user);
+        if (! $this->passwordReset->sendOtp($user)) {
+            return redirect()->route('password.otp.form', ['email' => $user->email])
+                ->with('error', "We couldn't send a new verification email right now. Please try again in a few minutes.");
+        }
 
         return redirect()->route('password.otp.form', ['email' => $user->email])
             ->with('status', 'A new verification code has been sent to your email.');

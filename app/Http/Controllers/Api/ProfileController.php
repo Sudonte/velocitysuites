@@ -232,7 +232,9 @@ class ProfileController extends Controller
             return response()->json(['message' => 'That is already your registered email address.'], 422);
         }
 
-        $this->emailChange->requestChange($user, $validated['new_email']);
+        if (! $this->emailChange->requestChange($user, $validated['new_email'])) {
+            return response()->json(['message' => "We couldn't send the verification code right now. Please try again in a few minutes."], 422);
+        }
 
         return response()->json(['message' => 'Verification code sent to your new email address.']);
     }

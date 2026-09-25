@@ -129,7 +129,9 @@ class RegisterController extends Controller
             'booking_intent' => $bookingIntent, // Preserve booking intent through registration
         ]));
 
-        $this->sendOtpEmail($validated['email'], $otp);
+        if (! $this->sendOtpEmail($validated['email'], $otp)) {
+            return back()->withInput()->with('error', "We couldn't send the verification email right now. Please try again in a few minutes.");
+        }
 
         return redirect()->route('verify-otp')->with('info', 'OTP sent to your email. Please verify to complete registration.');
     }
@@ -259,7 +261,9 @@ class RegisterController extends Controller
             'otp_created_at' => now(),
         ]));
 
-        $this->sendOtpEmail($registrationData['email'], $otp);
+        if (! $this->sendOtpEmail($registrationData['email'], $otp)) {
+            return back()->with('error', "We couldn't resend the verification email right now. Please try again in a few minutes.");
+        }
 
         return back()->with('success', 'OTP resent to your email.');
     }
@@ -271,7 +275,7 @@ class RegisterController extends Controller
      * a dead TODO (Mail::send(...) commented out) so the web registration
      * flow generated a code but never actually delivered it anywhere.
      */
-    private function sendOtpEmail(string $email, string $otp): void
+    private function sendOtpEmail(string $email, string $otp): bool
     {
         try {
             $body = "Hi,\n\nYour VelocitySuites verification code is: {$otp}\n\n"
@@ -280,8 +284,12 @@ class RegisterController extends Controller
             Mail::raw($body, function ($message) use ($email, $otp) {
                 $message->to($email)->subject("Your VelocitySuites verification code: {$otp}");
             });
+
+            return true;
         } catch (\Throwable $e) {
             Log::error("Failed to email registration OTP to {$email}: " . $e->getMessage());
+
+            return false;
         }
     }
 }

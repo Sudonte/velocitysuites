@@ -24,7 +24,15 @@ use Illuminate\Support\Facades\Mail;
  */
 class PasswordResetService
 {
-    public function sendOtp(User $user): void
+    /**
+     * Returns whether the OTP email was actually handed off successfully.
+     * Callers that show the guest a definite "code sent" message (as
+     * opposed to the deliberately non-committal "if that email is
+     * registered..." API response, which must stay identical either way
+     * to avoid account enumeration - see Api\AuthController::forgotPassword())
+     * need this to avoid lying about delivery that didn't happen.
+     */
+    public function sendOtp(User $user): bool
     {
         $otp = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
 
@@ -42,8 +50,12 @@ class PasswordResetService
             Mail::raw($body, function ($message) use ($user, $otp) {
                 $message->to($user->email)->subject("Your VelocitySuites password reset code: {$otp}");
             });
+
+            return true;
         } catch (\Throwable $e) {
             Log::error("Failed to email password reset OTP to {$user->email}: " . $e->getMessage());
+
+            return false;
         }
     }
 

@@ -23,7 +23,7 @@ use Illuminate\Support\Facades\Mail;
  */
 class EmailChangeService
 {
-    public function requestChange(User $user, string $newEmail): void
+    public function requestChange(User $user, string $newEmail): bool
     {
         $otp = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
 
@@ -42,8 +42,12 @@ class EmailChangeService
             Mail::raw($body, function ($message) use ($newEmail, $otp) {
                 $message->to($newEmail)->subject("Confirm your new VelocitySuites email: {$otp}");
             });
+
+            return true;
         } catch (\Throwable $e) {
             Log::error("Failed to email change-of-email OTP to {$newEmail}: " . $e->getMessage());
+
+            return false;
         }
     }
 
