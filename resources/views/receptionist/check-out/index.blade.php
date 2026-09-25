@@ -441,6 +441,15 @@ document.addEventListener('DOMContentLoaded', function () {
             return;
         }
 
+        // The backend already serializes/guards this via a locked
+        // transaction (see Receptionist\CheckOutController::recordPayment()),
+        // so a double-click can't actually duplicate a payment or checkout -
+        // but without this, the second click would still fire a second
+        // request and surface a confusing "not awaiting checkout" error
+        // instead of just being prevented outright.
+        const submitBtn = form.querySelector('button[type="submit"]');
+        if (submitBtn) submitBtn.disabled = true;
+
         try {
             const data = await fetchJson(buildUrl(urls.recordPayment, currentPaymentBillingId()), {
                 method: 'POST',
@@ -470,6 +479,8 @@ document.addEventListener('DOMContentLoaded', function () {
             activeBookingId = null;
         } catch (err) {
             showPaymentError(err.message);
+        } finally {
+            if (submitBtn) submitBtn.disabled = false;
         }
     });
 });
