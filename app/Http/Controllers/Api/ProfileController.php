@@ -16,6 +16,11 @@ use Illuminate\Validation\Rule;
 
 class ProfileController extends Controller
 {
+    public function __construct(
+        private \App\Services\EmailChangeService $emailChange,
+    ) {
+    }
+
     /**
      * Same shape as Guest\GuestController@profile.
      */
@@ -75,7 +80,6 @@ class ProfileController extends Controller
             'first_name' => 'required|string|max:100',
             'last_name' => 'required|string|max:100',
             'middle_name' => 'nullable|string|max:100',
-            'email' => 'required|email|unique:users,email,' . $user->id,
             'gender' => 'nullable|in:male,female',
             'date_of_birth' => 'nullable|date|before:today',
             'mobile_number' => [
@@ -169,7 +173,6 @@ class ProfileController extends Controller
                 'first_name' => $validated['first_name'],
                 'last_name' => $validated['last_name'],
                 'middle_name' => $validated['middle_name'] ?? null,
-                'email' => $validated['email'],
             ]);
 
             if ($lockedGuest) {
@@ -202,6 +205,58 @@ class ProfileController extends Controller
             'user' => $freshUser,
             'guest' => $freshGuest,
             'profile_update' => $this->profileUpdateState($freshGuest),
+        ]);
+    }
+
+    /**
+     * Step 1 of the OTP-gated email change: re-verify the current password
+     * (defense against a stolen/leaked bearer token trying to hijack the
+     * account via a silent email swap - a live session alone is no longer
+     * enough), then send a 6-digit code to the PROPOSED new address. Never
+     * writes the new email until confirmEmailChange() verifies that code.
+     */
+    public function requestEmailChange(Request $request): JsonResponse
+    {
+        $user = auth()->user();
+
+        $validated = $request->validate([
+            'new_email' => 'required|email|unique:users,email',
+            'current_password' => 'required|string',
+        ]);
+
+        if (! Hash::check($validated['current_password'], $user->password)) {
+            return response()->json(['message' => 'Incorrect password.'], 422);
+        }
+
+        if (strcasecmp($validated['new_email'], $user->email) === 0) {
+            return response()->json(['message' => 'That is already your registered email address.'], 422);
+        }
+
+        $this->emailChange->requestChange($user, $validated['new_email']);
+
+        return response()->json(['message' => 'Verification code sent to your new email address.']);
+    }
+
+    /**
+     * Step 2: verify the code and actually apply the change.
+     */
+    public function confirmEmailChange(Request $request): JsonResponse
+    {
+        $user = auth()->user();
+
+        $validated = $request->validate([
+            'otp' => 'required|string|size:6',
+        ]);
+
+        $result = $this->emailChange->confirmChange($user, $validated['otp']);
+
+        if (! $result['success']) {
+            return response()->json(['message' => $result['message']], 422);
+        }
+
+        return response()->json([
+            'message' => $result['message'],
+            'user' => $user->fresh(),
         ]);
     }
 
