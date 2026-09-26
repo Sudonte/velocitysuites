@@ -9,7 +9,6 @@ use Illuminate\Http\Request;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
-use Illuminate\Support\Str;
 use Illuminate\View\View;
 
 /**
@@ -41,7 +40,7 @@ class PasswordResetRequestController extends Controller
         abort_unless($staffPasswordResetRequest->status === 'pending', 422, 'Only a pending request can be approved.');
 
         $user = $staffPasswordResetRequest->user;
-        $temporaryPassword = Str::password(12);
+        $temporaryPassword = UserManagementController::DEFAULT_STAFF_PASSWORD;
 
         $user->update([
             'password' => $temporaryPassword,

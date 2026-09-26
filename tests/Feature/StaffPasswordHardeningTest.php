@@ -9,13 +9,12 @@ use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
 /**
- * Coverage for the must_change_password hardening added this session:
- * new/reset staff accounts previously all shared one hard-coded constant
- * password (UserManagementController::DEFAULT_STAFF_PASSWORD), detected by
- * comparing the account's password hash against that known value. Now each
- * account gets its own random temporary password and an explicit
- * must_change_password flag - these tests exist to make sure the force-
- * change gate still actually gates on that flag, and clears it correctly.
+ * Coverage for the must_change_password gate: new/reset staff accounts
+ * are provisioned with the shared UserManagementController::
+ * DEFAULT_STAFF_PASSWORD and must_change_password=true. These tests make
+ * sure the force-change gate actually gates on that flag - independent of
+ * whatever password value the account was given - and clears it once a
+ * real permanent password is set.
  */
 class StaffPasswordHardeningTest extends TestCase
 {
@@ -134,20 +133,5 @@ class StaffPasswordHardeningTest extends TestCase
         $this->post('/logout');
         $second = $this->post('/login', ['email' => $user->email, 'password' => 'Brand-New-Real-Pw-1!']);
         $second->assertRedirect(route('manager.dashboard'));
-    }
-
-    /**
-     * Two different accounts getting temporary passwords must never
-     * collide/reuse the same value the old shared constant did - this is
-     * the actual point of the change, so assert it directly rather than
-     * just trusting Str::password()'s randomness.
-     */
-    public function test_temporary_passwords_are_not_a_shared_constant(): void
-    {
-        $a = \Illuminate\Support\Str::password(12);
-        $b = \Illuminate\Support\Str::password(12);
-
-        $this->assertNotSame($a, $b);
-        $this->assertNotSame('velocitysuites123', $a);
     }
 }
