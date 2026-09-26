@@ -12,12 +12,22 @@ use App\Models\Reservation;
 use App\Models\Room;
 use App\Models\RoomType;
 use App\Models\User;
+use App\Support\TestAccountScope;
 use Carbon\Carbon;
 
 /**
  * Central place for dashboard statistics so counts stay connected to the
  * actual Reservation/Booking status model as it evolves, instead of being
  * re-derived (and drifting) inline in each dashboard controller.
+ *
+ * Every business-facing figure here (revenue, occupancy, reservation/
+ * booking counts, trend charts) excludes confirmed internal/developer
+ * test accounts via App\Support\TestAccountScope - see that class's own
+ * doc. pendingPaymentVerifications is deliberately left unfiltered: it's
+ * an operational queue depth (a real payment a receptionist still has to
+ * review, test account or not), not a business-performance figure.
+ * recentActivities (the audit-log feed) is also deliberately left
+ * unfiltered - test-account activity must stay fully visible there.
  */
 class DashboardStatsService
 {
@@ -27,46 +37,60 @@ class DashboardStatsService
 
     public function adminStats(): array
     {
-        $todayRevenue = (float) Payment::where('payment_status', 'completed')
-            ->whereDate('payment_date', today())
-            ->sum('amount_paid');
-        $yesterdayRevenue = (float) Payment::where('payment_status', 'completed')
-            ->whereDate('payment_date', today()->subDay())
-            ->sum('amount_paid');
+        $todayRevenue = (float) TestAccountScope::excludeFromPayments(
+            Payment::where('payment_status', 'completed')->whereDate('payment_date', today())
+        )->sum('amount_paid');
+        $yesterdayRevenue = (float) TestAccountScope::excludeFromPayments(
+            Payment::where('payment_status', 'completed')->whereDate('payment_date', today()->subDay())
+        )->sum('amount_paid');
 
-        $monthlyRevenue = (float) Payment::where('payment_status', 'completed')
-            ->whereMonth('payment_date', now()->month)
-            ->whereYear('payment_date', now()->year)
-            ->sum('amount_paid');
-        $lastMonthRevenue = (float) Payment::where('payment_status', 'completed')
-            ->whereMonth('payment_date', now()->subMonth()->month)
-            ->whereYear('payment_date', now()->subMonth()->year)
-            ->sum('amount_paid');
+        $monthlyRevenue = (float) TestAccountScope::excludeFromPayments(
+            Payment::where('payment_status', 'completed')
+                ->whereMonth('payment_date', now()->month)
+                ->whereYear('payment_date', now()->year)
+        )->sum('amount_paid');
+        $lastMonthRevenue = (float) TestAccountScope::excludeFromPayments(
+            Payment::where('payment_status', 'completed')
+                ->whereMonth('payment_date', now()->subMonth()->month)
+                ->whereYear('payment_date', now()->subMonth()->year)
+        )->sum('amount_paid');
 
-        $yearlyRevenue = (float) Payment::where('payment_status', 'completed')
-            ->whereYear('payment_date', now()->year)
-            ->sum('amount_paid');
-        $lastYearRevenue = (float) Payment::where('payment_status', 'completed')
-            ->whereYear('payment_date', now()->subYear()->year)
-            ->sum('amount_paid');
+        $yearlyRevenue = (float) TestAccountScope::excludeFromPayments(
+            Payment::where('payment_status', 'completed')->whereYear('payment_date', now()->year)
+        )->sum('amount_paid');
+        $lastYearRevenue = (float) TestAccountScope::excludeFromPayments(
+            Payment::where('payment_status', 'completed')->whereYear('payment_date', now()->subYear()->year)
+        )->sum('amount_paid');
 
         // "Active" and "completed" live on Booking (the operational record
         // from conversion onward) - Reservation's own status only covers
         // the pre-booking lifecycle.
-        $pendingReservations = Reservation::whereIn('status', Reservation::ACTIVE_STATUSES)->count();
-        $activeReservations = Booking::whereIn('booking_status', [Booking::STATUS_ACTIVE, Booking::STATUS_CHECKED_IN])->count();
-        $completedReservations = Booking::where('booking_status', Booking::STATUS_COMPLETED)->count();
+        $pendingReservations = TestAccountScope::excludeFromReservations(
+            Reservation::whereIn('status', Reservation::ACTIVE_STATUSES)
+        )->count();
+        $activeReservations = TestAccountScope::excludeFromBookings(
+            Booking::whereIn('booking_status', [Booking::STATUS_ACTIVE, Booking::STATUS_CHECKED_IN])
+        )->count();
+        $completedReservations = TestAccountScope::excludeFromBookings(
+            Booking::where('booking_status', Booking::STATUS_COMPLETED)
+        )->count();
 
-        $totalReservations = Reservation::count();
-        $totalReservationsLastMonth = Reservation::where('created_at', '<=', now()->subMonth())->count();
+        $totalReservations = TestAccountScope::excludeFromReservations(Reservation::query())->count();
+        $totalReservationsLastMonth = TestAccountScope::excludeFromReservations(
+            Reservation::where('created_at', '<=', now()->subMonth())
+        )->count();
 
-        $totalBookings = Reservation::whereHas('booking')->count();
-        $totalBookingsLastMonth = Reservation::whereHas('booking', fn ($q) => $q->where('confirmed_at', '<=', now()->subMonth()))->count();
+        $totalBookings = TestAccountScope::excludeFromReservations(Reservation::whereHas('booking'))->count();
+        $totalBookingsLastMonth = TestAccountScope::excludeFromReservations(
+            Reservation::whereHas('booking', fn ($q) => $q->where('confirmed_at', '<=', now()->subMonth()))
+        )->count();
 
         $pendingPaymentVerifications = Payment::where('payment_status', 'pending')->count();
 
-        $totalUsers = User::count();
-        $totalUsersLastMonth = User::where('created_at', '<=', now()->subMonth())->count();
+        $totalUsers = TestAccountScope::excludeFromUsers(User::query())->count();
+        $totalUsersLastMonth = TestAccountScope::excludeFromUsers(
+            User::where('created_at', '<=', now()->subMonth())
+        )->count();
 
         $totalRooms = Room::count();
         $totalRoomsLastMonth = Room::where('created_at', '<=', now()->subMonth())->count();
@@ -78,9 +102,9 @@ class DashboardStatsService
             // real (a user can flip between them any day).
             'totalUsers' => $totalUsers,
             'totalUsersChange' => $this->percentChange($totalUsers, $totalUsersLastMonth),
-            'activeUsers' => User::where('status', 'active')->count(),
-            'suspendedUsers' => User::where('status', 'suspended')->count(),
-            'totalGuests' => User::where('role', 'guest')->count(),
+            'activeUsers' => TestAccountScope::excludeFromUsers(User::where('status', 'active'))->count(),
+            'suspendedUsers' => TestAccountScope::excludeFromUsers(User::where('status', 'suspended'))->count(),
+            'totalGuests' => TestAccountScope::excludeFromUsers(User::where('role', 'guest'))->count(),
             'totalReceptionists' => User::where('role', 'receptionist')->count(),
             'totalManagers' => User::where('role', 'manager')->count(),
             'totalAdmins' => User::where('role', 'admin')->count(),
@@ -100,12 +124,19 @@ class DashboardStatsService
             // assignment, not the stored `status` column - that only flips
             // at explicit check-in/check-out events (or a manual admin
             // edit) and can drift from what's really occupied right now.
-            // See Room::getEffectiveStatusAttribute()'s docblock.
+            // See Room::getEffectiveStatusAttribute()'s docblock. A room
+            // currently held by a test-account booking counts as available
+            // here (business-facing figure) even though it's physically
+            // occupied - see managerStats()'s identical treatment.
             'availableRooms' => Room::where('status', '!=', 'maintenance')
-                ->whereDoesntHave('assignedBookings', fn ($q) => $q->where('booking_status', Booking::STATUS_CHECKED_IN))
+                ->whereDoesntHave('assignedBookings', fn ($q) => TestAccountScope::excludeFromBookings(
+                    $q->where('booking_status', Booking::STATUS_CHECKED_IN)
+                ))
                 ->count(),
             'occupiedRooms' => Room::where('status', '!=', 'maintenance')
-                ->whereHas('assignedBookings', fn ($q) => $q->where('booking_status', Booking::STATUS_CHECKED_IN))
+                ->whereHas('assignedBookings', fn ($q) => TestAccountScope::excludeFromBookings(
+                    $q->where('booking_status', Booking::STATUS_CHECKED_IN)
+                ))
                 ->count(),
             'maintenanceRooms' => Room::where('status', 'maintenance')->count(),
 
@@ -141,12 +172,17 @@ class DashboardStatsService
             // Booking / payment stats
             'totalBookings' => $totalBookings,
             'totalBookingsChange' => $this->percentChange($totalBookings, $totalBookingsLastMonth),
+            // Not test-excluded - an operational queue depth (a real
+            // payment still needing staff review), not a business-
+            // performance figure. See this class's own top doc.
             'pendingPaymentVerifications' => $pendingPaymentVerifications,
 
             // recentActivities: ActivityLog is an ever-growing event stream
             // (thousands of rows) - capped at a generous 50 so "Expand"
             // reveals a genuinely comprehensive recent window without
             // rendering the entire historical log into the dashboard card.
+            // Deliberately NOT test-excluded - this is an audit trail, not
+            // a business metric; every real action stays visible here.
             'recentActivities' => ActivityLog::with('user')
                 ->latest()
                 ->limit(50)
@@ -154,14 +190,20 @@ class DashboardStatsService
             // recentReservations: no cap - the reservations table is small
             // enough that "Expand" can show every row, matching the
             // dashboard's "show all available content" requirement exactly.
-            'recentReservations' => Reservation::with(['guest.user', 'roomType', 'booking'])
-                ->latest()
-                ->get(),
+            'recentReservations' => TestAccountScope::excludeFromReservations(
+                Reservation::with(['guest.user', 'roomType', 'booking'])
+            )->latest()->get(),
 
             // Last-7-days trend lines for the overview charts.
-            'usersTrend' => $this->dailySeries(fn ($date) => User::whereDate('created_at', '<=', $date)->count()),
-            'reservationsTrend' => $this->dailySeries(fn ($date) => Reservation::whereDate('created_at', $date)->count()),
-            'revenueTrend' => $this->dailySeries(fn ($date) => (float) Payment::where('payment_status', 'completed')->whereDate('payment_date', $date)->sum('amount_paid')),
+            'usersTrend' => $this->dailySeries(fn ($date) => TestAccountScope::excludeFromUsers(
+                User::whereDate('created_at', '<=', $date)
+            )->count()),
+            'reservationsTrend' => $this->dailySeries(fn ($date) => TestAccountScope::excludeFromReservations(
+                Reservation::whereDate('created_at', $date)
+            )->count()),
+            'revenueTrend' => $this->dailySeries(fn ($date) => (float) TestAccountScope::excludeFromPayments(
+                Payment::where('payment_status', 'completed')->whereDate('payment_date', $date)
+            )->sum('amount_paid')),
         ];
     }
 
@@ -205,6 +247,11 @@ class DashboardStatsService
      * "how many rooms are occupied at this exact moment" isn't a
      * date-range question - the view renders these as a visually separate,
      * always-current block so the distinction reads intentionally.
+     *
+     * Business-facing figures exclude confirmed test accounts (see this
+     * class's own top doc / App\Support\TestAccountScope); pendingPayment
+     * Verifications does not, for the same operational-queue reasoning as
+     * adminStats().
      */
     public function managerStats(Carbon $from, Carbon $to): array
     {
@@ -212,10 +259,14 @@ class DashboardStatsService
         // See adminStats()'s identical fix above - derived from an actual
         // CHECKED_IN booking assignment, not the stored `status` column.
         $occupiedRooms = Room::where('status', '!=', 'maintenance')
-            ->whereHas('assignedBookings', fn ($q) => $q->where('booking_status', Booking::STATUS_CHECKED_IN))
+            ->whereHas('assignedBookings', fn ($q) => TestAccountScope::excludeFromBookings(
+                $q->where('booking_status', Booking::STATUS_CHECKED_IN)
+            ))
             ->count();
         $availableRooms = Room::where('status', '!=', 'maintenance')
-            ->whereDoesntHave('assignedBookings', fn ($q) => $q->where('booking_status', Booking::STATUS_CHECKED_IN))
+            ->whereDoesntHave('assignedBookings', fn ($q) => TestAccountScope::excludeFromBookings(
+                $q->where('booking_status', Booking::STATUS_CHECKED_IN)
+            ))
             ->count();
         $maintenanceRooms = Room::where('status', 'maintenance')->count();
         $occupancyRate = $totalRooms > 0
@@ -225,33 +276,44 @@ class DashboardStatsService
         // Check-in/check-out/in-house state lives on Booking (the
         // operational record from conversion onward), not on Reservation's
         // own status. Always "today", not filter-scoped (see docblock).
-        $todayCheckIns = Booking::whereDate('check_in', today())
-            ->where('booking_status', Booking::STATUS_ACTIVE)
-            ->count();
+        $todayCheckIns = TestAccountScope::excludeFromBookings(
+            Booking::whereDate('check_in', today())->where('booking_status', Booking::STATUS_ACTIVE)
+        )->count();
 
-        $todayCheckOuts = Booking::whereDate('check_out', today())
-            ->where('booking_status', Booking::STATUS_CHECKED_IN)
-            ->count();
+        $todayCheckOuts = TestAccountScope::excludeFromBookings(
+            Booking::whereDate('check_out', today())->where('booking_status', Booking::STATUS_CHECKED_IN)
+        )->count();
 
-        $inHouseGuests = Booking::where('booking_status', Booking::STATUS_CHECKED_IN)->count();
+        $inHouseGuests = TestAccountScope::excludeFromBookings(
+            Booking::where('booking_status', Booking::STATUS_CHECKED_IN)
+        )->count();
 
-        $periodReservations = Reservation::whereBetween('check_in', [$from, $to])->count();
-        $periodBookings = Reservation::whereBetween('check_in', [$from, $to])->whereHas('booking')->count();
-        $periodCancelled = Reservation::whereBetween('check_in', [$from, $to])->where('status', Reservation::STATUS_CANCELLED)->count();
+        $periodReservations = TestAccountScope::excludeFromReservations(
+            Reservation::whereBetween('check_in', [$from, $to])
+        )->count();
+        $periodBookings = TestAccountScope::excludeFromReservations(
+            Reservation::whereBetween('check_in', [$from, $to])->whereHas('booking')
+        )->count();
+        $periodCancelled = TestAccountScope::excludeFromReservations(
+            Reservation::whereBetween('check_in', [$from, $to])->where('status', Reservation::STATUS_CANCELLED)
+        )->count();
 
-        $periodConfirmedBookings = Booking::whereBetween('check_in', [$from, $to])->count();
-        $periodNoShows = Booking::where('booking_status', Booking::STATUS_ACTIVE)
-            ->whereBetween('check_in', [$from, $to])
-            ->where('check_in', '<', now())
-            ->count();
+        $periodConfirmedBookings = TestAccountScope::excludeFromBookings(
+            Booking::whereBetween('check_in', [$from, $to])
+        )->count();
+        $periodNoShows = TestAccountScope::excludeFromBookings(
+            Booking::where('booking_status', Booking::STATUS_ACTIVE)
+                ->whereBetween('check_in', [$from, $to])
+                ->where('check_in', '<', now())
+        )->count();
 
-        $periodRevenue = (float) Payment::where('payment_status', 'completed')
-            ->whereBetween('payment_date', [$from, $to])
-            ->sum('amount_paid');
+        $periodRevenue = (float) TestAccountScope::excludeFromPayments(
+            Payment::where('payment_status', 'completed')->whereBetween('payment_date', [$from, $to])
+        )->sum('amount_paid');
 
-        $averageStay = (float) (Reservation::whereBetween('check_in', [$from, $to])
-            ->selectRaw('AVG(DATEDIFF(check_out, check_in)) as avg_nights')
-            ->value('avg_nights') ?? 0);
+        $averageStay = (float) (TestAccountScope::excludeFromReservations(
+            Reservation::whereBetween('check_in', [$from, $to])
+        )->selectRaw('AVG(DATEDIFF(check_out, check_in)) as avg_nights')->value('avg_nights') ?? 0);
 
         return [
             'totalRooms' => $totalRooms,
@@ -278,17 +340,18 @@ class DashboardStatsService
 
             // No cap - period-filtered already by whereBetween() above, and
             // small enough that "Expand" can show every matching row.
-            'recentReservations' => Reservation::with(['guest.user', 'roomType', 'booking.room'])
-                ->whereBetween('check_in', [$from, $to])
-                ->latest()
-                ->get(),
+            'recentReservations' => TestAccountScope::excludeFromReservations(
+                Reservation::with(['guest.user', 'roomType', 'booking.room'])->whereBetween('check_in', [$from, $to])
+            )->latest()->get(),
             // Ranked by bookings per room TYPE (Booking.room_type_id, set at
             // reservation time) - previously counted per individual physical
             // room instead, which split a popular type's bookings across its
             // rooms and could rank a less-popular type above it.
             // Kept at 5 - this exact set feeds the "Top Room Types" doughnut
             // chart's legend/slices, which isn't meant to grow.
-            'topRoomTypes' => RoomType::withCount(['bookings' => fn ($q) => $q->whereBetween('check_in', [$from, $to])])
+            'topRoomTypes' => RoomType::withCount(['bookings' => fn ($q) => TestAccountScope::excludeFromBookings(
+                $q->whereBetween('check_in', [$from, $to])
+            )])
                 ->orderByDesc('bookings_count')
                 ->limit(5)
                 ->get(),
@@ -297,12 +360,16 @@ class DashboardStatsService
             // just the chart's top-5) - deliberately not reused for the
             // chart above so expanding this list doesn't also add extra
             // doughnut slices.
-            'topRoomTypesList' => RoomType::withCount(['bookings' => fn ($q) => $q->whereBetween('check_in', [$from, $to])])
+            'topRoomTypesList' => RoomType::withCount(['bookings' => fn ($q) => TestAccountScope::excludeFromBookings(
+                $q->whereBetween('check_in', [$from, $to])
+            )])
                 ->orderByDesc('bookings_count')
                 ->get(),
 
             // Breakdown for the "Bookings by Status" chart card.
-            'bookingsByStatus' => Booking::whereBetween('check_in', [$from, $to])
+            'bookingsByStatus' => TestAccountScope::excludeFromBookings(
+                Booking::whereBetween('check_in', [$from, $to])
+            )
                 ->selectRaw('booking_status, count(*) as c')
                 ->groupBy('booking_status')
                 ->pluck('c', 'booking_status'),
@@ -336,7 +403,9 @@ class DashboardStatsService
             $labels[] = $bucketDays > 1
                 ? $cursor->format('M d') . ' - ' . $bucketEnd->format('M d')
                 : $cursor->format('M d');
-            $values[] = Reservation::whereBetween('created_at', [$cursor, $bucketEnd])->count();
+            $values[] = TestAccountScope::excludeFromReservations(
+                Reservation::whereBetween('created_at', [$cursor, $bucketEnd])
+            )->count();
 
             $cursor->addDays($bucketDays);
         }

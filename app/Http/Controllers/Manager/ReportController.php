@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Payment;
 use App\Models\Reservation;
 use App\Models\RoomType;
+use App\Support\TestAccountScope;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -25,20 +26,27 @@ class ReportController extends Controller
             ? Carbon::parse($request->to)->endOfDay()
             : Carbon::now()->endOfDay();
 
-        // Revenue by day
-        $revenueByDay = Payment::where('payment_status', 'completed')
-            ->whereBetween('payment_date', [$from, $to])
+        // Revenue by day - excludes confirmed internal/test accounts (see
+        // App\Support\TestAccountScope) so this reads as real business
+        // performance, not development noise.
+        $revenueByDay = TestAccountScope::excludeFromPayments(
+            Payment::where('payment_status', 'completed')->whereBetween('payment_date', [$from, $to])
+        )
             ->selectRaw('DATE(payment_date) as day, SUM(amount_paid) as total')
             ->groupBy('day')
             ->orderBy('day')
             ->get();
 
         $totalRevenue = (float) $revenueByDay->sum('total');
-        $totalReservations = Reservation::whereBetween('check_in', [$from, $to])->count();
-        $totalBookings = Reservation::whereBetween('check_in', [$from, $to])->whereHas('booking')->count();
-        $averageStay = (float) Reservation::whereBetween('check_in', [$from, $to])
-            ->selectRaw('AVG(DATEDIFF(check_out, check_in)) as avg_nights')
-            ->value('avg_nights');
+        $totalReservations = TestAccountScope::excludeFromReservations(
+            Reservation::whereBetween('check_in', [$from, $to])
+        )->count();
+        $totalBookings = TestAccountScope::excludeFromReservations(
+            Reservation::whereBetween('check_in', [$from, $to])->whereHas('booking')
+        )->count();
+        $averageStay = (float) (TestAccountScope::excludeFromReservations(
+            Reservation::whereBetween('check_in', [$from, $to])
+        )->selectRaw('AVG(DATEDIFF(check_out, check_in)) as avg_nights')->value('avg_nights') ?? 0);
 
         // Top room types - counted via RoomType's own reservations() relation
         // (Reservation.room_type_id, set at request time), not Room's - a
@@ -46,7 +54,7 @@ class ReportController extends Controller
         // so Room::reservations() no longer gets populated and always
         // returned zero here.
         $topRoomTypes = RoomType::withCount(['reservations' => function ($q) use ($from, $to) {
-            $q->whereBetween('check_in', [$from, $to]);
+            TestAccountScope::excludeFromReservations($q->whereBetween('check_in', [$from, $to]));
         }])
             ->orderByDesc('reservations_count')
             ->limit(5)
@@ -57,10 +65,15 @@ class ReportController extends Controller
         // Guest account at all), and grouping by it would otherwise
         // collapse every accountless walk-in in the range into one NULL
         // bucket that could outrank, or displace, real repeat guests.
-        $topGuests = Reservation::select('guest_id', DB::raw('COUNT(*) as reservation_count'))
-            ->with('guest.user')
-            ->whereNotNull('guest_id')
-            ->whereBetween('check_in', [$from, $to])
+        // Also excludes confirmed test accounts - otherwise the project's
+        // own repeated development testing would always rank as the
+        // "top guest" ahead of every real repeat customer.
+        $topGuests = TestAccountScope::excludeFromReservations(
+            Reservation::select('guest_id', DB::raw('COUNT(*) as reservation_count'))
+                ->with('guest.user')
+                ->whereNotNull('guest_id')
+                ->whereBetween('check_in', [$from, $to])
+        )
             ->groupBy('guest_id')
             ->orderByDesc('reservation_count')
             ->limit(5)
