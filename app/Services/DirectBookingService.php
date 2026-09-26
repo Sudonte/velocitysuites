@@ -154,6 +154,24 @@ class DirectBookingService
             $guest, $roomLines, $checkIn, $checkOut, $adults, $children,
             $guestName, $additionalGuests, $idCard, $paymentData, $resolvedAmenities, $idempotencyKey
         ) {
+            // The caller (Api\BookingController::store()) already ran
+            // validateRoomLinesAvailability() before opening this
+            // transaction, but that was only a fast-fail check against a
+            // snapshot that could already be stale by the time we get here -
+            // two guests racing for the last room of the same type could
+            // both pass it before either had committed. Locking every
+            // requested room_type row (in a stable ascending-id order, so
+            // two overlapping multi-room-type bookings can never deadlock
+            // each other over lock ordering) forces a truly concurrent
+            // create() for the same room type to wait for this transaction
+            // to commit or roll back before it can run its own availability
+            // count, so the re-check right after actually sees the other
+            // request's consumption instead of racing past it.
+            RoomType::whereIn('id', collect($roomLines)->pluck('room_type.id')->unique()->sort()->values())
+                ->lockForUpdate()
+                ->get();
+            $this->validateRoomLinesAvailability($roomLines, $checkIn, $checkOut);
+
             $nights = max(1, abs($checkOut->diffInDays($checkIn)));
             $firstRoomType = $roomLines[0]['room_type'];
             $totalRoomsRequested = collect($roomLines)->sum('quantity');
