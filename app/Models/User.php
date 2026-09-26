@@ -28,7 +28,6 @@ class User extends Authenticatable
         'password',
         'role',
         'status',
-        'is_test_account',
         'failed_login_attempts',
         'must_change_password',
         'last_login_at',
@@ -52,6 +51,20 @@ class User extends Authenticatable
         'profile_picture',
         'profile_picture_changed_at',
     ];
+
+    /**
+     * is_test_account is deliberately NOT in $fillable, even though every
+     * current create()/update() call site already builds an explicit
+     * field array (never $request->all()) and so isn't actually
+     * exploitable today - this is defense-in-depth against a future
+     * endpoint doing so carelessly. The only legitimate way to set this
+     * flag is the one-time historical migration (a raw DB::table()
+     * update, which bypasses Eloquent mass-assignment entirely) or a
+     * future authorized admin-only action, which must use forceFill()/a
+     * raw update explicitly - never plain mass assignment - so the
+     * intent to bypass this guard is visible at the call site. See
+     * App\Support\TestAccountScope for where the flag is actually read.
+     */
 
     /**
      * The attributes that should be hidden for serialization.

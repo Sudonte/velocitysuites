@@ -135,8 +135,13 @@ class TestAccountAnalyticsExclusionTest extends TestCase
             'last_name' => $isTest ? 'Guest' : 'Guest',
             'email' => ($isTest ? 'zztest' : 'real') . '.guest.' . uniqid() . '@example.com',
             'role' => 'guest',
-            'is_test_account' => $isTest,
         ]);
+        // is_test_account is deliberately not mass-assignable (see
+        // TestAccountSecurityTest) - a trusted test fixture must set it
+        // the same way a real trusted backend workflow would.
+        if ($isTest) {
+            $user->forceFill(['is_test_account' => true])->save();
+        }
 
         return Guest::create(['user_id' => $user->id]);
     }
