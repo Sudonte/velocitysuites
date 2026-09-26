@@ -129,6 +129,25 @@ class ReceiptNumberBackfillCommandTest extends TestCase
         $this->assertNotSame($p1->receipt_number, $p2->receipt_number);
     }
 
+    public function test_freshly_backfilled_row_is_reported_only_once_not_also_as_already_set(): void
+    {
+        // Regression test: the explicit --payment-ids "already set" report
+        // used to re-query whereNotNull() without excluding IDs the
+        // whereNull() scan had just processed moments earlier in the same
+        // run, so a row that was genuinely NULL when the command started
+        // (and got correctly backfilled) was confusingly listed a second
+        // time as "already set - skipped" right after being listed as
+        // "backfilled" - misleading output, even though nothing was
+        // actually double-written.
+        $payment = $this->makeEligiblePayment();
+
+        Artisan::call('receipts:backfill-missing-numbers', ['--payment-ids' => (string) $payment->id]);
+        $output = Artisan::output();
+
+        $this->assertSame(1, substr_count($output, 'backfilled'));
+        $this->assertStringNotContainsString('already set', $output);
+    }
+
     public function test_dry_run_does_not_persist_changes(): void
     {
         $payment = $this->makeEligiblePayment();

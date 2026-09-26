@@ -72,14 +72,22 @@ class BackfillMissingReceiptNumbers extends Command
             $paymentQuery->whereIn('id', $paymentIds);
         }
 
+        $processedPaymentIds = [];
         foreach ($paymentQuery->orderBy('id')->cursor() as $payment) {
+            $processedPaymentIds[] = $payment->id;
             $result = $this->attemptPayment($payment, $dryRun);
             $rows[] = ['Payment', $payment->id, $result['before'], $result['after'], $result['outcome']];
             $this->tally($result['outcome'], $changed, $skippedNotEligible, $skippedAlreadySet, $errors);
         }
 
+        // IDs explicitly requested that already had a non-null number
+        // *before this run started* never entered the whereNull() scan
+        // above, so report them too rather than silently ignoring them -
+        // excluding anything the scan itself just processed, which would
+        // otherwise also match this whereNotNull() check by now and get
+        // listed a confusing second time.
         if ($paymentIds !== null) {
-            foreach (Payment::whereIn('id', $paymentIds)->whereNotNull('receipt_number')->get(['id', 'receipt_number']) as $p) {
+            foreach (Payment::whereIn('id', $paymentIds)->whereNotNull('receipt_number')->whereNotIn('id', $processedPaymentIds)->get(['id', 'receipt_number']) as $p) {
                 $rows[] = ['Payment', $p->id, $p->receipt_number, $p->receipt_number, 'already set - skipped'];
                 $skippedAlreadySet++;
             }
@@ -90,7 +98,9 @@ class BackfillMissingReceiptNumbers extends Command
             $billingQuery->whereIn('id', $billingIds);
         }
 
+        $processedBillingIds = [];
         foreach ($billingQuery->orderBy('id')->cursor() as $billing) {
+            $processedBillingIds[] = $billing->id;
             $asOf = $billingAsOf[$billing->id] ?? null;
             $result = $this->attemptBilling($billing, $dryRun, $asOf);
             $rows[] = ['Billing', $billing->id, $result['before'], $result['after'], $result['outcome']];
@@ -98,7 +108,7 @@ class BackfillMissingReceiptNumbers extends Command
         }
 
         if ($billingIds !== null) {
-            foreach (Billing::whereIn('id', $billingIds)->whereNotNull('receipt_number')->get(['id', 'receipt_number']) as $b) {
+            foreach (Billing::whereIn('id', $billingIds)->whereNotNull('receipt_number')->whereNotIn('id', $processedBillingIds)->get(['id', 'receipt_number']) as $b) {
                 $rows[] = ['Billing', $b->id, $b->receipt_number, $b->receipt_number, 'already set - skipped'];
                 $skippedAlreadySet++;
             }
