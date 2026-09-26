@@ -64,7 +64,7 @@ class CheckInController extends Controller
             'all' => null,
         };
 
-        $expectedCount = Booking::where('booking_status', Booking::STATUS_ACTIVE)->whereNotNull('verified_at')->count();
+        $expectedCount = Booking::where('booking_status', Booking::STATUS_ACTIVE)->whereNotNull('verified_at')->whereNull('hidden_at')->count();
         $checkedInCount = Booking::where('booking_status', Booking::STATUS_CHECKED_IN)->count();
 
         if ($tab === 'checked_in') {
@@ -99,6 +99,7 @@ class CheckInController extends Controller
         $bookings = Booking::with(['reservation.guest.user', 'guest.user', 'rooms', 'roomType'])
             ->where('booking_status', Booking::STATUS_ACTIVE)
             ->whereNotNull('verified_at')
+            ->whereNull('hidden_at')
             ->when($rangeEnd, fn ($q) => $q->where('check_in', '<=', $rangeEnd))
             ->orderByRaw('viewed_at IS NULL DESC')
             ->orderBy('check_in')
@@ -258,6 +259,9 @@ class CheckInController extends Controller
         if ($booking->booking_status !== Booking::STATUS_ACTIVE) {
             abort(422, 'Only confirmed bookings can be checked in.');
         }
+        if ($booking->hidden_at !== null) {
+            abort(422, 'This booking has been archived and can no longer be checked in.');
+        }
 
         $booking->load(['reservation.guest.user', 'guest.user', 'roomType', 'rooms']);
         // One entry per distinct room type this booking actually needs
@@ -312,6 +316,9 @@ class CheckInController extends Controller
     {
         if ($booking->booking_status !== Booking::STATUS_ACTIVE) {
             return response()->json(['message' => 'Only confirmed bookings can be checked in.'], 422);
+        }
+        if ($booking->hidden_at !== null) {
+            return response()->json(['message' => 'This booking has been archived and can no longer be checked in.'], 422);
         }
 
         // Early check-in is allowed for now (temporarily relaxed per
