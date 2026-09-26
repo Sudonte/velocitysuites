@@ -70,7 +70,7 @@ class ReservationController extends Controller
         // see this guest's complete history instead of only the latest 15.
         $perPage = min($request->integer('per_page', 15), 200);
 
-        $reservations = $query->latest('check_in')->paginate($perPage);
+        $reservations = $query->latest('created_at')->paginate($perPage);
 
         // Cron-independent safety net for the 48-hour payment deadline (see
         // ReservationWorkflowService::expireUnpaid()'s docblock) - a no-op

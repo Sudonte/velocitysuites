@@ -109,7 +109,7 @@ class GuestDashboardController extends Controller
             ->whereHas('booking')
             ->whereNull('hidden_at')
             ->with(['roomType', 'booking'])
-            ->latest('check_in')
+            ->latest('created_at')
             ->limit(5)
             ->get();
 

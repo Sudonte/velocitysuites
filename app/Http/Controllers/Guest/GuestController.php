@@ -48,7 +48,7 @@ class GuestController extends Controller
             });
         }
 
-        return $query->latest('check_in');
+        return $query->latest('created_at');
     }
 
     /**

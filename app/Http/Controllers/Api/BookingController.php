@@ -58,7 +58,8 @@ class BookingController extends Controller
 
         $perPage = min($request->integer('per_page', 15), 200);
 
-        $paginated = $query->latest('check_in')->paginate($perPage);
+        // Newest-created-first (not soonest-check-in-first) so a guest sees a transaction they just created at the top regardless of its stay dates.
+        $paginated = $query->latest('created_at')->paginate($perPage);
         // total_amount_due/amenities are computed accessors
         // (Booking::getTotalAmountDueAttribute()/getAmenitiesAttribute()),
         // deliberately not in the model's own $appends (would add extra
