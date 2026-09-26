@@ -166,6 +166,12 @@ class BookingController extends Controller
      */
     public function store(Request $request): JsonResponse
     {
+        // Two-day advance rule (matches Android's Step2DatesFragment date-
+        // picker minDate, and Api\ReservationController::store()'s identical
+        // enforcement) - a direct Booking skips the Reservation step
+        // entirely, so this is the only backend gate its check_in ever
+        // passes through.
+        $minCheckIn = now()->addDays(2)->toDateString();
         $validated = $request->validate([
             // Multi-room-type shape (preferred - see MULTI_ROOM_TRANSACTION_BACKEND_SPEC.md).
             // 'rooms' array present -> authoritative, and the legacy
@@ -178,7 +184,7 @@ class BookingController extends Controller
             'rooms.*.quantity' => 'required_with:rooms|integer|min:1|max:50',
             // Legacy single-room-type shape - required only when 'rooms' isn't sent.
             'room_type_id' => 'required_without:rooms|exists:room_types,id',
-            'check_in' => 'required|date|after:today',
+            'check_in' => "required|date|after_or_equal:{$minCheckIn}",
             'check_out' => 'required|date|after:check_in',
             'rooms_requested' => 'nullable|integer|min:1|max:50',
             'adults' => 'required|integer|min:1',

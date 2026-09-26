@@ -127,6 +127,12 @@ class ReservationController extends Controller
      */
     public function store(Request $request): JsonResponse
     {
+        // Two-day advance rule (matches Android's Step2DatesFragment date-
+        // picker minDate) - the client already blocks same-day/next-day
+        // check-in in its own UI, but that's cosmetic only; this is the
+        // real, unbypassable enforcement for any request that reaches here
+        // regardless of which client (or client version) sent it.
+        $minCheckIn = now()->addDays(2)->toDateString();
         $validated = $request->validate([
             // Multi-room-type shape (preferred - see MULTI_ROOM_TRANSACTION_BACKEND_SPEC.md).
             // 'rooms' array present -> authoritative, and the legacy
@@ -140,7 +146,7 @@ class ReservationController extends Controller
             'rooms.*.room_type_id' => 'required_with:rooms|exists:room_types,id',
             'rooms.*.quantity' => 'required_with:rooms|integer|min:1|max:50',
             'room_type_id' => 'required_without:rooms|exists:room_types,id',
-            'check_in' => 'required|date|after:today',
+            'check_in' => "required|date|after_or_equal:{$minCheckIn}",
             'check_out' => 'required|date|after:check_in',
             'rooms_requested' => 'nullable|integer|min:1|max:50',
             'adults' => 'required|integer|min:1',
@@ -385,8 +391,11 @@ class ReservationController extends Controller
             $request->request->remove('rooms_requested');
         }
 
+        // Same two-day advance rule store() enforces - a Modify can set a
+        // brand-new check_in date, so it needs the identical floor.
+        $minCheckIn = now()->addDays(2)->toDateString();
         $validated = $request->validate([
-            'check_in' => 'required|date|after:today',
+            'check_in' => "required|date|after_or_equal:{$minCheckIn}",
             'check_out' => 'required|date|after:check_in',
             'adults' => 'required|integer|min:1',
             'children' => 'nullable|integer|min:0',
