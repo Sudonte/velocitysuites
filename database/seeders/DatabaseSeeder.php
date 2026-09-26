@@ -55,7 +55,14 @@ class DatabaseSeeder extends Seeder
             'email_verified_at' => now(),
         ]);
 
-        // Create Guest User with Profile
+        // Create Guest User with Profile - explicitly self-marked as a
+        // test account (a trusted, server-side seeder assignment via
+        // forceFill(), not mass assignment - is_test_account is
+        // deliberately excluded from User::$fillable) rather than relying
+        // on any name/email heuristic to catch it later. This is sample/
+        // demo data for a fresh install, not a real guest, so it should
+        // never count toward business analytics on any environment this
+        // seeder runs against - see App\Support\TestAccountScope.
         $guest_user = User::create([
             'first_name' => 'John',
             'last_name' => 'Doe',
@@ -65,6 +72,7 @@ class DatabaseSeeder extends Seeder
             'status' => 'active',
             'email_verified_at' => now(),
         ]);
+        $guest_user->forceFill(['is_test_account' => true])->save();
 
         Guest::create([
             'user_id' => $guest_user->id,
