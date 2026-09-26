@@ -560,13 +560,25 @@ class CheckOutController extends Controller
         ]);
         $billing->recalculateTotal();
 
-        // Reservation-derived: only a deposit-stage payment is still
-        // unparented (a final-stage one, if any, was already re-parented
-        // at conversion time). Direct booking: any stage, since there's no
-        // deposit concept for that transaction type.
+        // Reservation-derived: re-parent every completed, still-unparented
+        // payment regardless of stage. A prior version of this only
+        // reparented 'deposit'-stage payments, on the mistaken assumption
+        // that a 'final'-stage one (a Pay-Now-Full reservation, or a Cash
+        // reservation confirmed in full at conversion time - see
+        // ReservationWorkflowService::convertToBooking()'s own "Not stage-
+        // filtered" comment) was "already re-parented at conversion time" -
+        // conversion only ever marks that payment payment_status=completed,
+        // it never touches billing_id, since no Billing exists yet at
+        // conversion time (one is only ever created later, here, at
+        // check-in/checkout). The result was a real, live bug: a guest who
+        // paid their full reservation total upfront (GCash Pay-Now-Full, or
+        // a Cash reservation confirmed in full) had that entire payment
+        // silently excluded from every checkout balance calculation below,
+        // making checkout believe the full original amount was still owed
+        // all over again. Direct booking (else branch): unaffected either
+        // way, already unconditional.
         if ($booking->reservation_id) {
             $booking->reservation->payments()
-                ->where('payment_stage', 'deposit')
                 ->where('payment_status', 'completed')
                 ->whereNull('billing_id')
                 ->update(['billing_id' => $billing->id]);
