@@ -18,6 +18,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 /**
@@ -178,9 +179,33 @@ class BookingController extends Controller
         $firstRoomType = $roomLines[0]['room_type'];
         $totalRoomsRequested = collect($roomLines)->sum('quantity');
 
-        $booking = DB::transaction(function () use (
-            $validated, $children, $checkIn, $checkOut, $firstRoomType, $totalRoomsRequested, $roomLines, $nights
-        ) {
+        try {
+            $booking = DB::transaction(function () use (
+                $validated, $children, $checkIn, $checkOut, $firstRoomType, $totalRoomsRequested, $roomLines, $nights
+            ) {
+            // The resolveAndValidateRoomLines() call above is only a fast-
+            // fail check against a snapshot that's already stale by the
+            // time we get here - a concurrent request for the same room
+            // type (this same form double-submitted, the guest mobile app's
+            // DirectBookingService::create(), or another reservation
+            // converting via ReservationWorkflowService) could have
+            // consumed the last room in between. Locking every requested
+            // room_type row and re-checking here, with the lock held, is
+            // the actual guard - this booking consumes real inventory
+            // immediately, same as DirectBookingService::create()'s
+            // guest-facing equivalent.
+            $this->availability->lockRoomTypesForAvailabilityCheck(collect($roomLines)->pluck('room_type.id'));
+            foreach ($roomLines as $line) {
+                $available = $this->availability->availableCount($line['room_type'], $checkIn, $checkOut);
+                if ($available < $line['quantity']) {
+                    throw ValidationException::withMessages(['rooms' => [
+                        $line['quantity'] > 1
+                            ? "Not enough {$line['room_type']->name} rooms available for these dates (needs {$line['quantity']}, only {$available} free)."
+                            : "{$line['room_type']->name} is fully booked for these dates.",
+                    ]]);
+                }
+            }
+
             $booking = Booking::create([
                 'reservation_id' => null,
                 'guest_id' => null,
@@ -233,7 +258,10 @@ class BookingController extends Controller
             }
 
             return $booking;
-        });
+            });
+        } catch (ValidationException $e) {
+            return back()->withInput()->with('error', collect($e->errors())->flatten()->first());
+        }
 
         $roomTypeSummary = collect($roomLines)->map(fn ($l) => "{$l['room_type']->name} x{$l['quantity']}")->implode(', ');
         Activity::log(
@@ -359,6 +387,14 @@ class BookingController extends Controller
     {
         if (!in_array($booking->booking_status, [Booking::STATUS_ACTIVE, Booking::STATUS_CHECKED_IN], true)) {
             return back()->with('error', 'Only an active (confirmed or checked-in) booking can have a payment recorded.');
+        }
+        // An ACTIVE_BOOKING can be archived once verified (see
+        // isArchivable()) - archiving only ever removes it from the
+        // Confirmed Bookings list, it doesn't itself block this route, so a
+        // stale/bookmarked link could otherwise still record a real payment
+        // against something the receptionist considers done and tucked away.
+        if ($booking->hidden_at !== null) {
+            return back()->with('error', 'This booking has been archived and can no longer have a payment recorded.');
         }
 
         // Walk-in (unverified, staff-declared-complete) recording only ever

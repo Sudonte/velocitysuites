@@ -166,10 +166,11 @@ class DirectBookingService
             // create() for the same room type to wait for this transaction
             // to commit or roll back before it can run its own availability
             // count, so the re-check right after actually sees the other
-            // request's consumption instead of racing past it.
-            RoomType::whereIn('id', collect($roomLines)->pluck('room_type.id')->unique()->sort()->values())
-                ->lockForUpdate()
-                ->get();
+            // request's consumption instead of racing past it. Shared with
+            // every other Booking-creating call site - see
+            // RoomAvailabilityService::lockRoomTypesForAvailabilityCheck()'s
+            // own doc.
+            $this->availability->lockRoomTypesForAvailabilityCheck(collect($roomLines)->pluck('room_type.id'));
             $this->validateRoomLinesAvailability($roomLines, $checkIn, $checkOut);
 
             $nights = max(1, abs($checkOut->diffInDays($checkIn)));

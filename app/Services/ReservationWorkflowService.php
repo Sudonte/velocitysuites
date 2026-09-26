@@ -210,9 +210,40 @@ class ReservationWorkflowService
                 return;
             }
 
+            // The lockForUpdate() above only serializes against another
+            // request touching THIS SAME reservation row - it does nothing
+            // to stop a DIFFERENT reservation (or a receptionist's manual
+            // convertToBooking()) racing for the same room type's last free
+            // room at the same instant. Locking the room_type row(s) here,
+            // then re-running the exact same availability check the
+            // pre-transaction call above already ran, is what actually
+            // closes that gap. On a genuine shortfall this behaves exactly
+            // like the pre-transaction check already did: leaves the
+            // reservation awaiting-GCash and the payment pending for a
+            // receptionist to resolve manually - never blocks or rolls back
+            // the payment itself (see this method's own top doc).
+            $this->availability->lockRoomTypesForAvailabilityCheck($this->roomTypeIdsForReservation($locked));
+            if ($this->firstUnavailableLine($locked)) {
+                return;
+            }
+
             $this->createBookingFromReservation($locked);
             $payment->update(['payment_status' => 'completed']);
         });
+    }
+
+    /**
+     * Every distinct room_type_id this reservation actually needs a room
+     * for - real reservation_room_lines for a genuine multi-room-type
+     * reservation, or the single legacy room_type_id otherwise. Shared by
+     * convertToBooking()/tryAutoConvert()'s identical need to lock every
+     * relevant room_type row before re-checking availability.
+     */
+    private function roomTypeIdsForReservation(Reservation $reservation): array
+    {
+        $lines = $reservation->roomLines()->get();
+
+        return $lines->isEmpty() ? [$reservation->room_type_id] : $lines->pluck('room_type_id')->all();
     }
 
     /**
@@ -479,6 +510,21 @@ class ReservationWorkflowService
         }
 
         $booking = DB::transaction(function () use ($reservation, $staff) {
+            // The check above is only a fast-fail for the common case -
+            // two receptionists converting different reservations of the
+            // same room type (or this manual convert racing tryAutoConvert()
+            // for a different reservation) could both pass it before either
+            // committed. Locking the room_type row(s) and re-checking here,
+            // with the lock held, is the actual guard (mirrors
+            // DirectBookingService::create()'s identical fix for the
+            // guest-facing direct-booking path).
+            $this->availability->lockRoomTypesForAvailabilityCheck($this->roomTypeIdsForReservation($reservation));
+            if ($shortfall = $this->firstUnavailableLine($reservation)) {
+                abort(422, $shortfall['quantity'] > 1
+                    ? "Not enough {$shortfall['name']} rooms available for the requested dates (needs {$shortfall['quantity']}, only {$shortfall['available']} free)."
+                    : "{$shortfall['name']} is fully booked for the requested dates.");
+            }
+
             $booking = $this->createBookingFromReservation($reservation);
 
             // Not stage-filtered: a Pay-Now-Full GCash reservation that

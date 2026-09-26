@@ -32,6 +32,33 @@ class RoomAvailabilityService
     }
 
     /**
+     * Locks every given room_type row (ascending id order, so two
+     * overlapping multi-room-type operations locking the same set of rows
+     * can never deadlock each other) and returns without doing anything
+     * else - the shared first step of "lock the actual contended resource,
+     * then re-check availability before creating/converting anything that
+     * consumes real inventory." Must be called from inside the same
+     * DB::transaction() that will go on to perform that creation/
+     * conversion; a plain SELECT ... FOR UPDATE with no surrounding
+     * transaction releases its lock immediately and protects nothing.
+     * Used by every call site that creates a Booking (which consumes real
+     * inventory) - DirectBookingService::create(), ReservationWorkflowService::
+     * convertToBooking()/tryAutoConvert(), Receptionist\BookingController::
+     * store() - never by anything that only creates a Reservation, since a
+     * Reservation never reserves inventory in the first place (see this
+     * class's own top-of-file doc).
+     */
+    public function lockRoomTypesForAvailabilityCheck(iterable $roomTypeIds): void
+    {
+        $ids = collect($roomTypeIds)->filter()->unique()->sort()->values();
+        if ($ids->isEmpty()) {
+            return;
+        }
+
+        RoomType::whereIn('id', $ids)->lockForUpdate()->get();
+    }
+
+    /**
      * How many rooms of this type are free for the given date range: total
      * inventory, minus rooms under maintenance (unusable regardless of
      * dates), minus rooms already consumed by an overlapping confirmed or
