@@ -127,12 +127,12 @@ class ReservationController extends Controller
      */
     public function store(Request $request): JsonResponse
     {
-        // Two-day advance rule (matches Android's Step2DatesFragment date-
-        // picker minDate) - the client already blocks same-day/next-day
-        // check-in in its own UI, but that's cosmetic only; this is the
-        // real, unbypassable enforcement for any request that reaches here
+        // One-day advance rule (matches Android's Step2DatesFragment date-
+        // picker minDate) - the client already blocks same-day check-in in
+        // its own UI, but that's cosmetic only; this is the real,
+        // unbypassable enforcement for any request that reaches here
         // regardless of which client (or client version) sent it.
-        $minCheckIn = now()->addDays(2)->toDateString();
+        $minCheckIn = now()->addDays(1)->toDateString();
         $validated = $request->validate([
             // Multi-room-type shape (preferred - see MULTI_ROOM_TRANSACTION_BACKEND_SPEC.md).
             // 'rooms' array present -> authoritative, and the legacy
@@ -235,6 +235,21 @@ class ReservationController extends Controller
                     'message' => "You already have a {$roomType->name} reservation that overlaps these dates. Check My Reservations to modify or cancel it instead of submitting a duplicate.",
                 ], 422);
             }
+        }
+
+        // Adults + children combined must not exceed the summed guest
+        // capacity of every selected room (capacity-per-type x quantity,
+        // across every distinct room type in this transaction) - mirrors
+        // Android's Step5AdditionalGuestsFragment/BookingWizardState#
+        // totalSelectedCapacity(), and Api\BookingController::store()'s
+        // identical guard on the Booking side.
+        $totalCapacity = $roomLines->sum(fn ($line) => $line['room_type']->capacity * $line['quantity']);
+        $totalGuests = (int) $validated['adults'] + $children;
+        if ($totalGuests > $totalCapacity) {
+            return response()->json([
+                'message' => "Adults and children combined ({$totalGuests}) exceed the total capacity ({$totalCapacity}) of the selected room(s).",
+                'errors' => ['adults' => ["Adults and children combined can't exceed the selected room capacity of {$totalCapacity}."]],
+            ], 422);
         }
 
         $idCardType = $validated['id_card_type'] ?? 'None';
@@ -391,9 +406,9 @@ class ReservationController extends Controller
             $request->request->remove('rooms_requested');
         }
 
-        // Same two-day advance rule store() enforces - a Modify can set a
+        // Same one-day advance rule store() enforces - a Modify can set a
         // brand-new check_in date, so it needs the identical floor.
-        $minCheckIn = now()->addDays(2)->toDateString();
+        $minCheckIn = now()->addDays(1)->toDateString();
         $validated = $request->validate([
             'check_in' => "required|date|after_or_equal:{$minCheckIn}",
             'check_out' => 'required|date|after:check_in',
@@ -490,6 +505,33 @@ class ReservationController extends Controller
             // store()'s own.
             $updates['room_type_id'] = $roomLines->first()['room_type']->id;
             $updates['rooms_requested'] = (int) $roomLines->sum('quantity');
+        }
+
+        // Adults + children combined must not exceed the summed guest
+        // capacity of every selected room, same rule store() enforces.
+        // adults/children are required on every update call even when room
+        // selection itself is left untouched (rooms/room_type_id omitted),
+        // so this must not only run inside the $roomLinesInput branch above
+        // - that would let a guest raise adults/children arbitrarily on a
+        // room-selection-untouched update, exactly the gap this rule closes.
+        if ($roomLinesInput !== null) {
+            $totalCapacity = $roomLines->sum(fn ($line) => $line['room_type']->capacity * $line['quantity']);
+        } else {
+            // Explicit roomLines() relation call, not the ->roomLines
+            // property - that resolves to getRoomLinesAttribute() instead
+            // (a differently-shaped, JSON-display array; see its own doc).
+            // ReservationRoomLine has no roomType() relation, so capacity
+            // is resolved via a lookup rather than adding a new relation.
+            $existingLines = $reservation->roomLines()->get();
+            $capacityByTypeId = RoomType::whereIn('id', $existingLines->pluck('room_type_id'))->pluck('capacity', 'id');
+            $totalCapacity = $existingLines->sum(fn ($line) => ($capacityByTypeId[$line->room_type_id] ?? 0) * $line->quantity);
+        }
+        $totalGuests = (int) $validated['adults'] + $children;
+        if ($totalGuests > $totalCapacity) {
+            return response()->json([
+                'message' => "Adults and children combined ({$totalGuests}) exceed the total capacity ({$totalCapacity}) of the selected room(s).",
+                'errors' => ['adults' => ["Adults and children combined can't exceed the selected room capacity of {$totalCapacity}."]],
+            ], 422);
         }
 
         // Amenities replacement - validated up front (before anything is

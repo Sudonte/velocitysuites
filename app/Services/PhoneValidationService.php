@@ -22,7 +22,7 @@ use libphonenumber\PhoneNumberUtil;
  */
 class PhoneValidationService
 {
-    private const PH_PATTERN = '/^(09|\+639|639)\d{9}$/';
+    private const PH_PATTERN = '/^(09|\+639)\d{9}$/';
     private const FALLBACK_PATTERN = '/^\+?\d{7,15}$/';
 
     /** Every named country except Philippines (kept above) and "Other" (no fixed region -

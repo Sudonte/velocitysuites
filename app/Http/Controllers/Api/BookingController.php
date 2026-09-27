@@ -166,12 +166,12 @@ class BookingController extends Controller
      */
     public function store(Request $request): JsonResponse
     {
-        // Two-day advance rule (matches Android's Step2DatesFragment date-
+        // One-day advance rule (matches Android's Step2DatesFragment date-
         // picker minDate, and Api\ReservationController::store()'s identical
         // enforcement) - a direct Booking skips the Reservation step
         // entirely, so this is the only backend gate its check_in ever
         // passes through.
-        $minCheckIn = now()->addDays(2)->toDateString();
+        $minCheckIn = now()->addDays(1)->toDateString();
         $validated = $request->validate([
             // Multi-room-type shape (preferred - see MULTI_ROOM_TRANSACTION_BACKEND_SPEC.md).
             // 'rooms' array present -> authoritative, and the legacy
@@ -255,6 +255,23 @@ class BookingController extends Controller
             'room_type' => RoomType::findOrFail($line['room_type_id']),
             'quantity' => (int) $line['quantity'],
         ])->all();
+
+        // Adults + children combined must not exceed the summed guest
+        // capacity of every selected room (capacity-per-type x quantity,
+        // across every distinct room type in this transaction) - mirrors
+        // Android's Step5AdditionalGuestsFragment/BookingWizardState#
+        // totalSelectedCapacity(), re-enforced here since that client-side
+        // check can't be trusted alone (see amount_paid's identical
+        // resolved-model-dependent check just below for this codebase's
+        // established pattern for this kind of guard).
+        $totalCapacity = collect($roomLines)->sum(fn ($line) => $line['room_type']->capacity * $line['quantity']);
+        $totalGuests = (int) $validated['adults'] + $children;
+        if ($totalGuests > $totalCapacity) {
+            return response()->json([
+                'message' => "Adults and children combined ({$totalGuests}) exceed the total capacity ({$totalCapacity}) of the selected room(s).",
+                'errors' => ['adults' => ["Adults and children combined can't exceed the selected room capacity of {$totalCapacity}."]],
+            ], 422);
+        }
 
         // Validated before creating anything - an invalid amenity
         // selection or unavailable room rejects the whole submission

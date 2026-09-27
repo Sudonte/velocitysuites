@@ -75,17 +75,20 @@ class ReservationWorkflowService
 
     /**
      * True if this guest already has an active (not cancelled/rejected)
-     * reservation or booking of the same room type whose stay overlaps the
-     * requested dates - used by both Guest\ReservationController::store()
-     * and Api\ReservationController::store() to block an accidental duplicate
-     * submission (e.g. a double-tap, or resubmitting the same request form)
-     * before it ever reaches the database, per the same guard the Android
-     * app already enforces client-side (BookingAndReservationActivity's
-     * findOverlappingBooking()) - this makes it a real, server-side rule
-     * both platforms share instead of one client's local-only check.
+     * reservation or booking of the same room type whose stay genuinely
+     * OVERLAPS the requested dates (a partial overlap, not an exact
+     * check_in/check_out match) - used by Guest\ReservationController::store(),
+     * Api\ReservationController::store(), and Api\ReservationController::update()
+     * to block a guest from committing to an overlapping stay for the same
+     * room type. An EXACT date match is deliberately NOT treated as a
+     * conflict here: a guest is allowed to create multiple Bookings, and
+     * separately multiple Reservations, using the same check-in/check-out
+     * dates (e.g. two separate transactions for the same trip), as long as
+     * room availability and every other condition is independently
+     * satisfied - only a genuinely different, overlapping range blocks.
      * Half-open interval comparison (check_in < newCheckOut AND
      * check_out > newCheckIn) so back-to-back stays (one check-out day the
-     * next check-in day) don't count as overlapping.
+     * next check-in day) don't count as overlapping either.
      */
     public function hasOverlappingReservation(Guest $guest, RoomType $roomType, Carbon $checkIn, Carbon $checkOut, ?int $excludeReservationId = null): bool
     {
@@ -95,6 +98,7 @@ class ReservationWorkflowService
             ->when($excludeReservationId, fn ($q) => $q->where('id', '!=', $excludeReservationId))
             ->where('check_in', '<', $checkOut)
             ->where('check_out', '>', $checkIn)
+            ->where(fn ($q) => $q->where('check_in', '!=', $checkIn)->orWhere('check_out', '!=', $checkOut))
             ->exists();
     }
 
