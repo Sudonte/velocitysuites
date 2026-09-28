@@ -7,6 +7,7 @@ use App\Models\Amenity;
 use App\Rules\MeaningfulDescription;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
 class AmenityManagementController extends Controller
@@ -94,16 +95,30 @@ class AmenityManagementController extends Controller
      * Store a new amenity. Description must be a real 2-3 sentence
      * explanation (see MeaningfulDescription) - an amenity can never be
      * saved with empty, one-word, or placeholder text describing it.
+     * amenity_name is trimmed then checked for uniqueness among non-deleted
+     * amenities (whereNull('deleted_at') - Amenity uses SoftDeletes, and the
+     * `unique` rule queries the raw table directly, so without that clause
+     * a previously soft-deleted amenity's name would wrongly block reuse).
+     * The table's default utf8mb4_unicode_ci collation already makes this
+     * comparison case-insensitive at the DB level, so "Towel" and "TOWEL"
+     * are correctly treated as the same name without extra normalization.
      */
     public function store(Request $request): RedirectResponse
     {
+        $request->merge(['amenity_name' => trim((string) $request->input('amenity_name'))]);
+
         $validated = $request->validate([
-            'amenity_name' => 'required|string|max:255',
+            'amenity_name' => [
+                'required', 'string', 'max:255',
+                Rule::unique('amenities', 'amenity_name')->whereNull('deleted_at'),
+            ],
             'description' => ['required', 'string', new MeaningfulDescription()],
             'category' => 'required|string|in:' . implode(',', self::CATEGORIES),
             'quantity' => 'required|integer|min:0',
             'charge' => 'required|numeric|min:0',
             'status' => 'required|in:active,inactive',
+        ], [
+            'amenity_name.unique' => 'An amenity with this name already exists.',
         ]);
 
         Amenity::create($validated);
@@ -123,17 +138,25 @@ class AmenityManagementController extends Controller
     }
 
     /**
-     * Update amenity information. Same description requirement as store().
+     * Update amenity information. Same description requirement and
+     * duplicate-name check as store(), ignoring this amenity's own row.
      */
     public function update(Request $request, Amenity $amenity): RedirectResponse
     {
+        $request->merge(['amenity_name' => trim((string) $request->input('amenity_name'))]);
+
         $validated = $request->validate([
-            'amenity_name' => 'required|string|max:255',
+            'amenity_name' => [
+                'required', 'string', 'max:255',
+                Rule::unique('amenities', 'amenity_name')->ignore($amenity->id)->whereNull('deleted_at'),
+            ],
             'description' => ['required', 'string', new MeaningfulDescription()],
             'category' => 'required|string|in:' . implode(',', self::CATEGORIES),
             'quantity' => 'required|integer|min:0',
             'charge' => 'required|numeric|min:0',
             'status' => 'required|in:active,inactive',
+        ], [
+            'amenity_name.unique' => 'An amenity with this name already exists.',
         ]);
 
         $amenity->update($validated);
