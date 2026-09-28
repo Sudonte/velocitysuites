@@ -9,13 +9,20 @@ use App\Models\Payment;
 use App\Models\Reservation;
 use App\Models\Room;
 use App\Models\User;
+use App\Services\DashboardStatsService;
 use App\Support\TestAccountScope;
+use Barryvdh\DomPDF\Facade\Pdf;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\View\View;
 
 class AdminReportController extends Controller
 {
+    public function __construct(private DashboardStatsService $stats)
+    {
+    }
+
     /**
      * Display the admin reports dashboard. Accepts an optional start_date/
      * end_date GET filter (validated, order-corrected if reversed) that
@@ -26,16 +33,7 @@ class AdminReportController extends Controller
      */
     public function index(Request $request): View
     {
-        $request->validate([
-            'start_date' => ['nullable', 'date'],
-            'end_date' => ['nullable', 'date'],
-        ]);
-
-        $startDate = $request->filled('start_date') ? \Carbon\Carbon::parse($request->input('start_date'))->startOfDay() : null;
-        $endDate = $request->filled('end_date') ? \Carbon\Carbon::parse($request->input('end_date'))->endOfDay() : null;
-        if ($startDate && $endDate && $startDate->gt($endDate)) {
-            [$startDate, $endDate] = [$endDate->copy()->startOfDay(), $startDate->copy()->endOfDay()];
-        }
+        [$startDate, $endDate] = $this->resolveDateFilter($request);
 
         // Activity logs (newest first, paginated) - simplePaginate
         // (Previous/Next only, no numbered page-link boxes): the numbered
@@ -49,14 +47,7 @@ class AdminReportController extends Controller
             ->simplePaginate(20)
             ->withQueryString();
 
-        // Cached (short TTL, keyed by the date filter) - everything below
-        // this point (user/room summaries, revenue, reservation/booking
-        // counts, login logs) is a dozen-plus aggregate queries recomputed
-        // on every report view or filter change. activityLogs is
-        // deliberately NOT included here - it's paginated live data (an
-        // audit trail), not an aggregate worth caching per-page.
-        $cacheKey = 'admin_report:' . ($startDate?->toDateString() ?? 'all') . ':' . ($endDate?->toDateString() ?? 'all');
-        $data = Cache::remember($cacheKey, now()->addSeconds(60), fn () => $this->computeReportData($startDate, $endDate));
+        $data = $this->reportData($startDate, $endDate);
 
         return view('admin.reports.index', compact('activityLogs') + $data + [
             'startDateInput' => $startDate?->toDateString(),
@@ -65,7 +56,66 @@ class AdminReportController extends Controller
         ]);
     }
 
-    private function computeReportData(?\Carbon\Carbon $startDate, ?\Carbon\Carbon $endDate): array
+    /**
+     * A real, formal PDF document (dompdf, same library already used for
+     * Guest reservation/payment exports) - the "Print Report" button
+     * previously just called window.print() on this dashboard's live HTML,
+     * which produced a screenshot-like printout of stat cards/icons rather
+     * than an actual report. This renders a dedicated tabular layout
+     * (admin.reports.export-pdf) instead, branded with the Velocity Suites
+     * logo/name, built from the exact same figures as the on-screen report.
+     */
+    public function exportPdf(Request $request)
+    {
+        [$startDate, $endDate] = $this->resolveDateFilter($request);
+
+        $data = $this->reportData($startDate, $endDate);
+        $periodLabel = $startDate || $endDate
+            ? ($startDate?->format('M d, Y') ?? 'the beginning') . ' - ' . ($endDate?->format('M d, Y') ?? 'today')
+            : null;
+
+        $pdf = Pdf::loadView('admin.reports.export-pdf', $data + [
+            'periodLabel' => $periodLabel,
+            'generatedAt' => now(),
+            'monthlyBreakdown' => $this->stats->monthlyReservationBreakdown(),
+        ])->setPaper('a4', 'portrait');
+
+        return $pdf->download('Velocity-Suites-Admin-Report_' . now()->format('Y-m-d_His') . '.pdf');
+    }
+
+    /**
+     * @return array{0: ?Carbon, 1: ?Carbon}
+     */
+    private function resolveDateFilter(Request $request): array
+    {
+        $request->validate([
+            'start_date' => ['nullable', 'date'],
+            'end_date' => ['nullable', 'date'],
+        ]);
+
+        $startDate = $request->filled('start_date') ? Carbon::parse($request->input('start_date'))->startOfDay() : null;
+        $endDate = $request->filled('end_date') ? Carbon::parse($request->input('end_date'))->endOfDay() : null;
+        if ($startDate && $endDate && $startDate->gt($endDate)) {
+            [$startDate, $endDate] = [$endDate->copy()->startOfDay(), $startDate->copy()->endOfDay()];
+        }
+
+        return [$startDate, $endDate];
+    }
+
+    /**
+     * Cached (short TTL, keyed by the date filter) - everything here
+     * (user/room summaries, revenue, reservation/booking counts, login
+     * logs) is a dozen-plus aggregate queries; shared by both the on-screen
+     * report and the PDF export so the two never disagree with each other.
+     */
+    private function reportData(?Carbon $startDate, ?Carbon $endDate): array
+    {
+        $cacheKey = 'admin_report:' . ($startDate?->toDateString() ?? 'all') . ':' . ($endDate?->toDateString() ?? 'all');
+
+        return Cache::remember($cacheKey, now()->addSeconds(60), fn () => $this->computeReportData($startDate, $endDate));
+    }
+
+    private function computeReportData(?Carbon $startDate, ?Carbon $endDate): array
     {
         // Login-style logs: users ordered by last_login_at
         $loginLogs = User::whereNotNull('last_login_at')

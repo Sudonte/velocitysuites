@@ -6,7 +6,9 @@ use App\Http\Controllers\Controller;
 use App\Models\Payment;
 use App\Models\Reservation;
 use App\Models\RoomType;
+use App\Services\DashboardStatsService;
 use App\Support\TestAccountScope;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -15,10 +17,55 @@ use Illuminate\View\View;
 
 class ReportController extends Controller
 {
+    public function __construct(private DashboardStatsService $stats)
+    {
+    }
+
     /**
      * Display reports.
      */
     public function index(Request $request): View
+    {
+        [$from, $to] = $this->resolveDateRange($request);
+
+        $data = $this->reportData($from, $to);
+
+        return view('manager.reports.index', array_merge(compact('from', 'to'), $data));
+    }
+
+    /**
+     * A real, formal PDF document (dompdf, same library already used for
+     * Guest reservation/payment exports) - the "Print Report" button
+     * previously just called window.print() on this dashboard's live HTML,
+     * which produced a screenshot-like printout of stat cards/icons rather
+     * than an actual report. This renders a dedicated tabular layout
+     * (manager.reports.export-pdf) instead, branded with the Velocity
+     * Suites logo/name, built from the exact same figures as the on-screen
+     * report plus the occupancy/cancellation/no-show rates already computed
+     * by DashboardStatsService::managerStats() for the Manager dashboard.
+     */
+    public function exportPdf(Request $request)
+    {
+        [$from, $to] = $this->resolveDateRange($request);
+
+        $data = $this->reportData($from, $to);
+        $managerStats = $this->stats->managerStats($from, $to);
+        $periodLabel = $from->format('M d, Y') . ' - ' . $to->format('M d, Y');
+
+        $pdf = Pdf::loadView('manager.reports.export-pdf', $data + [
+            'periodLabel' => $periodLabel,
+            'generatedAt' => now(),
+            'managerStats' => $managerStats,
+            'monthlyBreakdown' => $this->stats->monthlyReservationBreakdown(),
+        ])->setPaper('a4', 'portrait');
+
+        return $pdf->download('Velocity-Suites-Manager-Report_' . now()->format('Y-m-d_His') . '.pdf');
+    }
+
+    /**
+     * @return array{0: Carbon, 1: Carbon}
+     */
+    private function resolveDateRange(Request $request): array
     {
         $from = $request->has('from') && $request->from
             ? Carbon::parse($request->from)->startOfDay()
@@ -27,14 +74,18 @@ class ReportController extends Controller
             ? Carbon::parse($request->to)->endOfDay()
             : Carbon::now()->endOfDay();
 
-        // Cached (short TTL, keyed by the resolved date range) - this page
-        // runs ~6 aggregate/group-by queries every time it's opened or
-        // re-filtered; repeated views of the same range within the TTL
-        // reuse one computed result instead of re-running all of it.
-        $cacheKey = 'manager_report:' . $from->toDateString() . ':' . $to->toDateString();
-        $data = Cache::remember($cacheKey, now()->addSeconds(60), fn () => $this->computeReport($from, $to));
+        return [$from, $to];
+    }
 
-        return view('manager.reports.index', array_merge(compact('from', 'to'), $data));
+    /**
+     * Cached (short TTL, keyed by the resolved date range) - shared by both
+     * the on-screen report and the PDF export so the two never disagree.
+     */
+    private function reportData(Carbon $from, Carbon $to): array
+    {
+        $cacheKey = 'manager_report:' . $from->toDateString() . ':' . $to->toDateString();
+
+        return Cache::remember($cacheKey, now()->addSeconds(60), fn () => $this->computeReport($from, $to));
     }
 
     private function computeReport(Carbon $from, Carbon $to): array

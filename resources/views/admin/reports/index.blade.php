@@ -2,23 +2,17 @@
 
 @section('title', 'Reports - Admin')
 
-@push('styles')
-<style>
-    /* Hide the filter form and non-report chrome when printing, so
-       "Print Report" produces a clean report-only page. */
-    @media print {
-        .no-print, nav, .app-sidebar, .app-footer, .page-header form { display: none !important; }
-    }
-</style>
-@endpush
-
 @section('content')
 <div class="container-fluid py-4">
     <x-page-header icon="fas fa-file-pdf" title="System Reports" subtitle="Overview of activity, users, rooms, and revenue.">
         <x-slot:actions>
-            <button type="button" class="btn btn-outline-secondary no-print" onclick="window.print()">
-                <i class="fas fa-print"></i> Print Report
-            </button>
+            {{-- Real formatted PDF document (dompdf, branded with the
+                 Velocity Suites logo) - a plain window.print() of this
+                 dashboard would just print the stat cards/icons as-is,
+                 which looks like a screenshot rather than a report. --}}
+            <a href="{{ route('admin.reports.exportPdf', request()->only(['start_date', 'end_date'])) }}" class="btn btn-outline-secondary">
+                <i class="fas fa-file-pdf"></i> Download PDF Report
+            </a>
         </x-slot:actions>
     </x-page-header>
 
@@ -32,7 +26,7 @@
     <!-- Date-range filter - scopes Revenue, Reservations, Bookings, and
          Activity Logs below; User/Room summaries and Recent Logins stay
          as live "right now" snapshots regardless of this filter. -->
-    <x-card class="mb-4 no-print" bodyClass="card-body">
+    <x-card class="mb-4" bodyClass="card-body">
         <form method="GET" action="{{ route('admin.reports.index') }}" class="row g-3 align-items-end">
             <div class="col-sm-6 col-md-4">
                 <label for="start_date" class="form-label small text-muted mb-1">From</label>

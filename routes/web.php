@@ -187,6 +187,7 @@ Route::middleware(['auth', 'account.status', 'log.activity', 'no.cache'])->group
 
         // Reports
         Route::get('/reports', [AdminReportController::class, 'index'])->name('reports.index');
+        Route::get('/reports/export/pdf', [AdminReportController::class, 'exportPdf'])->name('reports.exportPdf');
 
         // Booking & Reservation Monitoring - read-only, scoped to the
         // System Administrator role (separate from Manager's own
@@ -207,6 +208,7 @@ Route::middleware(['auth', 'account.status', 'log.activity', 'no.cache'])->group
 
         // Reports
         Route::get('/reports', [ReportController::class, 'index'])->name('reports.index');
+        Route::get('/reports/export/pdf', [ReportController::class, 'exportPdf'])->name('reports.exportPdf');
 
         // Notifications
         Route::get('/notifications', [ManagerNotificationController::class, 'index'])->name('notifications.index');

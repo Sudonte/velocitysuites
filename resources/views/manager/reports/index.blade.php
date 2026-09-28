@@ -2,21 +2,17 @@
 
 @section('title', 'Reports - Manager')
 
-@push('styles')
-<style>
-    @media print {
-        .no-print, nav, .app-sidebar, .app-footer, .page-header form { display: none !important; }
-    }
-</style>
-@endpush
-
 @section('content')
 <div class="container-fluid py-4">
     <x-page-header icon="fas fa-file-pdf" title="Manager Reports">
         <x-slot:actions>
-            <button type="button" class="btn btn-outline-secondary no-print" onclick="window.print()">
-                <i class="fas fa-print"></i> Print Report
-            </button>
+            {{-- Real formatted PDF document (dompdf, branded with the
+                 Velocity Suites logo) - a plain window.print() of this
+                 dashboard would just print the stat cards/icons as-is,
+                 which looks like a screenshot rather than a report. --}}
+            <a href="{{ route('manager.reports.exportPdf', request()->only(['from', 'to'])) }}" class="btn btn-outline-secondary">
+                <i class="fas fa-file-pdf"></i> Download PDF Report
+            </a>
         </x-slot:actions>
     </x-page-header>
 

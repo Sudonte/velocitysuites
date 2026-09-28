@@ -442,4 +442,50 @@ class DashboardStatsService
 
         return ['labels' => $labels, 'values' => $values];
     }
+
+    /**
+     * Month-by-month Gross/Cancelled/Net reservation counts for the
+     * trailing $months calendar months (oldest first, current month
+     * last) - the "seasonal volatility" timeline used by the Admin/Manager
+     * PDF reports (AdminReportController::exportPdf(),
+     * Manager\ReportController::exportPdf()). Kept here rather than in
+     * either controller since it's the same figure regardless of which
+     * role is asking for it, same as every other stat in this class.
+     * Excludes confirmed test accounts, same as every other business
+     * figure here (see this class's own top doc).
+     */
+    public function monthlyReservationBreakdown(int $months = 6): array
+    {
+        $start = now()->subMonths($months - 1)->startOfMonth();
+        $end = now()->endOfMonth();
+
+        $rows = TestAccountScope::excludeFromReservations(
+            Reservation::whereBetween('created_at', [$start, $end])
+        )
+            ->selectRaw(
+                "DATE_FORMAT(created_at, '%Y-%m') as ym, COUNT(*) as gross, SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) as cancelled",
+                [Reservation::STATUS_CANCELLED]
+            )
+            ->groupBy('ym')
+            ->get()
+            ->keyBy('ym');
+
+        $result = [];
+        for ($i = $months - 1; $i >= 0; $i--) {
+            $month = now()->subMonths($i);
+            $row = $rows->get($month->format('Y-m'));
+            $gross = (int) ($row->gross ?? 0);
+            $cancelled = (int) ($row->cancelled ?? 0);
+
+            $result[] = [
+                'label' => $month->format('M Y'),
+                'gross' => $gross,
+                'cancelled' => $cancelled,
+                'net' => $gross - $cancelled,
+                'cancelRate' => $gross > 0 ? round($cancelled / $gross * 100, 1) : 0.0,
+            ];
+        }
+
+        return $result;
+    }
 }
