@@ -26,7 +26,7 @@ class NotificationService
      */
     public function toUser(User $user, string $title, string $message, string $category = 'general', ?int $referenceId = null, ?array $targetAudience = null, ?string $receiptNumber = null, ?string $receiptType = null): Notification
     {
-        return Notification::create([
+        $notification = Notification::create([
             'user_id' => $user->id,
             'title' => $title,
             'message' => $message,
@@ -36,6 +36,10 @@ class NotificationService
             'receipt_number' => $receiptNumber,
             'receipt_type' => $receiptType,
         ]);
+
+        Notification::forgetUnreadCountFor($user->id);
+
+        return $notification;
     }
 
     /**
