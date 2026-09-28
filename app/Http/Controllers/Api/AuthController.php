@@ -11,6 +11,7 @@ use App\Services\AccountReactivationService;
 use App\Services\PasswordResetService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -275,51 +276,70 @@ class AuthController extends Controller
 
         $data = $pending->payload;
 
-        $user = User::create([
-            'first_name' => $data['first_name'],
-            'last_name' => $data['last_name'],
-            'middle_name' => $data['middle_name'] ?? null,
-            'email' => $data['email'],
-            'password' => Hash::make($data['password']),
-            'role' => 'guest',
-            'status' => 'active',
-            'email_verified_at' => now(),
-        ]);
+        // User::create() + Guest::create() + token issuance used to be three
+        // unguarded, separate writes - if Guest::create() (or anything after
+        // it) ever threw, the User row from the line above was already
+        // committed, permanently stranding a real, active, login-able guest
+        // account with no Guest profile. Every guest-facing endpoint
+        // dereferences auth()->user()->guest directly, so that account would
+        // then 500 the instant it touched literally any of them (bookings,
+        // reservations, profile...) with no way to self-heal, since $pending
+        // was only ever deleted after all of this succeeded - see
+        // AuthenticateApiToken's matching defense-in-depth guard for the case
+        // where such a row already exists from before this fix. Wrapping the
+        // whole sequence means a failure anywhere rolls back to exactly the
+        // pre-verifyOtp state (pending registration intact, safe to retry).
+        [$user, $plainToken] = DB::transaction(function () use ($data, $pending, $request) {
+            $user = User::create([
+                'first_name' => $data['first_name'],
+                'last_name' => $data['last_name'],
+                'middle_name' => $data['middle_name'] ?? null,
+                'email' => $data['email'],
+                'password' => Hash::make($data['password']),
+                'role' => 'guest',
+                'status' => 'active',
+                'email_verified_at' => now(),
+            ]);
 
-        Guest::create([
-            'user_id' => $user->id,
-            'age' => $data['age'],
-            'gender' => $data['gender'],
-            'date_of_birth' => $data['date_of_birth'],
-            'mobile_number' => $data['mobile_number'],
-            'address' => $data['address'],
-            'country' => $data['country'] ?? null,
-            'region' => $data['region'] ?? null,
-            'province' => $data['province'] ?? null,
-            'city' => $data['city'] ?? null,
-            'barangay' => $data['barangay'] ?? null,
-            'street' => $data['street'] ?? null,
-            'zip_code' => $data['zip_code'] ?? null,
-            'timezone' => $data['timezone'] ?? null,
-        ]);
+            Guest::create([
+                'user_id' => $user->id,
+                'age' => $data['age'],
+                'gender' => $data['gender'],
+                'date_of_birth' => $data['date_of_birth'],
+                'mobile_number' => $data['mobile_number'],
+                'address' => $data['address'],
+                'country' => $data['country'] ?? null,
+                'region' => $data['region'] ?? null,
+                'province' => $data['province'] ?? null,
+                'city' => $data['city'] ?? null,
+                'barangay' => $data['barangay'] ?? null,
+                'street' => $data['street'] ?? null,
+                'zip_code' => $data['zip_code'] ?? null,
+                'timezone' => $data['timezone'] ?? null,
+            ]);
 
-        $pending->delete();
+            $pending->delete();
+
+            $plainToken = Str::random(60);
+            $user->apiTokens()->create([
+                'token' => hash('sha256', $plainToken),
+                'device_name' => $request->userAgent(),
+                'last_used_at' => now(),
+            ]);
+
+            return [$user, $plainToken];
+        });
 
         // reference_id is a foreign key to reservations - a new account
         // has none yet, so this stays null; the identifying detail lives
-        // in the message text instead.
+        // in the message text instead. Fired after the transaction commits -
+        // a notification hiccup must never roll back an otherwise-successful
+        // registration.
         app(\App\Services\NotificationService::class)->notifyAdmin(
             'New Guest Account',
             "{$user->full_name} ({$user->email}) registered a new guest account (mobile).",
             'account'
         );
-
-        $plainToken = Str::random(60);
-        $user->apiTokens()->create([
-            'token' => hash('sha256', $plainToken),
-            'device_name' => $request->userAgent(),
-            'last_used_at' => now(),
-        ]);
 
         return response()->json([
             'token' => $plainToken,

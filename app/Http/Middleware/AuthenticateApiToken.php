@@ -41,6 +41,18 @@ class AuthenticateApiToken
             return response()->json(['message' => 'This account is no longer active.'], 403);
         }
 
+        // Defense-in-depth against a guest account whose Guest profile row
+        // is missing (e.g. registration failed partway through) - every
+        // guest-facing controller this middleware guards (Booking/
+        // Reservation/Profile/etc.) dereferences auth()->user()->guest
+        // directly and would otherwise fatal with an uncaught "property on
+        // null" 500 the first time such an account touched any of them,
+        // surfacing to the guest as an opaque server-error toast instead of
+        // an actionable message.
+        if ($user->role === 'guest' && ! $user->guest) {
+            return response()->json(['message' => 'Your account setup is incomplete. Please contact support.'], 422);
+        }
+
         $apiToken->update(['last_used_at' => now()]);
 
         auth()->setUser($user);

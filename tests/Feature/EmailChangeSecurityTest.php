@@ -92,6 +92,16 @@ class EmailChangeSecurityTest extends TestCase
             'password' => Hash::make($password),
         ]);
 
+        // A guest-role account with no Guest row is now rejected by
+        // AuthenticateApiToken's defense-in-depth guard (see that class's
+        // own doc) - every real account this test simulates has one by the
+        // time verifyOtp() finishes, so the fixture needs to match.
+        DB::table('guests')->insert([
+            'user_id' => $user->id,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
         $plainToken = 'test-token-' . $user->id;
         DB::table('api_tokens')->insert([
             'user_id' => $user->id,
