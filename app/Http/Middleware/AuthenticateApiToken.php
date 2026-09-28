@@ -5,6 +5,7 @@ namespace App\Http\Middleware;
 use App\Models\ApiToken;
 use Closure;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Symfony\Component\HttpFoundation\Response;
 
 class AuthenticateApiToken
@@ -57,6 +58,23 @@ class AuthenticateApiToken
 
         auth()->setUser($user);
         $request->attributes->set('api_token', $apiToken);
+
+        // Debug-diagnostic request correlation (task spec "Add Request Correlation") -
+        // the Android client tags each Booking/Reservation load with an X-Request-Id
+        // header (e.g. BOOKINGS_LOAD_xxxxxxxx - see DiagnosticLog#newRequestId() on the
+        // mobile side); when present, log one line here so a failed mobile request can
+        // be matched directly to its backend-side log entry via `grep <id>
+        // storage/logs/laravel.log`. Purely additive and read-only - absent header is a
+        // silent no-op, never a validation failure, so an older app build or any other
+        // API consumer that never sends this header is completely unaffected.
+        $requestId = $request->header('X-Request-Id');
+        if ($requestId) {
+            Log::info('mobile_request', [
+                'request_id' => $requestId,
+                'guest_id' => optional($user->guest)->id,
+                'path' => $request->path(),
+            ]);
+        }
 
         return $next($request);
     }

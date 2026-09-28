@@ -365,7 +365,11 @@ class ReservationController extends Controller
                     'discount_requested' => $discountRequested,
                     'discount_verification_status' => $discountRequested ? 'pending' : 'not_requested',
                     'id_card_type' => $discountRequested ? $idCardType : null,
-                    'additional_guest_details' => $validated['additional_guests'] ?? null,
+                    // array_values() - see DirectBookingService::create()'s identical doc
+                    // on why the raw validated array can have out-of-index-order keys that
+                    // json_encode() then serializes as a JSON object instead of an array,
+                    // crashing Android's Gson List<AdditionalGuestDto> parsing on fetch.
+                    'additional_guest_details' => isset($validated['additional_guests']) ? array_values($validated['additional_guests']) : null,
                     'idempotency_key' => $validated['idempotency_key'] ?? null,
                 ]);
 
@@ -655,7 +659,12 @@ class ReservationController extends Controller
         }
 
         if (array_key_exists('additional_guests', $validated)) {
-            $updates['additional_guest_details'] = $validated['additional_guests'];
+            // array_values() when non-null - see store()'s identical doc just above on why
+            // the raw validated array's key order can't be trusted to already form a proper
+            // JSON-array-serializable list.
+            $updates['additional_guest_details'] = $validated['additional_guests'] !== null
+                ? array_values($validated['additional_guests'])
+                : null;
         }
 
         // Snapshot before/after so the one-time Modify leaves a real audit

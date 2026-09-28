@@ -501,4 +501,72 @@ class BookingReservationCreationVisibilityTest extends TestCase
 
         $this->assertNotContains($ownerBookingId, $otherIds, 'a guest must never see another guest\'s booking in their own All Bookings list');
     }
+
+    /**
+     * Regression test for a real, live-confirmed bug (2026-09-29): the Android app's
+     * multipart request builder used a plain HashMap for additional_guests[i][*] fields,
+     * which does not preserve insertion order - with 2+ additional guests, fields could
+     * reach the server out of index order, producing a PHP array like ['1' => ..., '0' =>
+     * ...] here (present keys 0 and 1, but not in that exact order). json_encode() only
+     * treats an array as a JSON list when its keys are EXACTLY 0..n-1 IN THAT ORDER -
+     * anything else (even with the right key values, just wrong order) serializes as a
+     * JSON OBJECT instead. Android's additional_guest_details field is declared
+     * List<AdditionalGuestDto> - Gson throws parsing a JSON object into a List, which
+     * failed Retrofit's response conversion entirely and took down the ENTIRE combined
+     * bookings+reservations refresh for the affected guest (confirmed live via 4 real
+     * corrupted production rows, repaired as part of this fix). This test constructs the
+     * exact out-of-order shape directly (simulating what the scrambled multipart request
+     * would have produced) and asserts store() normalizes it before persisting, so the
+     * index() response is always genuinely JSON-array-shaped regardless of what order the
+     * request's fields arrived in.
+     */
+    public function test_booking_creation_normalizes_out_of_order_additional_guests_into_a_json_array(): void
+    {
+        [$user, ] = $this->makeGuestUser('GuestOrder');
+        $this->actingAs($user);
+        $rt1 = $this->makeRoomTypeWithRooms('Deluxe', 1000, 4, 3);
+        $rt2 = $this->makeRoomTypeWithRooms('Suite', 2000, 4, 3);
+        $total = 2 * (1000 * 1 + 2000 * 2);
+
+        $payload = $this->bookingRequestPayload($rt1, $rt2, 'GuestOrder', $total, (string) Str::uuid(), 'REF-' . Str::random(10));
+        $payload['adults'] = 2;
+        // Deliberately out-of-order keys ('1' before '0') - exactly what a HashMap-backed
+        // multipart field map could produce on the wire; PHP preserves this insertion
+        // order when Request::create() builds its InputBag from this array.
+        $payload['additional_guests'] = [
+            '1' => ['name' => 'Child Two', 'age' => 5, 'relationship' => 'Child'],
+            '0' => ['name' => 'Child One', 'age' => 7, 'relationship' => 'Child'],
+        ];
+
+        $request = Request::create('/api/guest/bookings', 'POST', $payload);
+        $request->files->set('receipt', UploadedFile::fake()->image('receipt.jpg', 20, 20));
+        $request->setUserResolver(fn () => $user);
+
+        $controller = app(BookingController::class);
+        $response = $controller->store($request);
+        $this->assertEquals(201, $response->getStatusCode(), $response->getContent());
+        $newId = json_decode($response->getContent())->id;
+
+        $indexRequest = Request::create('/api/guest/bookings', 'GET');
+        $indexRequest->setUserResolver(fn () => $user);
+        $indexBody = json_decode($controller->index($indexRequest)->getContent());
+        $ids = array_map(fn ($b) => $b->id, $indexBody->data);
+        $record = $indexBody->data[array_search($newId, $ids)];
+
+        // json_decode() with no $assoc flag decodes a JSON array as a PHP array and a JSON
+        // object as stdClass - this is the exact distinction that broke Android's Gson.
+        $this->assertIsArray($record->additional_guest_details,
+            'additional_guest_details must serialize as a JSON array, never a JSON object, regardless of the order its fields arrived in');
+        $this->assertCount(2, $record->additional_guest_details);
+        $names = array_map(fn ($g) => $g->name, $record->additional_guest_details);
+        $this->assertContains('Child One', $names);
+        $this->assertContains('Child Two', $names);
+
+        // Also confirmed directly against the raw stored column, independent of index()'s
+        // own JSON re-encoding - the malformed shape must never even reach the database.
+        $raw = Booking::find($newId)->getRawOriginal('additional_guest_details');
+        $decoded = json_decode($raw, true);
+        $this->assertSame(array_keys($decoded), range(0, count($decoded) - 1),
+            'the persisted column itself must already be a proper 0-indexed list');
+    }
 }

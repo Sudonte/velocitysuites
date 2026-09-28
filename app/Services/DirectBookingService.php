@@ -171,6 +171,19 @@ class DirectBookingService
         Collection $resolvedAmenities,
         ?string $idempotencyKey = null
     ): Booking {
+        // array_values(), not the raw validated array - a multipart request whose
+        // additional_guests[i][*] fields arrived out of index order (e.g. an older
+        // Android build's HashMap-backed field map hashing them out of order) produces a
+        // PHP array like ['1' => ..., '0' => ...] here: the VALUES are fine but the keys
+        // are not in the exact 0..n-1 order json_encode() requires to detect a "list" -
+        // it then serializes this as a JSON OBJECT ({"1":...,"0":...}) instead of a JSON
+        // ARRAY, which crashes Android's Gson (`List<AdditionalGuestDto>` expects
+        // BEGIN_ARRAY) the moment this booking is fetched back - confirmed live via 4 real
+        // corrupted rows (see the one-time repair for existing data). array_values() here
+        // guarantees a genuine 0-indexed list is what ever gets stored, regardless of the
+        // arrival order of any current or future client.
+        $additionalGuests = $additionalGuests !== null ? array_values($additionalGuests) : null;
+
         return DB::transaction(function () use (
             $guest, $roomLines, $checkIn, $checkOut, $adults, $children,
             $guestName, $additionalGuests, $idCard, $paymentData, $resolvedAmenities, $idempotencyKey
