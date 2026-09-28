@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Booking;
+use App\Models\Payment;
 use App\Models\Reservation;
 use App\Models\RoomType;
 use App\Services\NotificationService;
@@ -16,6 +17,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\Rule;
 
 class ReservationController extends Controller
 {
@@ -127,6 +129,22 @@ class ReservationController extends Controller
      */
     public function store(Request $request): JsonResponse
     {
+        // Checked BEFORE validation (not after) - same fix, and same
+        // rationale, as Api\BookingController::store() (reproduced live
+        // 2026-09-28): a retried submission legitimately reuses the SAME
+        // gcash reference_number, which would otherwise fail the
+        // reference_number.unique rule below (added alongside this fix, for
+        // the new optional pay-at-creation fields) before this short-circuit
+        // ever gets a chance to run.
+        $idempotencyKey = $request->input('idempotency_key');
+        if (! empty($idempotencyKey)) {
+            $existing = Reservation::where('idempotency_key', $idempotencyKey)->first();
+            if ($existing) {
+                $existing->load(['roomType', 'booking.room', 'bookingAmenities', 'payments']);
+                return response()->json($existing->append(['total_amount_due', 'amenities']), 201);
+            }
+        }
+
         // One-day advance rule (matches Android's Step2DatesFragment date-
         // picker minDate) - the client already blocks same-day check-in in
         // its own UI, but that's cosmetic only; this is the real,
@@ -171,6 +189,28 @@ class ReservationController extends Controller
             'amenities' => 'nullable|array',
             'amenities.*.amenity_id' => 'required_with:amenities|integer',
             'amenities.*.quantity' => 'required_with:amenities|integer|min:1',
+            // Optional: a fresh Reservation may now submit real GCash payment
+            // at creation time itself, instead of only ever being created
+            // unpaid and paid later via a separate Pay Now action. All four
+            // fields are grouped ("all present, or none") rather than tied to
+            // payment_method=gcash directly, so the existing "Reserve now,
+            // pay later" GCash path (no payment fields sent at all) keeps
+            // working unchanged for backward compatibility - see this
+            // method's handling below for why this deliberately does NOT
+            // auto-convert the reservation into a Booking the way
+            // Api\PaymentController::store()'s later Pay Now action does.
+            'reference_number' => [
+                'nullable', 'string', 'max:100',
+                'required_with:gcash_number,receipt,amount_paid',
+                Rule::unique('payments', 'reference_number')
+                    ->where(fn ($q) => $q->where('payment_method', 'gcash')->where('payment_status', '!=', 'failed')),
+            ],
+            'gcash_number' => 'nullable|regex:/^9\d{9}$/|required_with:reference_number,receipt,amount_paid',
+            // 50MB, matching Api\BookingController::store()'s identical
+            // guest-facing GCash receipt upload cap.
+            'receipt' => 'nullable|image|mimes:jpeg,png,jpg|max:51200|required_with:reference_number,gcash_number,amount_paid',
+            'amount_paid' => 'nullable|numeric|min:0|required_with:reference_number,gcash_number,receipt',
+            'selected_payment_percentage' => 'nullable|numeric|in:20,30,40,50,100',
             // One per Confirm-button tap (never per room/line) - lets a
             // double-tap or client/network retry of the same submission
             // attempt safely return the original reservation instead of
@@ -178,15 +218,13 @@ class ReservationController extends Controller
             // section 9b. Optional - an older app version that never sends
             // one simply gets no idempotency protection, same as today.
             'idempotency_key' => 'nullable|string|max:100',
+        ], [
+            'reference_number.unique' => 'This GCash reference number has already been used.',
         ]);
         $children = $validated['children'] ?? 0;
 
-        if (! empty($validated['idempotency_key'])) {
-            $existing = Reservation::where('idempotency_key', $validated['idempotency_key'])->first();
-            if ($existing) {
-                $existing->load(['roomType', 'booking.room', 'bookingAmenities']);
-                return response()->json($existing->append(['total_amount_due', 'amenities']), 201);
-            }
+        if (! empty($validated['reference_number']) && $validated['payment_method'] !== 'gcash') {
+            return response()->json(['message' => 'Payment details can only be submitted with GCash.'], 422);
         }
 
         // Validated before creating anything, so an invalid amenity
@@ -260,6 +298,36 @@ class ReservationController extends Controller
         $totalRoomsRequested = (int) $roomLines->sum('quantity');
         $nights = max(1, abs($checkOut->diffInDays($checkIn)));
 
+        // Optional pay-at-creation GCash payment (see the validation block's
+        // own doc) - validated and the receipt uploaded here, before the
+        // transaction opens, same convention Api\PaymentController::store()
+        // and Api\BookingController::store() already use ("a slow upload
+        // should never extend how long another concurrent request has to
+        // wait for a row lock"). $paymentToCreate stays null for the
+        // existing "Reserve now, pay later" case (no payment fields sent) or
+        // any Cash reservation - completely unchanged behavior for both.
+        $paymentToCreate = null;
+        if (! empty($validated['reference_number'])) {
+            $roomTotal = $roomLines->sum(fn ($line) => (float) $line['room_type']->rate * $nights * $line['quantity']);
+            $amenityTotal = $resolvedAmenities->sum(fn ($entry) => (float) $entry['amenity']->charge * $entry['quantity']);
+            $expectedTotal = round($roomTotal + $amenityTotal, 2);
+            $amountPaid = (float) $validated['amount_paid'];
+            if ($amountPaid <= 0 || $amountPaid > $expectedTotal + 0.01) {
+                return response()->json([
+                    'message' => "The amount paid must be greater than ₱0 and not exceed the total amount due (₱{$expectedTotal}).",
+                    'errors' => ['amount_paid' => ["Must be more than ₱0 and at most ₱{$expectedTotal}."]],
+                ], 422);
+            }
+            $paymentToCreate = [
+                'reference_number' => $validated['reference_number'],
+                'gcash_number' => $validated['gcash_number'],
+                'receipt_path' => $request->file('receipt')->store('payment-receipts', 'public'),
+                'amount_paid' => $amountPaid,
+                'payment_stage' => $amountPaid >= $expectedTotal - 0.01 ? 'final' : 'deposit',
+                'selected_payment_percentage' => $validated['selected_payment_percentage'] ?? null,
+            ];
+        }
+
         // Plain Reserve - no payment, no Booking row (payment goes through
         // PaymentController against this reservation once created).
         // discount_requested is set alongside the mobile-specific
@@ -278,7 +346,7 @@ class ReservationController extends Controller
         try {
             $reservation = DB::transaction(function () use (
                 $guest, $validated, $roomLines, $firstRoomType, $totalRoomsRequested,
-                $checkIn, $checkOut, $children, $discountRequested, $idCardType, $nights
+                $checkIn, $checkOut, $children, $discountRequested, $idCardType, $nights, $paymentToCreate
             ) {
                 $reservation = Reservation::create([
                     'guest_id' => $guest->id,
@@ -317,6 +385,39 @@ class ReservationController extends Controller
                     ]);
                 }
 
+                // Deliberately a plain Payment::create() against the
+                // Reservation directly - NOT a call into
+                // ReservationWorkflowService::recordDepositPayment()/
+                // tryAutoConvert(), which is what the later "Pay Now" action
+                // (Api\PaymentController::store()) uses and which auto-
+                // converts the Reservation into a Booking. This reservation
+                // must stay a Reservation (status/booking_status untouched)
+                // with its payment sitting pending-verification directly
+                // against it - Android's ApiMapper already reads a
+                // pre-conversion Reservation's own `payments` array this
+                // exact way (see ReservationDto#payments's existing
+                // pendingVerification computation), so no Android display
+                // change is needed for this to show "Pending Verification"
+                // correctly.
+                if ($paymentToCreate !== null) {
+                    Payment::create([
+                        'reservation_id' => $reservation->id,
+                        'booking_id' => null,
+                        'payment_method' => 'gcash',
+                        'reference_number' => $paymentToCreate['reference_number'],
+                        'gcash_number' => $paymentToCreate['gcash_number'],
+                        'receipt_path' => $paymentToCreate['receipt_path'],
+                        'amount_paid' => $paymentToCreate['amount_paid'],
+                        'payment_status' => 'pending',
+                        'payment_stage' => $paymentToCreate['payment_stage'],
+                        'payment_date' => now(),
+                    ]);
+                    $reservation->update([
+                        'selected_payment_percentage' => $paymentToCreate['selected_payment_percentage'],
+                        'required_payment_amount' => $paymentToCreate['amount_paid'],
+                    ]);
+                }
+
                 return $reservation;
             });
         } catch (\Illuminate\Database\UniqueConstraintViolationException $e) {
@@ -334,7 +435,7 @@ class ReservationController extends Controller
             if (! empty($validated['idempotency_key']) && str_contains($e->getMessage(), 'idempotency_key')) {
                 $winner = Reservation::where('idempotency_key', $validated['idempotency_key'])->first();
                 if ($winner) {
-                    $winner->load(['roomType', 'booking.room', 'bookingAmenities']);
+                    $winner->load(['roomType', 'booking.room', 'bookingAmenities', 'payments']);
                     return response()->json($winner->append(['total_amount_due', 'amenities']), 201);
                 }
             }
@@ -362,7 +463,7 @@ class ReservationController extends Controller
             $reservation
         );
 
-        $reservation->load(['roomType', 'booking.room', 'bookingAmenities']);
+        $reservation->load(['roomType', 'booking.room', 'bookingAmenities', 'payments']);
 
         return response()->json($reservation->append(['total_amount_due', 'amenities']), 201);
     }

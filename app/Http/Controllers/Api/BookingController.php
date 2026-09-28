@@ -171,6 +171,27 @@ class BookingController extends Controller
         // enforcement) - a direct Booking skips the Reservation step
         // entirely, so this is the only backend gate its check_in ever
         // passes through.
+        // Checked BEFORE validation (not after, as this used to be) - a
+        // retried submission (dropped response after the server already
+        // saved the booking, followed by a client/network retry or a guest
+        // re-tapping Submit) legitimately reuses the SAME gcash reference_number,
+        // which would otherwise fail the reference_number.unique rule below
+        // and never reach this short-circuit at all, surfacing a confusing
+        // "reference number already used, please use a different one" error
+        // for a submission that actually already succeeded. Reproduced live
+        // (2026-09-28): resubmitting an already-successful request with the
+        // same idempotency_key + reference_number returned 422, not the
+        // original booking. See MULTI_ROOM_TRANSACTION_BACKEND_SPEC.md
+        // section 9b / PAYMENT_STEP5_BACKEND_SPEC.md section 2, both of
+        // which specify this exact ordering.
+        $idempotencyKey = $request->input('idempotency_key');
+        if (! empty($idempotencyKey)) {
+            $existing = Booking::where('idempotency_key', $idempotencyKey)->first();
+            if ($existing) {
+                return response()->json($existing->append(['total_amount_due', 'amenities']), 201);
+            }
+        }
+
         $minCheckIn = now()->addDays(1)->toDateString();
         $validated = $request->validate([
             // Multi-room-type shape (preferred - see MULTI_ROOM_TRANSACTION_BACKEND_SPEC.md).
@@ -232,13 +253,6 @@ class BookingController extends Controller
         ], [
             'reference_number.unique' => 'This GCash reference number has already been used.',
         ]);
-
-        if (! empty($validated['idempotency_key'])) {
-            $existing = Booking::where('idempotency_key', $validated['idempotency_key'])->first();
-            if ($existing) {
-                return response()->json($existing->append(['total_amount_due', 'amenities']), 201);
-            }
-        }
 
         $children = $validated['children'] ?? 0;
         $checkIn = Carbon::parse($validated['check_in']);
