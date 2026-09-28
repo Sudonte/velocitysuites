@@ -323,6 +323,8 @@ Route::middleware(['auth', 'account.status', 'log.activity', 'no.cache'])->group
         // "Checked-out Guests" (view-only history).
         Route::get('/check-out', [ReceptionistCheckOutController::class, 'index'])->name('check-out.index');
         Route::get('/check-out/{booking}/billing', [ReceptionistCheckOutController::class, 'checkOutBilling'])->name('check-out.billing');
+        Route::get('/check-out/{booking}/rooms', [ReceptionistCheckOutController::class, 'roomsPanel'])->name('check-out.rooms');
+        Route::put('/check-out/{booking}/rooms/{room}', [ReceptionistCheckOutController::class, 'checkOutRoom'])->name('check-out.rooms.checkout');
         Route::delete('/check-out/billing/{billing}', [ReceptionistCheckOutController::class, 'checkOutCancelBilling'])->name('check-out.billing.cancel');
         Route::get('/check-out/billing/{billing}/payment', [ReceptionistCheckOutController::class, 'checkOutPaymentPanel'])->name('check-out.payment');
 

@@ -144,15 +144,19 @@ class DashboardStatsService
             // currently held by a test-account booking counts as available
             // here (business-facing figure) even though it's physically
             // occupied - see managerStats()'s identical treatment.
+            // whereNull('booking_rooms.checked_out_at') - a room
+            // individually checked out (CheckOutController::checkOutRoom(),
+            // a multi-room booking whose siblings are still checked in) is
+            // free again immediately, matching Room::isCurrentlyOccupied().
             'availableRooms' => Room::where('status', '!=', 'maintenance')
                 ->whereDoesntHave('assignedBookings', fn ($q) => TestAccountScope::excludeFromBookings(
                     $q->where('booking_status', Booking::STATUS_CHECKED_IN)
-                ))
+                )->whereNull('booking_rooms.checked_out_at'))
                 ->count(),
             'occupiedRooms' => Room::where('status', '!=', 'maintenance')
                 ->whereHas('assignedBookings', fn ($q) => TestAccountScope::excludeFromBookings(
                     $q->where('booking_status', Booking::STATUS_CHECKED_IN)
-                ))
+                )->whereNull('booking_rooms.checked_out_at'))
                 ->count(),
             'maintenanceRooms' => Room::where('status', 'maintenance')->count(),
 
@@ -291,12 +295,12 @@ class DashboardStatsService
         $occupiedRooms = Room::where('status', '!=', 'maintenance')
             ->whereHas('assignedBookings', fn ($q) => TestAccountScope::excludeFromBookings(
                 $q->where('booking_status', Booking::STATUS_CHECKED_IN)
-            ))
+            )->whereNull('booking_rooms.checked_out_at'))
             ->count();
         $availableRooms = Room::where('status', '!=', 'maintenance')
             ->whereDoesntHave('assignedBookings', fn ($q) => TestAccountScope::excludeFromBookings(
                 $q->where('booking_status', Booking::STATUS_CHECKED_IN)
-            ))
+            )->whereNull('booking_rooms.checked_out_at'))
             ->count();
         $maintenanceRooms = Room::where('status', 'maintenance')->count();
         $occupancyRate = $totalRooms > 0

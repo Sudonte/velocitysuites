@@ -52,7 +52,13 @@
                     @forelse($bookings as $booking)
                         <tr data-booking-id="{{ $booking->id }}">
                             <td>@unless($booking->viewed_at)<span class="unread-dot" title="New"></span>@endunless{{ $booking->guest_display_name }}</td>
-                            <td>{{ $booking->room->room_number ?? 'N/A' }} ({{ $booking->roomType->name ?? '' }})</td>
+                            <td>
+                                @if($booking->rooms->count() > 1)
+                                    {{ $booking->rooms->pluck('room_number')->implode(', ') }} ({{ $booking->roomType->name ?? '' }})
+                                @else
+                                    {{ $booking->room->room_number ?? 'N/A' }} ({{ $booking->roomType->name ?? '' }})
+                                @endif
+                            </td>
                             <td>
                                 {{ $booking->check_out->format('M d, Y') }}
                                 @if($tab === 'expected' && $booking->check_out->isAfter(today()))
@@ -76,12 +82,23 @@
                             </td>
                             @if($tab === 'expected')
                                 <td>
-                                    <button type="button" class="btn btn-sm btn-primary btn-start-checkout"
-                                        data-booking-id="{{ $booking->id }}"
-                                        data-guest-name="{{ $booking->guest_display_name }}"
-                                        data-room-number="{{ $booking->room->room_number ?? 'N/A' }}">
-                                        <i class="fas fa-sign-out-alt"></i> Check Out
-                                    </button>
+                                    @if($booking->rooms->count() > 1)
+                                        {{-- Multi-room: each room checks out independently -
+                                             see the Rooms Panel modal below. Billing only
+                                             starts once every room in this booking has
+                                             checked out. --}}
+                                        <button type="button" class="btn btn-sm btn-outline-primary btn-view-rooms"
+                                            data-booking-id="{{ $booking->id }}">
+                                            <i class="fas fa-eye"></i> View Rooms
+                                        </button>
+                                    @else
+                                        <button type="button" class="btn btn-sm btn-primary btn-start-checkout"
+                                            data-booking-id="{{ $booking->id }}"
+                                            data-guest-name="{{ $booking->guest_display_name }}"
+                                            data-room-number="{{ $booking->room->room_number ?? 'N/A' }}">
+                                            <i class="fas fa-sign-out-alt"></i> Check Out
+                                        </button>
+                                    @endif
                                 </td>
                             @endif
                         </tr>
@@ -143,6 +160,18 @@
     </div>
 </div>
 
+<!-- Multi-Room Checkout Picker (AJAX-loaded room cards, one Check Out
+     button per room - see CheckOutController::roomsPanel()/checkOutRoom()).
+     Checking out the last remaining room closes this and continues
+     straight into the same Billing Panel modal above. -->
+<div class="modal fade" id="roomsPanelModal" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content" id="roomsPanelContent">
+            <!-- Injected via AJAX -->
+        </div>
+    </div>
+</div>
+
 @push('scripts')
 <script>
 document.addEventListener('DOMContentLoaded', function () {
@@ -151,12 +180,15 @@ document.addEventListener('DOMContentLoaded', function () {
     const confirmModalEl = document.getElementById('confirmCheckoutModal');
     const billingModalEl = document.getElementById('billingPanelModal');
     const paymentModalEl = document.getElementById('paymentPanelModal');
+    const roomsModalEl = document.getElementById('roomsPanelModal');
     const confirmModal = new bootstrap.Modal(confirmModalEl);
     const billingModal = new bootstrap.Modal(billingModalEl);
     const paymentModal = new bootstrap.Modal(paymentModalEl);
+    const roomsModal = new bootstrap.Modal(roomsModalEl);
 
     const billingPanelContent = document.getElementById('billingPanelContent');
     const paymentPanelContent = document.getElementById('paymentPanelContent');
+    const roomsPanelContent = document.getElementById('roomsPanelContent');
 
     let activeBookingId = null;
 
@@ -169,10 +201,16 @@ document.addEventListener('DOMContentLoaded', function () {
         chargeDestroy: @json(route('receptionist.billing.additional-charge.destroy', ['additionalCharge' => '__ID__'])),
         discountStore: @json(route('receptionist.billing.discount.store', ['billing' => '__ID__'])),
         recordPayment: @json(route('receptionist.billing.payment.store', ['billing' => '__ID__'])),
+        rooms: @json(route('receptionist.check-out.rooms', ['booking' => '__ID__'])),
+        roomCheckout: @json(route('receptionist.check-out.rooms.checkout', ['booking' => '__BOOKING__', 'room' => '__ROOM__'])),
     };
 
     function buildUrl(template, id) {
         return template.replace('__ID__', id);
+    }
+
+    function buildRoomCheckoutUrl(bookingId, roomId) {
+        return urls.roomCheckout.replace('__BOOKING__', bookingId).replace('__ROOM__', roomId);
     }
 
     async function fetchJson(url, options = {}) {
@@ -202,16 +240,66 @@ document.addEventListener('DOMContentLoaded', function () {
         return response.text();
     }
 
-    // ---- Step 1: Open confirmation modal ----
+    // ---- Step 1: Open confirmation modal (single-room bookings only) ----
     document.getElementById('checkOutTableBody').addEventListener('click', function (e) {
-        const btn = e.target.closest('.btn-start-checkout');
+        const startBtn = e.target.closest('.btn-start-checkout');
+        if (startBtn) {
+            activeBookingId = startBtn.dataset.bookingId;
+            document.getElementById('confirmGuestName').textContent = startBtn.dataset.guestName;
+            document.getElementById('confirmRoomNumber').textContent = startBtn.dataset.roomNumber;
+            document.getElementById('confirmReservationCode').textContent = 'BKG-' + String(activeBookingId).padStart(5, '0');
+            confirmModal.show();
+            return;
+        }
+
+        // ---- Multi-room bookings: open the room-by-room checkout picker ----
+        const viewRoomsBtn = e.target.closest('.btn-view-rooms');
+        if (viewRoomsBtn) {
+            activeBookingId = viewRoomsBtn.dataset.bookingId;
+            openRoomsPanel();
+        }
+    });
+
+    async function openRoomsPanel() {
+        try {
+            const html = await fetchHtml(buildUrl(urls.rooms, activeBookingId));
+            roomsPanelContent.innerHTML = html;
+            roomsModal.show();
+        } catch (err) {
+            alert(err.message);
+        }
+    }
+
+    // ---- Rooms Panel interactions: check out one room at a time ----
+    roomsPanelContent.addEventListener('click', async function (e) {
+        const btn = e.target.closest('.btn-checkout-room');
         if (!btn) return;
 
-        activeBookingId = btn.dataset.bookingId;
-        document.getElementById('confirmGuestName').textContent = btn.dataset.guestName;
-        document.getElementById('confirmRoomNumber').textContent = btn.dataset.roomNumber;
-        document.getElementById('confirmReservationCode').textContent = 'BKG-' + String(activeBookingId).padStart(5, '0');
-        confirmModal.show();
+        btn.disabled = true;
+        try {
+            const data = await fetchJson(buildRoomCheckoutUrl(activeBookingId, btn.dataset.roomId), { method: 'PUT' });
+
+            if (data.final) {
+                // Last room just checked out - proceed straight into the
+                // same Billing Panel a single-room booking's "Continue to
+                // Billing" step opens.
+                roomsModal.hide();
+                const html = await fetchHtml(buildUrl(urls.billing, activeBookingId));
+                billingPanelContent.innerHTML = html;
+                billingModal.show();
+            } else {
+                roomsPanelContent.innerHTML = data.html;
+            }
+        } catch (err) {
+            const alertBox = roomsPanelContent.querySelector('#roomsErrorAlert');
+            if (alertBox) {
+                alertBox.textContent = err.message;
+                alertBox.classList.remove('d-none');
+            } else {
+                alert(err.message);
+            }
+            btn.disabled = false;
+        }
     });
 
     // ---- Step 1 -> 2: Continue to Billing ----

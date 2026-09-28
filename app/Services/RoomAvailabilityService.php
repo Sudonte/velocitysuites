@@ -192,7 +192,14 @@ class RoomAvailabilityService
             ->where('status', '!=', 'maintenance')
             ->whereDoesntHave('assignedBookings', function ($q) use ($booking) {
                 $q->whereIn('bookings.booking_status', [Booking::STATUS_ACTIVE, Booking::STATUS_CHECKED_IN])
-                  ->where('bookings.id', '!=', $booking->id);
+                  ->where('bookings.id', '!=', $booking->id)
+                  // A room already individually checked out (see
+                  // Receptionist\CheckOutController::checkOutRoom()) is free
+                  // again immediately even while its sibling rooms' shared
+                  // booking is still CHECKED_IN overall - it must not stay
+                  // blocked from assignment until the whole multi-room
+                  // booking finishes.
+                  ->whereNull('booking_rooms.checked_out_at');
                 $this->occupiesRoom($q, $booking->check_in, $booking->check_out, 'bookings.');
             })
             ->orderBy('room_number')

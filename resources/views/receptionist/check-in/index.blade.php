@@ -57,8 +57,19 @@
         <table class="table table-hover mb-0 align-middle">
             <thead>
                 <tr>
-                    <th>Guest</th>
-                    <th>Room</th>
+                    @if($tab === 'checked_in')
+                        {{-- Room first here - checked-in guests are tracked
+                             per physical room (see CheckInController::index()),
+                             so the room each row is about should be the very
+                             first thing a receptionist scans, not the guest
+                             name (which can legitimately repeat across rows
+                             for a multi-room booking). --}}
+                        <th>Room</th>
+                        <th>Guest</th>
+                    @else
+                        <th>Guest</th>
+                        <th>Room</th>
+                    @endif
                     <th>Check-In</th>
                     <th>Check-Out</th>
                     <th>Guests</th>
@@ -76,11 +87,11 @@
                         @php $booking = $room->assignedBookings->first(); @endphp
                         @continue(!$booking)
                         <tr>
-                            <td>@unless($booking->viewed_at)<span class="unread-dot" title="New"></span>@endunless{{ $booking->guest_display_name }}</td>
                             <td style="min-width: 200px;">
                                 {{ $room->room_number }} ({{ $booking->roomType->name ?? '' }})
                                 <x-status-badge :status="$room->effective_status" domain="room" />
                             </td>
+                            <td>@unless($booking->viewed_at)<span class="unread-dot" title="New"></span>@endunless{{ $booking->guest_display_name }}</td>
                             <td>{{ $booking->check_in->format('M d, Y') }}</td>
                             <td>{{ $booking->check_out->format('M d, Y') }}</td>
                             <td>{{ $booking->number_of_guests }}</td>

@@ -43,11 +43,15 @@ class ReceptionistController extends Controller
         // deliberate manual designation with no booking signal to derive it
         // from - see Room::getEffectiveStatusAttribute()'s docblock.
         $maintenanceRooms = Room::where('status', 'maintenance')->count();
+        // whereNull('booking_rooms.checked_out_at') - a room individually
+        // checked out (CheckOutController::checkOutRoom(), a multi-room
+        // booking whose siblings are still checked in) is free again
+        // immediately, matching Room::isCurrentlyOccupied().
         $occupiedRooms = Room::where('status', '!=', 'maintenance')
-            ->whereHas('assignedBookings', fn ($q) => $q->where('booking_status', Booking::STATUS_CHECKED_IN))
+            ->whereHas('assignedBookings', fn ($q) => $q->where('booking_status', Booking::STATUS_CHECKED_IN)->whereNull('booking_rooms.checked_out_at'))
             ->count();
         $availableRooms = Room::where('status', '!=', 'maintenance')
-            ->whereDoesntHave('assignedBookings', fn ($q) => $q->where('booking_status', Booking::STATUS_CHECKED_IN))
+            ->whereDoesntHave('assignedBookings', fn ($q) => $q->where('booking_status', Booking::STATUS_CHECKED_IN)->whereNull('booking_rooms.checked_out_at'))
             ->count();
         $bookingRequests = Reservation::whereIn('status', Reservation::ACTIVE_STATUSES)->count();
         // Matches Check-in's own "Expected Check-ins" tab (CheckInController::

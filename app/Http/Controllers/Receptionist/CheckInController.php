@@ -78,8 +78,13 @@ class CheckInController extends Controller
             // its Billing) always stays keyed to that shared Booking, never
             // the individual room, so multiple rows for the same
             // multi-room booking still point at the one same billing.
-            $bookings = Room::whereHas('assignedBookings', fn ($q) => $q->where('booking_status', Booking::STATUS_CHECKED_IN))
-                ->with(['assignedBookings' => fn ($q) => $q->where('booking_status', Booking::STATUS_CHECKED_IN)
+            // wherePivotNull('checked_out_at') - a room individually checked
+            // out via CheckOutController::checkOutRoom() (a multi-room
+            // booking whose siblings are still checked in) has already left;
+            // it drops off this list immediately rather than waiting for the
+            // whole booking to finish, matching Room::isCurrentlyOccupied().
+            $bookings = Room::whereHas('assignedBookings', fn ($q) => $q->where('booking_status', Booking::STATUS_CHECKED_IN)->whereNull('booking_rooms.checked_out_at'))
+                ->with(['assignedBookings' => fn ($q) => $q->where('booking_status', Booking::STATUS_CHECKED_IN)->whereNull('booking_rooms.checked_out_at')
                     ->with(['reservation.guest.user', 'guest.user', 'roomType'])])
                 ->orderBy('room_number')
                 ->simplePaginate(15)

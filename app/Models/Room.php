@@ -135,7 +135,7 @@ class Room extends Model
      */
     public function assignedBookings()
     {
-        return $this->belongsToMany(Booking::class, 'booking_rooms')->withTimestamps();
+        return $this->belongsToMany(Booking::class, 'booking_rooms')->withPivot('checked_out_at')->withTimestamps();
     }
 
     /**
@@ -145,11 +145,19 @@ class Room extends Model
      * (CheckInController::store() sets 'occupied', checkout sets it back
      * to 'available') and can also be hand-edited by an admin
      * (Admin\RoomManagementController::update()), so it can drift from
-     * reality; this is the ground truth to check instead.
+     * reality; this is the ground truth to check instead. wherePivotNull
+     * excludes a room that's already been individually checked out (see
+     * Receptionist\CheckOutController::checkOutRoom()) even while the
+     * booking itself is still CHECKED_IN overall (its other rooms haven't
+     * checked out yet) - that specific room is free again immediately,
+     * it doesn't wait for the whole multi-room booking to finish.
      */
     public function isCurrentlyOccupied(): bool
     {
-        return $this->assignedBookings()->where('booking_status', Booking::STATUS_CHECKED_IN)->exists();
+        return $this->assignedBookings()
+            ->where('booking_status', Booking::STATUS_CHECKED_IN)
+            ->wherePivotNull('checked_out_at')
+            ->exists();
     }
 
     /**

@@ -150,12 +150,12 @@ class AdminReportController extends Controller
             'available' => Room::where('status', '!=', 'maintenance')
                 ->whereDoesntHave('assignedBookings', fn ($q) => TestAccountScope::excludeFromBookings(
                     $q->where('booking_status', Booking::STATUS_CHECKED_IN)
-                ))
+                )->whereNull('booking_rooms.checked_out_at'))
                 ->count(),
             'occupied' => Room::where('status', '!=', 'maintenance')
                 ->whereHas('assignedBookings', fn ($q) => TestAccountScope::excludeFromBookings(
                     $q->where('booking_status', Booking::STATUS_CHECKED_IN)
-                ))
+                )->whereNull('booking_rooms.checked_out_at'))
                 ->count(),
             'maintenance' => Room::where('status', 'maintenance')->count(),
         ];

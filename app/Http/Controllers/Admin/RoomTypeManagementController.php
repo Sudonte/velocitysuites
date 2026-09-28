@@ -29,7 +29,7 @@ class RoomTypeManagementController extends Controller
         $query = RoomType::withCount([
             'rooms',
             'rooms as available_rooms_count' => fn ($q) => $q->where('status', '!=', 'maintenance')
-                ->whereDoesntHave('assignedBookings', fn ($qq) => $qq->where('booking_status', Booking::STATUS_CHECKED_IN)),
+                ->whereDoesntHave('assignedBookings', fn ($qq) => $qq->where('booking_status', Booking::STATUS_CHECKED_IN)->whereNull('booking_rooms.checked_out_at')),
         ]);
 
         if ($request->has('search') && $request->search) {

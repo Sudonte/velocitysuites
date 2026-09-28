@@ -9,8 +9,10 @@ use App\Models\Billing;
 use App\Models\Booking;
 use App\Models\Discount;
 use App\Models\Payment;
+use App\Models\Room;
 use App\Services\NotificationService;
 use App\Support\Activity;
+use Carbon\Carbon;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -96,6 +98,77 @@ class CheckOutController extends Controller
         $discounts = Discount::where('status', 'active')->orderBy('name')->get();
 
         return view('receptionist.check-out.partials.billing-panel', compact('booking', 'billing', 'amenityRequests', 'discounts'));
+    }
+
+    /**
+     * The room-by-room checkout picker for a multi-room booking ("View"
+     * action on the Expected Check-outs list, AJAX-loaded into
+     * #roomsPanelModal - same pattern as checkOutBilling()'s billing
+     * panel). A single-room booking never reaches this: its "Check Out"
+     * button goes straight to the existing confirm -> billing flow,
+     * unchanged, since there's nothing to pick between.
+     */
+    public function roomsPanel(Booking $booking)
+    {
+        if ($booking->booking_status !== Booking::STATUS_CHECKED_IN) {
+            return response()->json(['message' => 'Only checked-in bookings can be checked out.'], 422);
+        }
+
+        // rooms.roomType (each room's own type), not just the booking's
+        // legacy single roomType - a multi-room-type booking can genuinely
+        // have different room types per physical room (see
+        // Booking::getRoomLinesAttribute()'s own doc on that).
+        $booking->load(['reservation.guest.user', 'guest.user', 'rooms.roomType']);
+
+        return view('receptionist.check-out.partials.rooms-panel', compact('booking'));
+    }
+
+    /**
+     * Check out one physical room within a multi-room booking. Rooms are
+     * freed independently (RoomAvailabilityService::assignableRoomsOfType()
+     * already excludes a checked-out pivot row from assignment, and
+     * Room::isCurrentlyOccupied() already ignores it), so an earlier room
+     * doesn't wait for its siblings. Nothing about the Billing/payment flow
+     * starts until the LAST assigned room is checked out - only then does
+     * the frontend (see index.blade.php's JS) transition into the existing
+     * checkOutBilling() flow, at which point generateBilling() prices each
+     * room off its own checked_out_at, not the booking's (possibly since
+     * extended) check_out date - see that method's own doc.
+     */
+    public function checkOutRoom(Booking $booking, Room $room)
+    {
+        if ($booking->booking_status !== Booking::STATUS_CHECKED_IN) {
+            return response()->json(['message' => 'Only checked-in bookings can be checked out.'], 422);
+        }
+
+        $pivot = $booking->rooms->firstWhere('id', $room->id)?->pivot;
+        if (! $pivot) {
+            return response()->json(['message' => 'This room is not assigned to this booking.'], 422);
+        }
+        if ($pivot->checked_out_at) {
+            return response()->json(['message' => 'This room has already been checked out.'], 422);
+        }
+
+        $booking->rooms()->updateExistingPivot($room->id, ['checked_out_at' => now()]);
+
+        Activity::log('Checked out room', "Booking #{$booking->id} - Room {$room->room_number}", $booking);
+
+        $remaining = $booking->rooms()->wherePivotNull('checked_out_at')->count();
+
+        if ($remaining === 0) {
+            return response()->json([
+                'final' => true,
+                'message' => 'Last room checked out - proceeding to billing.',
+            ]);
+        }
+
+        $booking->load('rooms.roomType');
+
+        return response()->json([
+            'final' => false,
+            'message' => "Room {$room->room_number} checked out. {$remaining} room(s) still checked in.",
+            'html' => view('receptionist.check-out.partials.rooms-panel', compact('booking'))->render(),
+        ]);
     }
 
     /**
@@ -628,14 +701,7 @@ class CheckOutController extends Controller
      */
     private function generateBilling(Booking $booking): Billing
     {
-        $nights = max(1, abs($booking->check_out->diffInDays($booking->check_in)));
-
-        // A multi-room booking's rooms may each have their own rate
-        // override, so this sums per-room rather than multiplying a single
-        // rate by rooms_requested. Falls back to the legacy single room()
-        // relation for the rare pre-migration booking with no pivot rows.
-        $rooms = $booking->rooms->isNotEmpty() ? $booking->rooms : collect([$booking->room])->filter();
-        $roomCharge = $rooms->sum(fn ($room) => (float) $room->room_rate) * $nights;
+        $roomCharge = $this->computeRoomCharge($booking);
 
         // No automatic discount - Promotions are package/amenity-only now
         // (their inclusions are zero-charge amenity requests granted at
@@ -661,6 +727,36 @@ class CheckOutController extends Controller
         $this->refreshStayCharges($booking, $billing);
 
         return $billing;
+    }
+
+    /**
+     * Sums each assigned room's own rate x its own actual nights - not a
+     * single lump sum over the whole booking's check_out date. A room
+     * already individually checked out (see checkOutRoom()) is capped at
+     * ITS OWN checked_out_at, never the booking's current check_out -
+     * which may since have been pushed later by an extension covering
+     * only the room(s) still active - so an earlier-departing room in a
+     * multi-room booking is never re-billed for nights it was never
+     * actually occupied. A still-active room, or every room in an
+     * ordinary single-room booking (which never goes through
+     * checkOutRoom() at all - see index.blade.php's JS), is charged
+     * through the booking's current check_out date exactly as before.
+     * Falls back to the legacy single room() relation for the rare
+     * pre-migration booking with no pivot rows.
+     */
+    private function computeRoomCharge(Booking $booking): float
+    {
+        $rooms = $booking->rooms->isNotEmpty() ? $booking->rooms : collect([$booking->room])->filter();
+
+        return (float) $rooms->sum(function ($room) use ($booking) {
+            $roomCheckOut = $room->pivot && $room->pivot->checked_out_at
+                ? Carbon::parse($room->pivot->checked_out_at)->startOfDay()
+                : $booking->check_out;
+
+            $nights = max(1, abs($roomCheckOut->diffInDays($booking->check_in)));
+
+            return (float) $room->room_rate * $nights;
+        });
     }
 
     /**

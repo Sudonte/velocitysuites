@@ -206,10 +206,14 @@ class Booking extends Model
     /**
      * All rooms assigned to this booking (set at check-in - may be more
      * than one when rooms_requested > 1). Empty until check-in.
+     * checked_out_at (pivot) is null until that specific room is checked
+     * out - see Receptionist\CheckOutController::checkOutRoom(); a
+     * multi-room booking's rooms can check out one at a time, independent
+     * of the whole booking's own booking_status.
      */
     public function rooms()
     {
-        return $this->belongsToMany(Room::class, 'booking_rooms')->withTimestamps();
+        return $this->belongsToMany(Room::class, 'booking_rooms')->withPivot('checked_out_at')->withTimestamps();
     }
 
     /**
