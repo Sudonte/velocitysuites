@@ -14,6 +14,7 @@ use App\Models\RoomType;
 use App\Models\User;
 use App\Support\TestAccountScope;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Cache;
 
 /**
  * Central place for dashboard statistics so counts stay connected to the
@@ -35,7 +36,22 @@ class DashboardStatsService
     {
     }
 
+    /**
+     * Cached (short TTL) - this fires ~25-30 separate aggregate queries
+     * (revenue x6 periods, room/user/reservation counts, two 7-point trend
+     * series each running its own query per day) and is recomputed on every
+     * single admin dashboard visit. A 60s TTL means a dashboard that gets
+     * refreshed/re-opened repeatedly (the common case) reuses one computed
+     * snapshot instead of re-running all of it every time, while staying
+     * close enough to live for figures that only meaningfully change a few
+     * times an hour (bookings, payments, check-ins).
+     */
     public function adminStats(): array
+    {
+        return Cache::remember('dashboard_stats:admin', now()->addSeconds(60), fn () => $this->computeAdminStats());
+    }
+
+    private function computeAdminStats(): array
     {
         $todayRevenue = (float) TestAccountScope::excludeFromPayments(
             Payment::where('payment_status', 'completed')->whereDate('payment_date', today())
@@ -252,8 +268,22 @@ class DashboardStatsService
      * class's own top doc / App\Support\TestAccountScope); pendingPayment
      * Verifications does not, for the same operational-queue reasoning as
      * adminStats().
+     *
+     * Cached (short TTL, keyed by the resolved date range) - same rationale
+     * as adminStats(): a couple dozen aggregate queries plus a per-bucket
+     * trend chart query, recomputed on every manager dashboard visit/
+     * filter-change. Two managers viewing the same period within the TTL
+     * window share one computed snapshot instead of each re-running the
+     * full set.
      */
     public function managerStats(Carbon $from, Carbon $to): array
+    {
+        $cacheKey = 'dashboard_stats:manager:' . $from->toDateString() . ':' . $to->toDateString();
+
+        return Cache::remember($cacheKey, now()->addSeconds(60), fn () => $this->computeManagerStats($from, $to));
+    }
+
+    private function computeManagerStats(Carbon $from, Carbon $to): array
     {
         $totalRooms = Room::count();
         // See adminStats()'s identical fix above - derived from an actual

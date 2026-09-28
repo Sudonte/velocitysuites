@@ -28,7 +28,11 @@
         <ul class="navbar-nav flex-row align-items-center gap-1 gap-sm-2 ms-auto mb-0 flex-shrink-0">
             @if(auth()->check())
                 @php
-                    $navUnreadCount = auth()->user()->notifications()->where('is_read', false)->count();
+                    // Cached (Notification::unreadCountFor()) - this navbar
+                    // renders on every authenticated page for every role, so
+                    // an uncached COUNT here was paid for on every single
+                    // page navigation across the whole app.
+                    $navUnreadCount = \App\Models\Notification::unreadCountFor(auth()->id());
                     $navNotifUrl = auth()->user()->role === 'manager' ? route('manager.notifications.index') : route('notifications.index');
                 @endphp
                 <li class="nav-item">

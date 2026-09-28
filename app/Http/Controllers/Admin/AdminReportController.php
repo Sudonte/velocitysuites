@@ -11,6 +11,7 @@ use App\Models\Room;
 use App\Models\User;
 use App\Support\TestAccountScope;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\View\View;
 
 class AdminReportController extends Controller
@@ -48,6 +49,24 @@ class AdminReportController extends Controller
             ->simplePaginate(20)
             ->withQueryString();
 
+        // Cached (short TTL, keyed by the date filter) - everything below
+        // this point (user/room summaries, revenue, reservation/booking
+        // counts, login logs) is a dozen-plus aggregate queries recomputed
+        // on every report view or filter change. activityLogs is
+        // deliberately NOT included here - it's paginated live data (an
+        // audit trail), not an aggregate worth caching per-page.
+        $cacheKey = 'admin_report:' . ($startDate?->toDateString() ?? 'all') . ':' . ($endDate?->toDateString() ?? 'all');
+        $data = Cache::remember($cacheKey, now()->addSeconds(60), fn () => $this->computeReportData($startDate, $endDate));
+
+        return view('admin.reports.index', compact('activityLogs') + $data + [
+            'startDateInput' => $startDate?->toDateString(),
+            'endDateInput' => $endDate?->toDateString(),
+            'isFiltered' => (bool) ($startDate || $endDate),
+        ]);
+    }
+
+    private function computeReportData(?\Carbon\Carbon $startDate, ?\Carbon\Carbon $endDate): array
+    {
         // Login-style logs: users ordered by last_login_at
         $loginLogs = User::whereNotNull('last_login_at')
             ->orderByDesc('last_login_at')
@@ -112,8 +131,7 @@ class AdminReportController extends Controller
         // still needing staff review), not a business-performance figure.
         $pendingPaymentVerifications = Payment::where('payment_status', 'pending')->count();
 
-        return view('admin.reports.index', compact(
-            'activityLogs',
+        return compact(
             'loginLogs',
             'userReports',
             'roomReports',
@@ -121,10 +139,6 @@ class AdminReportController extends Controller
             'reservationsCount',
             'bookingsCount',
             'pendingPaymentVerifications'
-        ) + [
-            'startDateInput' => $startDate?->toDateString(),
-            'endDateInput' => $endDate?->toDateString(),
-            'isFiltered' => (bool) ($startDate || $endDate),
-        ]);
+        );
     }
 }

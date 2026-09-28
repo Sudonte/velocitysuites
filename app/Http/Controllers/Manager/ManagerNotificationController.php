@@ -43,6 +43,7 @@ class ManagerNotificationController extends Controller
     public function markAllAsRead(): RedirectResponse
     {
         auth()->user()->notifications()->where('is_read', false)->update(['is_read' => true]);
+        Notification::forgetUnreadCountFor(auth()->id());
 
         return back()->with('success', 'All notifications marked as read.');
     }

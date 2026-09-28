@@ -9,6 +9,7 @@ use App\Models\RoomType;
 use App\Support\TestAccountScope;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
@@ -26,6 +27,18 @@ class ReportController extends Controller
             ? Carbon::parse($request->to)->endOfDay()
             : Carbon::now()->endOfDay();
 
+        // Cached (short TTL, keyed by the resolved date range) - this page
+        // runs ~6 aggregate/group-by queries every time it's opened or
+        // re-filtered; repeated views of the same range within the TTL
+        // reuse one computed result instead of re-running all of it.
+        $cacheKey = 'manager_report:' . $from->toDateString() . ':' . $to->toDateString();
+        $data = Cache::remember($cacheKey, now()->addSeconds(60), fn () => $this->computeReport($from, $to));
+
+        return view('manager.reports.index', array_merge(compact('from', 'to'), $data));
+    }
+
+    private function computeReport(Carbon $from, Carbon $to): array
+    {
         // Revenue by day - excludes confirmed internal/test accounts (see
         // App\Support\TestAccountScope) so this reads as real business
         // performance, not development noise.
@@ -79,9 +92,7 @@ class ReportController extends Controller
             ->limit(5)
             ->get();
 
-        return view('manager.reports.index', compact(
-            'from',
-            'to',
+        return compact(
             'revenueByDay',
             'totalRevenue',
             'totalReservations',
@@ -89,6 +100,6 @@ class ReportController extends Controller
             'averageStay',
             'topRoomTypes',
             'topGuests'
-        ));
+        );
     }
 }

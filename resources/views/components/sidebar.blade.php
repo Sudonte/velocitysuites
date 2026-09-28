@@ -457,14 +457,23 @@
                 // so a receptionist can tell there's something unopened in
                 // Check-In/Check-Out without visiting the module first.
                 // Cheap boolean existence checks, not counts - this partial
-                // renders on every receptionist page.
-                $sidebarHasNewCheckIns = \App\Models\Booking::where('booking_status', \App\Models\Booking::STATUS_ACTIVE)
-                    ->whereNotNull('verified_at')
-                    ->whereNull('viewed_at')
-                    ->exists();
-                $sidebarHasNewCheckOuts = \App\Models\Booking::where('booking_status', \App\Models\Booking::STATUS_CHECKED_IN)
-                    ->whereNull('viewed_at')
-                    ->exists();
+                // renders on every receptionist page. Cached briefly (not
+                // per-user - viewed_at is a shared flag any receptionist can
+                // clear) so every page navigation doesn't pay for two more
+                // queries; a short TTL is fine for a "something new" dot.
+                $sidebarHasNewCheckIns = \Illuminate\Support\Facades\Cache::remember(
+                    'sidebar:has_new_checkins', now()->addSeconds(20),
+                    fn () => \App\Models\Booking::where('booking_status', \App\Models\Booking::STATUS_ACTIVE)
+                        ->whereNotNull('verified_at')
+                        ->whereNull('viewed_at')
+                        ->exists()
+                );
+                $sidebarHasNewCheckOuts = \Illuminate\Support\Facades\Cache::remember(
+                    'sidebar:has_new_checkouts', now()->addSeconds(20),
+                    fn () => \App\Models\Booking::where('booking_status', \App\Models\Booking::STATUS_CHECKED_IN)
+                        ->whereNull('viewed_at')
+                        ->exists()
+                );
             @endphp
             <ul class="nav flex-column">
                 <li><a href="{{ route('receptionist.dashboard') }}" class="nav-link {{ request()->routeIs('receptionist.dashboard') ? 'active' : '' }}" title="Dashboard">

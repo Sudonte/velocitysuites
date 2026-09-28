@@ -39,7 +39,15 @@ class NotificationService
     }
 
     /**
-     * Send notification to multiple users by role.
+     * Send notification to multiple users by role. Bulk-inserted in one
+     * query (chunked) rather than one Notification::create() per matching
+     * user - with dozens/hundreds of guests, the old per-row loop meant a
+     * role-wide broadcast (an announcement, "New Reservation" to every
+     * receptionist, etc.) issued that many sequential INSERTs inside the
+     * request that triggered it, blocking whoever published/booked/checked
+     * someone in until every single one finished. Returns an empty
+     * Collection - no caller uses the created rows themselves (fire-and-
+     * forget), so there's nothing worth re-selecting them for.
      */
     public function toRole(string $role, string $title, string $message, string $category = 'general', ?string $excludeEmail = null, ?int $referenceId = null, ?array $targetAudience = null): Collection
     {
@@ -49,19 +57,33 @@ class NotificationService
             $query->where('email', '!=', $excludeEmail);
         }
 
-        $notifications = collect();
-        $query->each(function ($user) use ($title, $message, $category, $referenceId, $targetAudience, $notifications) {
-            $notifications->push(Notification::create([
+        // Raw insert() bypasses Eloquent's date-cast/mutator pipeline
+        // entirely (unlike create()), so timestamps must already be
+        // DB-ready strings here, not Carbon instances.
+        $now = now()->toDateTimeString();
+        $targetAudienceJson = $targetAudience !== null ? json_encode($targetAudience) : null;
+
+        $query->select('id')->chunkById(500, function ($users) use ($title, $message, $category, $referenceId, $targetAudienceJson, $now) {
+            $rows = $users->map(fn ($user) => [
                 'user_id' => $user->id,
                 'title' => $title,
                 'message' => $message,
                 'category' => $category,
                 'reference_id' => $referenceId,
-                'target_audience' => $targetAudience,
-            ]));
+                'target_audience' => $targetAudienceJson,
+                'is_read' => false,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ])->all();
+
+            Notification::insert($rows);
+
+            foreach ($users as $user) {
+                Notification::forgetUnreadCountFor($user->id);
+            }
         });
 
-        return $notifications;
+        return collect();
     }
 
     /**
