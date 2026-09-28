@@ -33,6 +33,35 @@
         ];
     @endphp
 
+    <!-- Search and Filter -->
+    <x-card bodyClass="card-body" class="mb-4">
+        <form method="GET" action="{{ route('manager.notifications.index') }}" class="row g-3">
+            <div class="col-md-4">
+                <input type="text" name="search" class="form-control"
+                       placeholder="Search by title or message" value="{{ request('search') }}">
+            </div>
+            <div class="col-6 col-md-2">
+                <select name="category" class="form-control">
+                    <option value="">All Categories</option>
+                    @foreach($categories as $option)
+                        <option value="{{ $option }}" {{ request('category') === $option ? 'selected' : '' }}>{{ ucfirst(str_replace('_', ' ', $option)) }}</option>
+                    @endforeach
+                </select>
+            </div>
+            <div class="col-6 col-md-2">
+                <input type="date" name="date_from" class="form-control" placeholder="From" value="{{ request('date_from') }}">
+            </div>
+            <div class="col-6 col-md-2">
+                <input type="date" name="date_to" class="form-control" placeholder="To" value="{{ request('date_to') }}">
+            </div>
+            <div class="col-6 col-md-2">
+                <button type="submit" class="btn btn-primary w-100">
+                    <i class="fas fa-search"></i> Search
+                </button>
+            </div>
+        </form>
+    </x-card>
+
     <x-card title="All Notifications" icon="fas fa-list" bodyClass="card-body">
         @forelse($notifications as $notification)
             @php
@@ -75,8 +104,23 @@
                             </button>
                         </form>
                     @else
-                        <span class="badge bg-secondary">Read</span>
+                        <form action="{{ route('manager.notifications.markAsUnread', $notification) }}" method="POST">
+                            @csrf
+                            @method('PUT')
+                            <button type="submit" class="btn btn-sm btn-outline-secondary">
+                                <i class="fas fa-rotate-left"></i> Mark Unread
+                            </button>
+                        </form>
                     @endif
+
+                    <form action="{{ route('manager.notifications.destroy', $notification) }}" method="POST"
+                          onsubmit="return confirm('Delete this notification? This cannot be undone.');">
+                        @csrf
+                        @method('DELETE')
+                        <button type="submit" class="btn btn-sm btn-outline-danger">
+                            <i class="fas fa-trash"></i> Delete
+                        </button>
+                    </form>
 
                     @if($isAnnouncement)
                         <button type="button" class="btn btn-sm btn-outline-danger" data-bs-toggle="modal" data-bs-target="#notifDetailModal{{ $notification->id }}">
@@ -115,7 +159,9 @@
                 </div>
             @endif
         @empty
-            <x-empty-state icon="fas fa-bell" message="No notifications yet." />
+            <x-empty-state icon="fas fa-bell" :message="request()->hasAny(['search', 'category', 'date_from', 'date_to'])
+                ? 'No notifications match your search or filters.'
+                : 'No notifications yet.'" />
         @endforelse
         <x-slot:footer>
             {{ $notifications->links() }}

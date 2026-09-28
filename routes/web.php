@@ -213,7 +213,9 @@ Route::middleware(['auth', 'account.status', 'log.activity', 'no.cache'])->group
         // Notifications
         Route::get('/notifications', [ManagerNotificationController::class, 'index'])->name('notifications.index');
         Route::put('/notifications/{notification}/read', [ManagerNotificationController::class, 'markAsRead'])->name('notifications.markAsRead');
+        Route::put('/notifications/{notification}/unread', [ManagerNotificationController::class, 'markAsUnread'])->name('notifications.markAsUnread');
         Route::put('/notifications/read-all', [ManagerNotificationController::class, 'markAllAsRead'])->name('notifications.markAllAsRead');
+        Route::delete('/notifications/{notification}', [ManagerNotificationController::class, 'destroy'])->name('notifications.destroy');
     });
 
     // Reservation viewing (read-only index + show) - shared between Manager
@@ -416,7 +418,9 @@ Route::middleware(['auth', 'account.status', 'log.activity', 'no.cache'])->group
     Route::middleware('auth')->group(function () {
         Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications.index');
         Route::put('/notifications/{notification}/read', [NotificationController::class, 'markAsRead'])->name('notifications.markAsRead');
+        Route::put('/notifications/{notification}/unread', [NotificationController::class, 'markAsUnread'])->name('notifications.markAsUnread');
         Route::put('/notifications/read-all', [NotificationController::class, 'markAllAsRead'])->name('notifications.markAllAsRead');
+        Route::delete('/notifications/{notification}', [NotificationController::class, 'destroy'])->name('notifications.destroy');
 
         Route::get('/profile', [ProfileController::class, 'show'])->name('profile.show');
         // Light/dark toggle in the navbar account dropdown - role-agnostic,
