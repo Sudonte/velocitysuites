@@ -11,6 +11,7 @@ use App\Support\Activity;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
 
 /**
@@ -50,6 +51,27 @@ class PaymentController extends Controller
         // payment_method was required (null) so old data isn't broken.
         if ($reservation->payment_method !== null && $request->input('payment_method') !== $reservation->payment_method) {
             return response()->json(['message' => "This reservation's payment method is fixed and cannot be changed here."], 422);
+        }
+
+        // Must run BEFORE $request->validate() below, not after - the exact
+        // same ordering bug fixed in Api\BookingController::store()/Api\
+        // ReservationController::store() (commit 4ed3a3a) also applied here:
+        // a dropped-response retry resubmitting the SAME reference_number
+        // would otherwise hit the 'reference_number.unique' rule and get a
+        // misleading "already used" 422 instead of its own already-created
+        // payment back. Scoped to THIS reservation so a stray/replayed key
+        // can never leak a different reservation's payment.
+        $idempotencyKey = $request->input('idempotency_key');
+        if (! empty($idempotencyKey)) {
+            $existing = Payment::where('idempotency_key', $idempotencyKey)
+                ->where('reservation_id', $reservation->id)
+                ->first();
+            if ($existing) {
+                return response()->json([
+                    'payment' => $existing,
+                    'reservation' => $reservation->refresh()->loadMissing(['roomType', 'booking'])->append(['total_amount_due', 'amenities']),
+                ], 201);
+            }
         }
 
         $reservation->loadMissing('roomType');
@@ -102,6 +124,12 @@ class PaymentController extends Controller
             // accepting any of the 5 known values (rather than cross-checking
             // it against payment_type) can't be used to under/overpay.
             'selected_payment_percentage' => 'nullable|numeric|in:20,30,40,50,100',
+            // Optional - an older app version that never sends one simply
+            // gets no idempotency protection, same as today. See the
+            // pre-validate lookup above and MULTI_ROOM_TRANSACTION_BACKEND_SPEC.md
+            // section 9b for the shared convention across all 3 payment-
+            // bearing endpoints.
+            'idempotency_key' => 'nullable|string|max:100',
         ], [
             'reference_number.unique' => 'This GCash reference number has already been used.',
         ]);
@@ -155,7 +183,10 @@ class PaymentController extends Controller
         // commits, then correctly sees the first request's own result
         // (a pending payment, or status already CONVERTED_TO_BOOKING) and
         // safely no-ops instead of duplicating it.
-        $outcome = DB::transaction(function () use ($reservation, $validated, $paymentStageForDupeCheck, $paymentStage, $receiptPath) {
+        $idempotencyKeyForCreate = $validated['idempotency_key'] ?? null;
+
+        try {
+            $outcome = DB::transaction(function () use ($reservation, $validated, $paymentStageForDupeCheck, $paymentStage, $receiptPath, $idempotencyKeyForCreate) {
             $locked = Reservation::whereKey($reservation->id)->lockForUpdate()->first();
 
             if (! $locked || ! in_array($locked->status, Reservation::ACTIVE_STATUSES, true)) {
@@ -167,7 +198,23 @@ class PaymentController extends Controller
             // Payment row with nothing ever superseding the earlier ones - the guest's own
             // existing cancel/void endpoints are the correct way to clear a stuck attempt
             // before trying again.
-            if ($locked->payments()->where('payment_stage', $paymentStageForDupeCheck)->where('payment_status', 'pending')->exists()) {
+            $existingPending = $locked->payments()
+                ->where('payment_stage', $paymentStageForDupeCheck)
+                ->where('payment_status', 'pending')
+                ->first();
+            if ($existingPending) {
+                // A genuinely simultaneous resubmission of the SAME attempt
+                // (identical idempotency_key) can still reach here: the
+                // pre-validate lookup above ran before either request had
+                // committed, so both passed it. Rather than reject the very
+                // request that's racing against its own already-committed
+                // result, return that result as success - the same outcome
+                // a slightly-later retry would get from the pre-validate
+                // lookup instead.
+                if (! empty($idempotencyKeyForCreate) && $existingPending->idempotency_key === $idempotencyKeyForCreate) {
+                    return ['payment' => $existingPending, 'reservation' => $locked];
+                }
+
                 return ['error' => 'duplicate_pending'];
             }
 
@@ -199,13 +246,41 @@ class PaymentController extends Controller
                     'gcash_number' => $validated['gcash_number'],
                     'receipt_path' => $receiptPath,
                     'amount_paid' => $validated['amount_paid'],
+                    'idempotency_key' => $idempotencyKeyForCreate,
                 ], $paymentStage);
             } else {
-                $payment = $this->workflow->recordCashIntent($locked, (float) $validated['amount_paid'], $paymentStage);
+                $payment = $this->workflow->recordCashIntent($locked, (float) $validated['amount_paid'], $paymentStage, $idempotencyKeyForCreate);
             }
 
             return ['payment' => $payment, 'reservation' => $locked];
-        });
+            });
+        } catch (\Illuminate\Database\UniqueConstraintViolationException $e) {
+            // Lost a genuine race: another request with the SAME
+            // idempotency_key committed its own Payment row microseconds
+            // before this one - mirrors Api\BookingController::store()'s
+            // identical backstop. The application-level check above already
+            // handles the same-reservation case (both requests serialize on
+            // the reservation row lock), so this is defense-in-depth only,
+            // reachable mainly if idempotency_key were ever reused across
+            // different reservations.
+            if (! empty($idempotencyKeyForCreate) && str_contains($e->getMessage(), 'idempotency_key')) {
+                $winner = Payment::where('idempotency_key', $idempotencyKeyForCreate)
+                    ->where('reservation_id', $reservation->id)
+                    ->first();
+                if ($winner) {
+                    return response()->json([
+                        'payment' => $winner,
+                        'reservation' => $reservation->refresh()->loadMissing(['roomType', 'booking'])->append(['total_amount_due', 'amenities']),
+                    ], 201);
+                }
+            }
+            Log::error('Payment submission failed on an unexpected unique constraint violation', [
+                'reservation_id' => $reservation->id,
+                'idempotency_key' => $idempotencyKeyForCreate,
+                'error' => $e->getMessage(),
+            ]);
+            return response()->json(['message' => 'This payment could not be submitted. Please try again.'], 500);
+        }
 
         if (isset($outcome['error'])) {
             $message = $outcome['error'] === 'not_payable'

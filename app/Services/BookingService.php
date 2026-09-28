@@ -11,6 +11,7 @@ use App\Models\Reservation;
 use App\Models\RoomType;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 /**
  * Single place where a Reservation turns into a paid Booking, used by
@@ -24,6 +25,12 @@ use Illuminate\Support\Str;
  */
 class BookingService
 {
+    public function __construct(
+        private RoomAvailabilityService $availability,
+        private ReservationWorkflowService $workflow,
+    ) {
+    }
+
     /**
      * Room charge for the full stay (room type rate x nights x
      * rooms_requested) minus the best applicable active discount promotion, minus the senior-
@@ -137,15 +144,66 @@ class BookingService
      * has no 'pending' member, since a Booking never exists before that
      * point.
      */
-    public function ensureBooking(Reservation $reservation, string $bookingStatus = Booking::STATUS_ACTIVE): Booking
+    public function ensureBooking(Reservation $reservation, string $bookingStatus = Booking::STATUS_ACTIVE, ?string $paymentMethod = null): Booking
     {
+        // Re-fetch rather than trust the caller's instance as-is - a just-
+        // created, never-refreshed Reservation (e.g. WalkInController::
+        // store()'s own Reservation::create(), which omits rooms_requested
+        // entirely) reads that NOT NULL-with-a-DB-default column back as
+        // null in PHP memory, not its true default (1) - which silently
+        // defeated firstUnavailableLine()'s shortfall check below
+        // (`$available < null` is always false in PHP, so a fully-booked
+        // room type was never detected) as well as the discount_requested
+        // NOT NULL constraint on the Booking insert further down. Both
+        // confirmed live before this fix.
+        $reservation = $reservation->fresh();
+
         if ($reservation->booking) {
             return $reservation->booking;
         }
 
+        // Callers wrap this in their own DB::transaction() (see
+        // recordPayment() below), so this lock is effective there. Mirrors
+        // ReservationWorkflowService::convertToBooking()'s identical lock-
+        // then-recheck pattern (see that method's own doc) - this is the
+        // OTHER path that can turn a Reservation into a real, inventory-
+        // consuming Booking (currently only reachable via WalkInController's
+        // "book" intent), and previously had no availability check at all,
+        // not even an unlocked fast-fail one - a walk-in "book" for an
+        // already-fully-booked room type would silently succeed and
+        // overbook. Reuses ReservationWorkflowService's own helpers rather
+        // than duplicating this logic a third time.
+        $this->availability->lockRoomTypesForAvailabilityCheck(
+            collect($this->workflow->roomTypeIdsForReservation($reservation))
+        );
+        if ($shortfall = $this->workflow->firstUnavailableLine($reservation)) {
+            throw ValidationException::withMessages([
+                'room_type_id' => $shortfall['quantity'] > 1
+                    ? "Not enough {$shortfall['name']} rooms available for the requested dates (needs {$shortfall['quantity']}, only {$shortfall['available']} free)."
+                    : "{$shortfall['name']} is fully booked for the requested dates.",
+            ]);
+        }
+
+        // Same fields ReservationWorkflowService::createBookingFromReservation()
+        // copies, for the same reasons (see that method's own doc) - this
+        // method previously only copied a handful of columns, silently
+        // leaving guest name, rooms_requested, payment_method, the room-
+        // line breakdown, and discount/ID-card fields null on every
+        // Booking created through this path.
         $booking = Booking::create([
             'reservation_id' => $reservation->id,
             'room_type_id' => $reservation->room_type_id,
+            // reservations.rooms_requested/discount_requested are both
+            // NOT NULL DB columns with a default (1 / false respectively)
+            // applied only when the column is omitted from an INSERT - a
+            // just-created, never-refreshed $reservation instance (e.g.
+            // WalkInController::store()'s own Reservation::create(), which
+            // sets neither) reads back as null in PHP memory rather than
+            // that default, so copying it through unguarded here would
+            // fail the identical NOT NULL constraint on bookings (confirmed
+            // live). Explicit fallbacks make this correct regardless of
+            // whether the caller's $reservation reflects DB defaults.
+            'rooms_requested' => $reservation->rooms_requested ?? 1,
             'check_in' => $reservation->check_in,
             'check_out' => $reservation->check_out,
             'adults' => $reservation->adults,
@@ -153,7 +211,37 @@ class BookingService
             'number_of_guests' => $reservation->number_of_guests,
             'confirmed_at' => now(),
             'booking_status' => $bookingStatus === 'pending' ? Booking::STATUS_ACTIVE : $bookingStatus,
+            // $reservation->payment_method is reliably set for a converted
+            // Pay-Now/Pay-Later reservation (recordDepositPayment()/
+            // recordCashIntent() both set it), but WalkInController::store()
+            // never sets it on the Reservation row it creates at all - the
+            // $paymentMethod param (the method actually being recorded
+            // right now, when the caller knows it) takes priority so a
+            // walk-in GCash booking doesn't end up looking like a Booking
+            // with no payment method on file.
+            'payment_method' => $paymentMethod ?? $reservation->payment_method,
+            'guest_first_name' => $reservation->guest_first_name,
+            'guest_middle_name' => $reservation->guest_middle_name,
+            'guest_last_name' => $reservation->guest_last_name,
+            'additional_guest_details' => $reservation->additional_guest_details,
+            'id_card_type' => $reservation->id_card_type,
+            'id_card_image_path' => $reservation->id_card_image_path,
+            'discount_requested' => $reservation->discount_requested ?? false,
+            'discount_verification_status' => $reservation->discount_verification_status ?? 'not_requested',
+            'selected_payment_percentage' => $reservation->selected_payment_percentage,
+            'required_payment_amount' => $reservation->required_payment_amount,
         ]);
+
+        foreach ($reservation->roomLines()->get() as $line) {
+            $booking->roomLines()->create([
+                'room_type_id' => $line->room_type_id,
+                'room_type_name' => $line->room_type_name,
+                'quantity' => $line->quantity,
+                'price_per_night' => $line->price_per_night,
+                'number_of_nights' => $line->number_of_nights,
+                'subtotal' => $line->subtotal,
+            ]);
+        }
 
         if ($reservation->status !== Reservation::STATUS_CONVERTED) {
             $reservation->update(['status' => Reservation::STATUS_CONVERTED]);
@@ -249,7 +337,7 @@ class BookingService
     public function recordPayment(Reservation $reservation, array $paymentData, bool $staffRecorded): Payment
     {
         return DB::transaction(function () use ($reservation, $paymentData, $staffRecorded) {
-            $booking = $this->ensureBooking($reservation, $staffRecorded ? Booking::STATUS_ACTIVE : 'pending');
+            $booking = $this->ensureBooking($reservation, $staffRecorded ? Booking::STATUS_ACTIVE : 'pending', $paymentData['payment_method'] ?? null);
             $billing = $this->ensureBilling($booking, $reservation);
 
             $referenceNumber = $paymentData['reference_number'] ?? null;

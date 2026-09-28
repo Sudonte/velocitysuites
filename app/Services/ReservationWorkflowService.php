@@ -93,9 +93,17 @@ class ReservationWorkflowService
     public function hasOverlappingReservation(Guest $guest, RoomType $roomType, Carbon $checkIn, Carbon $checkOut, ?int $excludeReservationId = null): bool
     {
         return Reservation::where('guest_id', $guest->id)
-            ->where('room_type_id', $roomType->id)
             ->whereNotIn('status', [Reservation::STATUS_CANCELLED, Reservation::STATUS_REJECTED])
             ->when($excludeReservationId, fn ($q) => $q->where('id', '!=', $excludeReservationId))
+            // whereHas(roomLines) rather than the parent row's own
+            // room_type_id - that column only ever reflects a multi-room-
+            // type reservation's FIRST line (kept in sync purely for
+            // backward-compatible display - see e.g. DirectBookingService::
+            // create()'s identical convention on the Booking side), so
+            // checking it alone silently missed an overlap on any 2nd+ room
+            // type in a multi-room-type reservation. reservation_room_lines
+            // is the authoritative per-type record.
+            ->whereHas('roomLines', fn ($q) => $q->where('room_type_id', $roomType->id))
             ->where('check_in', '<', $checkOut)
             ->where('check_out', '>', $checkIn)
             ->where(fn ($q) => $q->where('check_in', '!=', $checkIn)->orWhere('check_out', '!=', $checkOut))
@@ -147,11 +155,12 @@ class ReservationWorkflowService
      * (cash always behaves like Pay Later: stays in "To Be Confirmed"
      * until staff reviews it in person, and never auto-converts).
      */
-    public function recordCashIntent(Reservation $reservation, float $amount, string $paymentStage = 'deposit'): Payment
+    public function recordCashIntent(Reservation $reservation, float $amount, string $paymentStage = 'deposit', ?string $idempotencyKey = null): Payment
     {
         $payment = Payment::create([
             'reservation_id' => $reservation->id,
             'billing_id' => null,
+            'idempotency_key' => $idempotencyKey,
             'payment_method' => 'cash',
             'amount_paid' => $amount,
             'payment_stage' => $paymentStage,
@@ -243,7 +252,7 @@ class ReservationWorkflowService
      * convertToBooking()/tryAutoConvert()'s identical need to lock every
      * relevant room_type row before re-checking availability.
      */
-    private function roomTypeIdsForReservation(Reservation $reservation): array
+    public function roomTypeIdsForReservation(Reservation $reservation): array
     {
         $lines = $reservation->roomLines()->get();
 
@@ -262,7 +271,7 @@ class ReservationWorkflowService
      * ['name' => ..., 'quantity' => ..., 'available' => ...] for the first
      * line found short, for a clear error message.
      */
-    private function firstUnavailableLine(Reservation $reservation): ?array
+    public function firstUnavailableLine(Reservation $reservation): ?array
     {
         $lines = $reservation->roomLines()->get();
         if ($lines->isEmpty()) {

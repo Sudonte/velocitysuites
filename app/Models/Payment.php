@@ -15,6 +15,7 @@ class Payment extends Model
         'billing_id',
         'reservation_id',
         'booking_id',
+        'idempotency_key',
         'payment_method',
         'reference_number',
         'receipt_path',
