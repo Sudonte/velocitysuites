@@ -40,7 +40,11 @@ class RoomTypeManagementController extends Controller
             $query->where('status', $request->status);
         }
 
-        $roomTypes = $query->orderBy('name')->paginate(15);
+        // simplePaginate (Previous/Next only, no numbered page-link boxes) -
+        // the numbered links render broken/oversized here for reasons that
+        // don't trace back to anything in this app's own CSS, same fix
+        // already applied everywhere else in the app.
+        $roomTypes = $query->orderBy('name')->simplePaginate(15)->withQueryString();
 
         return view('admin.room-types.index', compact('roomTypes'));
     }
@@ -67,7 +71,11 @@ class RoomTypeManagementController extends Controller
             $query->where('status', $request->status);
         }
 
-        $rooms = $query->orderBy('room_number')->paginate(20)->withQueryString();
+        // simplePaginate (Previous/Next only, no numbered page-link boxes) -
+        // the numbered links render broken/oversized here for reasons that
+        // don't trace back to anything in this app's own CSS, same fix
+        // already applied everywhere else in the app.
+        $rooms = $query->orderBy('room_number')->simplePaginate(20)->withQueryString();
 
         // Preview of the next numbers the bulk-add would generate.
         $nextNumbers = $roomType->nextRoomNumbers(3);

@@ -37,7 +37,11 @@ class PromotionManagementController extends Controller
             $query->where('status', $request->status);
         }
 
-        $promotions = $query->with('amenities')->latest()->paginate(15);
+        // simplePaginate (Previous/Next only, no numbered page-link boxes) -
+        // the numbered links render broken/oversized here for reasons that
+        // don't trace back to anything in this app's own CSS, same fix
+        // already applied everywhere else in the app.
+        $promotions = $query->with('amenities')->latest()->simplePaginate(15)->withQueryString();
         $roomTypes = RoomType::orderBy('name')->get();
 
         return view('admin.promotions.index', compact('promotions', 'roomTypes'));

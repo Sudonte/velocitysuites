@@ -36,12 +36,16 @@ class AdminReportController extends Controller
             [$startDate, $endDate] = [$endDate->copy()->startOfDay(), $startDate->copy()->endOfDay()];
         }
 
-        // Activity logs (newest first, paginated)
+        // Activity logs (newest first, paginated) - simplePaginate
+        // (Previous/Next only, no numbered page-link boxes): the numbered
+        // links render broken/oversized here for reasons that don't trace
+        // back to anything in this app's own CSS, same fix already applied
+        // everywhere else in the app.
         $activityLogs = ActivityLog::with('user')
             ->when($startDate, fn ($q) => $q->where('created_at', '>=', $startDate))
             ->when($endDate, fn ($q) => $q->where('created_at', '<=', $endDate))
             ->latest()
-            ->paginate(20)
+            ->simplePaginate(20)
             ->withQueryString();
 
         // Login-style logs: users ordered by last_login_at

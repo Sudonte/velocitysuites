@@ -6,7 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Booking;
 use App\Models\Reservation;
 use Illuminate\Http\Request;
-use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Pagination\Paginator;
 use Illuminate\View\View;
 
 /**
@@ -153,11 +153,18 @@ class ReservationMonitoringController extends Controller
         // booking_status, for every booking row above.
         $summaryPendingCount = $items->whereIn('monitor_status_value', [Reservation::STATUS_AWAITING_CASH, Reservation::STATUS_AWAITING_GCASH, 'AWAITING_VERIFICATION'])->count();
 
+        // Paginator (simple, not LengthAwarePaginator) - Previous/Next only,
+        // no numbered page-link boxes. Those render broken/oversized on
+        // this app's numbered paginators for reasons that don't trace back
+        // to anything in this app's own CSS - already fixed the same way
+        // everywhere else (simplePaginate() on every other list). Fetching
+        // one extra record lets Paginator detect "is there a next page"
+        // without a separate total COUNT query, matching how simplePaginate()
+        // itself works under the hood.
         $perPage = 15;
         $page = max(1, (int) $request->get('page', 1));
-        $reservations = new LengthAwarePaginator(
-            $items->forPage($page, $perPage)->values(),
-            $items->count(),
+        $reservations = new Paginator(
+            $items->forPage($page, $perPage + 1)->values(),
             $perPage,
             $page,
             ['path' => $request->url(), 'query' => $request->query()]

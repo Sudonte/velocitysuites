@@ -14,7 +14,11 @@ class ManagerNotificationController extends Controller
      */
     public function index(): View
     {
-        $notifications = auth()->user()->notifications()->latest()->paginate(20);
+        // simplePaginate (Previous/Next only, no numbered page-link boxes) -
+        // the numbered links render broken/oversized here for reasons that
+        // don't trace back to anything in this app's own CSS, same fix
+        // already applied everywhere else in the app.
+        $notifications = auth()->user()->notifications()->latest()->simplePaginate(20);
 
         return view('manager.notifications.index', compact('notifications'));
     }

@@ -54,7 +54,11 @@ class UserManagementController extends Controller
             $query->where('status', $request->status);
         }
 
-        $users = $query->paginate(15);
+        // simplePaginate (Previous/Next only, no numbered page-link boxes) -
+        // the numbered links render broken/oversized here for reasons that
+        // don't trace back to anything in this app's own CSS, same fix
+        // already applied everywhere else in the app.
+        $users = $query->simplePaginate(15)->withQueryString();
 
         $pendingResetRequestsCount = StaffPasswordResetRequest::where('status', 'pending')->count();
 
