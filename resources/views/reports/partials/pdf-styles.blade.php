@@ -1,5 +1,8 @@
 <style>
-    body { font-family: Helvetica, Arial, sans-serif; font-size: 11px; color: #1a1a1a; }
+    /* DejaVu Sans (bundled with dompdf), not Helvetica - Helvetica is a
+       core PDF font limited to WinAnsi encoding, which has no peso sign
+       glyph (renders as "?"); DejaVu Sans covers it. */
+    body { font-family: 'DejaVu Sans', sans-serif; font-size: 11px; color: #1a1a1a; }
 
     .pdf-header { width: 100%; border-bottom: 2px solid #D6414B; padding-bottom: 10px; margin-bottom: 18px; }
     .pdf-header table { width: 100%; }
