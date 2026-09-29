@@ -97,7 +97,20 @@ class CheckOutController extends Controller
 
         $discounts = Discount::where('status', 'active')->orderBy('name')->get();
 
-        return view('receptionist.check-out.partials.billing-panel', compact('booking', 'billing', 'amenityRequests', 'discounts'));
+        // Displayed instead of the originally scheduled check_out/
+        // number_of_nights so the panel's "Nights"/"Check-Out" labels never
+        // disagree with the room_charge amount actually billed below (see
+        // computeRoomCharge()'s identical early/late-checkout handling).
+        $effectiveCheckOutDate = $this->effectiveCheckOutDate($booking);
+        $effectiveNights = max(1, abs($effectiveCheckOutDate->diffInDays($booking->check_in->copy()->startOfDay())));
+        $scheduledCheckOutDate = $booking->check_out->copy()->startOfDay();
+        $isEarlyCheckout = $effectiveCheckOutDate->lt($scheduledCheckOutDate);
+        $isLateCheckout = $effectiveCheckOutDate->gt($scheduledCheckOutDate);
+
+        return view('receptionist.check-out.partials.billing-panel', compact(
+            'booking', 'billing', 'amenityRequests', 'discounts',
+            'effectiveCheckOutDate', 'effectiveNights', 'isEarlyCheckout', 'isLateCheckout'
+        ));
     }
 
     /**
@@ -737,12 +750,17 @@ class CheckOutController extends Controller
      * which may since have been pushed later by an extension covering
      * only the room(s) still active - so an earlier-departing room in a
      * multi-room booking is never re-billed for nights it was never
-     * actually occupied. A still-active room, or every room in an
-     * ordinary single-room booking (which never goes through
-     * checkOutRoom() at all - see index.blade.php's JS), is charged
-     * through the booking's current check_out date exactly as before.
-     * Falls back to the legacy single room() relation for the rare
-     * pre-migration booking with no pivot rows.
+     * actually occupied. A still-active room - which, by the time billing
+     * is actually generated, is every room in an ordinary single-room
+     * booking (those never go through checkOutRoom() at all - see
+     * index.blade.php's JS) - is charged through TODAY, the day this
+     * checkout is genuinely happening, not the originally scheduled
+     * check_out date: a guest checking out early must only pay for the
+     * nights they actually stayed, and one checking out late (an overstay)
+     * must pay for the extra nights actually used - see this page's own
+     * subtitle ("Checkout can happen before or after the scheduled date;
+     * the bill is settled either way"). Falls back to the legacy single
+     * room() relation for the rare pre-migration booking with no pivot rows.
      */
     private function computeRoomCharge(Booking $booking): float
     {
@@ -751,12 +769,31 @@ class CheckOutController extends Controller
         return (float) $rooms->sum(function ($room) use ($booking) {
             $roomCheckOut = $room->pivot && $room->pivot->checked_out_at
                 ? Carbon::parse($room->pivot->checked_out_at)->startOfDay()
-                : $booking->check_out;
+                : today();
 
             $nights = max(1, abs($roomCheckOut->diffInDays($booking->check_in)));
 
             return (float) $room->room_rate * $nights;
         });
+    }
+
+    /**
+     * The date this booking's stay actually ends, for display alongside
+     * computeRoomCharge()'s money - not necessarily the originally
+     * scheduled check_out date (see that method's doc for the early/late
+     * checkout rationale, identical here). Returns the latest of however
+     * many rooms this booking has, since that's the day the whole stay is
+     * genuinely over.
+     */
+    private function effectiveCheckOutDate(Booking $booking): Carbon
+    {
+        $rooms = $booking->rooms->isNotEmpty() ? $booking->rooms : collect([$booking->room])->filter();
+
+        $dates = $rooms->map(fn ($room) => $room->pivot && $room->pivot->checked_out_at
+            ? Carbon::parse($room->pivot->checked_out_at)->startOfDay()
+            : today());
+
+        return $dates->max() ?? today();
     }
 
     /**

@@ -13,8 +13,14 @@
         </div>
         <div class="col-md-6 text-md-end">
             <strong>Check-In:</strong> {{ $booking->check_in->format('M d, Y') }}<br>
-            <strong>Check-Out:</strong> {{ $booking->check_out->format('M d, Y') }}<br>
-            <strong>Nights:</strong> {{ $booking->number_of_nights }}
+            <strong>Check-Out:</strong> {{ $effectiveCheckOutDate->format('M d, Y') }}
+            @if($isEarlyCheckout)
+                <span class="badge bg-info" title="Originally scheduled for {{ $booking->check_out->format('M d, Y') }} - billed for the shorter, actual stay only.">Early Checkout</span>
+            @elseif($isLateCheckout)
+                <span class="badge bg-warning text-dark" title="Originally scheduled for {{ $booking->check_out->format('M d, Y') }} - billed for the extra night(s) actually stayed.">Late Checkout</span>
+            @endif
+            <br>
+            <strong>Nights:</strong> {{ $effectiveNights }}
         </div>
     </div>
 
@@ -22,7 +28,7 @@
     <div class="table-responsive">
     <table class="table table-sm table-borderless mb-3">
         <tr>
-            <td>Room Charge ({{ $booking->number_of_nights }} night{{ $booking->number_of_nights === 1 ? '' : 's' }})</td>
+            <td>Room Charge ({{ $effectiveNights }} night{{ $effectiveNights === 1 ? '' : 's' }})</td>
             <td class="text-end">₱{{ number_format($billing->room_charge, 2) }}</td>
         </tr>
         @if($billing->additional_guest_fee > 0)
