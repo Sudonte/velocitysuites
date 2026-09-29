@@ -7,6 +7,7 @@ use App\Models\Payment;
 use App\Models\Reservation;
 use App\Models\RoomType;
 use App\Services\DashboardStatsService;
+use App\Support\DateRange;
 use App\Support\TestAccountScope;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
@@ -22,15 +23,21 @@ class ReportController extends Controller
     }
 
     /**
-     * Display reports.
+     * Display reports. Accepts the same ?period=daily|weekly|monthly|custom
+     * (+from/to) quick-period selector as the Manager dashboard (see
+     * App\Support\DateRange) instead of this page's own previous from/to-only,
+     * always-"this month"-by-default filter - a manager/admin can now pick
+     * Today/This Week/This Month/Custom before generating a report instead of
+     * only ever getting an implicit "current month" unless they manually typed
+     * both date fields.
      */
     public function index(Request $request): View
     {
-        [$from, $to] = $this->resolveDateRange($request);
+        [$from, $to, $period] = $this->resolveDateRange($request);
 
         $data = $this->reportData($from, $to);
 
-        return view('manager.reports.index', array_merge(compact('from', 'to'), $data));
+        return view('manager.reports.index', array_merge(compact('from', 'to', 'period'), $data));
     }
 
     /**
@@ -63,18 +70,20 @@ class ReportController extends Controller
     }
 
     /**
-     * @return array{0: Carbon, 1: Carbon}
+     * @return array{0: Carbon, 1: Carbon, 2: string}
      */
     private function resolveDateRange(Request $request): array
     {
-        $from = $request->has('from') && $request->from
-            ? Carbon::parse($request->from)->startOfDay()
-            : Carbon::now()->startOfMonth();
-        $to = $request->has('to') && $request->to
-            ? Carbon::parse($request->to)->endOfDay()
-            : Carbon::now()->endOfDay();
+        // Defaults to Today, not DateRange::resolve()'s own 'monthly'
+        // default - a report should open scoped to today unless the
+        // manager/admin picks a wider period, whereas the Manager
+        // Dashboard (DateRange's other caller) keeps its own separate
+        // "current month" default untouched.
+        if (! $request->filled('period')) {
+            $request->merge(['period' => 'daily']);
+        }
 
-        return [$from, $to];
+        return DateRange::resolve($request);
     }
 
     /**

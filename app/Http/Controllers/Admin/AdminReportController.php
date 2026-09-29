@@ -33,7 +33,7 @@ class AdminReportController extends Controller
      */
     public function index(Request $request): View
     {
-        [$startDate, $endDate] = $this->resolveDateFilter($request);
+        [$startDate, $endDate, $range] = $this->resolveDateFilter($request);
 
         // Activity logs (newest first, paginated) - simplePaginate
         // (Previous/Next only, no numbered page-link boxes): the numbered
@@ -49,10 +49,10 @@ class AdminReportController extends Controller
 
         $data = $this->reportData($startDate, $endDate);
 
-        return view('admin.reports.index', compact('activityLogs') + $data + [
+        return view('admin.reports.index', compact('activityLogs', 'range') + $data + [
             'startDateInput' => $startDate?->toDateString(),
             'endDateInput' => $endDate?->toDateString(),
-            'isFiltered' => (bool) ($startDate || $endDate),
+            'isFiltered' => $range !== 'all',
         ]);
     }
 
@@ -84,14 +84,41 @@ class AdminReportController extends Controller
     }
 
     /**
-     * @return array{0: ?Carbon, 1: ?Carbon}
+     * Quick-period buttons (?range=today|week|month|all) plus the existing
+     * custom start_date/end_date fields. Defaults to Today when neither a
+     * range nor explicit dates are given - "All Time" is now its own
+     * opt-in choice (?range=all) rather than the implicit default, so a
+     * fresh visit to this page doesn't silently aggregate the hotel's
+     * entire history.
+     *
+     * @return array{0: ?Carbon, 1: ?Carbon, 2: string}
      */
     private function resolveDateFilter(Request $request): array
     {
         $request->validate([
             'start_date' => ['nullable', 'date'],
             'end_date' => ['nullable', 'date'],
+            'range' => ['nullable', 'in:today,week,month,all'],
         ]);
+
+        $range = $request->get('range');
+
+        if ($range === 'all') {
+            return [null, null, 'all'];
+        }
+        if ($range === 'today') {
+            return [today()->startOfDay(), today()->endOfDay(), 'today'];
+        }
+        if ($range === 'week') {
+            return [now()->startOfWeek()->startOfDay(), today()->endOfDay(), 'week'];
+        }
+        if ($range === 'month') {
+            return [now()->startOfMonth()->startOfDay(), today()->endOfDay(), 'month'];
+        }
+
+        if (! $request->filled('start_date') && ! $request->filled('end_date')) {
+            return [today()->startOfDay(), today()->endOfDay(), 'today'];
+        }
 
         $startDate = $request->filled('start_date') ? Carbon::parse($request->input('start_date'))->startOfDay() : null;
         $endDate = $request->filled('end_date') ? Carbon::parse($request->input('end_date'))->endOfDay() : null;
@@ -99,7 +126,7 @@ class AdminReportController extends Controller
             [$startDate, $endDate] = [$endDate->copy()->startOfDay(), $startDate->copy()->endOfDay()];
         }
 
-        return [$startDate, $endDate];
+        return [$startDate, $endDate, 'custom'];
     }
 
     /**

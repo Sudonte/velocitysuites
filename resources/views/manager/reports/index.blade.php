@@ -10,27 +10,36 @@
                  Velocity Suites logo) - a plain window.print() of this
                  dashboard would just print the stat cards/icons as-is,
                  which looks like a screenshot rather than a report. --}}
-            <a href="{{ route('manager.reports.exportPdf', request()->only(['from', 'to'])) }}" class="btn btn-outline-secondary">
+            <a href="{{ route('manager.reports.exportPdf', request()->only(['period', 'from', 'to'])) }}" class="btn btn-outline-secondary">
                 <i class="fas fa-file-pdf"></i> Download PDF Report
             </a>
         </x-slot:actions>
     </x-page-header>
 
-    <!-- Date Range Filter -->
-    <x-card bodyClass="card-body" class="mb-4">
-        <form method="GET" action="{{ route('manager.reports.index') }}" class="row g-3">
-            <div class="col-md-4">
-                <label class="form-label">From</label>
-                <input type="date" name="from" class="form-control" value="{{ $from->format('Y-m-d') }}">
+    <!-- Reporting Period - same quick-select + custom range pattern as the
+         Manager Dashboard (App\Support\DateRange), so a report defaults to
+         Today instead of an implicit "current month" unless a wider period
+         is picked. -->
+    <x-card title="Reporting Period" icon="fas fa-calendar-alt" bodyClass="card-body" class="mb-4">
+        <form method="GET" action="{{ route('manager.reports.index') }}" class="row gy-2 gx-2 align-items-end">
+            <div class="col-auto">
+                <div class="d-flex flex-wrap gap-1" role="group" aria-label="Reporting period">
+                    <a href="{{ route('manager.reports.index', ['period' => 'daily']) }}" class="btn btn-sm {{ $period === 'daily' ? 'btn-primary' : 'btn-outline-primary' }}">Today</a>
+                    <a href="{{ route('manager.reports.index', ['period' => 'weekly']) }}" class="btn btn-sm {{ $period === 'weekly' ? 'btn-primary' : 'btn-outline-primary' }}">This Week</a>
+                    <a href="{{ route('manager.reports.index', ['period' => 'monthly']) }}" class="btn btn-sm {{ $period === 'monthly' ? 'btn-primary' : 'btn-outline-primary' }}">This Month</a>
+                    <button type="submit" name="period" value="custom" class="btn btn-sm {{ $period === 'custom' ? 'btn-primary' : 'btn-outline-primary' }}">Custom</button>
+                </div>
             </div>
-            <div class="col-md-4">
-                <label class="form-label">To</label>
-                <input type="date" name="to" class="form-control" value="{{ $to->format('Y-m-d') }}">
+            <div class="col-auto">
+                <label class="form-label mb-0 small text-muted">From</label>
+                <input type="date" name="from" class="form-control form-control-sm" value="{{ $from->toDateString() }}">
             </div>
-            <div class="col-md-4 d-flex align-items-end">
-                <button type="submit" class="btn btn-primary w-100">
-                    <i class="fas fa-search"></i> Generate Report
-                </button>
+            <div class="col-auto">
+                <label class="form-label mb-0 small text-muted">To</label>
+                <input type="date" name="to" class="form-control form-control-sm" value="{{ $to->toDateString() }}">
+            </div>
+            <div class="col-auto">
+                <small class="text-muted">Showing {{ $from->format('M d, Y') }} &ndash; {{ $to->format('M d, Y') }}</small>
             </div>
         </form>
     </x-card>
