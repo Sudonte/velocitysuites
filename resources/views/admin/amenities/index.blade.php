@@ -63,10 +63,10 @@
         </form>
     </x-card>
 
-    <!-- Amenities Table - a simplified summary list (full description/
-         category/stock still lives in each row's View Details modal below),
-         but Charge is shown directly here so free vs. paid/additional is
-         obvious at a glance without opening the modal. -->
+    <!-- Amenities Table - a simplified summary list (full description
+         still lives in each row's View Details modal below), but Charge
+         and Quantity are shown directly here so pricing and remaining
+         stock are both obvious at a glance without opening the modal. -->
     <x-card bodyClass="table-responsive">
         <table class="table table-hover mb-0">
             <thead>
@@ -74,6 +74,7 @@
                     <th>Amenity</th>
                     <th>Type</th>
                     <th>Charge</th>
+                    <th>Quantity</th>
                     <th>Category</th>
                     <th>Status</th>
                     <th>Actions</th>
@@ -95,6 +96,13 @@
                                 <strong class="text-brand">₱{{ number_format($amenity->charge, 2) }}</strong>
                             @else
                                 <span class="text-muted">Free</span>
+                            @endif
+                        </td>
+                        <td>
+                            @if($amenity->quantity <= 0)
+                                <span class="badge bg-danger">Out of Stock</span>
+                            @else
+                                {{ $amenity->quantity }}
                             @endif
                         </td>
                         <td>{{ $amenity->category ?: 'Uncategorized' }}</td>
@@ -130,7 +138,7 @@
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="6">
+                        <td colspan="7">
                             <x-empty-state icon="fas fa-spa" :message="request()->hasAny(['search', 'status', 'category', 'pricing_type'])
                                 ? 'No amenities match your search or filters.'
                                 : 'No amenities found.'" />
