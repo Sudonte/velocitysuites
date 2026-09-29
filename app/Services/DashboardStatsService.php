@@ -111,7 +111,16 @@ class DashboardStatsService
             Booking::whereNull('reservation_id')->where('created_at', '<=', now()->subMonth())
         )->count();
 
-        $pendingPaymentVerifications = Payment::where('payment_status', 'pending')->count();
+        // Matches exactly what the "Pending Payment Verifications" card's
+        // own link shows (Admin\ReservationMonitoringController::index()'s
+        // payment_status=pending filter: reservations/bookings that HAVE a
+        // pending payment) - a raw Payment::count() counts individual
+        // payment ATTEMPTS instead, which over-counts the moment a single
+        // reservation/booking has more than one pending payment row (e.g.
+        // a retried GCash attempt), so the card's number no longer matched
+        // the number of rows the page it links to actually shows.
+        $pendingPaymentVerifications = Reservation::whereHas('payments', fn ($q) => $q->where('payment_status', 'pending'))->count()
+            + Booking::whereNull('reservation_id')->whereHas('payments', fn ($q) => $q->where('payment_status', 'pending'))->count();
 
         $totalUsers = TestAccountScope::excludeFromUsers(User::query())->count();
         $totalUsersLastMonth = TestAccountScope::excludeFromUsers(
