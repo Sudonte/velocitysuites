@@ -127,5 +127,6 @@ Route::middleware(['auth.api', 'role:guest'])->group(function () {
 
     Route::get('/notifications', [NotificationController::class, 'index']);
     Route::put('/notifications/{notification}/read', [NotificationController::class, 'markAsRead']);
+    Route::put('/notifications/{notification}/unread', [NotificationController::class, 'markAsUnread']);
     Route::put('/notifications/read-all', [NotificationController::class, 'markAllAsRead']);
 });

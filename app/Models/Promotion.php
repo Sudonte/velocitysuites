@@ -27,6 +27,7 @@ class Promotion extends Model
         'start_date' => 'date',
         'end_date' => 'date',
         'discount_value' => 'decimal:2',
+        'notified_at' => 'datetime',
     ];
 
     /**

@@ -750,6 +750,8 @@ class ReservationController extends Controller
             $reservation
         );
 
+        $this->notificationService->notifyReservationModified(auth()->user(), $reservation->roomType->name, $reservation->id);
+
         return response()->json($reservation->fresh(['roomType', 'booking.room', 'payments', 'roomLines', 'bookingAmenities'])->append(['total_amount_due', 'amenities']));
     }
 

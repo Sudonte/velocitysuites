@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Promotion;
 use App\Models\RoomType;
+use App\Services\NotificationService;
 use App\Support\Activity;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -13,6 +14,10 @@ use Illuminate\View\View;
 
 class PromotionManagementController extends Controller
 {
+    public function __construct(private NotificationService $notifications)
+    {
+    }
+
     /**
      * Display list of promotions.
      */
@@ -132,6 +137,7 @@ class PromotionManagementController extends Controller
         $this->syncAmenities($promotion, $validated);
 
         Activity::log('Created promotion', $promotion->promo_name, $promotion);
+        $this->notifyIfActive($promotion);
 
         return redirect()->route('admin.promotions.index')->with('success', 'Promotion created successfully!');
     }
@@ -167,6 +173,7 @@ class PromotionManagementController extends Controller
         $this->syncAmenities($promotion, $validated);
 
         Activity::log('Updated promotion', $promotion->promo_name, $promotion);
+        $this->notifyIfActive($promotion->fresh());
 
         return redirect()->route('admin.promotions.index')->with('success', 'Promotion updated successfully!');
     }
@@ -180,9 +187,31 @@ class PromotionManagementController extends Controller
         $promotion->update(['status' => $newStatus]);
 
         Activity::log("Set promotion to {$newStatus}", $promotion->promo_name, $promotion);
+        $this->notifyIfActive($promotion->fresh());
 
         return redirect()->route('admin.promotions.index')
             ->with('success', "Promotion {$newStatus}d successfully!");
+    }
+
+    /**
+     * Notifies every active guest the first time a promotion actually goes
+     * live (status=active + a due start_date) - guarded by notified_at so a
+     * later edit to an already-notified, still-active promotion doesn't
+     * re-blast everyone again. Mirrors Admin\AnnouncementManagementController::
+     * notifyIfPublished()'s exact guard shape.
+     */
+    private function notifyIfActive(Promotion $promotion): void
+    {
+        $isLive = $promotion->status === 'active'
+            && $promotion->start_date !== null
+            && $promotion->start_date->lte(now());
+
+        if (! $isLive || $promotion->notified_at !== null) {
+            return;
+        }
+
+        $this->notifications->notifyPromotion($promotion);
+        $promotion->forceFill(['notified_at' => now()])->save();
     }
 
     /**

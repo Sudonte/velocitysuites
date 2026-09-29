@@ -35,6 +35,24 @@ class NotificationController extends Controller
         return response()->json($notification);
     }
 
+    /**
+     * Counterpart to markAsRead() above - the model method already existed
+     * (used by the staff web portal's own NotificationController@markAsUnread/
+     * ManagerNotificationController@markAsUnread) but was never exposed to the
+     * guest API, so the mobile app had no way to toggle a notification back
+     * to unread.
+     */
+    public function markAsUnread(Notification $notification): JsonResponse
+    {
+        if ($notification->user_id !== auth()->id()) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        $notification->markAsUnread();
+
+        return response()->json($notification);
+    }
+
     public function markAllAsRead(): JsonResponse
     {
         auth()->user()->notifications()->where('is_read', false)->update(['is_read' => true]);

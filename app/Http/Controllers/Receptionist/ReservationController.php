@@ -319,7 +319,7 @@ class ReservationController extends Controller
                 $guestUser,
                 'Reservation Rejected',
                 'Your booking request for a ' . $reservation->roomType->name . ' room has been rejected. Reason: ' . $request->reason,
-                'booking'
+                'reservation'
             );
         }
 

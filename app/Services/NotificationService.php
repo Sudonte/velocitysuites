@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Announcement;
 use App\Models\Booking;
 use App\Models\Notification;
+use App\Models\Promotion;
 use App\Models\User;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
@@ -126,7 +127,12 @@ class NotificationService
     // ============ Booking Notifications ============
 
     /**
-     * Notify about new reservation booking.
+     * Notify about a new reservation (Pay Later / awaiting-confirmation
+     * path) - never a direct "New Booking" purchase, see
+     * notifyNewDirectBooking() for that. category='reservation' so it never
+     * gets mixed up with a genuinely separate Booking-lifecycle event -
+     * see notifyNewDirectBooking()'s own docblock for the historical bug
+     * this split fixes.
      */
     public function notifyNewBooking(User $guest, string $roomName, ?int $referenceId = null): void
     {
@@ -135,7 +141,7 @@ class NotificationService
             $guest,
             'Reservation Pending',
             "Your reservation for {$roomName} is pending confirmation.",
-            'booking',
+            'reservation',
             $referenceId
         );
 
@@ -143,6 +149,35 @@ class NotificationService
         $this->toStaff(
             'New Reservation',
             "New reservation from {$guest->full_name} for {$roomName} requires confirmation.",
+            'reservation',
+            $guest->email,
+            $referenceId
+        );
+    }
+
+    /**
+     * Notify about a new direct "New Booking" purchase (Api\BookingController::store(),
+     * the mobile pay-first path - see Services\DirectBookingService's docblock) - a
+     * genuinely different transaction from a Reservation, never derived from one.
+     * Distinct title ("Booking Pending" vs notifyNewBooking()'s "Reservation Pending")
+     * and category ('booking' vs 'reservation') so a guest's notification feed can
+     * never mislabel one as the other - this call site used to reuse
+     * notifyNewBooking() and always said "Reservation Pending" even for a direct
+     * Booking purchase, which was wrong.
+     */
+    public function notifyNewDirectBooking(User $guest, string $roomName, ?int $referenceId = null): void
+    {
+        $this->toUser(
+            $guest,
+            'Booking Pending',
+            "Your booking for {$roomName} is pending confirmation.",
+            'booking',
+            $referenceId
+        );
+
+        $this->toStaff(
+            'New Booking',
+            "New booking from {$guest->full_name} for {$roomName} requires confirmation.",
             'booking',
             $guest->email,
             $referenceId
@@ -158,7 +193,27 @@ class NotificationService
             $guest,
             'Reservation Confirmed',
             "Great news! Your reservation for {$roomName} has been confirmed.",
-            'booking',
+            'reservation',
+            $referenceId
+        );
+    }
+
+    /**
+     * Notify the guest that their own edit (the one-time "Modify" action -
+     * see Api\ReservationController::update()/Guest\ReservationController::update(),
+     * both gated by Reservation::edited_at) to a still-pending reservation was
+     * saved - the reservation itself doesn't change status here, only its
+     * dates/room/guest details, so this is deliberately a lighter-weight
+     * guest-only notice (no staff broadcast) rather than reusing
+     * notifyNewBooking()'s "requires confirmation" staff ping again.
+     */
+    public function notifyReservationModified(User $guest, string $roomName, ?int $referenceId = null): void
+    {
+        $this->toUser(
+            $guest,
+            'Reservation Modified',
+            "Your reservation for {$roomName} has been updated.",
+            'reservation',
             $referenceId
         );
     }
@@ -172,7 +227,7 @@ class NotificationService
             $guest,
             'Reservation Cancelled',
             'Your reservation has been cancelled.',
-            'booking',
+            'reservation',
             $referenceId
         );
 
@@ -180,7 +235,7 @@ class NotificationService
             'receptionist',
             'Reservation Cancelled',
             "{$guest->full_name} has cancelled their reservation for {$roomName}.",
-            'booking',
+            'reservation',
             $guest->email,
             $referenceId
         );
@@ -226,7 +281,7 @@ class NotificationService
             $guest,
             'Reservation Expired',
             "Your reservation for {$roomName} was cancelled because the 48-hour payment deadline expired.",
-            'booking',
+            'reservation',
             $referenceId
         );
 
@@ -234,7 +289,7 @@ class NotificationService
             'receptionist',
             'Reservation Expired',
             "A reservation for {$roomName} was automatically cancelled - its 48-hour payment deadline expired unpaid.",
-            'booking',
+            'reservation',
             null,
             $referenceId
         );
@@ -243,7 +298,9 @@ class NotificationService
     /**
      * Notify about a reservation automatically cancelled as a No-Show -
      * the guest never arrived or paid before the configured check-in
-     * cutoff. See ReservationWorkflowService::processNoShow().
+     * cutoff. See ReservationWorkflowService::processNoShow(). For a direct
+     * Booking's own, separate no-show path see notifyBookingNoShow() below -
+     * this method is reservation-only, category='reservation'.
      */
     public function notifyNoShow(User $guest, string $roomName, ?int $referenceId = null): void
     {
@@ -251,7 +308,7 @@ class NotificationService
             $guest,
             'Reservation Cancelled - No Show',
             "Your reservation for {$roomName} was cancelled because you did not arrive before the allowed check-in deadline.",
-            'booking',
+            'reservation',
             $referenceId
         );
 
@@ -259,6 +316,35 @@ class NotificationService
             'receptionist',
             'Reservation Cancelled - No Show',
             "A reservation for {$roomName} was automatically cancelled as a No-Show.",
+            'reservation',
+            null,
+            $referenceId
+        );
+    }
+
+    /**
+     * Notify about a direct Booking (never derived from a Reservation)
+     * automatically cancelled as a No-Show - see
+     * ReservationWorkflowService::processBookingNoShow(). Distinct title/
+     * category from notifyNoShow() above for the same Booking-vs-Reservation
+     * reason as notifyNewDirectBooking() - this call site used to reuse
+     * notifyNoShow() and always said "Reservation Cancelled - No Show" even
+     * for a direct Booking with no reservation at all.
+     */
+    public function notifyBookingNoShow(User $guest, string $roomName, ?int $referenceId = null): void
+    {
+        $this->toUser(
+            $guest,
+            'Booking Cancelled - No Show',
+            "Your booking for {$roomName} was cancelled because you did not arrive before the allowed check-in deadline.",
+            'booking',
+            $referenceId
+        );
+
+        $this->toRole(
+            'receptionist',
+            'Booking Cancelled - No Show',
+            "A booking for {$roomName} was automatically cancelled as a No-Show.",
             'booking',
             null,
             $referenceId
@@ -276,7 +362,7 @@ class NotificationService
             $guest,
             'Payment Deadline Approaching',
             "Complete your payment for {$roomName} before the deadline to avoid automatic cancellation of your reservation.",
-            'booking',
+            'reservation',
             $referenceId
         );
     }
@@ -528,6 +614,23 @@ class NotificationService
         }
 
         $this->toRole('manager', 'Payment Recorded', $message, 'payment', null, $referenceId);
+    }
+
+    // ============ Promotion Notifications ============
+
+    /**
+     * Notify every active guest that a promotion went live - the guest-facing
+     * counterpart of notifyAnnouncement() below, for Admin\PromotionManagementController's
+     * notifyIfActive() guard (fires once per promotion, the first time it's actually
+     * active - see that guard's own docblock). Guests only: unlike Announcement,
+     * Promotion has no target_audience concept - it's a guest-facing marketing
+     * campaign, never staff-relevant.
+     */
+    public function notifyPromotion(Promotion $promotion): void
+    {
+        $message = Str::limit((string) $promotion->description, 5000);
+
+        $this->toRole('guest', $promotion->promo_name, $message, 'promotion', null, $promotion->id);
     }
 
     // ============ Announcement Notifications ============

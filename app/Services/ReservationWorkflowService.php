@@ -487,7 +487,7 @@ class ReservationWorkflowService
         );
 
         if ($guest = $booking->account_guest?->user) {
-            $this->notifications->notifyNoShow($guest, $booking->roomType->name ?? 'your stay', $booking->id);
+            $this->notifications->notifyBookingNoShow($guest, $booking->roomType->name ?? 'your stay', $booking->id);
         }
     }
 

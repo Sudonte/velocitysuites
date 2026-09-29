@@ -430,6 +430,8 @@ class ReservationController extends Controller
             $reservation
         );
 
+        $this->notificationService->notifyReservationModified(auth()->user(), $reservation->roomType->name, $reservation->id);
+
         return back()->with('success', 'Reservation updated successfully!');
     }
 

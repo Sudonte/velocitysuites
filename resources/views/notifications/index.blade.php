@@ -26,9 +26,11 @@
     @php
         $categoryIcons = [
             'booking' => 'fa-calendar-check',
+            'reservation' => 'fa-calendar-day',
             'payment' => 'fa-credit-card',
             'check_in' => 'fa-door-open',
             'check_out' => 'fa-door-closed',
+            'promotion' => 'fa-tags',
             'announcement' => 'fa-bullhorn',
         ];
     @endphp

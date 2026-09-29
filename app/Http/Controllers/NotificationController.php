@@ -12,17 +12,23 @@ class NotificationController extends Controller
     /**
      * Known notification categories - kept in sync with
      * App\Services\NotificationService's call sites (general/booking/
-     * payment/check_in/check_out/checkin_reminder/announcement). Used both
-     * to populate the category filter dropdown and to validate the
-     * incoming filter input.
+     * reservation/payment/check_in/check_out/checkin_reminder/promotion/
+     * announcement). Used both to populate the category filter dropdown and
+     * to validate the incoming filter input. 'reservation' and 'promotion'
+     * are additive - 'booking' used to be overloaded for both direct
+     * Bookings and Reservations (see NotificationService::notifyNewBooking()/
+     * notifyNewDirectBooking()'s docblocks), and Promotion previously had no
+     * notification call site at all.
      */
     public const CATEGORIES = [
         'general',
         'booking',
+        'reservation',
         'payment',
         'check_in',
         'check_out',
         'checkin_reminder',
+        'promotion',
         'announcement',
     ];
 

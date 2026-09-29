@@ -392,7 +392,7 @@ class BookingController extends Controller
         )->join(', ');
 
         $user = auth()->user();
-        $this->notificationService->notifyNewBooking($user, $roomSummary, $booking->id);
+        $this->notificationService->notifyNewDirectBooking($user, $roomSummary, $booking->id);
         $this->notificationService->notifyPaymentSubmitted($user, (float) $validated['amount_paid'], $roomSummary, $booking->id);
 
         Activity::log(
