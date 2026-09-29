@@ -67,7 +67,19 @@
     <div class="detail-section-title"><i class="fas fa-chart-line"></i> Performance for the Selected Period</div>
     <div class="row mb-4">
         <div class="col-md-6 col-lg-3 mb-3">
-            <x-stat-card icon="fas fa-money-bill-wave" label="Revenue" value="₱{{ number_format($periodRevenue, 2) }}" color="success" href="{{ route('manager.reports.index', ['from' => $periodFrom->toDateString(), 'to' => $periodTo->toDateString()]) }}" />
+            {{-- :href (not href="{{ }}") - a colon-bound prop passes the raw
+                 route() string straight to <x-stat-card>, which escapes it
+                 exactly once itself. href="{{ route(...) }}" double-escapes
+                 any URL with 2+ query params (the calling template's {{ }}
+                 escapes it once, then the component's own {{ $href }}
+                 escapes it again), turning "&" into the literal text
+                 "&amp;" in the rendered link - which silently drops every
+                 query parameter after the first once a browser tries to
+                 follow it. This is exactly what made the Reservations card
+                 below link to "type=reservation" but silently lose its
+                 "from" bound, pulling in every historical reservation
+                 instead of just this period's. --}}
+            <x-stat-card icon="fas fa-money-bill-wave" label="Revenue" value="₱{{ number_format($periodRevenue, 2) }}" color="success" :href="route('manager.reports.index', ['from' => $periodFrom->toDateString(), 'to' => $periodTo->toDateString()])" />
         </div>
         <div class="col-md-6 col-lg-3 mb-3">
             {{-- type=reservation - without it this linked to the combined
@@ -77,10 +89,10 @@
                  concept appears (both Admin/Manager Booking and Reservation
                  Monitoring pages' Reservations summary card) - was
                  "secondary" (gray) here only. --}}
-            <x-stat-card icon="fas fa-calendar-alt" label="Reservations" :value="$totalReservations" color="info" href="{{ route('manager.reservations.index', ['type' => 'reservation', 'from' => $periodFrom->toDateString(), 'to' => $periodTo->toDateString()]) }}" />
+            <x-stat-card icon="fas fa-calendar-alt" label="Reservations" :value="$totalReservations" color="info" :href="route('manager.reservations.index', ['type' => 'reservation', 'from' => $periodFrom->toDateString(), 'to' => $periodTo->toDateString()])" />
         </div>
         <div class="col-md-6 col-lg-3 mb-3">
-            <x-stat-card icon="fas fa-credit-card" label="Bookings" :value="$totalBookings" color="primary" href="{{ route('manager.reservations.index', ['type' => 'booking', 'from' => $periodFrom->toDateString(), 'to' => $periodTo->toDateString()]) }}" />
+            <x-stat-card icon="fas fa-credit-card" label="Bookings" :value="$totalBookings" color="primary" :href="route('manager.reservations.index', ['type' => 'booking', 'from' => $periodFrom->toDateString(), 'to' => $periodTo->toDateString()])" />
         </div>
         <div class="col-md-6 col-lg-3 mb-3">
             <x-stat-card icon="fas fa-moon" label="Avg. Length of Stay" value="{{ $averageLengthOfStay }} nights" color="info" />

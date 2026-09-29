@@ -1,3 +1,12 @@
+{{--
+    $href is echoed via {{ $href }} below, which escapes it exactly once -
+    always pass it as :href="route(...)" at the call site, never
+    href="{{ route(...) }}" (see components/stat-card.blade.php's identical
+    note for why the latter double-escapes and silently corrupts any route
+    with 2+ query params). No current usage here has a multi-param route,
+    so nothing is broken today, but the same mistake would resurface the
+    moment one does.
+--}}
 @props(['icon', 'title', 'canvasId', 'legend', 'href' => null])
 
 @php

@@ -72,13 +72,22 @@
     <div class="detail-section-title"><i class="fas fa-peso-sign"></i> Revenue</div>
     <div class="row mb-3">
         <div class="col-md-4 mb-3">
-            <x-stat-card icon="fas fa-peso-sign" label="Today's Revenue" value="₱{{ number_format($todayRevenue, 2) }}" :change="$todayRevenueChange" color="success" href="{{ route('admin.reports.index', ['start_date' => today()->toDateString(), 'end_date' => today()->toDateString()]) }}" />
+            {{-- :href (not href="{{ }}") - a colon-bound prop passes the raw
+                 route() string straight to <x-stat-card>, which escapes it
+                 exactly once itself. href="{{ route(...) }}" double-escapes
+                 any URL with 2+ query params (the calling template's {{ }}
+                 escapes it once, then the component's own {{ $href }}
+                 escapes it again), turning "&" into the literal text
+                 "&amp;" in the rendered link - which a browser can't split
+                 back into separate query params, silently dropping every
+                 parameter after the first. --}}
+            <x-stat-card icon="fas fa-peso-sign" label="Today's Revenue" value="₱{{ number_format($todayRevenue, 2) }}" :change="$todayRevenueChange" color="success" :href="route('admin.reports.index', ['start_date' => today()->toDateString(), 'end_date' => today()->toDateString()])" />
         </div>
         <div class="col-md-4 mb-3">
-            <x-stat-card icon="fas fa-money-bill-wave" label="Monthly Revenue" value="₱{{ number_format($monthlyRevenue, 2) }}" :change="$monthlyRevenueChange" color="success" href="{{ route('admin.reports.index', ['start_date' => now()->startOfMonth()->toDateString(), 'end_date' => now()->toDateString()]) }}" />
+            <x-stat-card icon="fas fa-money-bill-wave" label="Monthly Revenue" value="₱{{ number_format($monthlyRevenue, 2) }}" :change="$monthlyRevenueChange" color="success" :href="route('admin.reports.index', ['start_date' => now()->startOfMonth()->toDateString(), 'end_date' => now()->toDateString()])" />
         </div>
         <div class="col-md-4 mb-3">
-            <x-stat-card icon="fas fa-sack-dollar" label="Yearly Revenue" value="₱{{ number_format($yearlyRevenue, 2) }}" :change="$yearlyRevenueChange" color="success" href="{{ route('admin.reports.index', ['start_date' => now()->startOfYear()->toDateString(), 'end_date' => now()->toDateString()]) }}" />
+            <x-stat-card icon="fas fa-sack-dollar" label="Yearly Revenue" value="₱{{ number_format($yearlyRevenue, 2) }}" :change="$yearlyRevenueChange" color="success" :href="route('admin.reports.index', ['start_date' => now()->startOfYear()->toDateString(), 'end_date' => now()->toDateString()])" />
         </div>
     </div>
 

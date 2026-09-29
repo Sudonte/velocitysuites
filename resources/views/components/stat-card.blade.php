@@ -1,3 +1,14 @@
+{{--
+    $href is echoed via {{ $href }} below (line ~38), which escapes it
+    exactly once - always pass it as :href="route(...)" at the call site,
+    never href="{{ route(...) }}". The latter escapes the URL a second
+    time before it even reaches this component, turning "&" between
+    query params into the literal text "&amp;" in the rendered link,
+    which silently drops every parameter after the first once a browser
+    tries to follow it. Only matters once a route has 2+ query params -
+    a single-param href has no "&" to corrupt, which is why this went
+    unnoticed on every stat-card until a multi-param one was added.
+--}}
 @props(['icon', 'label', 'value', 'color' => 'primary', 'href' => null, 'change' => null])
 
 @php
