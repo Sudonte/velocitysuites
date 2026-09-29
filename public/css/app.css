@@ -760,6 +760,29 @@ textarea {
     margin-bottom: 0.5rem;
 }
 
+/* Each amenity pill is a real toggle (a hidden .btn-check checkbox + this
+   label - Bootstrap's own checked/unchecked styling already fills the
+   pill in when selected), but an outlined pill alone doesn't read as
+   "click to add" - admins reported no obvious way to attach an existing
+   amenity here. A leading +/check icon that swaps with the checkbox
+   state makes the affordance explicit without any JS. */
+.audience-chip .amenity-toggle-icon-add,
+.audience-chip .amenity-toggle-icon-added {
+    margin-right: 0.35rem;
+}
+
+.audience-chip .amenity-toggle-icon-added {
+    display: none;
+}
+
+.btn-check:checked + .audience-chip .amenity-toggle-icon-add {
+    display: none;
+}
+
+.btn-check:checked + .audience-chip .amenity-toggle-icon-added {
+    display: inline-block;
+}
+
 /* Main Profile Image manager on Edit Room Type - centered preview with
    Upload/Replace and Remove Photo stacked directly below it, per an
    explicit requirement that Remove Photo sits below the image rather

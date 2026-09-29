@@ -152,6 +152,7 @@
 
                         <div class="mb-3">
                             <small class="text-muted d-block mb-2">
+                                <strong class="text-body">Click an amenity below to add or remove it from this room type</strong>, then Save Changes.
                                 Applies to every room of this type - amenities are managed only at the Room Type level,
                                 never on an individual room.
                                 <a href="{{ route('admin.amenities.create') }}" target="_blank">Create a new amenity <i class="fas fa-arrow-up-right-from-square fa-xs"></i></a>
@@ -167,6 +168,7 @@
                                                        {{ in_array($amenity->id, old('amenities', $selectedAmenityIds)) ? 'checked' : '' }}>
                                                 <label class="btn btn-outline-secondary audience-chip" for="amenity_{{ $amenity->id }}"
                                                        title="{{ $amenity->description }}">
+                                                    <i class="fas fa-plus amenity-toggle-icon-add" aria-hidden="true"></i><i class="fas fa-check amenity-toggle-icon-added" aria-hidden="true"></i>
                                                     {{ $amenity->amenity_name }}
                                                     @if($amenity->isPaid())
                                                         <span class="text-warning">(+₱{{ number_format($amenity->charge, 2) }})</span>
