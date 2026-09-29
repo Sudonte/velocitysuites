@@ -156,16 +156,28 @@ class ReservationMonitoringController extends Controller
         // Quick-glance counts for the summary cards atop the list - scoped
         // to whatever search/type/status/date filters are currently
         // applied (the same $items set the table itself renders), not a
-        // separate unfiltered global count.
-        $summaryTotal = $items->count();
-        $summaryBookingCount = $items->where('monitor_type', 'booking')->count();
-        $summaryReservationCount = $items->where('monitor_type', 'reservation')->count();
+        // separate unfiltered global count. Also excludes confirmed
+        // internal/test accounts (App\Support\TestAccountScope) so these
+        // numbers always match the dashboard cards that link here - the
+        // Admin Dashboard's own Pending/Active Reservations and Total
+        // Bookings figures already exclude test accounts, so without this
+        // the same "Bookings" figure would silently disagree depending on
+        // whether you were looking at the dashboard or this page. The
+        // detailed list below is untouched - every record, test account or
+        // not, still shows there for genuine administrative troubleshooting.
+        $businessItems = $items->reject(fn ($item) => $item->monitor_type === 'reservation'
+            ? (bool) ($item->guest?->user?->is_test_account ?? false)
+            : (bool) ($item->account_guest?->user?->is_test_account ?? false));
+
+        $summaryTotal = $businessItems->count();
+        $summaryBookingCount = $businessItems->where('monitor_type', 'booking')->count();
+        $summaryReservationCount = $businessItems->where('monitor_type', 'reservation')->count();
         // 'AWAITING_VERIFICATION' (Booking::display_status - see that
         // accessor) replaces Booking::STATUS_ACTIVE here: an ACTIVE
         // booking that's already been verified isn't "pending" anything,
         // and monitor_status_value now holds display_status, not the raw
         // booking_status, for every booking row above.
-        $summaryPendingCount = $items->whereIn('monitor_status_value', [Reservation::STATUS_AWAITING_CASH, Reservation::STATUS_AWAITING_GCASH, 'AWAITING_VERIFICATION'])->count();
+        $summaryPendingCount = $businessItems->whereIn('monitor_status_value', [Reservation::STATUS_AWAITING_CASH, Reservation::STATUS_AWAITING_GCASH, 'AWAITING_VERIFICATION'])->count();
 
         // Paginator (simple, not LengthAwarePaginator) - Previous/Next only,
         // no numbered page-link boxes. Those render broken/oversized on

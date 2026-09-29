@@ -98,7 +98,12 @@
             <x-stat-card icon="fas fa-calendar-check" label="Active Reservations" :value="$activeReservations" color="primary" href="{{ route('admin.reservations.index', ['status' => 'ACTIVE_BOOKING']) }}" />
         </div>
         <div class="col-md-6 col-lg-3 mb-3">
-            <x-stat-card icon="fas fa-credit-card" label="Total Bookings" :value="$totalBookings" :change="$totalBookingsChange" color="info" href="{{ route('admin.reservations.index', ['type' => 'booking']) }}" />
+            {{-- color="primary" - matches "Bookings" everywhere else this
+                 concept appears (Manager Dashboard's own Bookings card, and
+                 both the Admin/Manager Booking and Reservation Monitoring
+                 pages' Bookings summary card) - was "info" here only,
+                 disagreeing with the very page this card links to. --}}
+            <x-stat-card icon="fas fa-credit-card" label="Total Bookings" :value="$totalBookings" :change="$totalBookingsChange" color="primary" href="{{ route('admin.reservations.index', ['type' => 'booking']) }}" />
         </div>
         <div class="col-md-6 col-lg-3 mb-3">
             <x-stat-card icon="fas fa-clock" label="Pending Payment Verifications" :value="$pendingPaymentVerifications" color="danger" href="{{ route('admin.reservations.index', ['payment_status' => 'pending']) }}" />

@@ -158,6 +158,23 @@
                                 <a href="{{ route('admin.amenities.create') }}" target="_blank">Create a new amenity <i class="fas fa-arrow-up-right-from-square fa-xs"></i></a>
                             </small>
                             @if($amenities->isNotEmpty())
+                                <div class="input-group input-group-sm mb-3" style="max-width: 420px;">
+                                    <select class="form-select" id="amenityAddSelect">
+                                        <option value="">+ Add an amenity&hellip;</option>
+                                        @foreach($amenities->groupBy('category') as $category => $group)
+                                            <optgroup label="{{ $category ?: 'Uncategorized' }}">
+                                                @foreach($group as $amenity)
+                                                    <option value="{{ $amenity->id }}" {{ in_array($amenity->id, old('amenities', $selectedAmenityIds)) ? 'disabled' : '' }}>
+                                                        {{ $amenity->amenity_name }} ({{ $amenity->isPaid() ? '+₱' . number_format($amenity->charge, 2) : 'Free' }})
+                                                    </option>
+                                                @endforeach
+                                            </optgroup>
+                                        @endforeach
+                                    </select>
+                                    <button type="button" class="btn btn-primary" id="amenityAddBtn">
+                                        <i class="fas fa-plus"></i> Add
+                                    </button>
+                                </div>
                                 @foreach($amenities->groupBy('category') as $category => $group)
                                     <div class="amenity-picker-category">
                                         <h6 class="amenity-picker-category-title">{{ $category ?: 'Uncategorized' }}</h6>
@@ -278,6 +295,41 @@
                 var reader = new FileReader();
                 reader.onload = function (e) { imagePreview.src = e.target.result; };
                 reader.readAsDataURL(file);
+            });
+        }
+
+        // "+ Add" button/dropdown - an explicit alternative to clicking a
+        // chip directly below for admins who'd rather pick from a list than
+        // scan every category. Just checks the same hidden checkbox the
+        // chip already toggles, so Save Changes/validation need no changes;
+        // the chip itself still flips to "selected" via the existing
+        // .btn-check:checked CSS, and still works for removing it again.
+        var amenityAddSelect = document.getElementById('amenityAddSelect');
+        var amenityAddBtn = document.getElementById('amenityAddBtn');
+        if (amenityAddSelect && amenityAddBtn) {
+            amenityAddBtn.addEventListener('click', function () {
+                var id = amenityAddSelect.value;
+                if (!id) return;
+                var checkbox = document.getElementById('amenity_' + id);
+                if (checkbox) {
+                    checkbox.checked = true;
+                }
+                var option = amenityAddSelect.querySelector('option[value="' + id + '"]');
+                if (option) {
+                    option.disabled = true;
+                }
+                amenityAddSelect.value = '';
+            });
+
+            // Re-enable the dropdown option if its chip is later deselected
+            // (clicked directly, or removed) so it can be added again.
+            document.querySelectorAll('.audience-chip-group .btn-check').forEach(function (checkbox) {
+                checkbox.addEventListener('change', function () {
+                    var option = amenityAddSelect.querySelector('option[value="' + checkbox.value + '"]');
+                    if (option) {
+                        option.disabled = checkbox.checked;
+                    }
+                });
             });
         }
     });
