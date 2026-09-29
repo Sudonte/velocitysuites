@@ -41,7 +41,21 @@ class ReservationMonitoringController extends Controller
             $reservationQuery = Reservation::with(['guest.user', 'roomType', 'booking.room', 'booking.billing', 'payments']);
 
             if ($status) {
-                if (in_array($status, [Booking::STATUS_ACTIVE, Booking::STATUS_CHECKED_IN, Booking::STATUS_COMPLETED], true)) {
+                if ($status === 'PENDING') {
+                    // Synthetic value matching the Admin dashboard's
+                    // "Pending Reservations" card (DashboardStatsService::
+                    // computeAdminStats()'s $pendingReservations, which
+                    // counts BOTH awaiting-cash and awaiting-gcash
+                    // reservations combined) - a single real status column
+                    // value can't express "either of these two", and without
+                    // this the card linked to status=AWAITING_CASH_CONFIRMATION
+                    // only, silently hiding every awaiting-GCash reservation
+                    // from the page the card promised to show. Never matches
+                    // a Booking - awaiting-payment is a pre-conversion
+                    // Reservation-only concept - so the booking branch below
+                    // correctly falls through to its existing "no match" case.
+                    $reservationQuery->whereIn('status', Reservation::ACTIVE_STATUSES);
+                } elseif (in_array($status, [Booking::STATUS_ACTIVE, Booking::STATUS_CHECKED_IN, Booking::STATUS_COMPLETED], true)) {
                     $reservationQuery->whereHas('booking', fn ($q) => $q->where('booking_status', $status));
                 } else {
                     $reservationQuery->where('status', $status);

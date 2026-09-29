@@ -70,7 +70,10 @@
             <x-stat-card icon="fas fa-money-bill-wave" label="Revenue" value="₱{{ number_format($periodRevenue, 2) }}" color="success" href="{{ route('manager.reports.index', ['from' => $periodFrom->toDateString(), 'to' => $periodTo->toDateString()]) }}" />
         </div>
         <div class="col-md-6 col-lg-3 mb-3">
-            <x-stat-card icon="fas fa-calendar-alt" label="Reservations" :value="$totalReservations" color="secondary" href="{{ route('manager.reservations.index', ['from' => $periodFrom->toDateString(), 'to' => $periodTo->toDateString()]) }}" />
+            {{-- type=reservation - without it this linked to the combined
+                 reservations+bookings view, which could show more rows than
+                 $totalReservations (a pure Reservation count) promised. --}}
+            <x-stat-card icon="fas fa-calendar-alt" label="Reservations" :value="$totalReservations" color="secondary" href="{{ route('manager.reservations.index', ['type' => 'reservation', 'from' => $periodFrom->toDateString(), 'to' => $periodTo->toDateString()]) }}" />
         </div>
         <div class="col-md-6 col-lg-3 mb-3">
             <x-stat-card icon="fas fa-credit-card" label="Bookings" :value="$totalBookings" color="primary" href="{{ route('manager.reservations.index', ['type' => 'booking', 'from' => $periodFrom->toDateString(), 'to' => $periodTo->toDateString()]) }}" />

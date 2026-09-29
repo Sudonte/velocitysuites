@@ -36,7 +36,14 @@ class ReservationViewController extends Controller
             $reservationQuery = Reservation::with(['guest.user', 'roomType', 'booking.room', 'booking.billing', 'payments']);
 
             if ($status) {
-                if (in_array($status, [Booking::STATUS_ACTIVE, Booking::STATUS_CHECKED_IN, Booking::STATUS_COMPLETED], true)) {
+                if ($status === 'PENDING') {
+                    // Synthetic value matching Admin\ReservationMonitoringController's
+                    // identical fix - see that one's doc. Kept in sync here
+                    // even though no Manager dashboard card currently links
+                    // with status=PENDING, so this twin controller can't
+                    // silently regress the same bug if one ever does.
+                    $reservationQuery->whereIn('status', Reservation::ACTIVE_STATUSES);
+                } elseif (in_array($status, [Booking::STATUS_ACTIVE, Booking::STATUS_CHECKED_IN, Booking::STATUS_COMPLETED], true)) {
                     $reservationQuery->whereHas('booking', fn ($q) => $q->where('booking_status', $status));
                 } else {
                     $reservationQuery->where('status', $status);

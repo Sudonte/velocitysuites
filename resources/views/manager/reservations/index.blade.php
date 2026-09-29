@@ -49,6 +49,7 @@
                 <label class="form-label small text-muted mb-1">Status</label>
                 <select name="status" class="form-control">
                     <option value="">All Status</option>
+                    <option value="PENDING" {{ request('status') === 'PENDING' ? 'selected' : '' }}>Pending (Any Payment Method)</option>
                     <option value="AWAITING_CASH_CONFIRMATION" {{ request('status') === 'AWAITING_CASH_CONFIRMATION' ? 'selected' : '' }}>Awaiting Cash Payment</option>
                     <option value="AWAITING_GCASH_PAYMENT" {{ request('status') === 'AWAITING_GCASH_PAYMENT' ? 'selected' : '' }}>Awaiting GCash Payment</option>
                     <option value="ACTIVE_BOOKING" {{ request('status') === 'ACTIVE_BOOKING' ? 'selected' : '' }}>Confirmed (Booked)</option>

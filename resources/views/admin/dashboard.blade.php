@@ -86,7 +86,13 @@
     <div class="detail-section-title"><i class="fas fa-calendar-check"></i> Reservations &amp; Payments</div>
     <div class="row mb-3">
         <div class="col-md-6 col-lg-3 mb-3">
-            <x-stat-card icon="fas fa-hourglass-half" label="Pending Reservations" :value="$pendingReservations" color="warning" href="{{ route('admin.reservations.index', ['status' => 'AWAITING_CASH_CONFIRMATION']) }}" />
+            {{-- status=PENDING - $pendingReservations counts BOTH
+                 awaiting-cash AND awaiting-gcash reservations, but
+                 status=AWAITING_CASH_CONFIRMATION alone only ever showed the
+                 first half of what the card promised; PENDING is a
+                 synthetic value ReservationMonitoringController::index()
+                 recognizes as "either awaiting status". --}}
+            <x-stat-card icon="fas fa-hourglass-half" label="Pending Reservations" :value="$pendingReservations" color="warning" href="{{ route('admin.reservations.index', ['status' => 'PENDING']) }}" />
         </div>
         <div class="col-md-6 col-lg-3 mb-3">
             <x-stat-card icon="fas fa-calendar-check" label="Active Reservations" :value="$activeReservations" color="primary" href="{{ route('admin.reservations.index', ['status' => 'ACTIVE_BOOKING']) }}" />

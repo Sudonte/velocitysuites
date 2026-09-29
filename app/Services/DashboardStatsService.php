@@ -96,9 +96,19 @@ class DashboardStatsService
             Reservation::where('created_at', '<=', now()->subMonth())
         )->count();
 
-        $totalBookings = TestAccountScope::excludeFromReservations(Reservation::whereHas('booking'))->count();
-        $totalBookingsLastMonth = TestAccountScope::excludeFromReservations(
-            Reservation::whereHas('booking', fn ($q) => $q->where('confirmed_at', '<=', now()->subMonth()))
+        // Matches exactly what the "Total Bookings" card's own link shows
+        // (Admin\ReservationMonitoringController::index()'s type=booking
+        // filter: Booking::whereNull('reservation_id'), the standalone/
+        // direct "New Booking" pay-first transactions) - previously counted
+        // converted Reservations instead (Reservation::whereHas('booking')),
+        // a completely different, non-overlapping set from what clicking
+        // the card actually showed, so the number never matched the page it
+        // linked to. See Manager\ReservationViewController::index()'s
+        // identical type=booking semantics for the Manager dashboard's own
+        // "Bookings" card fix.
+        $totalBookings = TestAccountScope::excludeFromBookings(Booking::whereNull('reservation_id'))->count();
+        $totalBookingsLastMonth = TestAccountScope::excludeFromBookings(
+            Booking::whereNull('reservation_id')->where('created_at', '<=', now()->subMonth())
         )->count();
 
         $pendingPaymentVerifications = Payment::where('payment_status', 'pending')->count();
@@ -325,8 +335,12 @@ class DashboardStatsService
         $periodReservations = TestAccountScope::excludeFromReservations(
             Reservation::whereBetween('check_in', [$from, $to])
         )->count();
-        $periodBookings = TestAccountScope::excludeFromReservations(
-            Reservation::whereBetween('check_in', [$from, $to])->whereHas('booking')
+        // See adminStats()'s identical fix - matches exactly what the
+        // "Bookings" card's own link shows (Manager\ReservationViewController::
+        // index()'s type=booking filter: standalone/direct "New Booking"
+        // pay-first transactions), not converted Reservations.
+        $periodBookings = TestAccountScope::excludeFromBookings(
+            Booking::whereNull('reservation_id')->whereBetween('check_in', [$from, $to])
         )->count();
         $periodCancelled = TestAccountScope::excludeFromReservations(
             Reservation::whereBetween('check_in', [$from, $to])->where('status', Reservation::STATUS_CANCELLED)
