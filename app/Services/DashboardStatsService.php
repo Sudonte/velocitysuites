@@ -22,13 +22,20 @@ use Illuminate\Support\Facades\Cache;
  * re-derived (and drifting) inline in each dashboard controller.
  *
  * Every business-facing figure here (revenue, occupancy, reservation/
- * booking counts, trend charts) excludes confirmed internal/developer
- * test accounts via App\Support\TestAccountScope - see that class's own
- * doc. pendingPaymentVerifications is deliberately left unfiltered: it's
- * an operational queue depth (a real payment a receptionist still has to
- * review, test account or not), not a business-performance figure.
- * recentActivities (the audit-log feed) is also deliberately left
- * unfiltered - test-account activity must stay fully visible there.
+ * booking counts, trend charts, including pendingPaymentVerifications)
+ * excludes confirmed internal/developer test accounts via
+ * App\Support\TestAccountScope - see that class's own doc. This also
+ * keeps every clickable dashboard card's number matching what its
+ * link's destination page shows: Admin\ReservationMonitoringController
+ * (and its Manager twin) exclude test accounts from their own summary
+ * cards too, for the exact same reason - see that controller's
+ * $businessItems. pendingPaymentVerifications previously stayed
+ * unfiltered on the theory that it's an "operational queue depth, test
+ * account or not" - reversed once that made it the one figure that could
+ * still silently disagree with the page it links to. recentActivities
+ * (the audit-log feed) is still deliberately left unfiltered -
+ * test-account activity must stay fully visible there, and it has no
+ * corresponding "does this number match a link" expectation to honor.
  */
 class DashboardStatsService
 {
@@ -114,13 +121,16 @@ class DashboardStatsService
         // Matches exactly what the "Pending Payment Verifications" card's
         // own link shows (Admin\ReservationMonitoringController::index()'s
         // payment_status=pending filter: reservations/bookings that HAVE a
-        // pending payment) - a raw Payment::count() counts individual
-        // payment ATTEMPTS instead, which over-counts the moment a single
-        // reservation/booking has more than one pending payment row (e.g.
-        // a retried GCash attempt), so the card's number no longer matched
-        // the number of rows the page it links to actually shows.
-        $pendingPaymentVerifications = Reservation::whereHas('payments', fn ($q) => $q->where('payment_status', 'pending'))->count()
-            + Booking::whereNull('reservation_id')->whereHas('payments', fn ($q) => $q->where('payment_status', 'pending'))->count();
+        // pending payment) in two ways: counting distinct reservations/
+        // bookings rather than raw Payment rows (a retried GCash attempt
+        // would otherwise inflate this past the number of rows the linked
+        // page actually shows), and excluding confirmed test accounts to
+        // match that page's own now-test-excluded summary cards.
+        $pendingPaymentVerifications = TestAccountScope::excludeFromReservations(
+            Reservation::whereHas('payments', fn ($q) => $q->where('payment_status', 'pending'))
+        )->count() + TestAccountScope::excludeFromBookings(
+            Booking::whereNull('reservation_id')->whereHas('payments', fn ($q) => $q->where('payment_status', 'pending'))
+        )->count();
 
         $totalUsers = TestAccountScope::excludeFromUsers(User::query())->count();
         $totalUsersLastMonth = TestAccountScope::excludeFromUsers(
