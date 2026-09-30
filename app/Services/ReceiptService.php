@@ -64,6 +64,7 @@ class ReceiptService
     {
         $grandTotal = $this->grandTotal($booking);
         $totalPaid = PaymentMath::totalPaid($this->chronologicalPayments($booking));
+        $billing = $this->billingOf($booking);
 
         return [
             'grand_total' => $grandTotal,
@@ -71,7 +72,16 @@ class ReceiptService
             'remaining_balance' => PaymentMath::remainingBalance($grandTotal, $totalPaid),
             'payment_status' => PaymentMath::paymentStatus($grandTotal, $totalPaid),
             'payment_percentage' => PaymentMath::normalizePercentage($booking->selected_payment_percentage),
-            'official_receipt_available' => $this->billingOf($booking)?->isOfficialReceiptAvailable() ?? false,
+            'official_receipt_available' => $billing?->isOfficialReceiptAvailable() ?? false,
+            // Locked discount amount once a Billing exists (see
+            // Reservation::getDiscountPreviewAttribute()'s identical
+            // "booking->billing->discount once billed" rule) - 0 for a
+            // still-pending transaction with no Billing yet, matching the
+            // guest-facing receipt's "hide the row instead of a fake value"
+            // convention rather than falling back to the pre-billing live
+            // preview (a receipt only ever renders post-payment, so this is
+            // never actually null in practice for a real receipt).
+            'discount' => (float) ($billing?->discount ?? 0),
         ];
     }
 
@@ -368,6 +378,10 @@ class ReceiptService
             'payment_status' => PaymentMath::paymentStatus($snapshotGrandTotal, $snapshotPaid),
             'payment_percentage' => $anchorRow['payment_percentage'] ?? null,
             'official_receipt_available' => $liveSummary['official_receipt_available'],
+            // Same "reuse the live value" rule as official_receipt_available
+            // above - a Billing's discount is fixed once billed, not a
+            // per-payment-event fact that needs its own frozen snapshot.
+            'discount' => $liveSummary['discount'],
         ];
 
         return [$paymentSummary, $paymentTransactionsForReceipt];
@@ -402,6 +416,8 @@ class ReceiptService
             'check_out' => $booking->check_out?->toIso8601String(),
             'number_of_nights' => $booking->number_of_nights,
             'assigned_room_numbers' => $booking->rooms->pluck('room_number')->values()->all(),
+            'adults' => $booking->adults,
+            'children' => $booking->children,
             'payment_summary' => $paymentSummary,
             'payment_transactions' => $paymentTransactionsForReceipt,
             'anchor_payment' => $anchorPayment ? [
