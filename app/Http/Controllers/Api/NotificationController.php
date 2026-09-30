@@ -14,14 +14,24 @@ class NotificationController extends Controller
      * defaults to 20 for any other caller, but the Android app explicitly
      * requests a high per_page so the dashboard/notification list always
      * see this guest's complete recent history instead of only the latest 20.
+     *
+     * unread_count is the guest's TRUE total unread count (Notification::
+     * unreadCountFor(), the same cached count the web navbar badge already
+     * uses) - deliberately NOT derived from this response's own paginated
+     * `data`, which only ever holds up to $perPage rows. A guest with more
+     * unread notifications than fit in one page must still see their real
+     * total, not an undercount silently capped at whatever page size the
+     * client happened to request.
      */
     public function index(Request $request): JsonResponse
     {
         $perPage = min($request->integer('per_page', 20), 200);
+        $paginated = auth()->user()->notifications()->latest()->paginate($perPage);
 
-        return response()->json(
-            auth()->user()->notifications()->latest()->paginate($perPage)
-        );
+        return response()->json(array_merge(
+            $paginated->toArray(),
+            ['unread_count' => Notification::unreadCountFor(auth()->id())]
+        ));
     }
 
     public function markAsRead(Notification $notification): JsonResponse
