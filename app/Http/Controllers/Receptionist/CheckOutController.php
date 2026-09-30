@@ -45,7 +45,7 @@ class CheckOutController extends Controller
         // Check-in/Bookings/Reservations' index(): the numbered page-link
         // boxes render broken/oversized here for reasons that don't trace
         // back to anything in this app's own CSS.
-        $bookings = Booking::with(['reservation.guest.user', 'guest.user', 'rooms', 'roomType', 'billing'])
+        $bookings = Booking::with(['reservation.guest.user', 'guest.user', 'rooms.roomType', 'room.roomType', 'roomType', 'billing'])
             ->where('booking_status', $tab === 'expected' ? Booking::STATUS_CHECKED_IN : Booking::STATUS_COMPLETED)
             ->orderByRaw('viewed_at IS NULL DESC')
             ->orderBy('check_out', $tab === 'expected' ? 'asc' : 'desc')

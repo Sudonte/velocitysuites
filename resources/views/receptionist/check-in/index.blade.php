@@ -68,6 +68,7 @@
                         <th>Guest</th>
                     @else
                         <th>Guest</th>
+                        <th>Room Type</th>
                         <th>Room</th>
                     @endif
                     <th>Check-In</th>
@@ -88,7 +89,12 @@
                         @continue(!$booking)
                         <tr>
                             <td style="min-width: 200px;">
-                                {{ $room->room_number }} ({{ $booking->roomType->name ?? '' }})
+                                {{-- The physical room's OWN type, not the booking's legacy
+                                     top-level room_type_id - a multi-room-type booking (e.g.
+                                     Standard + Superior) has one shared room_type_id for the
+                                     whole booking, so every row used to show that same single
+                                     type even for a room that's actually a different type. --}}
+                                {{ $room->room_number }} ({{ $room->roomType->name ?? '' }})
                                 <x-status-badge :status="$room->effective_status" domain="room" />
                             </td>
                             <td>@unless($booking->viewed_at)<span class="unread-dot" title="New"></span>@endunless{{ $booking->guest_display_name }}</td>
@@ -113,6 +119,13 @@
                     @forelse($bookings as $booking)
                         <tr>
                             <td>@unless($booking->viewed_at)<span class="unread-dot" title="New"></span>@endunless{{ $booking->guest_display_name }}</td>
+                            <td>
+                                {{-- Full multi-room-type breakdown (room_lines) when this
+                                     booking has one, not just the single legacy room_type_id -
+                                     a Standard + Superior booking must show both, not just
+                                     whichever type happens to be the booking's primary one. --}}
+                                {{ !empty($booking->room_lines) ? collect($booking->room_lines)->pluck('room_type')->join(', ') : ($booking->roomType->name ?? 'N/A') }}
+                            </td>
                             <td style="min-width: 200px;">
                                 <span class="text-muted small"><i class="fas fa-door-open"></i> Not yet assigned</span>
                             </td>
@@ -132,7 +145,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="6">
+                            <td colspan="7">
                                 <x-empty-state icon="fas fa-sign-in-alt" message="No expected check-ins." />
                             </td>
                         </tr>

@@ -84,7 +84,7 @@ class CheckInController extends Controller
             // it drops off this list immediately rather than waiting for the
             // whole booking to finish, matching Room::isCurrentlyOccupied().
             $bookings = Room::whereHas('assignedBookings', fn ($q) => $q->where('booking_status', Booking::STATUS_CHECKED_IN)->whereNull('booking_rooms.checked_out_at'))
-                ->with(['assignedBookings' => fn ($q) => $q->where('booking_status', Booking::STATUS_CHECKED_IN)->whereNull('booking_rooms.checked_out_at')
+                ->with(['roomType', 'assignedBookings' => fn ($q) => $q->where('booking_status', Booking::STATUS_CHECKED_IN)->whereNull('booking_rooms.checked_out_at')
                     ->with(['reservation.guest.user', 'guest.user', 'roomType'])])
                 ->orderBy('room_number')
                 ->simplePaginate(15)

@@ -53,10 +53,14 @@
                         <tr data-booking-id="{{ $booking->id }}">
                             <td>@unless($booking->viewed_at)<span class="unread-dot" title="New"></span>@endunless{{ $booking->guest_display_name }}</td>
                             <td>
+                                {{-- Each room's OWN type, not the booking's single legacy
+                                     room_type_id - a Standard + Superior multi-room booking
+                                     previously labeled every room number with the same one
+                                     type instead of each room's actual type. --}}
                                 @if($booking->rooms->count() > 1)
-                                    {{ $booking->rooms->pluck('room_number')->implode(', ') }} ({{ $booking->roomType->name ?? '' }})
+                                    {{ $booking->rooms->map(fn ($r) => $r->room_number . ' (' . ($r->roomType->name ?? '') . ')')->implode(', ') }}
                                 @else
-                                    {{ $booking->room->room_number ?? 'N/A' }} ({{ $booking->roomType->name ?? '' }})
+                                    {{ $booking->room->room_number ?? 'N/A' }} ({{ $booking->room->roomType->name ?? $booking->roomType->name ?? '' }})
                                 @endif
                             </td>
                             <td>
