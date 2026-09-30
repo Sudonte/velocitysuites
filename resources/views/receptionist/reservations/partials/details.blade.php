@@ -47,9 +47,10 @@
     </div>
 @endif
 
-<div class="row g-4">
-    <!-- Left column: guest + stay + room -->
-    <div class="col-lg-6">
+<!-- Single stacked column - every panel full-width so long values (e.g. the
+     "Room assignment pending..." note) get room to wrap normally instead of
+     being squeezed into a narrow half-width column. -->
+<div class="details-stack">
         <x-card title="Guest Information" icon="fas fa-user" bodyClass="card-body" class="mb-4">
             <dl class="detail-list mb-0">
                 <div><dt>Account Holder</dt><dd>{{ $reservation->guest?->user?->full_name ?? 'Walk-in (no account)' }}</dd></div>
@@ -149,10 +150,7 @@
                 </div>
             @endif
         </x-card>
-    </div>
 
-    <!-- Right column: payment/billing + actions -->
-    <div class="col-lg-6">
         <x-card title="Payment Summary" icon="fas fa-receipt" bodyClass="card-body" class="mb-4">
             <dl class="detail-list mb-2">
                 <div><dt>Room Total ({{ $nights }} night{{ $nights == 1 ? '' : 's' }})</dt><dd>₱{{ number_format($roomTotal, 2) }}</dd></div>
@@ -291,7 +289,6 @@
                 </ul>
             </x-card>
         @endif
-    </div>
 </div>
 
 <!-- ===================== AUTHORIZED RECEPTIONIST ACTIONS =====================
