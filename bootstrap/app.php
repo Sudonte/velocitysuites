@@ -21,5 +21,10 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        //
+        // Failed queries are still logged - but through SafeExceptionLog, which leaves out every bound value, so a
+        // failing INSERT/UPDATE can never write a password hash, token or one-time code to the log file.
+        $exceptions->report(function (\Illuminate\Database\QueryException $e) {
+            [$message, $context] = \App\Support\SafeExceptionLog::forQueryException($e);
+            \Illuminate\Support\Facades\Log::error($message, $context);
+        })->stop();
     })->create();
