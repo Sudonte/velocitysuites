@@ -34,7 +34,7 @@ class BookingService
     /**
      * Room charge for the full stay (room type rate x nights x
      * rooms_requested) minus the best applicable active discount promotion, minus the senior-
-     * citizen/PWD statutory 20% discount if the reservation has one
+     * citizen/PWD statutory discount (value read from the Discount module) if the reservation has one
      * (id_card_type, mobile-app-only field - see Api\ReservationController
      * @store). The two are additive, capped at the room charge - they
      * were never combined before this unification, so stacking rather
@@ -115,9 +115,9 @@ class BookingService
 
         $discount = $promoDiscount;
 
-        if (in_array($reservation->id_card_type, ['Senior Citizen', 'PWD'], true)) {
-            $discount += round($roomCharge * 0.20, 2);
-        }
+        // Statutory Senior Citizen / PWD discount: the value comes from the Discount module (the admin's
+        // row - 20% by law, RA 9994 / RA 10754), never from a number in code.
+        $discount += $this->statutoryDiscountAmount($reservation, $roomCharge);
 
         $discount = min($discount, $roomCharge);
 
@@ -127,6 +127,18 @@ class BookingService
             'discount' => round($discount, 2),
             'total' => round(max(0, $roomCharge - $discount), 2),
         ];
+    }
+
+    /**
+     * Peso discount for the Senior Citizen / PWD discount the guest claimed, read from the Discount module.
+     * 0 when no such discount is claimed, or the admin has deactivated it. Other claimed discounts (VIP,
+     * etc.) are not pre-applied - the receptionist applies them at billing after verifying the ID.
+     */
+    private function statutoryDiscountAmount(Reservation $reservation, float $roomCharge): float
+    {
+        [$claimed] = \App\Support\DiscountSelection::resolve($reservation->discount_id, $reservation->id_card_type);
+
+        return ($claimed && $claimed->isStatutory()) ? $claimed->amountOff($roomCharge) : 0.0;
     }
 
     /**
