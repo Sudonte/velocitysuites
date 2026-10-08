@@ -245,12 +245,7 @@
         <x-card title="Discount Request" icon="fas fa-id-card" bodyClass="card-body" class="mb-4">
             @if($reservation->discount_requested)
                 <p class="mb-1"><strong>Status:</strong> <x-status-badge :status="$reservation->discount_verification_status" domain="discount_verification" /></p>
-                @if($reservation->id_document_path)
-                    <a href="{{ asset('storage/' . $reservation->id_document_path) }}" target="_blank" class="d-block mt-1">
-                        <img src="{{ asset('storage/' . $reservation->id_document_path) }}" alt="ID Document" class="img-thumbnail" style="max-height: 150px;">
-                        <small class="d-block text-muted">Click to view full size</small>
-                    </a>
-                @elseif($reservation->id_card_image_path)
+                @if($reservation->id_card_image_path)
                     <a href="{{ route('receptionist.reservations.id-card', $reservation) }}" target="_blank" class="d-block mt-1">
                         <img src="{{ route('receptionist.reservations.id-card', $reservation) }}" alt="ID Card{{ $reservation->id_card_type ? " ({$reservation->id_card_type})" : '' }}" class="img-thumbnail" style="max-height: 150px;">
                         <small class="d-block text-muted">{{ $reservation->id_card_type ? "{$reservation->id_card_type} - " : '' }}Click to view full size</small>

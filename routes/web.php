@@ -109,6 +109,12 @@ Route::middleware(['auth', 'account.status', 'log.activity', 'no.cache'])->group
     Route::get('/force-change-password', [\App\Http\Controllers\Auth\ForcePasswordChangeController::class, 'show'])->name('force-password-change.show');
     Route::post('/force-change-password', [\App\Http\Controllers\Auth\ForcePasswordChangeController::class, 'update'])->name('force-password-change.update');
 
+    // Guest discount IDs for the Billing / Check-out page: streamed from the PRIVATE disk, and only to a
+    // logged-in receptionist or system administrator (role middleware) - never a public link.
+    Route::middleware('role:receptionist,admin')->prefix('staff')->name('staff.')->group(function () {
+        Route::get('/billing/{billing}/discount-id', [\App\Http\Controllers\Staff\DiscountIdController::class, 'show'])->name('billing.discount-id');
+    });
+
     // Admin Routes
     Route::middleware('role:admin')->prefix('admin')->name('admin.')->group(function () {
         Route::get('/dashboard', [\App\Http\Controllers\Admin\AdminDashboardController::class, 'index'])->name('dashboard');
