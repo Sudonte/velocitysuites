@@ -41,8 +41,6 @@ class PasswordResetService
             ['token' => Hash::make($otp), 'created_at' => now()]
         );
 
-        Log::info("Password reset OTP for {$user->email}: {$otp}");
-
         try {
             $body = "Hi,\n\nYour VelocitySuites password reset code is: {$otp}\n\n"
                 . "Enter this code to set a new password. This code expires in 15 minutes.\n\n"
@@ -51,9 +49,12 @@ class PasswordResetService
                 $message->to($user->email)->subject("Your VelocitySuites password reset code: {$otp}");
             });
 
+            // Only the fact that a code went out - never the code itself.
+            Log::info('Password reset code sent', ['user_id' => $user->id, 'channel' => 'email', 'at' => now()->toIso8601String()]);
+
             return true;
         } catch (\Throwable $e) {
-            Log::error("Failed to email password reset OTP to {$user->email}: " . $e->getMessage());
+            Log::error("Failed to email password reset OTP to user #{$user->id}: " . $e->getMessage());
 
             return false;
         }

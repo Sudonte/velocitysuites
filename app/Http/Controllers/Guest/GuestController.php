@@ -506,7 +506,7 @@ class GuestController extends Controller
             ['token' => Hash::make($otp), 'created_at' => now()]
         );
 
-        Log::info("Profile password-change OTP for {$user->email}: {$otp}");
+        Log::info('Profile password-change code issued', ['user_id' => $user->id, 'channel' => 'email', 'at' => now()->toIso8601String()]);
 
         try {
             $body = "Hi,\n\nYour VelocitySuites password change verification code is: {$otp}\n\n"

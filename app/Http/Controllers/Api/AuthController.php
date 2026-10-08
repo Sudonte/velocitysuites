@@ -563,9 +563,9 @@ class AuthController extends Controller
             ]
         );
 
-        Log::info("Registration OTP for {$email}: {$otp}");
-
         $channel = $payload['otp_channel'] ?? 'email';
+        // Only that a code was issued - never the code itself.
+        Log::info('Registration code issued', ['channel' => $channel, 'at' => now()->toIso8601String()]);
 
         return ($channel === 'mobile' && ! empty($payload['mobile_number']))
             ? $this->sendOtpSms($payload['mobile_number'], $otp)
@@ -600,6 +600,12 @@ class AuthController extends Controller
      * already refuses mobile-channel signups before reaching here in
      * that case, so this path only runs with a real key.
      */
+    /** Removes any 6-digit code from text headed for a log (an SMS gateway may echo the message it was given). */
+    private function redactCodes(string $text): string
+    {
+        return preg_replace('/\b\d{6}\b/', '[REDACTED]', $text);
+    }
+
     private function sendOtpSms(string $mobileNumber, string $otp): bool
     {
         $apiKey = config('services.semaphore.key');
@@ -616,14 +622,14 @@ class AuthController extends Controller
             ]));
 
             if (! $response->successful()) {
-                Log::error("Semaphore SMS failed for {$mobileNumber}: " . $response->body());
+                Log::error("Semaphore SMS failed (HTTP {$response->status()}): " . $this->redactCodes($response->body()));
 
                 return false;
             }
 
             return true;
         } catch (\Throwable $e) {
-            Log::error("Semaphore SMS exception for {$mobileNumber}: " . $e->getMessage());
+            Log::error('Semaphore SMS exception: ' . $this->redactCodes($e->getMessage()));
 
             return false;
         }
