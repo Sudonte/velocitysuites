@@ -15,10 +15,11 @@ class BookingIntentController extends Controller
         // Validate required data
         $validated = $request->validate([
             'room_type_id' => 'required|integer|exists:room_types,id',
-            'check_in' => 'nullable|date',
+            // Same shared rule as every other guest entry point (earliest check-in = today + 2 days).
+            'check_in' => ['nullable', 'date', 'after_or_equal:'.\App\Support\CheckInWindow::earliest()],
             'check_out' => 'nullable|date|after:check_in',
             'guests' => 'nullable|integer|min:1',
-        ]);
+        ], \App\Support\CheckInWindow::messages());
 
         // Store booking intent in session
         session()->put('booking_intent', [

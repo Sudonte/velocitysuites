@@ -102,12 +102,14 @@ class PublicRoomController extends Controller
      */
     private function resolveDates(Request $request): array
     {
+        // Earliest check-in is today + 2 days (hotel time) with no upper limit; check-out is at least a day later.
+        $earliest = Carbon::parse(\App\Support\CheckInWindow::earliest())->startOfDay();
         $checkIn = $request->filled('check_in')
-            ? Carbon::parse($request->check_in)->startOfDay()
-            : now()->addDay()->startOfDay();
+            ? Carbon::parse($request->check_in)->startOfDay()->max($earliest)
+            : $earliest;
 
         $checkOut = $request->filled('check_out')
-            ? Carbon::parse($request->check_out)->startOfDay()
+            ? Carbon::parse($request->check_out)->startOfDay()->max($checkIn->copy()->addDay())
             : $checkIn->copy()->addDay();
 
         return [$checkIn, $checkOut];

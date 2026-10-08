@@ -29,8 +29,8 @@ class GuestRulesApiTest extends ApiFlowTestCase
     {
         return array_merge([
             'rooms' => [['room_type_id' => $roomType->id, 'quantity' => 1]],
-            'check_in' => now('Asia/Manila')->addDay()->toDateString(),
-            'check_out' => now('Asia/Manila')->addDays(3)->toDateString(),
+            'check_in' => now('Asia/Manila')->addDays(2)->toDateString(),
+            'check_out' => now('Asia/Manila')->addDays(4)->toDateString(),
             'adults' => 1,
             'children' => 0,
             'guest_first_name' => 'ClaudeTest',
@@ -84,42 +84,69 @@ class GuestRulesApiTest extends ApiFlowTestCase
         $this->assertStringContainsStringIgnoringCase($needle, $response->getContent());
     }
 
-    // ---- Task 1: check-in window -------------------------------------------------
+    // ---- check-in rule: earliest = today + 2 days (Manila), no upper limit; check-out >= check-in + 1 ----
 
-    public function test_reservation_check_in_must_be_within_two_days_of_manila_today(): void
+    public function test_reservation_check_in_must_be_at_least_two_days_from_manila_today_with_no_upper_limit(): void
     {
         $rt = $this->makeRoomTypeWithRooms('Deluxe', 1000, 2, 9);
         $today = now('Asia/Manila');
 
-        foreach ([0, 1, 2] as $offset) {
+        foreach ([2, 3, 120] as $offset) { // earliest, the day after, months ahead
             [$user] = $this->makeGuestUser('Window' . $offset);
             $res = $this->postReservation($user, $this->reservationPayload($rt, [
                 'check_in' => $today->copy()->addDays($offset)->toDateString(),
-                'check_out' => $today->copy()->addDays($offset + 4)->toDateString(),
+                'check_out' => $today->copy()->addDays($offset + 2)->toDateString(),
                 'idempotency_key' => (string) Str::uuid(),
             ]));
             $this->assertEquals(201, $res->getStatusCode(), "offset {$offset}: " . $res->getContent());
         }
 
-        foreach ([-1, 3] as $offset) {
-            [$user] = $this->makeGuestUser('WindowBad' . ($offset + 1));
+        foreach ([0, 1] as $offset) { // today, tomorrow
+            [$user] = $this->makeGuestUser('WindowBad' . $offset);
             $res = $this->postReservation($user, $this->reservationPayload($rt, [
                 'check_in' => $today->copy()->addDays($offset)->toDateString(),
                 'check_out' => $today->copy()->addDays($offset + 2)->toDateString(),
             ]));
-            $this->assertRejected($res, 'Check-in must be today or within the next 2 days');
+            $this->assertRejected($res, 'Check-in must be at least 2 days from today');
         }
     }
 
-    public function test_booking_check_in_outside_window_is_rejected(): void
+    public function test_check_out_must_be_at_least_one_day_after_check_in(): void
+    {
+        $rt = $this->makeRoomTypeWithRooms('Deluxe', 1000, 2, 9);
+        $in = now('Asia/Manila')->addDays(2);
+
+        [$u1] = $this->makeGuestUser('SameDay');
+        $same = $this->postReservation($u1, $this->reservationPayload($rt, ['check_in' => $in->toDateString(), 'check_out' => $in->toDateString()]));
+        $this->assertRejected($same, 'Check-out must be at least 1 day after check-in');
+
+        [$u2] = $this->makeGuestUser('NextDay');
+        $ok = $this->postReservation($u2, $this->reservationPayload($rt, [
+            'check_in' => $in->toDateString(), 'check_out' => $in->copy()->addDay()->toDateString(), 'idempotency_key' => (string) Str::uuid(),
+        ]));
+        $this->assertEquals(201, $ok->getStatusCode(), $ok->getContent());
+
+        // a late check-in: check-out starts the day after THAT date
+        [$u3] = $this->makeGuestUser('LateIn');
+        $late = $in->copy()->addDays(5);
+        $this->assertRejected($this->postReservation($u3, $this->reservationPayload($rt, ['check_in' => $late->toDateString(), 'check_out' => $late->toDateString()])), 'Check-out must be at least 1 day');
+    }
+
+    public function test_booking_check_in_rule_matches_reservations(): void
     {
         [$user] = $this->makeGuestUser('WindowB');
         $rt = $this->makeRoomTypeWithRooms('Deluxe', 1000, 2, 3);
         $res = $this->postBooking($user, $this->bookingPayload($rt, 1000, [
-            'check_in' => now('Asia/Manila')->addDays(3)->toDateString(),
-            'check_out' => now('Asia/Manila')->addDays(4)->toDateString(),
+            'check_in' => now('Asia/Manila')->addDay()->toDateString(),
+            'check_out' => now('Asia/Manila')->addDays(2)->toDateString(),
         ]));
-        $this->assertRejected($res, 'Check-in must be today or within the next 2 days');
+        $this->assertRejected($res, 'Check-in must be at least 2 days from today');
+
+        $ok = $this->postBooking($user, $this->bookingPayload($rt, 3000, [
+            'check_in' => now('Asia/Manila')->addDays(60)->toDateString(),
+            'check_out' => now('Asia/Manila')->addDays(63)->toDateString(),
+        ]));
+        $this->assertEquals(201, $ok->getStatusCode(), $ok->getContent());
     }
 
     // ---- Task 5: guest capacity ---------------------------------------------------

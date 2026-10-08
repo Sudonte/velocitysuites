@@ -160,14 +160,14 @@
                             <div class="mb-3">
                                 <label class="form-label">Check-in Date</label>
                                 <input type="date" name="check_in" class="form-control"
-                                       min="{{ date('Y-m-d') }}" required
+                                       min="{{ \App\Support\CheckInWindow::earliest() }}" required
                                        value="{{ $checkIn->toDateString() }}">
                             </div>
 
                             <div class="mb-3">
                                 <label class="form-label">Check-out Date</label>
                                 <input type="date" name="check_out" class="form-control"
-                                       min="{{ date('Y-m-d', strtotime('+1 day')) }}" required
+                                       min="{{ \App\Support\CheckInWindow::earliestCheckOut(\App\Support\CheckInWindow::earliest()) }}" required
                                        value="{{ $checkOut->toDateString() }}">
                             </div>
 
@@ -194,14 +194,14 @@
                             <div class="mb-3">
                                 <label class="form-label">Check-in Date</label>
                                 <input type="date" name="check_in" class="form-control"
-                                       min="{{ date('Y-m-d') }}"
+                                       min="{{ \App\Support\CheckInWindow::earliest() }}"
                                        value="{{ $checkIn->toDateString() }}">
                             </div>
 
                             <div class="mb-3">
                                 <label class="form-label">Check-out Date</label>
                                 <input type="date" name="check_out" class="form-control"
-                                       min="{{ date('Y-m-d', strtotime('+1 day')) }}"
+                                       min="{{ \App\Support\CheckInWindow::earliestCheckOut(\App\Support\CheckInWindow::earliest()) }}"
                                        value="{{ $checkOut->toDateString() }}">
                             </div>
 
@@ -259,4 +259,5 @@
 </div>
 
 <x-amenity-detail-modal />
+@include('partials.stay-date-rules')
 @endsection

@@ -368,7 +368,7 @@
                     <div class="modal-body">
                         <div class="form-group mb-3">
                             <label for="mod_check_in">Check-In Date</label>
-                            <input type="date" class="form-control" id="mod_check_in" name="check_in"
+                            <input type="date" class="form-control" id="mod_check_in" name="check_in" data-keep-existing="1"
                                    value="{{ $reservation->check_in->toDateString() }}" required>
                         </div>
                         <div class="form-group mb-3">
@@ -424,4 +424,5 @@
         flex-grow: 1;
     }
 </style>
+@include('partials.stay-date-rules')
 @endsection

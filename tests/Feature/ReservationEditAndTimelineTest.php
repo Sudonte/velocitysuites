@@ -41,8 +41,8 @@ class ReservationEditAndTimelineTest extends ApiFlowTestCase
             'guest_last_name' => 'Edit',
             'room_type_id' => $roomType->id,
             'rooms_requested' => 1,
-            'check_in' => now('Asia/Manila')->addDay()->toDateString(),
-            'check_out' => now('Asia/Manila')->addDays(3)->toDateString(),
+            'check_in' => now('Asia/Manila')->addDays(2)->toDateString(),
+            'check_out' => now('Asia/Manila')->addDays(4)->toDateString(),
             'adults' => 2,
             'children' => 0,
             'number_of_guests' => 2,
@@ -187,17 +187,17 @@ class ReservationEditAndTimelineTest extends ApiFlowTestCase
         [$u1] = $this->makeGuestUser('EditWin');
         $r1 = $this->reservationFor($u1, $rt);
         $res = $this->edit($u1, $r1, $this->unchangedPayload($r1, [
-            'check_in' => now('Asia/Manila')->addDays(6)->toDateString(),
-            'check_out' => now('Asia/Manila')->addDays(8)->toDateString(),
+            'check_in' => now('Asia/Manila')->addDay()->toDateString(),
+            'check_out' => now('Asia/Manila')->addDays(3)->toDateString(),
         ]));
         $this->assertEquals(422, $res->getStatusCode());
-        $this->assertStringContainsString('Check-in must be today or within the next 2 days', $res->getContent());
+        $this->assertStringContainsString('Check-in must be at least 2 days from today', $res->getContent());
 
-        // an untouched check-in already outside the window is accepted as-is
+        // an untouched check-in (made under an older, looser rule) is accepted as-is
         [$u2] = $this->makeGuestUser('EditOld');
         $r2 = $this->reservationFor($u2, $rt, [
-            'check_in' => now('Asia/Manila')->addDays(9)->toDateString(),
-            'check_out' => now('Asia/Manila')->addDays(11)->toDateString(),
+            'check_in' => now('Asia/Manila')->addDay()->toDateString(),
+            'check_out' => now('Asia/Manila')->addDays(3)->toDateString(),
         ]);
         $this->assertEquals(200, $this->edit($u2, $r2, $this->unchangedPayload($r2, ['adults' => 1]))->getStatusCode());
 

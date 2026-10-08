@@ -29,12 +29,12 @@
                         <form action="{{ route('public.rooms.index') }}" method="GET">
                             <div class="mb-3">
                                 <label class="form-label">Check-in</label>
-                                <input type="date" name="check_in" class="form-control" min="{{ date('Y-m-d') }}"
+                                <input type="date" name="check_in" class="form-control" min="{{ \App\Support\CheckInWindow::earliest() }}"
                                        value="{{ $checkIn->toDateString() }}">
                             </div>
                             <div class="mb-3">
                                 <label class="form-label">Check-out</label>
-                                <input type="date" name="check_out" class="form-control" min="{{ date('Y-m-d', strtotime('+1 day')) }}"
+                                <input type="date" name="check_out" class="form-control" min="{{ \App\Support\CheckInWindow::earliestCheckOut(\App\Support\CheckInWindow::earliest()) }}"
                                        value="{{ $checkOut->toDateString() }}">
                             </div>
                             <div class="mb-3">
@@ -131,5 +131,6 @@
             </div>
         </div>
     </div>
+@include('partials.stay-date-rules')
 @endsection
 

@@ -62,8 +62,8 @@ class ReservationController extends Controller
         // instead sidesteps that class of bug entirely.
         $validator = \Illuminate\Support\Facades\Validator::make($request->all(), [
             'room_type_id' => 'required|exists:room_types,id',
-            'check_in' => 'required|date|after:today',
-            'check_out' => 'required|date|after:check_in',
+            'check_in' => \App\Support\CheckInWindow::rulesFor(auth()->user()),
+            'check_out' => \App\Support\CheckInWindow::checkOutRules(),
         ]);
         if ($validator->fails()) {
             return redirect()->route('public.rooms.index')
@@ -135,8 +135,8 @@ class ReservationController extends Controller
     {
         $validated = $request->validate([
             'room_type_id' => 'required|exists:room_types,id',
-            'check_in' => 'required|date|after:today',
-            'check_out' => 'required|date|after:check_in',
+            'check_in' => \App\Support\CheckInWindow::rulesFor(auth()->user()),
+            'check_out' => \App\Support\CheckInWindow::checkOutRules(),
             'rooms_requested' => 'required|integer|min:1|max:50',
             'adults' => 'required|integer|min:1',
             'children' => 'nullable|integer|min:0',
@@ -178,6 +178,7 @@ class ReservationController extends Controller
             'amenities.*.quantity' => 'required_with:amenities|integer|min:1',
         ], [
             'reference_number.unique' => 'This GCash reference number has already been used.',
+            ...\App\Support\CheckInWindow::messages(),
         ]);
 
         // Validated before creating anything, so an invalid amenity
@@ -402,12 +403,17 @@ class ReservationController extends Controller
             return back()->with('error', 'Can only modify a reservation that is still awaiting review.');
         }
 
+        // An untouched check-in is always accepted (it may already be inside the 2-day lead time); a changed one
+        // must follow the same shared rule as a new reservation.
+        $checkInRules = $request->input('check_in') === $reservation->check_in->toDateString()
+            ? ['required', 'date']
+            : \App\Support\CheckInWindow::rulesFor(auth()->user());
         $validated = $request->validate([
-            'check_in' => 'required|date|after:today',
-            'check_out' => 'required|date|after:check_in',
+            'check_in' => $checkInRules,
+            'check_out' => \App\Support\CheckInWindow::checkOutRules(),
             'adults' => 'required|integer|min:1',
             'children' => 'nullable|integer|min:0',
-        ]);
+        ], \App\Support\CheckInWindow::messages());
         $children = $validated['children'] ?? 0;
 
         $reservation->loadMissing('roomType');
