@@ -60,12 +60,13 @@
                     @include('receptionist.partials.room-lines-input')
 
                     <h6 class="form-section-heading">Stay</h6>
+                    @include('partials.check-in-notice')
                     <div class="row">
                         <div class="col-md-6">
                             <div class="form-group mb-3">
                                 <label for="check_in">Check-In *</label>
                                 <input type="date" class="form-control @error('check_in') is-invalid @enderror"
-                                       id="check_in" name="check_in" value="{{ old('check_in') }}" min="{{ now()->toDateString() }}" required>
+                                       id="check_in" name="check_in" value="{{ old('check_in') }}" min="{{ \App\Support\CheckInWindow::earliest() }}" required>
                                 @error('check_in')<div class="invalid-feedback">{{ $message }}</div>@enderror
                             </div>
                         </div>
@@ -73,7 +74,7 @@
                             <div class="form-group mb-3">
                                 <label for="check_out">Check-Out *</label>
                                 <input type="date" class="form-control @error('check_out') is-invalid @enderror"
-                                       id="check_out" name="check_out" value="{{ old('check_out') }}" required>
+                                       id="check_out" name="check_out" value="{{ old('check_out') }}" min="{{ \App\Support\CheckInWindow::earliestCheckOut(\App\Support\CheckInWindow::earliest()) }}" required>
                                 @error('check_out')<div class="invalid-feedback">{{ $message }}</div>@enderror
                             </div>
                         </div>

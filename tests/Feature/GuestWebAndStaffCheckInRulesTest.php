@@ -2,24 +2,14 @@
 
 namespace Tests\Feature;
 
-use App\Models\Booking;
-use App\Models\User;
 use App\Support\CheckInWindow;
 
 /**
- * The guest WEB pages follow the same shared check-in rule as the mobile API (App\Support\CheckInWindow), while
- * receptionist / admin accounts stay exempt and can still book for today or tomorrow.
+ * The guest WEB pages follow the same shared check-in rule as the mobile API (App\Support\CheckInWindow). Staff are
+ * not exempt any more - see ReceptionistAdvanceCheckInTest.
  */
 class GuestWebAndStaffCheckInRulesTest extends ApiFlowTestCase
 {
-    private function staff(string $role): User
-    {
-        return User::create([
-            'first_name' => 'Staff', 'last_name' => ucfirst($role), 'email' => "{$role}-rule@example.test",
-            'password' => bcrypt('x'), 'role' => $role, 'status' => 'active', 'email_verified_at' => now(),
-        ]);
-    }
-
     public function test_the_public_room_pages_disable_dates_before_the_earliest_check_in_and_before_check_in_plus_one(): void
     {
         $rt = $this->makeRoomTypeWithRooms('Deluxe', 1000, 2, 2);
@@ -66,27 +56,9 @@ class GuestWebAndStaffCheckInRulesTest extends ApiFlowTestCase
         $ok->assertOk();
     }
 
-    public function test_a_receptionist_can_still_create_a_booking_for_today_and_for_tomorrow(): void
-    {
-        $rt = $this->makeRoomTypeWithRooms('Deluxe', 1000, 2, 4);
-        $receptionist = $this->staff('receptionist');
-
-        foreach ([0, 1] as $offset) {
-            $in = now('Asia/Manila')->addDays($offset);
-            $response = $this->actingAs($receptionist)->post(route('receptionist.bookings.store'), [
-                'guest_first_name' => 'Walk', 'guest_last_name' => 'In'.$offset,
-                'room_type_id' => $rt->id, 'rooms_requested' => 1,
-                'check_in' => $in->toDateString(), 'check_out' => $in->copy()->addDay()->toDateString(),
-                'adults' => 1, 'children' => 0,
-            ]);
-            $response->assertSessionHasNoErrors();
-        }
-        $this->assertSame(2, Booking::whereNull('guest_id')->count(), 'both receptionist bookings were created');
-    }
-
     public function test_the_guest_mobile_api_endpoints_are_not_reachable_with_the_staff_exemption(): void
     {
-        // the exemption lives in rulesFor(); the API controllers always use the strict guest rule()
+        // the API controllers use the one shared rule()
         $source = file_get_contents(base_path('app/Http/Controllers/Api/BookingController.php')).file_get_contents(base_path('app/Http/Controllers/Api/ReservationController.php'));
         $this->assertStringNotContainsString('rulesFor', $source);
         $this->assertStringContainsString('CheckInWindow::rules()', $source);

@@ -66,7 +66,7 @@ class WalkInController extends Controller
             'address' => 'required_if:guest_mode,new|nullable|string',
 
             'room_type_id' => 'required|exists:room_types,id',
-            'check_in' => 'required|date|after:today',
+            'check_in' => \App\Support\CheckInWindow::rules(),
             'check_out' => 'required|date|after:check_in',
             'adults' => 'required|integer|min:1',
             'children' => 'nullable|integer|min:0',
@@ -77,7 +77,7 @@ class WalkInController extends Controller
             'payment_method' => 'required_if:intent,book|nullable|in:cash,gcash',
             'reference_number' => 'nullable|string|max:255',
             'amount_paid' => 'required_if:intent,book|nullable|numeric|min:0.01',
-        ]);
+        ], \App\Support\CheckInWindow::staffMessages());
 
         $guest = $validated['guest_mode'] === 'existing'
             ? User::findOrFail($validated['existing_guest_id'])->guest

@@ -147,12 +147,12 @@ class BookingController extends Controller
             'rooms.*.room_type_id' => 'required_with:rooms|exists:room_types,id',
             'rooms.*.quantity' => 'required_with:rooms|integer|min:1|max:50',
             'room_type_id' => 'required_without:rooms|exists:room_types,id',
-            'check_in' => 'required|date|after_or_equal:today',
+            'check_in' => \App\Support\CheckInWindow::rules(),
             'check_out' => 'required|date|after:check_in',
             'rooms_requested' => 'nullable|integer|min:1|max:50',
             'adults' => 'required|integer|min:1',
             'children' => 'nullable|integer|min:0',
-        ]);
+        ], \App\Support\CheckInWindow::staffMessages());
 
         $checkIn = Carbon::parse($validated['check_in']);
         $checkOut = Carbon::parse($validated['check_out']);

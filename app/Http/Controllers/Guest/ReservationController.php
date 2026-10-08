@@ -62,7 +62,7 @@ class ReservationController extends Controller
         // instead sidesteps that class of bug entirely.
         $validator = \Illuminate\Support\Facades\Validator::make($request->all(), [
             'room_type_id' => 'required|exists:room_types,id',
-            'check_in' => \App\Support\CheckInWindow::rulesFor(auth()->user()),
+            'check_in' => \App\Support\CheckInWindow::rules(),
             'check_out' => \App\Support\CheckInWindow::checkOutRules(),
         ]);
         if ($validator->fails()) {
@@ -135,7 +135,7 @@ class ReservationController extends Controller
     {
         $validated = $request->validate([
             'room_type_id' => 'required|exists:room_types,id',
-            'check_in' => \App\Support\CheckInWindow::rulesFor(auth()->user()),
+            'check_in' => \App\Support\CheckInWindow::rules(),
             'check_out' => \App\Support\CheckInWindow::checkOutRules(),
             'rooms_requested' => 'required|integer|min:1|max:50',
             'adults' => 'required|integer|min:1',
@@ -407,7 +407,7 @@ class ReservationController extends Controller
         // must follow the same shared rule as a new reservation.
         $checkInRules = $request->input('check_in') === $reservation->check_in->toDateString()
             ? ['required', 'date']
-            : \App\Support\CheckInWindow::rulesFor(auth()->user());
+            : \App\Support\CheckInWindow::rules();
         $validated = $request->validate([
             'check_in' => $checkInRules,
             'check_out' => \App\Support\CheckInWindow::checkOutRules(),

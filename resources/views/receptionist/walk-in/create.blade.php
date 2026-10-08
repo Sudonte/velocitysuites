@@ -104,17 +104,18 @@
                             @endforeach
                         </select>
                     </div>
+                    @include('partials.check-in-notice')
                     <div class="row">
                         <div class="col-md-6">
                             <div class="form-group mb-3">
                                 <label for="check_in"><strong>Check-In *</strong></label>
-                                <input type="date" class="form-control" id="check_in" name="check_in" min="{{ date('Y-m-d', strtotime('+1 day')) }}" required>
+                                <input type="date" class="form-control" id="check_in" name="check_in" value="{{ old('check_in') }}" min="{{ \App\Support\CheckInWindow::earliest() }}" required>
                             </div>
                         </div>
                         <div class="col-md-6">
                             <div class="form-group mb-3">
                                 <label for="check_out"><strong>Check-Out *</strong></label>
-                                <input type="date" class="form-control" id="check_out" name="check_out" min="{{ date('Y-m-d', strtotime('+2 day')) }}" required>
+                                <input type="date" class="form-control" id="check_out" name="check_out" value="{{ old('check_out') }}" min="{{ \App\Support\CheckInWindow::earliestCheckOut(\App\Support\CheckInWindow::earliest()) }}" required>
                             </div>
                         </div>
                     </div>

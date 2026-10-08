@@ -2,7 +2,6 @@
 
 namespace App\Support;
 
-use App\Models\User;
 use Carbon\Carbon;
 
 /**
@@ -14,8 +13,9 @@ use Carbon\Carbon;
  *   - there is no upper limit on check-in;
  *   - check-out must be at least 1 day after check-in.
  *
- * Receptionist and admin accounts book on a guest's behalf, often for today or tomorrow, so they are exempt
- * (see rulesFor()); the receptionist forms also keep their own, separate rules.
+ * The rule applies to everyone who creates a booking or reservation or changes its dates - guests (web and mobile
+ * API) and receptionist front-desk / walk-in forms alike; there is no staff exemption. It does NOT limit the
+ * receptionist's Check In action for a guest arriving on an existing booking's date.
  */
 class CheckInWindow
 {
@@ -52,25 +52,35 @@ class CheckInWindow
         return ['required', 'date', 'after:check_in'];
     }
 
-    /**
-     * check_in rules for whoever is making the request: guests get rules(); a receptionist or admin booking on a
-     * guest's behalf is only required to give a real date that is not in the past.
-     */
-    public static function rulesFor(?User $user, ?Carbon $now = null): array
+    /** "Sat, Oct 10, 2026" - the earliest check-in spelled out for messages and notes. */
+    public static function earliestLabel(?Carbon $now = null): string
     {
-        if ($user && in_array($user->role, ['receptionist', 'admin'], true)) {
-            return ['required', 'date', 'after_or_equal:'.self::today($now)->toDateString()];
-        }
-
-        return self::rules($now);
+        return Carbon::parse(self::earliest($now))->format('D, M j, Y');
     }
 
+    /** The note shown next to every check-in date field. */
+    public static function notice(?Carbon $now = null): string
+    {
+        return 'Check-in must be booked at least '.self::MIN_DAYS_AHEAD.' days ('.(self::MIN_DAYS_AHEAD * 24)
+            .' hours) in advance. Earliest available check-in: '.self::earliestLabel($now).'.';
+    }
+
+    /** Validation messages for the guest endpoints (web + mobile API) - wording unchanged. */
     public static function messages(): array
     {
         $text = 'Check-in must be at least '.self::MIN_DAYS_AHEAD.' days from today.';
 
         return [
             'check_in.after_or_equal' => $text,
+            'check_out.after' => 'Check-out must be at least 1 day after check-in.',
+        ];
+    }
+
+    /** Validation messages for the receptionist forms: the full note, with the computed earliest date. */
+    public static function staffMessages(?Carbon $now = null): array
+    {
+        return [
+            'check_in.after_or_equal' => self::notice($now),
             'check_out.after' => 'Check-out must be at least 1 day after check-in.',
         ];
     }

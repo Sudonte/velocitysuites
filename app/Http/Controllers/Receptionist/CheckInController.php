@@ -141,7 +141,13 @@ class CheckInController extends Controller
      */
     public function storeWalkIn(Request $request): RedirectResponse
     {
+        // This form always checks the guest in TODAY, and no booking may start less than 2 days (48 hours) from
+        // today - the same CheckInWindow rule as every other booking/reservation entry point. Validating the
+        // implicit date here is what rejects it, with the same message as the other forms.
+        $request->merge(['check_in' => \App\Support\CheckInWindow::today()->toDateString()]);
+
         $validated = $request->validate([
+            'check_in' => \App\Support\CheckInWindow::rules(),
             'guest_first_name' => 'required|string|max:100',
             'guest_middle_name' => 'nullable|string|max:100',
             'guest_last_name' => 'required|string|max:100',
@@ -158,7 +164,7 @@ class CheckInController extends Controller
             'rooms_requested' => 'nullable|integer|min:1|max:50',
             'adults' => 'required|integer|min:1',
             'children' => 'nullable|integer|min:0',
-        ]);
+        ], \App\Support\CheckInWindow::staffMessages());
 
         $checkIn = Carbon::today();
         $checkOut = Carbon::parse($validated['check_out']);

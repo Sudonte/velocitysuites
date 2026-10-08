@@ -75,19 +75,27 @@ class CheckInWindowTest extends TestCase
         $this->assertSame('2026-10-16', CheckInWindow::earliestCheckOut('2026-10-15'));
     }
 
-    public function test_receptionists_and_admins_are_exempt_but_guests_are_not(): void
+    public function test_the_same_rule_applies_to_everyone_there_is_no_staff_exemption(): void
     {
-        $tomorrow = ['check_in' => '2026-10-09'];
-        foreach (['receptionist', 'admin'] as $role) {
-            $staff = new User(['role' => $role]);
-            $staff->role = $role;
-            $this->assertTrue(Validator::make($tomorrow, ['check_in' => CheckInWindow::rulesFor($staff, $this->now())])->passes(), $role);
-            $this->assertTrue(Validator::make(['check_in' => '2026-10-08'], ['check_in' => CheckInWindow::rulesFor($staff, $this->now())])->passes(), "$role today");
-            $this->assertFalse(Validator::make(['check_in' => '2026-10-07'], ['check_in' => CheckInWindow::rulesFor($staff, $this->now())])->passes(), "$role past");
-        }
-        $guest = new User();
-        $guest->role = 'guest';
-        $this->assertFalse(Validator::make($tomorrow, ['check_in' => CheckInWindow::rulesFor($guest, $this->now())])->passes());
-        $this->assertTrue(Validator::make(['check_in' => '2026-10-10'], ['check_in' => CheckInWindow::rulesFor($guest, $this->now())])->passes());
+        $rules = ['check_in' => CheckInWindow::rules($this->now())];
+        $this->assertFalse(Validator::make(['check_in' => '2026-10-08'], $rules)->passes(), 'today');
+        $this->assertFalse(Validator::make(['check_in' => '2026-10-09'], $rules)->passes(), 'today + 1');
+        $this->assertTrue(Validator::make(['check_in' => '2026-10-10'], $rules)->passes(), 'today + 2');
+        $this->assertFalse(Validator::make(['check_in' => '2026-10-07'], $rules)->passes(), 'past');
+        $this->assertFalse(method_exists(CheckInWindow::class, 'rulesFor'));
+    }
+
+    public function test_guest_messages_keep_their_original_wording(): void
+    {
+        $this->assertSame('Check-in must be at least 2 days from today.', CheckInWindow::messages()['check_in.after_or_equal']);
+    }
+
+    public function test_the_notice_names_the_computed_earliest_date(): void
+    {
+        $this->assertSame(
+            'Check-in must be booked at least 2 days (48 hours) in advance. Earliest available check-in: Sat, Oct 10, 2026.',
+            CheckInWindow::notice($this->now())
+        );
+        $this->assertSame(CheckInWindow::notice($this->now()), CheckInWindow::staffMessages($this->now())['check_in.after_or_equal']);
     }
 }
