@@ -187,6 +187,7 @@ class BookingReservationCreationVisibilityTest extends TestCase
             $table->id();
             $table->unsignedBigInteger('booking_id');
             $table->unsignedBigInteger('room_id');
+            $table->timestamp('checked_out_at')->nullable();
             $table->timestamps();
         });
 
@@ -347,8 +348,8 @@ class BookingReservationCreationVisibilityTest extends TestCase
                 ['room_type_id' => $rt1->id, 'quantity' => 1],
                 ['room_type_id' => $rt2->id, 'quantity' => 2],
             ],
-            'check_in' => now()->addDays(3)->toDateString(),
-            'check_out' => now()->addDays(5)->toDateString(),
+            'check_in' => now()->addDays(1)->toDateString(),
+            'check_out' => now()->addDays(3)->toDateString(),
             'adults' => 1,
             'children' => 0,
             'guest_first_name' => 'ClaudeTest',
@@ -367,7 +368,7 @@ class BookingReservationCreationVisibilityTest extends TestCase
         $this->actingAs($user);
         $rt1 = $this->makeRoomTypeWithRooms('Deluxe', 1000, 2, 3);
         $rt2 = $this->makeRoomTypeWithRooms('Suite', 2000, 4, 3);
-        // 2 nights (addDays(5) - addDays(3)) x (1000*1 + 2000*2) = 2 x 5000 = 10000
+        // 2 nights (addDays(3) - addDays(1)) x (1000*1 + 2000*2) = 2 x 5000 = 10000
         $total = 2 * (1000 * 1 + 2000 * 2);
 
         $request = Request::create('/api/guest/bookings', 'POST',
@@ -409,8 +410,8 @@ class BookingReservationCreationVisibilityTest extends TestCase
                 ['room_type_id' => $rt1->id, 'quantity' => 2],
                 ['room_type_id' => $rt2->id, 'quantity' => 1],
             ],
-            'check_in' => now()->addDays(3)->toDateString(),
-            'check_out' => now()->addDays(5)->toDateString(),
+            'check_in' => now()->addDays(1)->toDateString(),
+            'check_out' => now()->addDays(3)->toDateString(),
             'adults' => 1,
             'children' => 0,
             'guest_first_name' => 'ClaudeTest',

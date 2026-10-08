@@ -192,7 +192,6 @@ class BookingController extends Controller
             }
         }
 
-        $minCheckIn = now()->addDays(1)->toDateString();
         $validated = $request->validate([
             // Multi-room-type shape (preferred - see MULTI_ROOM_TRANSACTION_BACKEND_SPEC.md).
             // 'rooms' array present -> authoritative, and the legacy
@@ -205,7 +204,7 @@ class BookingController extends Controller
             'rooms.*.quantity' => 'required_with:rooms|integer|min:1|max:50',
             // Legacy single-room-type shape - required only when 'rooms' isn't sent.
             'room_type_id' => 'required_without:rooms|exists:room_types,id',
-            'check_in' => "required|date|after_or_equal:{$minCheckIn}",
+            'check_in' => \App\Support\CheckInWindow::rules(),
             'check_out' => 'required|date|after:check_in',
             'rooms_requested' => 'nullable|integer|min:1|max:50',
             'adults' => 'required|integer|min:1',
@@ -252,6 +251,7 @@ class BookingController extends Controller
             'idempotency_key' => 'nullable|string|max:100',
         ], [
             'reference_number.unique' => 'This GCash reference number has already been used.',
+            ...\App\Support\CheckInWindow::messages(),
         ]);
 
         $children = $validated['children'] ?? 0;

@@ -153,6 +153,7 @@ class CheckoutFinalStagePaymentReparentingTest extends TestCase
             $table->id();
             $table->unsignedBigInteger('booking_id');
             $table->unsignedBigInteger('room_id');
+            $table->timestamp('checked_out_at')->nullable();
             $table->timestamps();
         });
 

@@ -150,7 +150,6 @@ class ReservationController extends Controller
         // its own UI, but that's cosmetic only; this is the real,
         // unbypassable enforcement for any request that reaches here
         // regardless of which client (or client version) sent it.
-        $minCheckIn = now()->addDays(1)->toDateString();
         $validated = $request->validate([
             // Multi-room-type shape (preferred - see MULTI_ROOM_TRANSACTION_BACKEND_SPEC.md).
             // 'rooms' array present -> authoritative, and the legacy
@@ -164,7 +163,7 @@ class ReservationController extends Controller
             'rooms.*.room_type_id' => 'required_with:rooms|exists:room_types,id',
             'rooms.*.quantity' => 'required_with:rooms|integer|min:1|max:50',
             'room_type_id' => 'required_without:rooms|exists:room_types,id',
-            'check_in' => "required|date|after_or_equal:{$minCheckIn}",
+            'check_in' => \App\Support\CheckInWindow::rules(),
             'check_out' => 'required|date|after:check_in',
             'rooms_requested' => 'nullable|integer|min:1|max:50',
             'adults' => 'required|integer|min:1',
@@ -220,6 +219,7 @@ class ReservationController extends Controller
             'idempotency_key' => 'nullable|string|max:100',
         ], [
             'reference_number.unique' => 'This GCash reference number has already been used.',
+            ...\App\Support\CheckInWindow::messages(),
         ]);
         $children = $validated['children'] ?? 0;
 
@@ -513,9 +513,14 @@ class ReservationController extends Controller
 
         // Same one-day advance rule store() enforces - a Modify can set a
         // brand-new check_in date, so it needs the identical floor.
-        $minCheckIn = now()->addDays(1)->toDateString();
         $validated = $request->validate([
-            'check_in' => "required|date|after_or_equal:{$minCheckIn}",
+            // An untouched check-in (the guest only changed rooms, guests,
+            // add-ons...) is always accepted as-is - it may legitimately be
+            // today or already past the window by the time of the edit. Any
+            // changed check-in must satisfy the same window as a new reservation.
+            'check_in' => (string) $request->input('check_in') === ($reservation->check_in?->toDateString() ?? '')
+                ? ['required', 'date']
+                : \App\Support\CheckInWindow::rules(),
             'check_out' => 'required|date|after:check_in',
             'adults' => 'required|integer|min:1',
             'children' => 'nullable|integer|min:0',
