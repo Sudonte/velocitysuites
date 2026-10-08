@@ -31,7 +31,7 @@
                         @endif
                     </div>
                     <div class="col">
-                        <div><strong>{{ $discountInfo['discount_name'] ?: 'Discount requested' }}</strong></div>
+                        <div><strong>{{ $discountInfo['discount_name'] ?: 'Discount requested' }}</strong>@if($discountInfo['validity_label']) <span class="small text-muted">({{ $discountInfo['validity_label'] }})</span>@endif</div>
                         <div class="small text-muted">
                             @if($discountInfo['has_id'])
                                 ID uploaded {{ $discountInfo['uploaded_at']->format('M d, Y g:i A') }}
@@ -63,7 +63,7 @@
                             <option value="">-- Select verified discount --</option>
                             @foreach($discounts as $d)
                                 <option value="{{ $d->id }}" {{ (int) $preselectedDiscountId === (int) $d->id ? 'selected' : '' }}>
-                                    {{ $d->name }} ({{ $d->discount_type === 'percentage' ? $d->value . '%' : '₱' . number_format($d->value, 2) }})
+                                    {{ $d->name }} ({{ $d->discount_type === 'percentage' ? $d->value . '%' : '₱' . number_format($d->value, 2) }}) - {{ $d->validityLabel() }}
                                 </option>
                             @endforeach
                         </select>

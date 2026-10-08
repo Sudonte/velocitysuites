@@ -15,18 +15,22 @@ class DiscountSelection
 {
     /**
      * @param  int|string|null  $discountId
-     * @param  int|null  $keepIfUnchangedId  an edit may keep its current discount even if the
-     *                                       admin has since deactivated it - it just can't be newly picked
+     * @param  int|null  $keepIfUnchangedId  an edit may keep its current discount even if the admin has since
+     *                                       deactivated it or its validity window has ended - it just can't be newly picked
+     * @param  bool  $enforceValidity  true (default) when a guest is creating/editing: the discount must be active AND
+     *                                 valid today. false for pricing/billing of a booking that already exists - a discount
+     *                                 that was valid when the guest booked is still honored after it expires
      * @return array{0: ?Discount, 1: ?string} [discount, error message]
      */
-    public static function resolve($discountId, ?string $legacyName, ?int $keepIfUnchangedId = null): array
+    public static function resolve($discountId, ?string $legacyName, ?int $keepIfUnchangedId = null, bool $enforceValidity = true): array
     {
         if ($discountId !== null && $discountId !== '') {
             $discount = Discount::find((int) $discountId);
             if (! $discount) {
                 return [null, 'The selected discount does not exist.'];
             }
-            if ($discount->status !== 'active' && $discount->id !== $keepIfUnchangedId) {
+            $kept = $discount->id === $keepIfUnchangedId;
+            if (! $kept && ($discount->status !== 'active' || ($enforceValidity && ! $discount->isValidOn()))) {
                 return [null, 'The selected discount is no longer available.'];
             }
 
@@ -34,7 +38,8 @@ class DiscountSelection
         }
 
         if ($legacyName !== null && $legacyName !== '' && strcasecmp($legacyName, 'None') !== 0) {
-            $discount = Discount::where('status', 'active')->where('name', $legacyName)->orderBy('id')->first();
+            $query = $enforceValidity ? Discount::offered() : Discount::where('status', 'active');
+            $discount = $query->where('name', $legacyName)->orderBy('id')->first();
             if (! $discount) {
                 return [null, 'The selected discount is no longer available.'];
             }

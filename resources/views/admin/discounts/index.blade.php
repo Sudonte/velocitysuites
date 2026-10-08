@@ -48,6 +48,8 @@
                     <th>Name</th>
                     <th>Amount</th>
                     <th>Description</th>
+                    <th>Start date</th>
+                    <th>End date</th>
                     <th>Status</th>
                     <th>Actions</th>
                 </tr>
@@ -64,6 +66,8 @@
                             @endif
                         </td>
                         <td><small class="text-muted">{{ Str::limit($discount->description, 80) }}</small></td>
+                        <td>{{ $discount->start_date ? $discount->start_date->format('M j, Y') : '-' }}</td>
+                        <td>{{ $discount->end_date ? $discount->end_date->format('M j, Y') : 'No expiry' }}</td>
                         <td><x-status-badge :status="$discount->status" domain="active_flag" /></td>
                         <td>
                             <a href="{{ route('admin.discounts.edit', $discount) }}" class="btn btn-sm btn-info">
@@ -89,7 +93,7 @@
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="5">
+                        <td colspan="7">
                             <x-empty-state icon="fas fa-id-card" message="No discounts found." />
                             <p class="text-center">
                                 <a href="{{ route('admin.discounts.create') }}">Create one now</a>

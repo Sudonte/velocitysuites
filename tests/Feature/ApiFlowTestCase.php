@@ -117,6 +117,17 @@ abstract class ApiFlowTestCase extends TestCase
             $table->decimal('value', 10, 2)->default(0);
             $table->text('description')->nullable();
             $table->string('status')->default('active');
+            $table->date('start_date')->nullable();
+            $table->date('end_date')->nullable();
+            $table->timestamps();
+        });
+
+        Schema::create('additional_charges', function (Blueprint $table) {
+            $table->id();
+            $table->unsignedBigInteger('billing_id');
+            $table->string('description')->nullable();
+            $table->string('charge_name')->nullable();
+            $table->decimal('amount', 10, 2)->default(0);
             $table->timestamps();
         });
 
@@ -370,8 +381,8 @@ abstract class ApiFlowTestCase extends TestCase
                 ['room_type_id' => $rt1->id, 'quantity' => 1],
                 ['room_type_id' => $rt2->id, 'quantity' => 2],
             ],
-            'check_in' => now()->addDays(1)->toDateString(),
-            'check_out' => now()->addDays(3)->toDateString(),
+            'check_in' => now('Asia/Manila')->addDays(2)->toDateString(),
+            'check_out' => now('Asia/Manila')->addDays(4)->toDateString(),
             'adults' => 1,
             'children' => 0,
             'guest_first_name' => 'ClaudeTest',

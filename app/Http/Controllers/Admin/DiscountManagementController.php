@@ -50,6 +50,9 @@ class DiscountManagementController extends Controller
             'value' => 'required|numeric|min:0',
             'description' => 'nullable|string',
             'status' => 'required|in:active,inactive',
+            // Optional validity window (inclusive, hotel-local days); empty = no limit on that side.
+            'start_date' => 'nullable|date',
+            'end_date' => 'nullable|date|after_or_equal:start_date',
         ]);
     }
 

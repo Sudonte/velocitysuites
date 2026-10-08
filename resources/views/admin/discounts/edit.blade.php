@@ -60,6 +60,30 @@
                         </div>
                     </div>
 
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group mb-3">
+                                <label for="start_date">Start date <small class="text-muted">(optional)</small></label>
+                                <input type="date" class="form-control @error('start_date') is-invalid @enderror"
+                                       id="start_date" name="start_date" value="{{ old('start_date', $discount->start_date?->toDateString()) }}">
+                                @error('start_date')
+                                    <div class="invalid-feedback">{{ $message }}</div>
+                                @enderror
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group mb-3">
+                                <label for="end_date">End date <small class="text-muted">(optional, on or after the start date)</small></label>
+                                <input type="date" class="form-control @error('end_date') is-invalid @enderror"
+                                       id="end_date" name="end_date" value="{{ old('end_date', $discount->end_date?->toDateString()) }}">
+                                @error('end_date')
+                                    <div class="invalid-feedback">{{ $message }}</div>
+                                @enderror
+                            </div>
+                        </div>
+                    </div>
+                    <p class="text-muted small mb-3">Leave both empty for a discount with no time limit.</p>
+
                     <div class="form-group mb-3">
                         <label for="description">Description</label>
                         <textarea class="form-control @error('description') is-invalid @enderror"
@@ -90,4 +114,11 @@
         </div>
     </div>
 </div>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    var s = document.getElementById('start_date'), e = document.getElementById('end_date');
+    function sync() { e.min = s.value || ''; }
+    s.addEventListener('change', sync); sync();
+});
+</script>
 @endsection

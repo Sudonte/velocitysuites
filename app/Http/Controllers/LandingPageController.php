@@ -51,7 +51,7 @@ class LandingPageController extends Controller
             ->orderBy('start_date')
             ->get();
 
-        $discounts = Discount::where('status', 'active')->orderBy('name')->get();
+        $discounts = Discount::offered()->orderBy('name')->get();
 
         // Public-audience announcements only, newest first, capped so the
         // Home page can't be overrun by a long publishing history - "Read

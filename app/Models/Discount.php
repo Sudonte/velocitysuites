@@ -21,11 +21,52 @@ class Discount extends Model
         'value',
         'description',
         'status',
+        'start_date',
+        'end_date',
     ];
 
     protected $casts = [
         'value' => 'decimal:2',
+        'start_date' => 'date:Y-m-d',
+        'end_date' => 'date:Y-m-d',
     ];
+
+    /**
+     * Is this discount offered on the given day (default: today, hotel time)? An empty start or end date means no limit
+     * on that side. Dates are inclusive calendar days.
+     */
+    public function isValidOn(?\Carbon\Carbon $day = null): bool
+    {
+        $day = ($day ?? \App\Support\CheckInWindow::today())->toDateString();
+        $start = $this->start_date?->toDateString();
+        $end = $this->end_date?->toDateString();
+
+        return ($start === null || $day >= $start) && ($end === null || $day <= $end);
+    }
+
+    /** Active AND valid on the day - what a guest may newly pick. */
+    public function scopeOffered($query, ?\Carbon\Carbon $day = null)
+    {
+        $day = ($day ?? \App\Support\CheckInWindow::today())->toDateString();
+
+        return $query->where('status', 'active')
+            ->where(fn ($q) => $q->whereNull('start_date')->orWhere('start_date', '<=', $day))
+            ->where(fn ($q) => $q->whereNull('end_date')->orWhere('end_date', '>=', $day));
+    }
+
+    /** Human text: "No expiry", "Valid until Dec 31, 2026", "Valid from Oct 1, 2026", "Valid Oct 1, 2026 - Dec 31, 2026". */
+    public function validityLabel(): string
+    {
+        $start = $this->start_date?->format('M j, Y');
+        $end = $this->end_date?->format('M j, Y');
+
+        return match (true) {
+            $start && $end => "Valid {$start} - {$end}",
+            (bool) $end => "Valid until {$end}",
+            (bool) $start => "Valid from {$start}",
+            default => 'No expiry',
+        };
+    }
 
     public function billings()
     {

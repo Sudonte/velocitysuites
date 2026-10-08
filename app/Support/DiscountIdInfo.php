@@ -21,7 +21,7 @@ class DiscountIdInfo
 {
     /**
      * @return array{
-     *   requested: bool, discount_name: ?string, requested_discount_id: ?int,
+     *   requested: bool, discount_name: ?string, validity_label: ?string, requested_discount_id: ?int,
      *   has_id: bool, path: ?string, uploaded_at: ?Carbon, version: ?int,
      *   status: string, status_label: string
      * }
@@ -49,8 +49,8 @@ class DiscountIdInfo
         }
 
         $discountId = $target?->discount_id ?? $booking?->discount_id;
-        $discountName = $discountId ? Discount::find($discountId)?->name : null;
-        $discountName ??= $target?->id_card_type ?? $booking?->id_card_type;
+        $claimed = $discountId ? Discount::find($discountId) : null;
+        $discountName = $claimed?->name ?? $target?->id_card_type ?? $booking?->id_card_type;
 
         $status = $booking?->discount_verification_status ?: $target?->discount_verification_status;
         if ($billing->discount_id || $status === 'approved') {
@@ -62,6 +62,7 @@ class DiscountIdInfo
         return [
             'requested' => $requested,
             'discount_name' => $discountName,
+            'validity_label' => $claimed?->validityLabel(),
             'requested_discount_id' => $discountId ? (int) $discountId : null,
             'has_id' => $best !== null,
             'path' => $best['path'] ?? null,
