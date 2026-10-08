@@ -22,6 +22,9 @@ use Tests\TestCase;
  */
 class MailFailureHonestyTest extends TestCase
 {
+    // Each test gets its own fresh in-memory sqlite database (see Tests\TestCase), so the tables built in
+    // setUp() vanish on their own - nothing ever needs to drop them by hand.
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -82,17 +85,6 @@ class MailFailureHonestyTest extends TestCase
             $table->timestamp('last_used_at')->nullable();
             $table->timestamps();
         });
-    }
-
-    protected function tearDown(): void
-    {
-        Schema::dropIfExists('api_tokens');
-        Schema::dropIfExists('activity_logs');
-        Schema::dropIfExists('guests');
-        Schema::dropIfExists('email_change_requests');
-        Schema::dropIfExists('password_reset_tokens');
-        Schema::dropIfExists('users');
-        parent::tearDown();
     }
 
     private function makeGuest(string $password = 'correct-password'): User

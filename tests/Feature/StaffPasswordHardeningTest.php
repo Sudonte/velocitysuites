@@ -18,6 +18,9 @@ use Tests\TestCase;
  */
 class StaffPasswordHardeningTest extends TestCase
 {
+    // Each test gets its own fresh in-memory sqlite database (see Tests\TestCase), so the tables built in
+    // setUp() vanish on their own - nothing ever needs to drop them by hand.
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -61,14 +64,6 @@ class StaffPasswordHardeningTest extends TestCase
             $table->string('ip_address')->nullable();
             $table->timestamps();
         });
-    }
-
-    protected function tearDown(): void
-    {
-        Schema::dropIfExists('activity_logs');
-        Schema::dropIfExists('staff_password_reset_requests');
-        Schema::dropIfExists('users');
-        parent::tearDown();
     }
 
     public function test_login_redirects_to_force_change_when_flag_set(): void

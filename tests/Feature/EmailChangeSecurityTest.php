@@ -74,16 +74,6 @@ class EmailChangeSecurityTest extends TestCase
         });
     }
 
-    protected function tearDown(): void
-    {
-        Schema::dropIfExists('api_tokens');
-        Schema::dropIfExists('activity_logs');
-        Schema::dropIfExists('guests');
-        Schema::dropIfExists('email_change_requests');
-        Schema::dropIfExists('users');
-        parent::tearDown();
-    }
-
     private function authAsGuest(string $password = 'correct-password'): array
     {
         $user = User::factory()->create([

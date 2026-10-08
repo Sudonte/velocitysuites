@@ -26,6 +26,9 @@ use Tests\TestCase;
  */
 class FailedLoginLockoutTest extends TestCase
 {
+    // Each test gets its own fresh in-memory sqlite database (see Tests\TestCase), so the tables built in
+    // setUp() vanish on their own - nothing ever needs to drop them by hand.
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -65,14 +68,6 @@ class FailedLoginLockoutTest extends TestCase
             $table->timestamp('completed_at')->nullable();
             $table->timestamps();
         });
-    }
-
-    protected function tearDown(): void
-    {
-        Schema::dropIfExists('staff_password_reset_requests');
-        Schema::dropIfExists('password_reset_tokens');
-        Schema::dropIfExists('users');
-        parent::tearDown();
     }
 
     private function makeUser(string $role): User

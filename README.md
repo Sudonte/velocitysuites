@@ -109,6 +109,27 @@ A comprehensive Laravel-based hotel booking and reservation management system wi
 
 Visit `http://localhost:8000` in your browser.
 
+## Running the tests (local machine ONLY - never on the server)
+
+The test suite creates and **drops tables** and inserts rows. Run it on a developer machine, with the in-memory
+sqlite database that `phpunit.xml` configures, and **never on the Hostinger server**. On 2026-10-08 a run on the
+server hit the live MySQL database (a cached `bootstrap/cache/config.php` makes the app ignore `phpunit.xml`) and
+dropped four production tables.
+
+```
+composer install
+php artisan config:clear      # a cached config must NOT exist on a machine that runs tests
+php vendor/bin/phpunit
+```
+
+The suite protects itself: `tests/bootstrap.php` (via `Tests\Support\TestEnvironmentGuard`) stops the run *before any
+test executes* unless `APP_ENV` is `testing`, the connection is sqlite with the `:memory:` database, no `DB_URL` /
+`APP_CONFIG_CACHE` override is set, and no cached config file exists. `Tests\TestCase` re-checks the booted app before
+every test. `tests/Unit/TestEnvironmentGuardTest.php` proves the guard by starting real phpunit processes pointed at
+MySQL / production / a cached config and asserting each aborts. Every test gets its own fresh in-memory database, so
+tests build their schema in `setUp()` and never drop tables by hand. (Laravel's `RefreshDatabase` is not usable here:
+several migrations contain MySQL-only SQL such as `UPDATE ... JOIN`, which sqlite cannot run.)
+
 ## Default Test Accounts
 
 | Role | Email | Password |

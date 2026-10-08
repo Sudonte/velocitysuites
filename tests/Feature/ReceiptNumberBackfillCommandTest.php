@@ -57,14 +57,6 @@ class ReceiptNumberBackfillCommandTest extends TestCase
         });
     }
 
-    protected function tearDown(): void
-    {
-        Schema::dropIfExists('payments');
-        Schema::dropIfExists('billings');
-        Schema::dropIfExists('bookings');
-        parent::tearDown();
-    }
-
     private function makeEligiblePayment(array $overrides = []): Payment
     {
         return Payment::create(array_merge([
