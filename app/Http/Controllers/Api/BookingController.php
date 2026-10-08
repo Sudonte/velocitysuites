@@ -71,7 +71,7 @@ class BookingController extends Controller
         // amount, and amenities for the itemized breakdown -
         // BookingAmenityDto's own doc previously noted this key was never
         // actually sent by any guest-facing endpoint).
-        $paginated->getCollection()->each(fn (Booking $b) => $b->append(['total_amount_due', 'amenities']));
+        $paginated->getCollection()->each(fn (Booking $b) => $b->append(['total_amount_due', 'amenities', 'timeline']));
 
         return response()->json($paginated);
     }
@@ -92,7 +92,7 @@ class BookingController extends Controller
         // "don't add cost to every listing" convention as total_amount_due/
         // amenities above - only a single Booking Details/Payment Receipt
         // fetch actually needs this.
-        $payload = $booking->append(['total_amount_due', 'amenities'])->toArray();
+        $payload = $booking->append(['total_amount_due', 'amenities', 'timeline'])->toArray();
         $payload['payment_summary'] = $booking->paymentSummary();
         $payload['payment_transactions'] = $booking->paymentTransactionsPayload();
         $payload['receipts'] = $booking->receiptsPayload();
@@ -188,7 +188,7 @@ class BookingController extends Controller
         if (! empty($idempotencyKey)) {
             $existing = Booking::where('idempotency_key', $idempotencyKey)->first();
             if ($existing) {
-                return response()->json($existing->append(['total_amount_due', 'amenities']), 201);
+                return response()->json($existing->append(['total_amount_due', 'amenities', 'timeline']), 201);
             }
         }
 
@@ -376,7 +376,7 @@ class BookingController extends Controller
             if (! empty($validated['idempotency_key']) && str_contains($e->getMessage(), 'idempotency_key')) {
                 $winner = Booking::where('idempotency_key', $validated['idempotency_key'])->first();
                 if ($winner) {
-                    return response()->json($winner->append(['total_amount_due', 'amenities']), 201);
+                    return response()->json($winner->append(['total_amount_due', 'amenities', 'timeline']), 201);
                 }
             }
             Log::error('Booking creation failed on an unexpected unique constraint violation', [
@@ -413,7 +413,7 @@ class BookingController extends Controller
             $booking
         );
 
-        return response()->json($booking->append(['total_amount_due', 'amenities']), 201);
+        return response()->json($booking->append(['total_amount_due', 'amenities', 'timeline']), 201);
     }
 
     /**

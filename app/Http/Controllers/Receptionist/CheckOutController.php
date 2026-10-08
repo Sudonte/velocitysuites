@@ -169,6 +169,11 @@ class CheckOutController extends Controller
         $remaining = $booking->rooms()->wherePivotNull('checked_out_at')->count();
 
         if ($remaining === 0) {
+            // Timeline: the last room just left - that is the stay's check-out moment.
+            if ($booking->checked_out_at === null) {
+                $booking->update(['checked_out_at' => now()]);
+            }
+
             return response()->json([
                 'final' => true,
                 'message' => 'Last room checked out - proceeding to billing.',
@@ -352,7 +357,14 @@ class CheckOutController extends Controller
 
             $officialReceiptNumber = null;
             if ($completed) {
-                $lockedBooking->update(['booking_status' => Booking::STATUS_COMPLETED]);
+                // Timeline: completion is verified by the receptionist right now; check-out
+                // is stamped here too if the room-by-room path above never did (e.g. a
+                // single-step checkout).
+                $lockedBooking->update([
+                    'booking_status' => Booking::STATUS_COMPLETED,
+                    'completed_at' => now(),
+                    'checked_out_at' => $lockedBooking->checked_out_at ?? now(),
+                ]);
                 foreach ($rooms as $room) {
                     $room->update(['status' => 'available']);
                 }
@@ -473,6 +485,13 @@ class CheckOutController extends Controller
 
             if ($discountTarget->discount_verification_status !== 'approved') {
                 $discountTarget->update(['discount_verification_status' => 'approved']);
+            }
+
+            // Timeline: stamp the booking (what the guest's timeline reads) every time the
+            // receptionist verifies/changes the discount - add-or-update, newest wins.
+            $billing->booking->update(['discount_verified_at' => now()]);
+            if ($billing->booking->discount_verification_status !== 'approved') {
+                $billing->booking->update(['discount_verification_status' => 'approved']);
             }
         });
 

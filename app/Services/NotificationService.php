@@ -211,7 +211,7 @@ class NotificationService
     {
         $this->toUser(
             $guest,
-            'Reservation Modified',
+            'Reservation Updated',
             "Your reservation for {$roomName} has been updated.",
             'reservation',
             $referenceId

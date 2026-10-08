@@ -60,12 +60,20 @@ class Booking extends Model
         'selected_payment_percentage',
         'required_payment_amount',
         'idempotency_key',
+        'checked_in_at',
+        'checked_out_at',
+        'completed_at',
+        'discount_verified_at',
     ];
 
     protected $casts = [
         'check_in' => 'datetime',
         'check_out' => 'datetime',
         'confirmed_at' => 'datetime',
+        'checked_in_at' => 'datetime',
+        'checked_out_at' => 'datetime',
+        'completed_at' => 'datetime',
+        'discount_verified_at' => 'datetime',
         'verified_at' => 'datetime',
         'hidden_at' => 'datetime',
         'viewed_at' => 'datetime',
@@ -106,6 +114,15 @@ class Booking extends Model
     public function reservation()
     {
         return $this->belongsTo(Reservation::class);
+    }
+
+    /**
+     * The guest-facing Transaction Timeline (see \App\Support\TransactionTimeline). Not in $appends - only
+     * the guest API responses that show a timeline attach it explicitly.
+     */
+    public function getTimelineAttribute(): array
+    {
+        return \App\Support\TransactionTimeline::forBooking($this);
     }
 
     /**

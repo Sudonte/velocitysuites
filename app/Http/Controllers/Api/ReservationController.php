@@ -88,7 +88,7 @@ class ReservationController extends Controller
             // extra queries per row to every listing) - appended here at
             // runtime instead, since the guest-facing list needs both (see
             // Api\BookingController::index()'s identical convention).
-            $r->append(['total_amount_due', 'amenities']);
+            $r->append(['total_amount_due', 'amenities', 'timeline']);
         });
 
         return response()->json($reservations);
@@ -113,7 +113,7 @@ class ReservationController extends Controller
         // see Reservation::paymentSummary() and
         // PAYMENT_RECEIPT_HISTORY_BACKEND_SPEC.md §10 (Reservation ->
         // Booking payment-history preservation).
-        $payload = $reservation->append(['total_amount_due', 'amenities'])->toArray();
+        $payload = $reservation->append(['total_amount_due', 'amenities', 'timeline'])->toArray();
         $payload['payment_summary'] = $reservation->paymentSummary();
         $payload['payment_transactions'] = $reservation->paymentTransactionsPayload();
         $payload['receipts'] = $reservation->receiptsPayload();
@@ -141,7 +141,7 @@ class ReservationController extends Controller
             $existing = Reservation::where('idempotency_key', $idempotencyKey)->first();
             if ($existing) {
                 $existing->load(['roomType', 'booking.room', 'bookingAmenities', 'payments']);
-                return response()->json($existing->append(['total_amount_due', 'amenities']), 201);
+                return response()->json($existing->append(['total_amount_due', 'amenities', 'timeline']), 201);
             }
         }
 
@@ -446,7 +446,7 @@ class ReservationController extends Controller
                 $winner = Reservation::where('idempotency_key', $validated['idempotency_key'])->first();
                 if ($winner) {
                     $winner->load(['roomType', 'booking.room', 'bookingAmenities', 'payments']);
-                    return response()->json($winner->append(['total_amount_due', 'amenities']), 201);
+                    return response()->json($winner->append(['total_amount_due', 'amenities', 'timeline']), 201);
                 }
             }
             Log::error('Reservation creation failed on an unexpected unique constraint violation', [
@@ -475,7 +475,7 @@ class ReservationController extends Controller
 
         $reservation->load(['roomType', 'booking.room', 'bookingAmenities', 'payments']);
 
-        return response()->json($reservation->append(['total_amount_due', 'amenities']), 201);
+        return response()->json($reservation->append(['total_amount_due', 'amenities', 'timeline']), 201);
     }
 
     /**
@@ -541,7 +541,12 @@ class ReservationController extends Controller
             // compatibility with an older app build.
             'room_type_id' => 'nullable|exists:room_types,id',
             'rooms_requested' => 'nullable|integer|min:1|max:50',
-            'id_card_type' => 'nullable|in:None,Senior Citizen,PWD',
+            // Any discount the Discount module currently offers - see \App\Support\DiscountSelection.
+            // Sent as id_card_type = "None" (and no discount_id) to drop the discount.
+            'discount_id' => 'nullable|integer',
+            'id_card_type' => 'nullable|string|max:100',
+            // Delete the stored ID image once this edit has saved successfully.
+            'remove_id_card' => 'nullable|boolean',
             'additional_guests' => 'nullable|array',
             'additional_guests.*.name' => 'required_with:additional_guests|string|max:150',
             'additional_guests.*.age' => 'required_with:additional_guests|integer|min:0',
@@ -555,7 +560,7 @@ class ReservationController extends Controller
             'amenities' => 'nullable|array',
             'amenities.*.amenity_id' => 'required_with:amenities|integer',
             'amenities.*.quantity' => 'required_with:amenities|integer|min:1',
-        ]);
+        ], \App\Support\CheckInWindow::messages());
         $children = $validated['children'] ?? 0;
 
         $updates = [
@@ -658,15 +663,46 @@ class ReservationController extends Controller
             $resolvedAmenities = $this->amenityService->validateSelection($validated['amenities'] ?? []);
         }
 
-        // Only touch the discount/ID fields if the guest actually changed the
-        // ID type this Modify - null/absent means "no change requested",
-        // never silently clears an already-verified discount request.
-        if (array_key_exists('id_card_type', $validated) && $validated['id_card_type'] !== $reservation->id_card_type) {
-            $idCardType = $validated['id_card_type'] ?? 'None';
-            $discountRequested = $idCardType !== 'None';
-            $updates['discount_requested'] = $discountRequested;
-            $updates['discount_verification_status'] = $discountRequested ? 'pending' : 'not_requested';
-            $updates['id_card_type'] = $discountRequested ? $idCardType : null;
+        // Discount / ID. Untouched unless the request names a discount (discount_id or
+        // id_card_type): an unchanged discount keeps its verification state and its ID;
+        // a different one (or a newly claimed one) goes back to "pending" for the
+        // receptionist to verify; "None" drops the discount and its ID. The stored ID
+        // image is only deleted AFTER this edit has saved (see $idPathToDelete below),
+        // so a failed save never costs the guest their existing ID.
+        $removeIdCard = (bool) ($validated['remove_id_card'] ?? false);
+        $idPathToDelete = null;
+        $namesDiscount = (isset($validated['discount_id']) && $validated['discount_id'] !== null)
+            || (isset($validated['id_card_type']) && $validated['id_card_type'] !== null);
+        if ($namesDiscount) {
+            [$discount, $discountError] = \App\Support\DiscountSelection::resolve(
+                $validated['discount_id'] ?? null,
+                $validated['id_card_type'] ?? null,
+                $reservation->discount_id !== null ? (int) $reservation->discount_id : null
+            );
+            if ($discountError !== null) {
+                return response()->json(['message' => $discountError, 'errors' => ['discount_id' => [$discountError]]], 422);
+            }
+
+            if ($discount === null) {
+                $updates['discount_requested'] = false;
+                $updates['discount_verification_status'] = 'not_requested';
+                $updates['id_card_type'] = null;
+                $updates['discount_id'] = null;
+                $removeIdCard = true; // an ID with no discount to claim has no use
+            } else {
+                $unchanged = $discount->id === (int) $reservation->discount_id
+                    || ($reservation->discount_id === null && $discount->name === $reservation->id_card_type);
+                if (! $unchanged) {
+                    $updates['discount_requested'] = true;
+                    $updates['discount_verification_status'] = 'pending';
+                    $updates['id_card_type'] = $discount->name;
+                    $updates['discount_id'] = $discount->id;
+                }
+            }
+        }
+        if ($removeIdCard && $reservation->id_card_image_path) {
+            $updates['id_card_image_path'] = null;
+            $idPathToDelete = $reservation->id_card_image_path;
         }
 
         if (array_key_exists('additional_guests', $validated)) {
@@ -682,6 +718,9 @@ class ReservationController extends Controller
         // trail (visible in the existing curated activity log), matching
         // every other reservation-lifecycle action in this controller.
         $before = "{$reservation->roomType->name} x{$reservation->rooms_requested}, {$reservation->check_in} to {$reservation->check_out}, {$reservation->adults} adult(s)/{$reservation->children} child(ren)";
+        // For the old-vs-new total shown to the guest after the edit (the app shows the same
+        // numbers before they confirm, computed from the same rate x nights x quantity + add-ons).
+        $oldTotal = round((float) $reservation->total_amount_due, 2);
 
         // Everything below - the one-time-edit decision itself, the
         // reservation's own fields, its room lines, and its amenities - is
@@ -751,6 +790,10 @@ class ReservationController extends Controller
             return response()->json(['message' => 'This reservation has already been modified and cannot be edited again.'], 422);
         }
 
+        if ($idPathToDelete !== null) {
+            Storage::disk('local')->delete($idPathToDelete);
+        }
+
         $reservation->refresh();
 
         $after = "{$reservation->roomType->name} x{$reservation->rooms_requested}, {$reservation->check_in} to {$reservation->check_out}, {$reservation->adults} adult(s)/{$reservation->children} child(ren)";
@@ -763,7 +806,21 @@ class ReservationController extends Controller
 
         $this->notificationService->notifyReservationModified(auth()->user(), $reservation->roomType->name, $reservation->id);
 
-        return response()->json($reservation->fresh(['roomType', 'booking.room', 'payments', 'roomLines', 'bookingAmenities'])->append(['total_amount_due', 'amenities']));
+        $fresh = $reservation->fresh(['roomType', 'booking.room', 'payments', 'roomLines', 'bookingAmenities']);
+        $newTotal = round((float) $fresh->total_amount_due, 2);
+        $amountPaid = round((float) $fresh->payments
+            ->whereNotIn('payment_status', ['rejected', 'failed', 'cancelled', 'voided'])
+            ->sum('amount_paid'), 2);
+        $payload = $fresh->append(['total_amount_due', 'amenities', 'timeline'])->toArray();
+        $payload['edit_summary'] = [
+            'old_total' => $oldTotal,
+            'new_total' => $newTotal,
+            'amount_paid' => $amountPaid,
+            'balance_due' => round(max(0, $newTotal - $amountPaid), 2),
+            'excess' => round(max(0, $amountPaid - $newTotal), 2),
+        ];
+
+        return response()->json($payload);
     }
 
     /**
@@ -780,7 +837,7 @@ class ReservationController extends Controller
 
         $this->workflow->switchToGcash($reservation);
 
-        return response()->json($reservation->fresh(['roomType', 'booking.room', 'payments'])->append(['total_amount_due', 'amenities']));
+        return response()->json($reservation->fresh(['roomType', 'booking.room', 'payments'])->append(['total_amount_due', 'amenities', 'timeline']));
     }
 
     /**
@@ -796,7 +853,7 @@ class ReservationController extends Controller
 
         $this->workflow->switchToCash($reservation);
 
-        return response()->json($reservation->fresh(['roomType', 'booking.room', 'payments'])->append(['total_amount_due', 'amenities']));
+        return response()->json($reservation->fresh(['roomType', 'booking.room', 'payments'])->append(['total_amount_due', 'amenities', 'timeline']));
     }
 
     /**
@@ -819,7 +876,7 @@ class ReservationController extends Controller
 
         $this->notificationService->notifyReservationCancelled($user, $roomName, $reservation->id);
 
-        return response()->json($reservation->fresh(['roomType', 'booking.room', 'payments'])->append(['total_amount_due', 'amenities']));
+        return response()->json($reservation->fresh(['roomType', 'booking.room', 'payments'])->append(['total_amount_due', 'amenities', 'timeline']));
     }
 
     /**
@@ -837,7 +894,7 @@ class ReservationController extends Controller
 
         $this->workflow->hide($reservation);
 
-        return response()->json($reservation->fresh(['roomType', 'booking.room', 'payments'])->append(['total_amount_due', 'amenities']));
+        return response()->json($reservation->fresh(['roomType', 'booking.room', 'payments'])->append(['total_amount_due', 'amenities', 'timeline']));
     }
 
     /**
@@ -859,12 +916,19 @@ class ReservationController extends Controller
             'id_card' => 'required|image|max:5120',
         ]);
 
-        if ($reservation->id_card_image_path) {
-            Storage::disk('local')->delete($reservation->id_card_image_path);
-        }
-
+        // New file first; the old one is only deleted once the row points at the new
+        // one, so a failure part-way never leaves the guest with no ID at all.
+        $oldPath = $reservation->id_card_image_path;
         $path = $request->file('id_card')->store('id-cards', 'local');
-        $reservation->update(['id_card_image_path' => $path]);
+        $changes = ['id_card_image_path' => $path];
+        if ($oldPath !== null && $reservation->discount_requested) {
+            // A replacement ID must be looked at again by the receptionist.
+            $changes['discount_verification_status'] = 'pending';
+        }
+        $reservation->update($changes);
+        if ($oldPath !== null && $oldPath !== $path) {
+            Storage::disk('local')->delete($oldPath);
+        }
 
         return response()->json(['message' => 'ID uploaded.']);
     }

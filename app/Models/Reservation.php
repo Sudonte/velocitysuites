@@ -116,6 +116,12 @@ class Reservation extends Model
         return $this->belongsTo(Guest::class);
     }
 
+    /** The guest-facing Transaction Timeline (see \App\Support\TransactionTimeline). Attached explicitly by the guest API, not in $appends. */
+    public function getTimelineAttribute(): array
+    {
+        return \App\Support\TransactionTimeline::forReservation($this);
+    }
+
     /**
      * Get the room type the guest requested. Always set; the specific
      * room (room_id) stays null until a receptionist assigns one at

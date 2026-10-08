@@ -384,6 +384,8 @@ class CheckInController extends Controller
                     'children' => $children,
                     'number_of_guests' => $validated['adults'] + $children,
                     'booking_status' => Booking::STATUS_CHECKED_IN,
+                    // Timeline: the moment the receptionist verified/checked the guest in.
+                    'checked_in_at' => now(),
                 ]);
             });
         } catch (HttpExceptionInterface $e) {

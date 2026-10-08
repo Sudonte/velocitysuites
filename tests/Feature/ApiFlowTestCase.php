@@ -169,6 +169,10 @@ abstract class ApiFlowTestCase extends TestCase
             $table->timestamp('cancelled_at')->nullable();
             $table->timestamp('hidden_at')->nullable();
             $table->timestamp('viewed_at')->nullable();
+            $table->timestamp('checked_in_at')->nullable();
+            $table->timestamp('checked_out_at')->nullable();
+            $table->timestamp('completed_at')->nullable();
+            $table->timestamp('discount_verified_at')->nullable();
             $table->timestamp('deleted_at')->nullable();
             $table->timestamps();
         });
@@ -190,6 +194,22 @@ abstract class ApiFlowTestCase extends TestCase
             $table->unsignedBigInteger('booking_id');
             $table->unsignedBigInteger('room_id');
             $table->timestamp('checked_out_at')->nullable();
+            $table->timestamps();
+        });
+
+        Schema::create('billings', function (Blueprint $table) {
+            $table->id();
+            $table->unsignedBigInteger('booking_id')->nullable();
+            $table->decimal('room_charge', 10, 2)->default(0);
+            $table->decimal('additional_guest_fee', 10, 2)->default(0);
+            $table->decimal('amenity_charge', 10, 2)->default(0);
+            $table->decimal('discount', 10, 2)->default(0);
+            $table->unsignedBigInteger('discount_id')->nullable();
+            $table->unsignedBigInteger('discount_verified_by')->nullable();
+            $table->timestamp('discount_verified_at')->nullable();
+            $table->decimal('total_amount', 10, 2)->default(0);
+            $table->string('billing_status', 20)->default('pending');
+            $table->string('receipt_number')->nullable();
             $table->timestamps();
         });
 
