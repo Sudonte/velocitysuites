@@ -179,7 +179,8 @@ class ReservationController extends Controller
             // web Guest\ReservationController::store(), which already sets
             // this at creation via its payment_choice field.
             'payment_method' => 'required|in:cash,gcash',
-            'id_card_type' => 'nullable|in:None,Senior Citizen,PWD',
+            'discount_id' => 'nullable|integer',
+            'id_card_type' => 'nullable|string|max:100',
             'additional_guests' => 'nullable|array',
             'additional_guests.*.name' => 'required_with:additional_guests|string|max:150',
             'additional_guests.*.age' => 'required_with:additional_guests|integer|min:0',
@@ -290,8 +291,12 @@ class ReservationController extends Controller
             ], 422);
         }
 
-        $idCardType = $validated['id_card_type'] ?? 'None';
-        $discountRequested = $idCardType !== 'None';
+        [$discount, $discountError] = \App\Support\DiscountSelection::resolve($validated['discount_id'] ?? null, $validated['id_card_type'] ?? null);
+        if ($discountError !== null) {
+            return response()->json(['message' => $discountError, 'errors' => ['discount_id' => [$discountError]]], 422);
+        }
+        $idCardType = $discount?->name ?? 'None';
+        $discountRequested = $discount !== null;
 
         /** @var RoomType $firstRoomType */
         $firstRoomType = $roomLines->first()['room_type'];
@@ -346,7 +351,7 @@ class ReservationController extends Controller
         try {
             $reservation = DB::transaction(function () use (
                 $guest, $validated, $roomLines, $firstRoomType, $totalRoomsRequested,
-                $checkIn, $checkOut, $children, $discountRequested, $idCardType, $nights, $paymentToCreate
+                $checkIn, $checkOut, $children, $discountRequested, $idCardType, $discount, $nights, $paymentToCreate
             ) {
                 $reservation = Reservation::create([
                     'guest_id' => $guest->id,
@@ -365,6 +370,7 @@ class ReservationController extends Controller
                     'discount_requested' => $discountRequested,
                     'discount_verification_status' => $discountRequested ? 'pending' : 'not_requested',
                     'id_card_type' => $discountRequested ? $idCardType : null,
+                    'discount_id' => $discount?->id,
                     // array_values() - see DirectBookingService::create()'s identical doc
                     // on why the raw validated array can have out-of-index-order keys that
                     // json_encode() then serializes as a JSON object instead of an array,

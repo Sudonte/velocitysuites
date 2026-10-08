@@ -47,6 +47,7 @@ class Booking extends Model
         'booking_status',
         'payment_method',
         'id_card_type',
+        'discount_id',
         'id_card_image_path',
         'additional_guest_details',
         'discount_requested',

@@ -212,8 +212,11 @@ class BookingController extends Controller
             'guest_first_name' => 'required|string|max:100',
             'guest_middle_name' => 'nullable|string|max:100',
             'guest_last_name' => 'required|string|max:100',
-            'id_card_type' => 'nullable|in:None,Senior Citizen,PWD',
-            'id_card_image' => 'required_if:id_card_type,Senior Citizen,PWD|nullable|image|max:5120',
+            // Any discount the Discount module currently offers (see
+            // App\Support\DiscountSelection) - not just Senior Citizen/PWD.
+            'discount_id' => 'nullable|integer',
+            'id_card_type' => 'nullable|string|max:100',
+            'id_card_image' => 'nullable|image|max:5120',
             'additional_guests' => 'nullable|array',
             'additional_guests.*.name' => 'required_with:additional_guests|string|max:150',
             'additional_guests.*.age' => 'required_with:additional_guests|integer|min:0',
@@ -304,11 +307,20 @@ class BookingController extends Controller
             ], 422);
         }
 
-        $idCardType = $validated['id_card_type'] ?? 'None';
+        [$discount, $discountError] = \App\Support\DiscountSelection::resolve($validated['discount_id'] ?? null, $validated['id_card_type'] ?? null);
+        if ($discountError !== null) {
+            return response()->json(['message' => $discountError, 'errors' => ['discount_id' => [$discountError]]], 422);
+        }
         $idCard = null;
-        if ($idCardType !== 'None') {
+        if ($discount !== null) {
+            if (! $request->hasFile('id_card_image')) {
+                return response()->json([
+                    'message' => 'Please upload a valid ID to claim this discount.',
+                    'errors' => ['id_card_image' => ['Please upload a valid ID to claim this discount.']],
+                ], 422);
+            }
             $path = $request->file('id_card_image')->store('id-cards', 'local');
-            $idCard = ['type' => $idCardType, 'path' => $path];
+            $idCard = ['type' => $discount->name, 'discount_id' => $discount->id, 'path' => $path];
         }
 
         $paymentData = [

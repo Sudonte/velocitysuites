@@ -58,7 +58,7 @@ class CatalogController extends Controller
     public function discounts(): JsonResponse
     {
         return response()->json(
-            Discount::where('status', 'active')->orderBy('name')->get(['id', 'name', 'discount_type', 'value', 'description'])
+            Discount::where('status', 'active')->orderBy('name')->get(['id', 'name', 'discount_type', 'value', 'description', 'status', 'created_at', 'updated_at'])
         );
     }
 

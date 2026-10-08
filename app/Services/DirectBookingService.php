@@ -253,6 +253,7 @@ class DirectBookingService
                 'booking_status' => Booking::STATUS_ACTIVE,
                 'payment_method' => $paymentData['payment_method'],
                 'id_card_type' => $idCard['type'] ?? null,
+                'discount_id' => $idCard['discount_id'] ?? null,
                 'id_card_image_path' => $idCard['path'] ?? null,
                 'discount_requested' => $idCard !== null,
                 'discount_verification_status' => $idCard !== null ? 'pending' : 'not_requested',
