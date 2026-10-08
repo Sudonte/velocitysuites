@@ -95,7 +95,7 @@ class CheckOutController extends Controller
             ->where('status', 'approved')
             ->get();
 
-        $discounts = Discount::where('status', 'active')->orderBy('name')->get();
+        $discounts = $this->billableDiscounts($booking->reservation ?? $booking);
 
         // Displayed instead of the originally scheduled check_out/
         // number_of_nights so the panel's "Nights"/"Check-Out" labels never
@@ -464,19 +464,21 @@ class CheckOutController extends Controller
         ]);
 
         $discount = Discount::where('status', 'active')->findOrFail($validated['discount_id']);
+        // A discount that has expired since the guest booked is still honored for THAT guest; anyone else may only be
+        // given a discount that is valid today.
+        if (! $discount->isValidOn() && $discount->id !== $this->claimedDiscountId($discountTarget)) {
+            return response()->json(['message' => 'That discount is not valid today ('.$discount->validityLabel().').'], 422);
+        }
 
         DB::transaction(function () use ($billing, $discount, $discountTarget) {
-            $subtotal = (float) $billing->room_charge
-                + (float) $billing->additional_guest_fee
+            // Whole bill (room + extra-guest fee + amenities + additional charges) through the SAME function
+            // the guest's estimate uses (App\Support\BillDiscount), so the two can never disagree.
+            $addOns = (float) $billing->additional_guest_fee
                 + (float) $billing->amenity_charge
                 + $billing->additional_charges_total;
 
-            $amount = $discount->discount_type === 'percentage'
-                ? $subtotal * ((float) $discount->value / 100)
-                : (float) $discount->value;
-
             $billing->update([
-                'discount' => round(min($amount, $subtotal), 2),
+                'discount' => \App\Support\BillDiscount::amount($discount, (float) $billing->room_charge, $addOns),
                 'discount_id' => $discount->id,
                 'discount_verified_by' => auth()->id(),
                 'discount_verified_at' => now(),
@@ -496,12 +498,30 @@ class CheckOutController extends Controller
         });
 
         $billing->refresh()->load('discountApplied');
-        $discounts = Discount::where('status', 'active')->orderBy('name')->get();
+        $discounts = $this->billableDiscounts($discountTarget);
 
         return response()->json([
             'html' => view('receptionist.check-out.partials.discount-panel', compact('billing', 'discounts'))->render(),
             'running_total' => $billing->running_total,
         ]);
+    }
+
+    /** The discount the guest claimed when booking (by id, else by name for older records), regardless of today's validity dates. */
+    private function claimedDiscountId($discountTarget): ?int
+    {
+        [$claimed] = \App\Support\DiscountSelection::resolve($discountTarget->discount_id, $discountTarget->id_card_type, null, false);
+
+        return $claimed?->id;
+    }
+
+    /** Discounts the receptionist may apply: every active one valid today, plus the one this guest claimed even if it has since expired. */
+    private function billableDiscounts($discountTarget)
+    {
+        $claimed = $this->claimedDiscountId($discountTarget);
+
+        return Discount::where('status', 'active')->orderBy('name')->get()
+            ->filter(fn (Discount $d) => $d->isValidOn() || $d->id === $claimed)
+            ->values();
     }
 
     /**

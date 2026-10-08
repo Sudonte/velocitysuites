@@ -115,17 +115,20 @@ class BookingService
 
         $discount = $promoDiscount;
 
-        // Statutory Senior Citizen / PWD discount: the value comes from the Discount module (the admin's
-        // row - 20% by law, RA 9994 / RA 10754), never from a number in code.
-        $discount += $this->statutoryDiscountAmount($reservation, $roomCharge);
+        // Statutory Senior Citizen / PWD discount: the value comes from the Discount module (the admin's row -
+        // 20% by law, RA 9994 / RA 10754), never from a number in code, and it applies to the WHOLE bill - room
+        // charges plus the paid amenities the guest selected - through the same function Billing / Check-out uses.
+        $addOns = round((float) $reservation->bookingAmenities->sum('subtotal'), 2);
+        $discount += $this->statutoryDiscountAmount($reservation, $roomCharge, $addOns);
 
-        $discount = min($discount, $roomCharge);
+        $discount = min($discount, $roomCharge + $addOns);
 
         return [
             'nights' => $nights,
             'room_charge' => round($roomCharge, 2),
+            'add_ons' => $addOns,
             'discount' => round($discount, 2),
-            'total' => round(max(0, $roomCharge - $discount), 2),
+            'total' => round(max(0, $roomCharge + $addOns - $discount), 2),
         ];
     }
 
@@ -134,11 +137,11 @@ class BookingService
      * 0 when no such discount is claimed, or the admin has deactivated it. Other claimed discounts (VIP,
      * etc.) are not pre-applied - the receptionist applies them at billing after verifying the ID.
      */
-    private function statutoryDiscountAmount(Reservation $reservation, float $roomCharge): float
+    private function statutoryDiscountAmount(Reservation $reservation, float $roomCharge, float $addOns): float
     {
-        [$claimed] = \App\Support\DiscountSelection::resolve($reservation->discount_id, $reservation->id_card_type);
+        [$claimed] = \App\Support\DiscountSelection::resolve($reservation->discount_id, $reservation->id_card_type, null, false);
 
-        return ($claimed && $claimed->isStatutory()) ? $claimed->amountOff($roomCharge) : 0.0;
+        return ($claimed && $claimed->isStatutory()) ? \App\Support\BillDiscount::amount($claimed, $roomCharge, $addOns) : 0.0;
     }
 
     /**
