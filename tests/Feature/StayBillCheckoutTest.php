@@ -318,6 +318,27 @@ class StayBillCheckoutTest extends ApiFlowTestCase
         $this->assertStringContainsString('3,000.00', $note->message);
     }
 
+    public function test_the_guest_api_and_receipt_carry_the_same_stay_bill_the_receptionist_billed(): void
+    {
+        [$booking, $rooms] = $this->stay([1000]);
+        $this->at('2026-10-08 10:00');
+        $billing = $this->openBilling($booking);
+        $this->actingAs($this->receptionist())->postJson(route('receptionist.billing.payment.store', $billing), ['payment_method' => 'cash', 'amount_paid' => 3000])->assertOk();
+
+        $user = User::find($booking->fresh()->guest->user_id);
+        $this->actingAs($user);
+        $payload = json_decode(app(\App\Http\Controllers\Api\BookingController::class)->show($booking->fresh())->getContent(), true);
+
+        $this->assertSame(3000.0, (float) $payload['stay_bill']['total']);
+        $this->assertSame(3, $payload['stay_bill']['actual_nights']);
+        $this->assertSame(1, $payload['stay_bill']['scheduled_nights']);
+        $this->assertSame((float) $billing->fresh()->total_amount, (float) $payload['stay_bill']['total']);
+
+        $receipt = app(ReceiptService::class)->buildReceiptPayload($booking->fresh(), 'OFFICIAL_RECEIPT', null, $billing->fresh());
+        $this->assertSame(3000.0, $receipt['stay_bill']['total']);
+        $this->assertSame('2026-10-08', $receipt['stay_bill']['actual_check_out']);
+    }
+
     // ---------------------------------------------------------------- ID verification vs transaction verification
 
     private function bookingWithDiscountId(string $status = Booking::STATUS_ACTIVE): array

@@ -76,7 +76,9 @@ class BookingController extends Controller
         // amount, and amenities for the itemized breakdown -
         // BookingAmenityDto's own doc previously noted this key was never
         // actually sent by any guest-facing endpoint).
-        $paginated->getCollection()->each(fn (Booking $b) => $b->append(['total_amount_due', 'amenities', 'timeline']));
+        // stay_bill: the itemized stay (scheduled vs actual check-out, nights, extra nights, per-room lines, discount,
+        // total) - the very calculation the receptionist's check-out bill uses. null until the stay is in house.
+        $paginated->getCollection()->each(fn (Booking $b) => $b->append(['total_amount_due', 'amenities', 'timeline', 'stay_bill']));
 
         return response()->json($paginated);
     }
@@ -97,7 +99,7 @@ class BookingController extends Controller
         // "don't add cost to every listing" convention as total_amount_due/
         // amenities above - only a single Booking Details/Payment Receipt
         // fetch actually needs this.
-        $payload = $booking->append(['total_amount_due', 'amenities', 'timeline'])->toArray();
+        $payload = $booking->append(['total_amount_due', 'amenities', 'timeline', 'stay_bill'])->toArray();
         $payload['payment_summary'] = $booking->paymentSummary();
         $payload['payment_transactions'] = $booking->paymentTransactionsPayload();
         $payload['receipts'] = $booking->receiptsPayload();

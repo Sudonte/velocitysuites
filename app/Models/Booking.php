@@ -111,6 +111,16 @@ class Booking extends Model
      * The guest took this off their Bookings & Reservations list. Only that list honors it - Transaction History
      * keeps the record forever (nothing here is ever hard-deleted).
      */
+    public function getStayBillAttribute(): ?array
+    {
+        if (! in_array($this->booking_status, [self::STATUS_CHECKED_IN, self::STATUS_COMPLETED], true)) {
+            return null;
+        }
+        $billing = $this->billing()->with('additionalCharges')->first();
+
+        return $billing ? \App\Support\StayBill::forBooking($this, \App\Support\StayBill::FINAL, null, $billing) : null;
+    }
+
     public function getHiddenByGuestAttribute(): bool
     {
         return $this->hidden_by_guest_at !== null;

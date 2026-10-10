@@ -104,6 +104,7 @@ final class StayBill
                 $lines[] = [
                     'room_id' => $room->id,
                     'room_number' => $room->room_number,
+                    'room_type_id' => isset($room->room_type_id) ? (string) $room->room_type_id : null,
                     'room_type' => $room->roomType?->name,
                     'rate' => round($rate, 2),
                     'status' => $isCheckedOut ? 'checked_out' : 'active',

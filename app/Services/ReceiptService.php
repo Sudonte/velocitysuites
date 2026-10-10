@@ -415,6 +415,9 @@ class ReceiptService
             'check_in' => $booking->check_in?->toIso8601String(),
             'check_out' => $booking->check_out?->toIso8601String(),
             'number_of_nights' => $booking->number_of_nights,
+            // The itemized stay (scheduled vs actual check-out, nights, extra nights, per-room lines, discount, total):
+            // the same StayBill the receptionist's check-out bill is built from. null until the stay is in house.
+            'stay_bill' => $booking->stay_bill,
             'assigned_room_numbers' => $booking->rooms->pluck('room_number')->values()->all(),
             'adults' => $booking->adults,
             'children' => $booking->children,
