@@ -106,7 +106,7 @@ class Reservation extends Model
      * payment_deadline is the 48-hour Pay Later/Pay Now cutoff (see
      * getPaymentDeadlineAttribute()) - also always derived, never stored.
      */
-    protected $appends = ['discount_preview', 'payment_deadline', 'room_lines'];
+    protected $appends = ['discount_preview', 'payment_deadline', 'room_lines', 'deposit_cap'];
 
     /**
      * Get the guest associated with the reservation.
@@ -247,6 +247,21 @@ class Reservation extends Model
             'unit_price' => (float) $a->charge,
             'subtotal' => (float) $a->subtotal,
         ])->values()->all();
+    }
+
+    /**
+     * While a discount waits for the receptionist's ID check, the most ALL payments together may add up to (the
+     * smaller of 50% of the undiscounted total and the total after the requested discount - see
+     * ReservationWorkflowService::pendingDepositCap()). Null otherwise. Sent to the mobile app so its payment screen
+     * applies the same cap without calculating a discount of its own.
+     */
+    public function getDepositCapAttribute(): ?float
+    {
+        if ($this->discount_verification_status !== 'pending' || ! $this->roomType || $this->booking) {
+            return null;
+        }
+
+        return app(\App\Services\ReservationWorkflowService::class)->pendingDepositCap($this, (float) $this->total_amount_due);
     }
 
     /**

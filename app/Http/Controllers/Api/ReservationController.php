@@ -320,12 +320,19 @@ class ReservationController extends Controller
                     'errors' => ['amount_paid' => ["Must be more than ₱0 and at most ₱{$expectedTotal}."]],
                 ], 422);
             }
-            // A Senior/PWD discount asked for in this same request is by definition still waiting for the ID check:
-            // a deposit only, never the full (undiscounted) total - see ReservationWorkflowService::hasPendingDiscount().
-            if ($discountRequested && $amountPaid >= $expectedTotal - 0.01) {
-                $message = $this->workflow->pendingDiscountFullPaymentMessage($this->workflow->depositRangeForTotal($expectedTotal));
+            // A discount asked for in this same request is by definition still waiting for the ID check: a deposit
+            // only, and all payments together stay under the pending-discount cap (ReservationWorkflowService::
+            // pendingDepositCap) - never the full (undiscounted) total.
+            if ($discountRequested) {
+                $cap = $this->workflow->pendingDepositCapForNewTransaction($expectedTotal, $discount);
+                $depositRange = $this->workflow->depositRangeForTotal($expectedTotal);
+                if ($amountPaid > $cap + 0.005) {
+                    $message = $cap + 0.009 < $depositRange['min']
+                        ? $this->workflow->maxDepositReachedMessage()
+                        : $this->workflow->pendingDiscountFullPaymentMessage(['min' => $depositRange['min'], 'max' => $cap]);
 
-                return response()->json(['message' => $message, 'errors' => ['amount_paid' => [$message]]], 422);
+                    return response()->json(['message' => $message, 'errors' => ['amount_paid' => [$message]]], 422);
+                }
             }
             $paymentToCreate = [
                 'reference_number' => $validated['reference_number'],

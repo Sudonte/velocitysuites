@@ -318,11 +318,16 @@ class BookingController extends Controller
                     'errors' => ['id_card_image' => ['Please upload a valid ID to claim this discount.']],
                 ], 422);
             }
-            // A Senior/PWD discount asked for in this same request is by definition still waiting for the ID check
-            // (discount_verification_status 'pending'): a deposit only, never the full (undiscounted) total.
-            if ($amountPaid >= $expectedTotal - 0.01) {
-                $workflow = app(\App\Services\ReservationWorkflowService::class);
-                $message = $workflow->pendingDiscountFullPaymentMessage($workflow->depositRangeForTotal($expectedTotal));
+            // A discount asked for in this same request is by definition still waiting for the ID check: a deposit
+            // only, and all payments together stay under the pending-discount cap (ReservationWorkflowService::
+            // pendingDepositCap) - never the full (undiscounted) total.
+            $workflow = app(\App\Services\ReservationWorkflowService::class);
+            $cap = $workflow->pendingDepositCapForNewTransaction($expectedTotal, $discount);
+            $depositRange = $workflow->depositRangeForTotal($expectedTotal);
+            if ($amountPaid > $cap + 0.005) {
+                $message = $cap + 0.009 < $depositRange['min']
+                    ? $workflow->maxDepositReachedMessage()
+                    : $workflow->pendingDiscountFullPaymentMessage(['min' => $depositRange['min'], 'max' => $cap]);
 
                 return response()->json(['message' => $message, 'errors' => ['amount_paid' => [$message]]], 422);
             }

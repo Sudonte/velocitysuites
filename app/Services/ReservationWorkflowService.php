@@ -101,7 +101,18 @@ class ReservationWorkflowService
 
         $remaining = PaymentMath::remainingBalance($total, $paid);
         $range = $this->depositRangeForTotal($total);
-        $max = min($range['max'], $remaining);
+        $discountPending = $this->hasPendingDiscount($reservation);
+
+        // While a discount waits for its ID check the total of ALL payments (already paid + this one) must stay
+        // under the smaller of 50% of the undiscounted total and the total after the requested discount, so
+        // several deposits can never add up past what the bill will become. See pendingDepositCap().
+        $depositCap = null;
+        $capLeft = INF;
+        if ($discountPending && ! $reservation->booking) {
+            $depositCap = $this->pendingDepositCap($reservation, $total);
+            $capLeft = max(0.0, round($depositCap - $paid, 2));
+        }
+        $max = min($range['max'], $remaining, $capLeft);
 
         return [
             'total' => round($total, 2),
@@ -111,19 +122,67 @@ class ReservationWorkflowService
             'max' => $max,
             'can_partial' => $remaining > 0.009 && $range['min'] <= $max + 0.009,
             'is_settled' => $remaining <= 0.009,
-            'discount_pending' => $this->hasPendingDiscount($reservation),
+            'discount_pending' => $discountPending,
+            'deposit_cap' => $depositCap,
+            // The cap, not the balance, is what leaves no room for even the minimum deposit.
+            'cap_reached' => $discountPending && $depositCap !== null && $capLeft + 0.009 < $range['min'],
         ];
     }
 
     /**
-     * True while a Senior Citizen / PWD discount the guest asked for is still waiting for the receptionist's ID
-     * check (discount_verification_status = 'pending'). Until it is approved - and included in the total - or
-     * rejected, only a deposit may be paid: the largest deposit (50% of the undiscounted total) is always below the
-     * discounted total, so a deposit can never overpay, while a Full payment of the undiscounted balance could.
+     * True while a discount the guest asked for (Senior Citizen / PWD, or any other) is still waiting for the
+     * receptionist's ID check (discount_verification_status = 'pending'). Until it is decided only a deposit may be
+     * paid, and deposits are capped (see pendingDepositCap()): a Full payment of the undiscounted balance could
+     * overpay once the discount is applied at checkout.
      */
     public function hasPendingDiscount(Reservation $reservation): bool
     {
         return $reservation->discount_verification_status === 'pending';
+    }
+
+    /**
+     * The total this reservation will come to once the discount the guest REQUESTED is applied: the same quote the
+     * guest estimate and the Billing use (BookingService::quoteRoomCharge - promotions plus the Senior/PWD discount
+     * through App\Support\BillDiscount), and, for a requested discount the quote does not pre-apply (VIP and the like -
+     * the receptionist applies those at billing), the same BillDiscount amount on top. Null when it cannot be worked out.
+     */
+    public function requestedDiscountedTotal(Reservation $reservation): ?float
+    {
+        if (! $reservation->roomType) {
+            return null;
+        }
+
+        $quote = app(BookingService::class)->quoteRoomCharge($reservation);
+        $discounted = (float) $quote['total'];
+
+        [$requested] = \App\Support\DiscountSelection::resolve($reservation->discount_id, $reservation->id_card_type, null, false);
+        if ($requested !== null && ! $requested->isStatutory()) {
+            $discounted -= \App\Support\BillDiscount::amount($requested, (float) $quote['room_charge'], (float) $quote['add_ons']);
+        }
+
+        return round(max(0.0, $discounted), 2);
+    }
+
+    /**
+     * The most ALL payments together may add up to while the discount is pending: the smaller of 50% of the
+     * undiscounted total and the total after the requested discount (a 50%-or-larger discount is what makes the
+     * second one win).
+     */
+    public function pendingDepositCap(Reservation $reservation, float $undiscountedTotal): float
+    {
+        $cap = round($undiscountedTotal * (float) config('hotel.maximum_payment_ratio', 0.50), 2);
+        $discounted = $this->requestedDiscountedTotal($reservation);
+
+        return $discounted === null ? $cap : min($cap, $discounted);
+    }
+
+    /** The same cap for a transaction that does not exist yet (a reservation or booking created together with its payment). */
+    public function pendingDepositCapForNewTransaction(float $undiscountedTotal, ?\App\Models\Discount $discount): float
+    {
+        $cap = round($undiscountedTotal * (float) config('hotel.maximum_payment_ratio', 0.50), 2);
+        $discounted = max(0.0, $undiscountedTotal - \App\Support\BillDiscount::amount($discount, $undiscountedTotal, 0.0));
+
+        return min($cap, round($discounted, 2));
     }
 
     /** Why Full payment is unavailable while a discount is being verified - one wording for every payment entry point. */
@@ -135,6 +194,64 @@ class ReservationWorkflowService
         }
 
         return $message . ' and pay the rest after the discount is applied.';
+    }
+
+    /** Nothing more can be paid online while the discount is pending: the deposit cap has been used up. */
+    public function maxDepositReachedMessage(): string
+    {
+        return "You've paid the maximum deposit while your discount is being verified. The rest is settled at the front desk.";
+    }
+
+    private function peso(float $amount): string
+    {
+        return '₱' . number_format($amount, 2);
+    }
+
+    /**
+     * Why $amount is not an acceptable payment right now, as the 422 body (message + errors.amount_paid), or null if
+     * it is. $range comes from payableRange(). The ONE amount rule for every guest payment entry point (the mobile
+     * API and the website), so they can never disagree.
+     */
+    public function amountError(array $range, string $paymentType, float $amount): ?array
+    {
+        $message = null;
+
+        if ($range['is_settled']) {
+            $message = 'This reservation is already fully paid. There is nothing left to pay.';
+        } elseif ($range['discount_pending'] && ! $range['can_partial'] && $range['cap_reached']) {
+            $message = $this->maxDepositReachedMessage();
+        } elseif ($paymentType === 'full') {
+            if ($range['discount_pending']) {
+                // A discount waiting for the ID check: deposits only, whatever the amount (see hasPendingDiscount()).
+                $message = $this->pendingDiscountFullPaymentMessage($range['can_partial'] ? $range : null);
+            } elseif (abs($amount - $range['remaining']) > 0.01) {
+                $message = 'Full payment must equal the remaining balance (' . $this->peso($range['remaining']) . ').';
+            }
+        } elseif (! $range['can_partial'] && $range['discount_pending']) {
+            $message = 'Your discount is being verified. Payment is on hold until it is applied; the remaining balance ('
+                . $this->peso($range['remaining']) . ') is below the minimum deposit (' . $this->peso($range['min']) . ').';
+        } elseif (! $range['can_partial']) {
+            $message = 'Full payment is required: the remaining balance (' . $this->peso($range['remaining'])
+                . ') is below the minimum down payment (' . $this->peso($range['min']) . '). Pay the full '
+                . $this->peso($range['remaining']) . ' instead.';
+        } elseif ($amount < $range['min'] - 0.005 || $amount > $range['max'] + 0.005) {
+            $minPercent = (int) round((float) config('hotel.minimum_payment_ratio', 0.20) * 100);
+            $maxPercent = (int) round((float) config('hotel.maximum_payment_ratio', 0.50) * 100);
+            $message = 'The payment must be between ' . $this->peso($range['min']) . ' and ' . $this->peso($range['max'])
+                . ($range['discount_pending']
+                    ? ' while your discount is being verified (a deposit of ' . $minPercent . '%-' . $maxPercent . '% of the '
+                        . $this->peso($range['total']) . ' total, and no more than the discounted total).'
+                    : " ({$minPercent}%-{$maxPercent}% of the " . $this->peso($range['total']) . ' total, and never more than the '
+                        . $this->peso($range['remaining']) . ' still owed).');
+        }
+
+        return $message === null ? null : ['message' => $message, 'errors' => ['amount_paid' => [$message]]];
+    }
+
+    /** 'final' when the payment settles everything still owed (whichever option the guest picked), else 'deposit'. */
+    public function stageFor(array $range, float $amount): string
+    {
+        return abs($amount - $range['remaining']) <= 0.01 ? 'final' : 'deposit';
     }
 
     /**

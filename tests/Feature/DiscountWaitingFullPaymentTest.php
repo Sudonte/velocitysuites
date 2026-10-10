@@ -101,27 +101,30 @@ class DiscountWaitingFullPaymentTest extends ApiFlowTestCase
         $this->earlierPayment($r, 600);
 
         $this->assertRefused($this->pay($user, $r, 'full', 1400), 'being verified');
-        $this->assertAccepted($this->pay($user, $r, 'partial', 500)); // the normal 20-50% rule still applies to deposits
-        $this->assertRefused($this->pay($user, $r, 'partial', 1100), '₱1,000.00');
+        // all payments together stay under the cap: min(50% of 2,000, 1,600 after the 20% discount) = 1,000, so 400 is left
+        $this->assertRefused($this->pay($user, $r, 'partial', 500), '₱400.00');
+        $this->assertAccepted($this->pay($user, $r, 'partial', 400));
     }
 
-    public function test_a_partial_payment_that_would_settle_the_undiscounted_balance_is_still_a_deposit_rule_matter_not_a_full_payment(): void
+    public function test_once_the_cap_is_used_up_nothing_more_can_be_paid_online(): void
     {
         [$user, $guest] = $this->makeGuestUser('Disc4');
         $r = $this->reservation($guest, 'pending', $this->senior());
-        $this->earlierPayment($r, 1000); // 1,000 left = the 50% maximum
+        $this->earlierPayment($r, 1000); // exactly the cap
 
-        $this->assertAccepted($this->pay($user, $r, 'partial', 1000));
+        $this->assertRefused($this->pay($user, $r, 'partial', 1000), "maximum deposit");
+        $this->assertRefused($this->pay($user, $r, 'full', 1000), "maximum deposit");
     }
 
-    public function test_pending_with_too_little_left_for_a_deposit_puts_payment_on_hold(): void
+    public function test_pending_with_the_cap_already_exceeded_allows_nothing_more(): void
     {
         [$user, $guest] = $this->makeGuestUser('Disc5');
         $r = $this->reservation($guest, 'pending', $this->senior());
         $this->earlierPayment($r, 1700); // 300 left, under the 400 minimum deposit
 
-        $this->assertRefused($this->pay($user, $r, 'partial', 300), 'on hold');
-        $this->assertRefused($this->pay($user, $r, 'full', 300), 'being verified');
+        // already past the cap (it cannot happen through the app; the rule still has to hold): nothing more online
+        $this->assertRefused($this->pay($user, $r, 'partial', 300), 'maximum deposit');
+        $this->assertRefused($this->pay($user, $r, 'full', 300), 'maximum deposit');
     }
 
     // ---- approved: the discount is in the total ----
