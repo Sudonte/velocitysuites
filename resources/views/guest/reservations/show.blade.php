@@ -54,7 +54,7 @@
                             <strong>Rate:</strong> ₱{{ number_format($reservation->roomType->rate, 2) }} per night
                         </p>
                         <p class="mb-0">
-                            <strong>Capacity:</strong> Up to {{ $reservation->roomType->capacity }} guests
+                            <strong>Capacity:</strong> {{ $reservation->roomType->capacity_label }} per room
                         </p>
                     </div>
                 </div>
@@ -362,7 +362,9 @@
                     <h5 class="modal-title">Modify Reservation</h5>
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                 </div>
-                <form action="{{ route('guest.reservations.update', $reservation) }}" method="POST">
+                @php $modCapacity = \App\Support\GuestCapacity::range(\App\Support\GuestCapacity::linesForReservation($reservation)); @endphp
+                <form action="{{ route('guest.reservations.update', $reservation) }}" method="POST"
+                      data-guest-capacity data-capacity-min="{{ $modCapacity['min'] }}" data-capacity-max="{{ $modCapacity['max'] }}">
                     @csrf
                     @method('PUT')
                     <div class="modal-body">
@@ -381,7 +383,7 @@
                                 <div class="form-group mb-3">
                                     <label for="mod_adults">Adults</label>
                                     <input type="number" class="form-control" id="mod_adults" name="adults"
-                                           value="{{ $reservation->adults }}" min="1" max="{{ $reservation->roomType->capacity }}" required>
+                                           value="{{ $reservation->adults }}" min="1" required>
                                 </div>
                             </div>
                             <div class="col-md-6">
@@ -389,6 +391,7 @@
                                     <label for="mod_children">Children <span class="text-muted">(under 12)</span></label>
                                     <input type="number" class="form-control" id="mod_children" name="children"
                                            value="{{ $reservation->children }}" min="0">
+                                    <small class="guest-capacity-hint d-block text-muted mt-1"></small>
                                 </div>
                             </div>
                         </div>

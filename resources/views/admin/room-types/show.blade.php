@@ -57,7 +57,7 @@
                         </div>
                         <div class="room-type-detail-row">
                             <span class="room-type-detail-label">Capacity (guests):</span>
-                            <span class="room-type-detail-value">{{ $roomType->capacity }}</span>
+                            <span class="room-type-detail-value">{{ $roomType->capacity_label }}</span>
                         </div>
                         <div class="room-type-detail-row">
                             <span class="room-type-detail-label">Bed Configuration:</span>
@@ -189,7 +189,7 @@
                             @endif
 
                             <div class="room-type-stats mt-2">
-                                <span class="room-type-stat-chip"><i class="fas fa-user"></i> {{ $room->room_capacity }} guests</span>
+                                <span class="room-type-stat-chip"><i class="fas fa-user"></i> {{ $roomType->capacity_label }}</span>
                                 <span class="room-type-stat-chip">
                                     <i class="fas fa-tag"></i> ₱{{ number_format($room->room_rate, 2) }}
                                     @if($room->has_rate_override)
@@ -273,7 +273,7 @@
                     <div class="row">
                         <div class="col-6 mb-2">
                             <label class="form-label text-muted">Capacity (guests)</label>
-                            <input type="text" class="form-control" value="{{ $roomType->capacity }}" disabled>
+                            <input type="text" class="form-control" value="{{ $roomType->capacity_label }}" disabled>
                         </div>
                         <div class="col-6 mb-2">
                             <label class="form-label text-muted">Rate Override (₱)</label>

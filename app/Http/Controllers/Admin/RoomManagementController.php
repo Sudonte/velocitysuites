@@ -71,7 +71,6 @@ class RoomManagementController extends Controller
             'room_number' => 'required|string|unique:rooms,room_number,' . $room->id,
             'room_name' => 'required|string|max:255',
             'room_type_id' => 'required|exists:room_types,id',
-            'room_capacity' => 'required|integer|min:1',
             'rate_override' => 'nullable|numeric|min:0',
             // No "reserved" option - RoomAvailabilityService only ever treats
             // "maintenance" as a hard block on booking/check-in assignment,

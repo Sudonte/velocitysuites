@@ -198,6 +198,14 @@ deny-all rule is active).
 - Default: `QUEUE_CONNECTION=database` (compatible with shared hosting)
 - Avoid Redis or Supervisor as they require SSH access
 
+### Hotel Settings (`config/hotel.php`)
+- After changing `config/hotel.php`, run `php artisan config:cache` again.
+- `extra_guest_fee_rate` was removed (2026-10-10). Guest capacity is a min-max
+  range on each room type (`room_types.min_capacity`..`capacity`) and stays
+  above the maximum are blocked, so there is no extra-guest fee. Past bills
+  keep any fee already stored on them. `rooms.room_capacity` is no longer
+  read by the app; it only mirrors the type's maximum for the mobile API.
+
 ### Permissions
 ```bash
 chmod -R 755 storage bootstrap/cache

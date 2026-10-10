@@ -471,7 +471,7 @@ class CheckOutController extends Controller
         }
 
         DB::transaction(function () use ($billing, $discount, $discountTarget) {
-            // Whole bill (room + extra-guest fee + amenities + additional charges) through the SAME function
+            // Whole bill (room + amenities + additional charges) through the SAME function
             // the guest's estimate uses (App\Support\BillDiscount), so the two can never disagree.
             $addOns = (float) $billing->additional_guest_fee
                 + (float) $billing->amenity_charge
@@ -642,8 +642,8 @@ class CheckOutController extends Controller
     }
 
     /**
-     * Refreshes additional_guest_fee/amenity_charge from the booking's
-     * current headcount/rooms and approved amenity requests - same
+     * Refreshes amenity_charge from the booking's approved amenity
+     * requests (additional_guest_fee is always 0 now) - same
      * calculation generateBilling() uses at creation, just re-run every
      * time the panel opens so anything added mid-stay actually reaches
      * the bill (see checkOutBilling()). room_charge/discount are
@@ -663,12 +663,6 @@ class CheckOutController extends Controller
      */
     private function refreshStayCharges(Booking $booking, Billing $billing): void
     {
-        $rooms = $booking->rooms->isNotEmpty() ? $booking->rooms : collect([$booking->room])->filter();
-        $adults = $booking->adults ?? $booking->number_of_guests;
-        $totalCapacity = $rooms->sum('room_capacity');
-        $extraGuests = max(0, $adults - $totalCapacity);
-        $extraGuestFee = $extraGuests * (float) config('hotel.extra_guest_fee_rate', 0);
-
         $amenityCharge = (float) AmenityRequest::where(function ($q) use ($booking) {
                 if ($booking->reservation_id) {
                     $q->where('reservation_id', $booking->reservation_id);
@@ -680,7 +674,9 @@ class CheckOutController extends Controller
             ->sum(DB::raw('charge * quantity'));
 
         $billing->update([
-            'additional_guest_fee' => round($extraGuestFee, 2),
+            // Over-capacity stays are blocked (App\Support\GuestCapacity), so
+            // there is no extra-guest fee; only past bills keep a stored one.
+            'additional_guest_fee' => 0,
             'amenity_charge' => round($amenityCharge, 2),
         ]);
         $billing->recalculateTotal();

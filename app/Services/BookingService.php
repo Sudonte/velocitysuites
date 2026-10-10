@@ -309,8 +309,8 @@ class BookingService
     }
 
     /**
-     * Applies charges only knowable once the stay is underway (extra-
-     * guest fee, approved amenity requests) on top of whatever
+     * Applies charges only knowable once the stay is underway (approved
+     * amenity requests) on top of whatever
      * room_charge/discount the billing already has. Safe to call
      * whether the billing was just created fresh (guest never pre-paid)
      * or already existed (guest paid via "Book & Pay" before arrival) -
@@ -318,19 +318,14 @@ class BookingService
      */
     public function applyStayCharges(Billing $billing, Reservation $reservation): void
     {
-        // Children under 12 stay free - only adults count toward the
-        // extra-guest fee, even though both occupy the room's capacity.
-        $adults = $reservation->adults ?? $reservation->number_of_guests;
-        $roomCapacity = $reservation->room->room_capacity ?? $reservation->roomType->capacity;
-        $extraGuests = max(0, $adults - $roomCapacity);
-        $extraGuestFee = $extraGuests * (float) config('hotel.extra_guest_fee_rate', 0);
-
         $amenityCharge = (float) AmenityRequest::where('reservation_id', $reservation->id)
             ->where('status', 'approved')
             ->sum(DB::raw('charge * quantity'));
 
         $billing->update([
-            'additional_guest_fee' => round($extraGuestFee, 2),
+            // Over-capacity stays are blocked (App\Support\GuestCapacity), so
+            // there is no extra-guest fee; only past bills keep a stored one.
+            'additional_guest_fee' => 0,
             'amenity_charge' => round($amenityCharge, 2),
         ]);
         $billing->recalculateTotal();

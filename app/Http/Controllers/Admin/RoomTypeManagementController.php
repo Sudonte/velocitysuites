@@ -110,7 +110,8 @@ class RoomTypeManagementController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255|unique:room_types,name',
             'rate' => 'required|numeric|min:0',
-            'capacity' => 'required|integer|min:1',
+            'capacity' => 'required|integer|min:1|max:50',
+            'min_capacity' => 'required|integer|min:1|lte:capacity',
             'bed_type' => 'nullable|string|max:255',
             'description' => 'nullable|string|max:2000',
             'number_format' => ['required', 'string', 'max:20', 'regex:/^[A-Za-z0-9\-]*#+[A-Za-z0-9\-]*$/'],
@@ -119,6 +120,7 @@ class RoomTypeManagementController extends Controller
             'amenities.*' => ['exists:amenities,id', $this->freeAmenityRule()],
         ], [
             'number_format.regex' => 'The numbering format must contain a run of # placeholders (e.g. 1## for 101, 102... or D-## for D-01, D-02...).',
+            'min_capacity.lte' => 'Minimum guests cannot be more than the maximum guests.',
         ]);
 
         $validated['image'] = $this->storeImage($request);
@@ -195,7 +197,7 @@ class RoomTypeManagementController extends Controller
 
     /**
      * Bulk-add rooms to this type. Numbers are generated from the type's
-     * numbering format. Room Name, Capacity, and Description are inherited
+     * numbering format. Room Name and Description are inherited
      * directly from the room type (never taken from the request, even if
      * present - the Add Rooms form only shows them as read-only preview
      * text) so a room can never end up with values other than its type's;
@@ -224,7 +226,6 @@ class RoomTypeManagementController extends Controller
                 'room_number' => $number,
                 'room_name' => $roomType->name . ' Room',
                 'room_type_id' => $roomType->id,
-                'room_capacity' => $roomType->capacity,
                 'status' => $validated['status'],
             ]);
         }
@@ -256,7 +257,8 @@ class RoomTypeManagementController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255|unique:room_types,name,' . $roomType->id,
             'rate' => 'required|numeric|min:0',
-            'capacity' => 'required|integer|min:1',
+            'capacity' => 'required|integer|min:1|max:50',
+            'min_capacity' => 'required|integer|min:1|lte:capacity',
             'bed_type' => 'nullable|string|max:255',
             'description' => 'nullable|string|max:2000',
             'number_format' => ['required', 'string', 'max:20', 'regex:/^[A-Za-z0-9\-]*#+[A-Za-z0-9\-]*$/'],
@@ -265,6 +267,7 @@ class RoomTypeManagementController extends Controller
             'amenities.*' => ['exists:amenities,id', $this->freeAmenityRule()],
         ], [
             'number_format.regex' => 'The numbering format must contain a run of # placeholders (e.g. 1## for 101, 102... or D-## for D-01, D-02...).',
+            'min_capacity.lte' => 'Minimum guests cannot be more than the maximum guests.',
         ]);
 
         if ($request->hasFile('image')) {
@@ -288,6 +291,10 @@ class RoomTypeManagementController extends Controller
 
         $roomType->update($validated);
         $roomType->assignedAmenities()->sync($amenityIds);
+        if ($roomType->wasChanged('capacity')) {
+            // Keep the legacy per-room mirror (API only) in step with the type.
+            Room::where('room_type_id', $roomType->id)->update(['room_capacity' => $roomType->capacity]);
+        }
 
         return redirect()->route('admin.room-types.index')->with('success', 'Room type updated successfully!');
     }

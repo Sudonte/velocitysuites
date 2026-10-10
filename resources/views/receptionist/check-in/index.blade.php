@@ -224,6 +224,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 throw new Error(data.message || 'Failed to load the check-in panel.');
             }
             content.innerHTML = await response.text();
+            window.initGuestCapacity(document.getElementById('checkInForm'));
         } catch (err) {
             content.innerHTML = '<div class="modal-body"><div class="alert alert-danger mb-0">' + err.message + '</div></div>';
         }

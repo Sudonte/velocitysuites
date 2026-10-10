@@ -181,6 +181,11 @@ class CheckInController extends Controller
             return back()->withInput()->with('error', $error);
         }
 
+        $capacityError = \App\Support\GuestCapacity::error($roomLines, (int) $validated['adults'] + (int) ($validated['children'] ?? 0));
+        if ($capacityError !== null) {
+            return back()->withInput()->with('error', $capacityError);
+        }
+
         $children = (int) ($validated['children'] ?? 0);
         $nights = max(1, $checkIn->diffInDays($checkOut));
         $firstRoomType = $roomLines[0]['room_type'];
@@ -318,10 +323,9 @@ class CheckInController extends Controller
      * so a stale/concurrent selection can't double-book a room.
      *
      * adults/children are overwritten with whatever the receptionist
-     * confirms here (not just whatever the booking originally requested) -
-     * CheckOutController::generateBilling() computes the extra-guest fee
-     * straight off these columns, so correcting the headcount here is what
-     * makes that fee accurate for walk-up additions.
+     * confirms here (not just whatever the booking originally requested),
+     * but must stay within the booked rooms' capacity range
+     * (App\Support\GuestCapacity).
      */
     public function store(Request $request, Booking $booking)
     {
@@ -366,6 +370,15 @@ class CheckInController extends Controller
         ]);
 
         $children = (int) ($validated['children'] ?? 0);
+
+        $capacityError = \App\Support\GuestCapacity::error(
+            \App\Support\GuestCapacity::linesForBooking($booking),
+            (int) $validated['adults'] + $children
+        );
+        if ($capacityError !== null) {
+            return response()->json(['message' => $capacityError, 'errors' => ['adults' => [$capacityError]]], 422);
+        }
+
         $currentAddress = ($validated['current_address_same_as_permanent'] ?? false)
             ? $validated['checkin_permanent_address']
             : $validated['checkin_current_address'];

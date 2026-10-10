@@ -281,12 +281,11 @@ class BookingController extends Controller
         // check can't be trusted alone (see amount_paid's identical
         // resolved-model-dependent check just below for this codebase's
         // established pattern for this kind of guard).
-        $totalCapacity = collect($roomLines)->sum(fn ($line) => $line['room_type']->capacity * $line['quantity']);
-        $totalGuests = (int) $validated['adults'] + $children;
-        if ($totalGuests > $totalCapacity) {
+        $capacityError = \App\Support\GuestCapacity::error($roomLines, (int) $validated['adults'] + $children);
+        if ($capacityError !== null) {
             return response()->json([
-                'message' => "Adults and children combined ({$totalGuests}) exceed the total capacity ({$totalCapacity}) of the selected room(s).",
-                'errors' => ['adults' => ["Adults and children combined can't exceed the selected room capacity of {$totalCapacity}."]],
+                'message' => $capacityError,
+                'errors' => ['adults' => [$capacityError]],
             ], 422);
         }
 

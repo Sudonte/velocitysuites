@@ -37,7 +37,7 @@
                             <span class="badge bg-warning text-dark" title="Overrides the type's base rate of ₱{{ number_format($roomType->rate, 2) }}">override</span>
                         @endif
                     </span>
-                    <span class="room-type-stat-chip"><i class="fas fa-user"></i> {{ $room->room_capacity }} guests</span>
+                    <span class="room-type-stat-chip"><i class="fas fa-user"></i> {{ $room->roomType->capacity_label ?? '' }}</span>
                     @if($roomType->bed_type)
                         <span class="room-type-stat-chip"><i class="fas fa-bed"></i> {{ $roomType->bed_type }}</span>
                     @endif

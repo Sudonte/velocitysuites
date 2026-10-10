@@ -187,7 +187,7 @@
                         <div class="d-flex justify-content-between align-items-center mb-3 pb-2 {{ $loop->index >= 5 ? 'preview-extra d-none' : '' }}" style="border-bottom: 1px solid #f0f0f0;">
                             <div>
                                 <strong>{{ $roomType->name }}</strong><br>
-                                <small class="text-muted">Up to {{ $roomType->capacity }} guests &middot; ₱{{ number_format($roomType->rate, 2) }}/night</small>
+                                <small class="text-muted">{{ $roomType->capacity_label }} &middot; ₱{{ number_format($roomType->rate, 2) }}/night</small>
                             </div>
                             <span class="badge badge-brand">{{ $roomType->bookings_count }} bookings</span>
                         </div>

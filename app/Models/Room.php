@@ -34,8 +34,25 @@ class Room extends Model
     protected $with = ['roomType'];
 
     /**
-     * Get the room's type (base rate and type name live there; the type's
-     * capacity is only the default for newly added rooms).
+     * Guest capacity lives on the room type. room_capacity is no longer read
+     * by the app; it only mirrors the type's maximum so existing API
+     * consumers still receive a number.
+     */
+    protected static function booted(): void
+    {
+        static::saving(function (Room $room) {
+            $typeChanged = $room->exists && $room->isDirty('room_type_id');
+            if ($room->room_type_id && ($typeChanged || $room->room_capacity === null)) {
+                $capacity = RoomType::whereKey($room->room_type_id)->value('capacity');
+                if ($capacity !== null) {
+                    $room->room_capacity = $capacity;
+                }
+            }
+        });
+    }
+
+    /**
+     * Get the room's type (base rate, type name and guest capacity live there).
      */
     public function roomType()
     {

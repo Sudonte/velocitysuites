@@ -177,7 +177,7 @@
                 @endif
             </dl>
             <p class="text-muted small mb-0">
-                <i class="fas fa-info-circle"></i> Final charges (extra-guest fees, additional charges, and any
+                <i class="fas fa-info-circle"></i> Final charges (additional charges recorded during the stay and any
                 verified discount) are settled at checkout, not here.
             </p>
             @if($reservation->payment_deadline)

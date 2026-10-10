@@ -28,7 +28,7 @@
                     Use Create Booking or Create Reservation with a check-in of {{ \App\Support\CheckInWindow::earliestLabel() }} or later.
                     To check in a guest who already has a booking, use the Expected Check-ins list.
                 </div>
-                <form action="{{ route('receptionist.check-in.walk-in.store') }}" method="POST">
+                <form action="{{ route('receptionist.check-in.walk-in.store') }}" method="POST" data-guest-capacity>
                     @csrf
 
                     <h6 class="form-section-heading">Guest</h6>
@@ -99,6 +99,7 @@
                                 <label for="children">Children</label>
                                 <input type="number" min="0" class="form-control @error('children') is-invalid @enderror"
                                        id="children" name="children" value="{{ old('children', 0) }}">
+                                <small class="guest-capacity-hint d-block text-muted mt-1"></small>
                                 @error('children')<div class="invalid-feedback">{{ $message }}</div>@enderror
                             </div>
                         </div>

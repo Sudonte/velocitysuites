@@ -83,13 +83,9 @@
                             </div>
                             <div class="col-md-6">
                                 <div class="form-group mb-3">
-                                    <label for="room_capacity">Capacity (guests) *</label>
-                                    <input type="number" min="1" class="form-control @error('room_capacity') is-invalid @enderror"
-                                           id="room_capacity" name="room_capacity" value="{{ old('room_capacity', $room->room_capacity) }}" required>
-                                    <small class="text-muted">This room's own capacity; the type's {{ $room->roomType->capacity }} is just the baseline.</small>
-                                    @error('room_capacity')
-                                        <div class="invalid-feedback">{{ $message }}</div>
-                                    @enderror
+                                    <label>Guest Capacity</label>
+                                    <p class="form-control-plaintext mb-0">{{ $room->roomType->capacity_label ?? 'N/A' }}</p>
+                                    <small class="text-muted">Set on the room type. <a href="{{ route('admin.room-types.edit', $room->roomType) }}">Edit type</a></small>
                                 </div>
                             </div>
                         </div>
@@ -245,7 +241,7 @@
             <x-card title="Room Details" bodyClass="card-body" class="mb-3">
                 <p class="mb-2"><strong>Room Number:</strong> {{ $room->room_number }}</p>
                 <p class="mb-2"><strong>Type:</strong> {{ $room->roomType->name }}</p>
-                <p class="mb-2"><strong>Capacity:</strong> {{ $room->room_capacity }} guests</p>
+                <p class="mb-2"><strong>Capacity:</strong> {{ $room->roomType->capacity_label ?? 'N/A' }}</p>
                 <p class="mb-2"><strong>Rate:</strong> ₱{{ number_format($room->room_rate, 2) }}/night</p>
                 <p class="mb-2"><strong>Status:</strong> <x-status-badge :status="$room->effective_status" domain="room" /></p>
                 <p class="mb-0"><strong>Created:</strong> {{ $room->created_at->format('M d, Y') }}</p>

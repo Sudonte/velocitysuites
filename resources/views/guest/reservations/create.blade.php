@@ -89,7 +89,7 @@
         <div class="col-lg-8">
             <x-card title="Room Type" icon="fas fa-door-open" bodyClass="card-body">
                 <h3 class="mb-2">{{ $roomType->name }} Room</h3>
-                <p class="mb-3"><i class="fas fa-users text-brand"></i> Up to {{ $roomType->capacity }} guests</p>
+                <p class="mb-3"><i class="fas fa-users text-brand"></i> {{ $roomType->capacity_label }}</p>
                 <p class="{{ $roomType->amenities ? 'mb-3' : 'mb-0' }}">{{ $roomType->description ?: 'A comfortable room for your stay.' }}</p>
                 @if($roomType->amenities)
                     <hr class="mt-0">
@@ -123,7 +123,8 @@
                     You are requesting a <strong>{{ $roomType->name }}</strong> room type.
                     A specific room number is assigned by our staff when you check in.
                 </div>
-                <form action="{{ route('guest.reservations.store') }}" method="POST" enctype="multipart/form-data">
+                <form action="{{ route('guest.reservations.store') }}" method="POST" enctype="multipart/form-data"
+                      data-guest-capacity data-capacity-min="{{ \App\Support\GuestCapacity::minOf($roomType) }}" data-capacity-max="{{ $roomType->capacity }}">
                     @csrf
 
                     <input type="hidden" name="room_type_id" value="{{ $roomType->id }}">
@@ -153,7 +154,7 @@
                                 <div class="form-group mb-3">
                                     <label for="adults" class="form-label">Adults *</label>
                                     <input type="number" class="form-control @error('adults') is-invalid @enderror"
-                                           id="adults" name="adults" min="1" max="{{ $roomType->capacity }}"
+                                           id="adults" name="adults" min="1"
                                            value="{{ old('adults', request('guests', 1)) }}" required>
                                     @error('adults')
                                         <div class="invalid-feedback">{{ $message }}</div>
@@ -173,8 +174,9 @@
                             </div>
                         </div>
                         <small class="text-muted d-block mb-0">
-                            Room type capacity: {{ $roomType->capacity }} guests. Children under 12 stay free of charge.
+                            Capacity: {{ $roomType->capacity_label }} per room, adults and children combined.
                         </small>
+                        <small class="guest-capacity-hint d-block text-muted"></small>
                     </div>
 
                     <div class="detail-section">

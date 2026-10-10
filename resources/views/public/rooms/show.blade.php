@@ -75,7 +75,7 @@
                     <div class="row mt-4">
                         <div class="col-md-6">
                             <h6><i class="fas fa-user text-brand me-2"></i>Capacity</h6>
-                            <p>Up to {{ $roomType->capacity }} guests</p>
+                            <p>{{ $roomType->capacity_label }}</p>
                         </div>
                         <div class="col-md-6">
                             <h6><i class="fas fa-door-open text-brand me-2"></i>Availability</h6>
@@ -174,7 +174,7 @@
                             <div class="mb-3">
                                 <label class="form-label">Number of Guests</label>
                                 <select name="guests" class="form-select">
-                                    @for($i = 1; $i <= $roomType->capacity; $i++)
+                                    @for($i = \App\Support\GuestCapacity::minOf($roomType); $i <= $roomType->capacity; $i++)
                                         <option value="{{ $i }}" {{ request('guests') == $i ? 'selected' : '' }}>
                                             {{ $i }} {{ $i == 1 ? 'Guest' : 'Guests' }}
                                         </option>
@@ -208,7 +208,7 @@
                             <div class="mb-3">
                                 <label class="form-label">Number of Guests</label>
                                 <select name="guests" class="form-select">
-                                    @for($i = 1; $i <= $roomType->capacity; $i++)
+                                    @for($i = \App\Support\GuestCapacity::minOf($roomType); $i <= $roomType->capacity; $i++)
                                         <option value="{{ $i }}" {{ request('guests') == $i ? 'selected' : '' }}>
                                             {{ $i }} {{ $i == 1 ? 'Guest' : 'Guests' }}
                                         </option>
@@ -243,7 +243,7 @@
                             <div class="p-4">
                                 <h5 class="fw-bold">{{ $relatedRoomType->name }}</h5>
                                 <p class="mb-2 text-muted">
-                                    <i class="fas fa-user me-1 text-brand"></i> Up to {{ $relatedRoomType->capacity }} guests
+                                    <i class="fas fa-user me-1 text-brand"></i> {{ $relatedRoomType->capacity_label }}
                                 </p>
                                 <div class="d-flex justify-content-between align-items-center">
                                     <span class="room-price mb-0">₱{{ number_format($relatedRoomType->rate, 2) }}</span>

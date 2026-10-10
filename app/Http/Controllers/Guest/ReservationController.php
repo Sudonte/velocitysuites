@@ -11,6 +11,7 @@ use App\Services\ReservationAmenityService;
 use App\Services\ReservationWorkflowService;
 use App\Services\RoomAvailabilityService;
 use App\Support\Activity;
+use App\Support\GuestCapacity;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -195,6 +196,13 @@ class ReservationController extends Controller
         }
         if (!$roomType->rooms()->where('status', '!=', 'maintenance')->exists()) {
             return back()->with('error', 'No rooms of this type are currently in service.');
+        }
+        $capacityError = GuestCapacity::error(
+            [['room_type' => $roomType, 'quantity' => (int) $validated['rooms_requested']]],
+            (int) $validated['adults'] + (int) $children
+        );
+        if ($capacityError !== null) {
+            return back()->withInput()->with('error', $capacityError);
         }
 
         $guest = auth()->user()->guest;
@@ -422,6 +430,11 @@ class ReservationController extends Controller
             'children' => 'nullable|integer|min:0',
         ], \App\Support\CheckInWindow::messages());
         $children = $validated['children'] ?? 0;
+
+        $capacityError = GuestCapacity::error(GuestCapacity::linesForReservation($reservation), (int) $validated['adults'] + (int) $children);
+        if ($capacityError !== null) {
+            return back()->withInput()->with('error', $capacityError);
+        }
 
         $reservation->loadMissing('roomType');
         $before = "{$reservation->check_in} to {$reservation->check_out}, {$reservation->adults} adult(s)/{$reservation->children} child(ren)";

@@ -97,7 +97,7 @@
                             <td class="text-end text-brand">₱{{ number_format($quote['total'], 2) }}</td>
                         </tr>
                     </table>
-                    <p class="text-muted small mb-0 mt-2">Final charges may include extra-guest fees and amenities added during the stay.</p>
+                    <p class="text-muted small mb-0 mt-2">Final charges may include amenities and additional charges added during the stay.</p>
                 </section>
 
                 @if($reservation->status === 'pending')
@@ -216,7 +216,7 @@
                                         <option value="">-- Select room --</option>
                                         @foreach($assignableRooms as $room)
                                             <option value="{{ $room->id }}">
-                                                Room {{ $room->room_number }} — {{ $room->room_name }} ({{ $room->room_capacity }} guests)
+                                                Room {{ $room->room_number }} — {{ $room->room_name }} ({{ $room->roomType->capacity_label ?? '' }})
                                             </option>
                                         @endforeach
                                     </select>

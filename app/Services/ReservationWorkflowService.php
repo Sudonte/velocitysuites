@@ -48,7 +48,7 @@ class ReservationWorkflowService
      * nights x rooms requested), for a Partial (deposit) payment; 'total'
      * itself is what a Full payment must equal. A discount is never
      * applied until a receptionist verifies it at billing, and the final
-     * amount (extra guest fees, amenities, additional charges) isn't known
+     * amount (amenities, additional charges) isn't known
      * until checkout, so "full" here means 100% of the quoted room total,
      * not a final bill.
      */

@@ -14,11 +14,11 @@
         <div class="col-md-6">
             <div class="form-group mb-3">
                 <label>Room Type *</label>
-                <select class="form-control @error('rooms.0.room_type_id') is-invalid @enderror" name="rooms[0][room_type_id]" required>
+                <select class="form-control @error('rooms.0.room_type_id') is-invalid @enderror" name="rooms[0][room_type_id]" data-capacity-line required>
                     <option value="">-- Select a room type --</option>
                     @foreach($roomTypes as $roomType)
-                        <option value="{{ $roomType->id }}" {{ (string) old('rooms.0.room_type_id') === (string) $roomType->id ? 'selected' : '' }}>
-                            {{ $roomType->name }} - ₱{{ number_format($roomType->rate, 2) }}/night (sleeps {{ $roomType->capacity }})
+                        <option value="{{ $roomType->id }}" data-min-capacity="{{ \App\Support\GuestCapacity::minOf($roomType) }}" data-max-capacity="{{ $roomType->capacity }}" {{ (string) old('rooms.0.room_type_id') === (string) $roomType->id ? 'selected' : '' }}>
+                            {{ $roomType->name }} - ₱{{ number_format($roomType->rate, 2) }}/night ({{ $roomType->capacity_label }} per room)
                         </option>
                     @endforeach
                 </select>

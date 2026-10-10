@@ -298,3 +298,67 @@ document.addEventListener('click', function (event) {
         localStorage.setItem(container.dataset.previewPersistKey, expanded ? '1' : '0');
     }
 });
+
+// Guest capacity: a form marked [data-guest-capacity] has adults + children
+// checked against the selected rooms' capacity range, mirroring the server
+// rule (App\Support\GuestCapacity). The range comes from room-line selects
+// (option data-min-capacity/data-max-capacity) or the form's own
+// data-capacity-min/data-capacity-max (per room, times rooms_requested).
+function guestCapacityRange(form) {
+    const selects = form.querySelectorAll('select[data-capacity-line]');
+    if (selects.length) {
+        let min = 0;
+        let max = 0;
+        selects.forEach(function (sel) {
+            const opt = sel.selectedOptions[0];
+            if (!opt || !opt.value) return;
+            const row = sel.closest('.room-line-row');
+            const qtyInput = row ? row.querySelector('input[name$="[quantity]"]') : null;
+            const qty = Math.max(1, parseInt(qtyInput ? qtyInput.value : '1', 10) || 1);
+            const typeMin = parseInt(opt.dataset.minCapacity || '1', 10);
+            if (typeMin > 1) min += typeMin * qty;
+            max += (parseInt(opt.dataset.maxCapacity || '0', 10) || 0) * qty;
+        });
+        return { min: Math.max(1, min), max: max };
+    }
+    const qtyEl = form.querySelector('[name="rooms_requested"]');
+    const qty = qtyEl ? Math.max(1, parseInt(qtyEl.value, 10) || 1) : 1;
+    const typeMin = parseInt(form.dataset.capacityMin || '1', 10);
+    const typeMax = parseInt(form.dataset.capacityMax || '0', 10) || 0;
+    return { min: Math.max(1, typeMin > 1 ? typeMin * qty : 1), max: typeMax * qty };
+}
+
+function initGuestCapacity(form) {
+    if (!form || form.dataset.guestCapacityBound) return;
+    const adults = form.querySelector('[name="adults"]');
+    if (!adults) return;
+    form.dataset.guestCapacityBound = '1';
+    const children = form.querySelector('[name="children"]');
+    const hint = form.querySelector('.guest-capacity-hint');
+
+    const check = function () {
+        const range = guestCapacityRange(form);
+        const total = (parseInt(adults.value, 10) || 0) + (parseInt(children ? children.value : '0', 10) || 0);
+        let message = '';
+        if (range.max > 0 && total > range.max) {
+            message = 'Adults and children combined (' + total + ') exceed the capacity (' + range.max + ') of the selected room(s).';
+        } else if (total < range.min) {
+            message = 'The selected room(s) require at least ' + range.min + ' guest(s).';
+        }
+        adults.setCustomValidity(message);
+        if (hint) {
+            hint.textContent = message || (range.max > 0 ? 'Allowed: ' + range.min + '–' + range.max + ' guest(s), adults and children combined.' : '');
+            hint.classList.toggle('text-danger', !!message);
+            hint.classList.toggle('text-muted', !message);
+        }
+    };
+
+    form.addEventListener('input', check);
+    form.addEventListener('change', check);
+    check();
+}
+
+window.initGuestCapacity = initGuestCapacity;
+document.addEventListener('DOMContentLoaded', function () {
+    document.querySelectorAll('form[data-guest-capacity]').forEach(initGuestCapacity);
+});

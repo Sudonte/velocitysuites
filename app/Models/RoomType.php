@@ -14,6 +14,7 @@ class RoomType extends Model
         'name',
         'rate',
         'capacity',
+        'min_capacity',
         'bed_type',
         'description',
         'image',
@@ -45,6 +46,19 @@ class RoomType extends Model
     protected $hidden = [
         'rooms',
     ];
+
+    /** Guest-facing capacity text: "Up to 2 guests" or "2–4 guests". */
+    public function getCapacityLabelAttribute(): string
+    {
+        $min = \App\Support\GuestCapacity::minOf($this);
+        $max = (int) $this->capacity;
+
+        if ($min >= $max) {
+            return $max . ' ' . ($max === 1 ? 'guest' : 'guests');
+        }
+
+        return $min <= 1 ? "Up to {$max} guests" : "{$min}–{$max} guests";
+    }
 
     /**
      * Get the physical rooms of this type.

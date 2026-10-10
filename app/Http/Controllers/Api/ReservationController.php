@@ -282,12 +282,11 @@ class ReservationController extends Controller
         // Android's Step5AdditionalGuestsFragment/BookingWizardState#
         // totalSelectedCapacity(), and Api\BookingController::store()'s
         // identical guard on the Booking side.
-        $totalCapacity = $roomLines->sum(fn ($line) => $line['room_type']->capacity * $line['quantity']);
-        $totalGuests = (int) $validated['adults'] + $children;
-        if ($totalGuests > $totalCapacity) {
+        $capacityError = \App\Support\GuestCapacity::error($roomLines, (int) $validated['adults'] + $children);
+        if ($capacityError !== null) {
             return response()->json([
-                'message' => "Adults and children combined ({$totalGuests}) exceed the total capacity ({$totalCapacity}) of the selected room(s).",
-                'errors' => ['adults' => ["Adults and children combined can't exceed the selected room capacity of {$totalCapacity}."]],
+                'message' => $capacityError,
+                'errors' => ['adults' => [$capacityError]],
             ], 422);
         }
 
@@ -642,23 +641,12 @@ class ReservationController extends Controller
         // so this must not only run inside the $roomLinesInput branch above
         // - that would let a guest raise adults/children arbitrarily on a
         // room-selection-untouched update, exactly the gap this rule closes.
-        if ($roomLinesInput !== null) {
-            $totalCapacity = $roomLines->sum(fn ($line) => $line['room_type']->capacity * $line['quantity']);
-        } else {
-            // Explicit roomLines() relation call, not the ->roomLines
-            // property - that resolves to getRoomLinesAttribute() instead
-            // (a differently-shaped, JSON-display array; see its own doc).
-            // ReservationRoomLine has no roomType() relation, so capacity
-            // is resolved via a lookup rather than adding a new relation.
-            $existingLines = $reservation->roomLines()->get();
-            $capacityByTypeId = RoomType::whereIn('id', $existingLines->pluck('room_type_id'))->pluck('capacity', 'id');
-            $totalCapacity = $existingLines->sum(fn ($line) => ($capacityByTypeId[$line->room_type_id] ?? 0) * $line->quantity);
-        }
-        $totalGuests = (int) $validated['adults'] + $children;
-        if ($totalGuests > $totalCapacity) {
+        $capacityLines = $roomLinesInput !== null ? $roomLines : \App\Support\GuestCapacity::linesForReservation($reservation);
+        $capacityError = \App\Support\GuestCapacity::error($capacityLines, (int) $validated['adults'] + $children);
+        if ($capacityError !== null) {
             return response()->json([
-                'message' => "Adults and children combined ({$totalGuests}) exceed the total capacity ({$totalCapacity}) of the selected room(s).",
-                'errors' => ['adults' => ["Adults and children combined can't exceed the selected room capacity of {$totalCapacity}."]],
+                'message' => $capacityError,
+                'errors' => ['adults' => [$capacityError]],
             ], 422);
         }
 

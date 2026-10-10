@@ -40,7 +40,8 @@
             This booking needs {{ $shortfallLine['quantity'] }} {{ $shortfallLine['room_type'] }} room(s), but only {{ $freeCount }} {{ $freeCount === 1 ? 'is' : 'are' }} currently free for these dates.
         </div>
     @else
-        <form id="checkInForm">
+        @php $panelCapacity = \App\Support\GuestCapacity::range(\App\Support\GuestCapacity::linesForBooking($booking)); @endphp
+        <form id="checkInForm" data-guest-capacity data-capacity-min="{{ $panelCapacity['min'] }}" data-capacity-max="{{ $panelCapacity['max'] }}">
             {{-- Step 1: Guest Details (registration card) - confirmed before room
                  assignment, since who's actually at the counter (and how many of
                  them there are) can differ from what was booked. --}}
@@ -101,8 +102,9 @@
                                value="{{ old('children', $booking->children ?? 0) }}">
                     </div>
                 </div>
+                <small class="guest-capacity-hint d-block text-muted mb-2"></small>
                 <p class="text-muted small mb-0">
-                    <i class="fas fa-info-circle"></i> Update the counts above if the guest brought more (or fewer) people than originally booked - this is what determines any extra-guest fee at checkout.
+                    <i class="fas fa-info-circle"></i> Update the counts above if the guest brought more (or fewer) people than originally booked. The total must stay within the booked rooms' capacity.
                 </p>
             </div>
 

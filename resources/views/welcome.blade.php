@@ -616,7 +616,7 @@
                         <div class="p-4">
                             <h5 class="fw-bold">{{ $roomType->name }}</h5>
                             <p class="mb-2 text-muted">
-                                <i class="fas fa-user me-1 text-brand"></i> Up to {{ $roomType->capacity }} guests
+                                <i class="fas fa-user me-1 text-brand"></i> {{ $roomType->capacity_label }}
                             </p>
                             @if($roomType->description)
                                 <p class="small text-muted mb-2">{{ Str::limit($roomType->description, 80) }}</p>

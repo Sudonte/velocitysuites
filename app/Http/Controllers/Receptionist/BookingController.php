@@ -169,6 +169,11 @@ class BookingController extends Controller
             return back()->withInput()->with('error', $error);
         }
 
+        $capacityError = \App\Support\GuestCapacity::error($roomLines, (int) $validated['adults'] + (int) ($validated['children'] ?? 0));
+        if ($capacityError !== null) {
+            return back()->withInput()->with('error', $capacityError);
+        }
+
         $children = (int) ($validated['children'] ?? 0);
         $nights = max(1, $checkIn->diffInDays($checkOut));
         // Legacy room_type_id/rooms_requested kept in sync from the first

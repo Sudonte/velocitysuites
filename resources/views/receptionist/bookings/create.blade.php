@@ -22,7 +22,7 @@
                     </div>
                 @endif
 
-                <form action="{{ route('receptionist.bookings.store') }}" method="POST">
+                <form action="{{ route('receptionist.bookings.store') }}" method="POST" data-guest-capacity>
                     @csrf
 
                     <h6 class="form-section-heading">Guest</h6>
@@ -94,6 +94,7 @@
                                 <label for="children">Children</label>
                                 <input type="number" min="0" class="form-control @error('children') is-invalid @enderror"
                                        id="children" name="children" value="{{ old('children', 0) }}">
+                                <small class="guest-capacity-hint d-block text-muted mt-1"></small>
                                 @error('children')<div class="invalid-feedback">{{ $message }}</div>@enderror
                             </div>
                         </div>
