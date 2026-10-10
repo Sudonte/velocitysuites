@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\User;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * The web login shows one message for an unknown email, a wrong password and
@@ -10,6 +11,14 @@ use App\Models\User;
  */
 class WebLoginMessageTest extends ApiFlowTestCase
 {
+    protected function setUp(): void
+    {
+        parent::setUp();
+        if (! Schema::hasColumn('users', 'failed_login_attempts')) {
+            Schema::table('users', fn ($table) => $table->unsignedInteger('failed_login_attempts')->default(0));
+        }
+    }
+
     public function test_failed_logins_share_one_message(): void
     {
         User::create([
@@ -26,13 +35,11 @@ class WebLoginMessageTest extends ApiFlowTestCase
             ['email' => 'real@example.test', 'password' => 'wrong'],
             ['email' => 'suspended@example.test', 'password' => 'right-password'],
         ])->map(function ($credentials) {
-            $r = $this->from(route("login"))->post(route("login.post"), $credentials); fwrite(STDERR, $r->status() . " " . ($r->exception ? $r->exception->getMessage() : "") . "
-");
+            $this->from(route('login'))->post(route('login.post'), $credentials)->assertRedirect(route('login'));
 
             return session('error');
         });
 
-        fwrite(STDERR, json_encode($messages->all()));
         $this->assertCount(1, $messages->unique());
         $this->assertStringContainsString('email or password you entered is incorrect', $messages->first());
     }
