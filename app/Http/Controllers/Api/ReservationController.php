@@ -51,8 +51,14 @@ class ReservationController extends Controller
         // conversion (billing_id null); 'booking.billing.payments' covers
         // final/re-parented payments once a Booking exists. Both are
         // needed - a reservation only ever has one or the other active.
-        $query = $guest->reservations()->with(['roomType', 'booking.room', 'booking.billing.payments', 'payments', 'bookingAmenities'])
-            ->whereNull('hidden_at');
+        // Transaction History passes include_hidden=1 and gets EVERY record, including the ones the guest removed
+        // from Bookings & Reservations (hidden_by_guest / hidden_at say so); the list itself never does.
+        $includeHidden = $request->boolean('include_hidden');
+        $query = $guest->reservations()->with([
+            'roomType',
+            'booking' => fn ($q) => $q->withTrashed(),
+            'booking.room', 'booking.billing.payments', 'payments', 'bookingAmenities',
+        ])->when(! $includeHidden, fn ($q) => $q->whereNull('hidden_at'));
 
         if ($request->filled('status')) {
             $query->where('status', $request->status);
@@ -63,8 +69,8 @@ class ReservationController extends Controller
         // views (guest.reservations.index / guest.bookings.index).
         if ($request->has('has_booking')) {
             $request->boolean('has_booking')
-                ? $query->whereHas('booking')
-                : $query->whereDoesntHave('booking');
+                ? $query->whereHas('booking', fn ($q) => $q->withTrashed())
+                : $query->whereDoesntHave('booking', fn ($q) => $q->withTrashed());
         }
 
         // Default stays 15 for any other caller, but the Android app explicitly
@@ -951,22 +957,11 @@ class ReservationController extends Controller
     }
 
     /**
-     * Guest-initiated PERMANENT deletion of a Reservation - hard,
-     * non-recoverable, unlike hide() above (which only ever sets
-     * hidden_at and never touches a single child row). Handles both a
-     * reservation that never converted (eligibility keyed off the
-     * reservation's own status) and one that did (eligibility keyed off
-     * the resulting Booking's status instead, since "the operational
-     * status lives on Booking" once converted - reservation.status stays
-     * CONVERTED_TO_BOOKING forever and is never itself re-checked here).
-     * Confirmed against the live backend (2026-09-18) that
-     * Api\BookingController is exclusively a direct-booking controller -
-     * every reservation-derived transaction, converted or not, is
-     * deleted through this endpoint instead. See
-     * TRANSACTION_DELETE_BACKEND_SPEC.md's 2026-09-18 update for the full
-     * investigation and TransactionArchiveService for why payments/
-     * billing are archived rather than either hard-deleted blindly or
-     * left blocking the delete.
+     * The guest removes a Completed / Cancelled reservation (converted or not) from Bookings & Reservations. NOTHING
+     * is deleted: the reservation, its booking, billing and payments all stay, and the record keeps showing in
+     * Transaction History with its real status - the guest needs it as proof. Eligibility is the same as hide(): a
+     * converted transaction is judged by its Booking's status, an unconverted one by the reservation's own. The route
+     * keeps its old DELETE verb so older app builds still work.
      */
     public function destroy(Reservation $reservation): JsonResponse
     {
@@ -978,64 +973,25 @@ class ReservationController extends Controller
 
         if ($booking) {
             if (! in_array($booking->booking_status, [Booking::STATUS_COMPLETED, Booking::STATUS_CANCELLED], true)) {
-                return response()->json(['message' => 'This booking cannot be permanently deleted while it is still active.'], 409);
+                return response()->json(['message' => 'This booking cannot be removed while it is still active.'], 409);
             }
         } elseif (! in_array($reservation->status, [Reservation::STATUS_CANCELLED, Reservation::STATUS_REJECTED], true)) {
-            return response()->json(['message' => 'This reservation cannot be permanently deleted while it is still active.'], 409);
+            return response()->json(['message' => 'This reservation cannot be removed while it is still active.'], 409);
         }
 
-        $reservationId = $reservation->id;
-        $guestId = $reservation->guest_id;
-        $bookingId = $booking?->id;
-        $roomTypeName = optional($reservation->roomType)->name ?? 'room';
-
-        try {
-            DB::transaction(function () use ($reservation, $booking, $guestId, $reservationId) {
-                $this->archiveService->archiveAndPurgeFinancials($reservation, $booking, $guestId);
-
-                if ($booking && $booking->id_card_image_path) {
-                    Storage::disk('local')->delete($booking->id_card_image_path);
-                }
-                if ($reservation->id_card_image_path) {
-                    Storage::disk('local')->delete($reservation->id_card_image_path);
-                }
-
-                if ($booking) {
-                    // Safety check per TRANSACTION_DELETE_BACKEND_SPEC.md: never
-                    // delete a booking reached any way other than being this
-                    // exact reservation's own, exclusively-linked conversion.
-                    if ((int) $booking->reservation_id !== (int) $reservationId) {
-                        throw new \RuntimeException(
-                            "Booking {$booking->id} reservation_id ({$booking->reservation_id}) does not match reservation {$reservationId} during permanent delete - aborting."
-                        );
-                    }
-                    $booking->forceDelete();
-                }
-
-                $reservation->delete();
+        if ($reservation->hidden_by_guest_at === null) {
+            DB::transaction(function () use ($reservation, $booking) {
+                $reservation->update(['hidden_at' => $reservation->hidden_at ?? now(), 'hidden_by_guest_at' => now()]);
+                $booking?->update(['hidden_at' => $booking->hidden_at ?? now(), 'hidden_by_guest_at' => now()]);
             });
-        } catch (\Throwable $e) {
-            Log::error('Permanent reservation delete failed', [
-                'endpoint' => 'DELETE guest/reservations/{reservation}',
-                'reservation_id' => $reservationId,
-                'booking_id' => $bookingId,
-                'guest_id' => $guestId,
-                'reservation_status' => $reservation->status,
-                'booking_status' => $booking?->booking_status,
-                'exception' => get_class($e),
-                'error' => $e->getMessage(),
-            ]);
 
-            return response()->json(['message' => 'This transaction could not be permanently deleted. Please try again or contact support.'], 500);
+            Activity::log(
+                'Removed reservation from guest list',
+                "Reservation #{$reservation->id} for " . (optional($reservation->roomType)->name ?? 'room'),
+                $reservation
+            );
         }
 
-        Activity::log(
-            'Permanently deleted reservation',
-            "Reservation #{$reservationId} for {$roomTypeName}",
-            null
-        );
-
-        return response()->json(['message' => 'Reservation permanently deleted.']);
+        return response()->json(['message' => 'Removed from your bookings. It stays in your Transaction History.']);
     }
 }
-

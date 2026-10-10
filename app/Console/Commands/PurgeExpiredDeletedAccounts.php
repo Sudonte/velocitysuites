@@ -28,9 +28,30 @@ class PurgeExpiredDeletedAccounts extends Command
             ->get();
 
         foreach ($expired as $user) {
-            Log::info("Purging expired deleted account: user_id={$user->id}, email={$user->email}");
+            Log::info("Purging expired deleted account: user_id={$user->id}");
             $user->apiTokens()->delete();
-            $user->guest?->delete();
+
+            // A guest with reservations / bookings / payments keeps them: they are proof for the hotel's accounting
+            // (and the foreign keys refuse to cascade them away). Only the PERSON goes - name, contact details and
+            // login are scrubbed and the account is closed; the records stay attached to an anonymous guest.
+            $guest = $user->guest;
+            if ($guest && ($guest->reservations()->exists() || \App\Models\Booking::withTrashed()->where('guest_id', $guest->id)->exists())) {
+                $guest->forceFill([
+                    'mobile_number' => null, 'address' => null, 'profile_picture' => null,
+                    'date_of_birth' => null, 'age' => null, 'gender' => null,
+                ])->save();
+                $user->forceFill([
+                    'first_name' => 'Deleted', 'last_name' => 'Guest', 'middle_name' => null,
+                    'email' => 'deleted-guest-'.$user->id.'@invalid.local',
+                    'password' => bcrypt(\Illuminate\Support\Str::random(40)),
+                    'status' => 'deactivated', 'restore_deadline' => null,
+                ])->save();
+                $this->warn("User {$user->id} kept as an anonymous account - their transactions are retained.");
+
+                continue;
+            }
+
+            $guest?->delete();
             $user->delete();
         }
 

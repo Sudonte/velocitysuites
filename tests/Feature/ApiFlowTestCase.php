@@ -93,6 +93,7 @@ abstract class ApiFlowTestCase extends TestCase
             $table->unsignedBigInteger('verified_by')->nullable();
             $table->timestamp('cancelled_at')->nullable();
             $table->timestamp('hidden_at')->nullable();
+            $table->timestamp('hidden_by_guest_at')->nullable();
             $table->timestamp('viewed_at')->nullable();
             $table->string('payment_preference', 20)->nullable();
             $table->string('payment_method', 20)->nullable();
@@ -181,6 +182,7 @@ abstract class ApiFlowTestCase extends TestCase
             $table->unsignedBigInteger('verified_by')->nullable();
             $table->timestamp('cancelled_at')->nullable();
             $table->timestamp('hidden_at')->nullable();
+            $table->timestamp('hidden_by_guest_at')->nullable();
             $table->timestamp('viewed_at')->nullable();
             $table->timestamp('checked_in_at')->nullable();
             $table->timestamp('checked_out_at')->nullable();

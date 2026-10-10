@@ -47,9 +47,14 @@ class BookingController extends Controller
     {
         $guest = auth()->user()->guest;
 
-        $query = Booking::where('guest_id', $guest->id)
+        // Transaction History asks for include_hidden=1: it lists EVERY record the guest ever made, including the ones
+        // they removed from Bookings & Reservations (and ones staff archived) - those carry hidden_by_guest / hidden_at.
+        $includeHidden = $request->boolean('include_hidden');
+
+        $query = ($includeHidden ? Booking::withTrashed() : Booking::query())
+            ->where('guest_id', $guest->id)
             ->whereNull('reservation_id')
-            ->whereNull('hidden_at')
+            ->when(! $includeHidden, fn ($q) => $q->whereNull('hidden_at'))
             ->with(['roomType', 'payments']);
 
         if ($request->filled('status')) {
@@ -448,15 +453,10 @@ class BookingController extends Controller
     }
 
     /**
-     * Guest-initiated PERMANENT deletion of a direct Booking - hard,
-     * non-recoverable, unlike Receptionist\BookingController::destroy()
-     * (a staff-side soft delete/archive via SoftDeletes, which never
-     * touches child rows at all). Scoped to reservation_id === null only,
-     * same as cancel()/show()/showIdCard() above - a reservation-derived
-     * Booking is deleted through Api\ReservationController::destroy()
-     * instead, confirmed against this controller's own existing scope
-     * rather than assumed (see TRANSACTION_DELETE_BACKEND_SPEC.md's
-     * 2026-09-18 update for the full investigation).
+     * The guest removes a Completed / Cancelled direct Booking from Bookings & Reservations. NOTHING is deleted:
+     * the booking, its billing and every payment stay exactly as they were - the guest needs them as proof - and the
+     * record keeps showing in Transaction History with its real status. Only the Bookings & Reservations list filters
+     * on the flag (hidden_by_guest_at / hidden_at). The route keeps its old DELETE verb so older app builds still work.
      */
     public function destroy(Booking $booking): JsonResponse
     {
@@ -465,43 +465,19 @@ class BookingController extends Controller
         }
 
         if (! in_array($booking->booking_status, [Booking::STATUS_COMPLETED, Booking::STATUS_CANCELLED], true)) {
-            return response()->json(['message' => 'This booking cannot be permanently deleted while it is still active.'], 409);
+            return response()->json(['message' => 'This booking cannot be removed while it is still active.'], 409);
         }
 
-        $bookingId = $booking->id;
-        $guestId = $booking->guest_id;
-        $bookingStatus = $booking->booking_status;
-        $roomTypeName = optional($booking->roomType)->name ?? 'room';
+        if ($booking->hidden_by_guest_at === null) {
+            $booking->update(['hidden_at' => $booking->hidden_at ?? now(), 'hidden_by_guest_at' => now()]);
 
-        try {
-            DB::transaction(function () use ($booking, $guestId) {
-                $this->archiveService->archiveAndPurgeFinancials(null, $booking, $guestId);
-
-                if ($booking->id_card_image_path) {
-                    Storage::disk('local')->delete($booking->id_card_image_path);
-                }
-
-                $booking->forceDelete();
-            });
-        } catch (\Throwable $e) {
-            Log::error('Permanent booking delete failed', [
-                'endpoint' => 'DELETE guest/bookings/{booking}',
-                'booking_id' => $bookingId,
-                'guest_id' => $guestId,
-                'booking_status' => $bookingStatus,
-                'exception' => get_class($e),
-                'error' => $e->getMessage(),
-            ]);
-
-            return response()->json(['message' => 'This transaction could not be permanently deleted. Please try again or contact support.'], 500);
+            Activity::log(
+                'Removed booking from guest list',
+                "Booking #{$booking->id} for " . (optional($booking->roomType)->name ?? 'room'),
+                $booking
+            );
         }
 
-        Activity::log(
-            'Permanently deleted booking',
-            "Booking #{$bookingId} for {$roomTypeName}",
-            null
-        );
-
-        return response()->json(['message' => 'Booking permanently deleted.']);
+        return response()->json(['message' => 'Removed from your bookings. It stays in your Transaction History.']);
     }
 }
