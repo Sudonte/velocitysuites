@@ -169,20 +169,6 @@
 
 @push('scripts')
 <script>
-// Tiny reason-prompt for the payment-level Reject button rendered inside
-// the AJAX-loaded details partial (see partials/details.blade.php) - a
-// plain form submit (full page reload, same as the existing "Verify
-// Booking" button), just with a prompt() gate to collect the required
-// reason first and stash it in the form's hidden `reason` input.
-window.preparePaymentReject = function (form) {
-    const reason = window.prompt('Reason for rejecting this payment (max 500 characters):');
-    if (!reason || !reason.trim()) {
-        return false;
-    }
-    form.querySelector('input[name="reason"]').value = reason.trim().slice(0, 500);
-    return true;
-};
-
 document.addEventListener('DOMContentLoaded', function () {
     const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
     const detailsModalEl = document.getElementById('detailsModal');

@@ -150,8 +150,12 @@
                     <p class="mb-2 fw-bold">Deposit Payments</p>
                     @foreach($reservation->payments as $payment)
                         <div class="d-flex justify-content-between mb-1">
-                            <span>{{ ucfirst($payment->payment_method) }} @if($payment->reference_number) ({{ $payment->reference_number }}) @endif</span>
-                            <x-status-badge :status="$payment->payment_status" domain="payment" />
+                            <span>{{ $payment->payment_method === 'gcash' ? 'GCash' : ucfirst($payment->payment_method) }} @if($payment->reference_number) ({{ $payment->reference_number }}) @endif</span>
+                            @if($payment->isPendingVerification())
+                                <span class="badge bg-warning text-dark">Awaiting verification</span>
+                            @else
+                                <x-status-badge :status="$payment->payment_status" domain="payment" />
+                            @endif
                         </div>
                     @endforeach
                 @endif
@@ -286,9 +290,15 @@
                             <i class="fas fa-edit"></i> Modify Dates
                         </button>
                     @else
-                        <p class="text-info mb-3">
-                            <i class="fas fa-check-circle"></i> Booking confirmed.
-                        </p>
+                        @if($booking && $booking->display_status === 'AWAITING_VERIFICATION')
+                            <p class="text-warning mb-3">
+                                <i class="fas fa-hourglass-half"></i> Booking received - our staff are verifying your payment.
+                            </p>
+                        @else
+                            <p class="text-info mb-3">
+                                <i class="fas fa-check-circle"></i> Booking confirmed.
+                            </p>
+                        @endif
                     @endif
 
                     {{-- Mirrors the mobile app's "Switch to GCash" action - a Cash reservation can

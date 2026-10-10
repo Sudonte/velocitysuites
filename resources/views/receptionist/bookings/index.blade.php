@@ -155,7 +155,9 @@
                         </a>
                         @if($tab === 'pending')
                             @if($booking->gcashPaymentNeedsVerification())
-                                <span class="badge bg-secondary align-self-center">Review payment first</span>
+                                <a href="{{ route('receptionist.bookings.show', $booking) }}#gcashPayment" class="btn btn-sm btn-warning flex-fill" title="The GCash receipt must be verified first">
+                                    <i class="fas fa-receipt"></i> Review Payment
+                                </a>
                             @else
                                 <form action="{{ route('receptionist.bookings.verify', $booking) }}" method="POST" class="flex-fill" data-confirm="The booking will be marked as verified." data-confirm-title="Verify this booking?" data-confirm-button="Verify Booking" data-confirm-variant="success">
                                     @csrf

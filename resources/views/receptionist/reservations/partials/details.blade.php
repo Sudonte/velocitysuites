@@ -222,21 +222,29 @@
                         @endif
                     </p>
                     @if(!$depositPayment->isVerified() && !$depositPayment->isRejected())
-                        <div class="d-flex gap-2">
-                            <form action="{{ route('receptionist.payments.verify', $depositPayment) }}" method="POST" class="d-inline" data-confirm="It will be marked as verified." data-confirm-title="Verify this payment?" data-confirm-button="Verify Payment" data-confirm-variant="success">
+                        <div class="verification-actions">
+                            <form action="{{ route('receptionist.payments.verify', $depositPayment) }}" method="POST" class="flex-sm-grow-1"
+                                  data-confirm="Check that the GCash number, reference {{ $depositPayment->reference_number }} and the receipt match ₱{{ number_format($depositPayment->amount_paid, 2) }}."
+                                  data-confirm-title="Verify this GCash payment?" data-confirm-button="Verify Payment" data-confirm-variant="success">
                                 @csrf
                                 @method('PUT')
-                                <button type="submit" class="btn btn-sm btn-success">
+                                <button type="submit" class="btn btn-success w-100">
                                     <i class="fas fa-check"></i> Verify Payment
                                 </button>
                             </form>
-                            <form action="{{ route('receptionist.payments.reject', $depositPayment) }}" method="POST" class="d-inline" onsubmit="return window.preparePaymentReject(this)">
+                            <button type="button" class="btn btn-outline-danger" data-bs-toggle="collapse" data-bs-target="#rejectDepositForm{{ $depositPayment->id }}" aria-expanded="false">
+                                <i class="fas fa-times"></i> Reject Payment
+                            </button>
+                        </div>
+                        <div class="collapse mt-2" id="rejectDepositForm{{ $depositPayment->id }}">
+                            <form action="{{ route('receptionist.payments.reject', $depositPayment) }}" method="POST"
+                                  data-confirm="The guest will be told the receipt was rejected and asked to pay again." data-confirm-title="Reject this GCash payment?" data-confirm-button="Reject Payment" data-confirm-variant="danger">
                                 @csrf
                                 @method('PUT')
-                                <input type="hidden" name="reason" value="">
-                                <button type="submit" class="btn btn-sm btn-outline-danger">
-                                    <i class="fas fa-times"></i> Reject Payment
-                                </button>
+                                <label for="rejectDepositReason{{ $depositPayment->id }}" class="form-label small">Reason (sent to the guest) <span class="text-danger">*</span></label>
+                                <textarea name="reason" id="rejectDepositReason{{ $depositPayment->id }}" class="form-control form-control-sm mb-2" rows="2" maxlength="500" required
+                                          placeholder="e.g. the receipt doesn't match the declared amount"></textarea>
+                                <button type="submit" class="btn btn-sm btn-danger"><i class="fas fa-times"></i> Reject Payment</button>
                             </form>
                         </div>
                     @endif

@@ -171,7 +171,7 @@
 
             @if($gcashPayment)
                 <!-- ===================== GCASH PAYMENT INFORMATION ===================== -->
-                <x-card title="GCash Payment Information" icon="fas fa-qrcode" bodyClass="card-body" class="mb-4">
+                <x-card title="GCash Payment Information" icon="fas fa-qrcode" bodyClass="card-body" class="mb-4" id="gcashPayment">
                     <div class="row">
                         <div class="col-md-6">
                             <dl class="detail-list mb-0">
@@ -214,18 +214,21 @@
                     </p>
 
                     @unless($gcashPayment->isVerified() || $gcashPayment->isRejected())
-                        <div class="d-flex gap-2">
-                            <form action="{{ route('receptionist.payments.verify', $gcashPayment) }}" method="POST" class="d-inline" data-confirm="Make sure the registered number and receipt have both been checked against the booking details." data-confirm-title="Verify this GCash payment?" data-confirm-button="Verify Payment" data-confirm-variant="success">
+                        <div class="verification-actions">
+                            <form action="{{ route('receptionist.payments.verify', $gcashPayment) }}" method="POST" class="flex-sm-grow-1"
+                                  data-confirm="Check that the GCash number, reference {{ $gcashPayment->reference_number }} and the receipt match ₱{{ number_format($gcashPayment->amount_paid, 2) }}. Verifying also completes the booking."
+                                  data-confirm-title="Verify this GCash payment?" data-confirm-button="Verify Payment" data-confirm-variant="success">
                                 @csrf
                                 @method('PUT')
-                                <button type="submit" class="btn btn-sm btn-success">
+                                <button type="submit" class="btn btn-success w-100">
                                     <i class="fas fa-check"></i> Verify Payment
                                 </button>
                             </form>
-                            <button type="button" class="btn btn-sm btn-outline-danger" data-bs-toggle="modal" data-bs-target="#rejectPaymentModal">
+                            <button type="button" class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#rejectPaymentModal">
                                 <i class="fas fa-times"></i> Reject Payment
                             </button>
                         </div>
+                        <p class="text-muted small mt-2 mb-0"><i class="fas fa-info-circle"></i> Verifying the payment also completes the booking. Rejecting asks the guest for a new payment.</p>
                     @endunless
                 </x-card>
             @endif
@@ -379,16 +382,16 @@
                             - verifying the payment there completes the booking automatically, in one step.
                         </div>
                     @else
-                        <div class="d-flex gap-2 mb-3">
-                            <form action="{{ route('receptionist.bookings.verify', $booking) }}" method="POST" data-confirm="The booking will be marked as verified." data-confirm-title="Verify this booking?" data-confirm-button="Verify Booking" data-confirm-variant="success">
+                        <div class="verification-actions mb-3">
+                            <form action="{{ route('receptionist.bookings.verify', $booking) }}" method="POST" class="flex-sm-grow-1" data-confirm="The booking will be marked as verified and moves to Confirmed Bookings." data-confirm-title="Verify booking #{{ $booking->id }}?" data-confirm-button="Verify Booking" data-confirm-variant="success">
                                 @csrf
                                 @method('PUT')
-                                <button type="submit" class="btn btn-success">
+                                <button type="submit" class="btn btn-success w-100">
                                     <i class="fas fa-check"></i> Verify Booking
                                 </button>
                             </form>
-                            <button type="button" class="btn btn-outline-danger" data-bs-toggle="collapse" data-bs-target="#rejectBookingForm">
-                                <i class="fas fa-ban"></i> Reject
+                            <button type="button" class="btn btn-outline-danger" data-bs-toggle="collapse" data-bs-target="#rejectBookingForm" aria-expanded="false" aria-controls="rejectBookingForm">
+                                <i class="fas fa-ban"></i> Reject Booking
                             </button>
                         </div>
                         <div class="collapse" id="rejectBookingForm">
@@ -505,7 +508,7 @@
 @if($gcashPayment && !$gcashPayment->isVerified() && !$gcashPayment->isRejected())
 <div class="modal fade" id="rejectPaymentModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog">
-        <form action="{{ route('receptionist.payments.reject', $gcashPayment) }}" method="POST" class="modal-content">
+        <form action="{{ route('receptionist.payments.reject', $gcashPayment) }}" method="POST" class="modal-content" data-submit-once>
             @csrf
             @method('PUT')
             <div class="modal-header">

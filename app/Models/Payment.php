@@ -169,6 +169,17 @@ class Payment extends Model
         return $this->verified_at !== null;
     }
 
+    /**
+     * Payments that count as revenue: completed, and - for GCash - verified
+     * by staff. An auto-converted GCash deposit is already 'completed' but
+     * stays unverified until a receptionist checks the receipt.
+     */
+    public function scopeCountedAsRevenue($query)
+    {
+        return $query->where('payments.payment_status', 'completed')
+            ->where(fn ($q) => $q->where('payments.payment_method', '!=', 'gcash')->orWhereNotNull('payments.verified_at'));
+    }
+
     public function isRejected(): bool
     {
         return $this->rejected_at !== null || $this->payment_status === 'rejected';

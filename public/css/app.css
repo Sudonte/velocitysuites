@@ -1787,3 +1787,8 @@ tbody tr:hover {
 .flatpickr-day.today { border-color: var(--primary-color); }
 .flatpickr-day.today:hover { background: var(--primary-color); border-color: var(--primary-color); color: #fff; }
 .flatpickr-months .flatpickr-month, .flatpickr-current-month .flatpickr-monthDropdown-months { color: var(--text-dark); }
+
+/* Payment / booking verification actions: primary action fills the row,
+   the rejection sits apart; both stack full-width on small screens. */
+.verification-actions { display: flex; flex-direction: column; gap: 0.5rem; padding-top: 0.75rem; border-top: 1px solid var(--border-color); }
+@media (min-width: 576px) { .verification-actions { flex-direction: row; align-items: stretch; } .verification-actions > .btn-outline-danger { margin-left: 1.5rem; } }

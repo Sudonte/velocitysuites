@@ -503,3 +503,11 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     });
 })();
+
+// Forms marked data-submit-once disable their submit buttons on submit so a
+// double click can't send the action twice.
+document.addEventListener('submit', function (event) {
+    const form = event.target;
+    if (!form.matches || !form.matches('form[data-submit-once]') || event.defaultPrevented) return;
+    form.querySelectorAll('button[type="submit"]').forEach(function (btn) { btn.disabled = true; });
+});

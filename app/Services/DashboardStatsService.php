@@ -75,28 +75,28 @@ class DashboardStatsService
     private function computeAdminStats(): array
     {
         $todayRevenue = (float) TestAccountScope::excludeFromPayments(
-            Payment::where('payment_status', 'completed')->whereDate('payment_date', today())
+            Payment::countedAsRevenue()->whereDate('payment_date', today())
         )->sum('amount_paid');
         $yesterdayRevenue = (float) TestAccountScope::excludeFromPayments(
-            Payment::where('payment_status', 'completed')->whereDate('payment_date', today()->subDay())
+            Payment::countedAsRevenue()->whereDate('payment_date', today()->subDay())
         )->sum('amount_paid');
 
         $monthlyRevenue = (float) TestAccountScope::excludeFromPayments(
-            Payment::where('payment_status', 'completed')
+            Payment::countedAsRevenue()
                 ->whereMonth('payment_date', now()->month)
                 ->whereYear('payment_date', now()->year)
         )->sum('amount_paid');
         $lastMonthRevenue = (float) TestAccountScope::excludeFromPayments(
-            Payment::where('payment_status', 'completed')
+            Payment::countedAsRevenue()
                 ->whereMonth('payment_date', now()->subMonth()->month)
                 ->whereYear('payment_date', now()->subMonth()->year)
         )->sum('amount_paid');
 
         $yearlyRevenue = (float) TestAccountScope::excludeFromPayments(
-            Payment::where('payment_status', 'completed')->whereYear('payment_date', now()->year)
+            Payment::countedAsRevenue()->whereYear('payment_date', now()->year)
         )->sum('amount_paid');
         $lastYearRevenue = (float) TestAccountScope::excludeFromPayments(
-            Payment::where('payment_status', 'completed')->whereYear('payment_date', now()->subYear()->year)
+            Payment::countedAsRevenue()->whereYear('payment_date', now()->subYear()->year)
         )->sum('amount_paid');
 
         // "Active" and "completed" live on Booking (the operational record
@@ -261,7 +261,7 @@ class DashboardStatsService
                 Reservation::whereDate('created_at', $date)
             )->count()),
             'revenueTrend' => $this->dailySeries(fn ($date) => (float) TestAccountScope::excludeFromPayments(
-                Payment::where('payment_status', 'completed')->whereDate('payment_date', $date)
+                Payment::countedAsRevenue()->whereDate('payment_date', $date)
             )->sum('amount_paid')),
         ];
     }

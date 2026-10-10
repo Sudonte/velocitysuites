@@ -134,7 +134,7 @@ class AdminReportController extends Controller
         // Revenue: completed payments in range, optionally one payment
         // method and/or payments for one room type.
         $revenue = TestAccountScope::excludeFromPayments(
-            Payment::where('payment_status', 'completed')
+            Payment::countedAsRevenue()
                 ->whereBetween('created_at', [$from, $to])
                 ->when($paymentMethod, fn ($q) => $q->where('payment_method', $paymentMethod))
                 ->when($roomTypeId, fn ($q) => $q->where(function ($w) use ($roomTypeId) {
