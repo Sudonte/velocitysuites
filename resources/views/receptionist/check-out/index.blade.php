@@ -562,6 +562,23 @@ document.addEventListener('DOMContentLoaded', function () {
             message = 'The amount can\'t be more than the remaining balance of ' + peso(balanceCents / 100) + '.';
         }
 
+        // Cash: what was handed over must cover what is applied; the rest is change.
+        const method = paymentPanelContent.querySelector('#paymentMethodSelect');
+        const receivedInput = paymentPanelContent.querySelector('#cashReceivedInput');
+        const changeBox = paymentPanelContent.querySelector('#changeDueBox');
+        const isCash = !method || method.value === 'cash';
+        if (changeBox) changeBox.classList.add('d-none');
+        if (message === '' && isCash && receivedInput) {
+            const receivedCents = Math.round(parseFloat(receivedInput.value) * 100);
+            const appliedCents = Math.round(amount * 100);
+            if (isNaN(receivedCents) || receivedCents < appliedCents) {
+                message = 'The cash received must be at least the amount applied.';
+            } else if (receivedCents > appliedCents && changeBox) {
+                changeBox.textContent = 'Change due: ' + peso((receivedCents - appliedCents) / 100);
+                changeBox.classList.remove('d-none');
+            }
+        }
+
         error.textContent = message;
         error.classList.toggle('d-none', message === '');
         input.classList.toggle('is-invalid', message !== '');
@@ -573,15 +590,18 @@ document.addEventListener('DOMContentLoaded', function () {
         const methodSelect = paymentPanelContent.querySelector('#paymentMethodSelect');
         const refGroup = paymentPanelContent.querySelector('#referenceNumberGroup');
         if (methodSelect && refGroup) refGroup.classList.toggle('d-none', methodSelect.value !== 'gcash');
+        const cashGroup = paymentPanelContent.querySelector('#cashReceivedGroup');
+        if (methodSelect && cashGroup) cashGroup.classList.toggle('d-none', methodSelect.value !== 'cash');
+        validateAmount();
     }
 
     paymentModalEl.addEventListener('shown.bs.modal', function () { syncPaymentMethod(); validateAmount(); });
     paymentPanelContent.addEventListener('change', function (e) {
         if (e.target.id === 'paymentMethodSelect') syncPaymentMethod();
-        if (e.target.id === 'amountPaidInput') validateAmount();
+        if (e.target.id === 'amountPaidInput' || e.target.id === 'cashReceivedInput') validateAmount();
     });
     paymentPanelContent.addEventListener('input', function (e) {
-        if (e.target.id === 'amountPaidInput') validateAmount();
+        if (e.target.id === 'amountPaidInput' || e.target.id === 'cashReceivedInput') validateAmount();
     });
 
     function currentPaymentBillingId() {

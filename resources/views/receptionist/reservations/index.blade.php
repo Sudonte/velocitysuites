@@ -66,7 +66,7 @@
                         </span>
                     </div>
                     <div class="d-flex flex-wrap gap-2 mt-2">
-                        <button type="button" class="btn btn-outline-primary btn-sm flex-fill" data-bs-toggle="modal"
+                        <button type="button" class="btn btn-sm btn-primary flex-fill" data-bs-toggle="modal"
                                 data-bs-target="#detailsModal" data-details-url="{{ route('receptionist.reservations.details', $reservation) }}">
                             <i class="fas fa-eye"></i> View / Manage
                         </button>
@@ -130,7 +130,7 @@
                             @endif
                         </td>
                         <td class="text-nowrap">
-                            <button type="button" class="btn btn-outline-primary btn-sm" data-bs-toggle="modal"
+                            <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal"
                                     data-bs-target="#detailsModal" data-details-url="{{ route('receptionist.reservations.details', $reservation) }}">
                                 <i class="fas fa-eye"></i> View / Manage
                             </button>
@@ -233,15 +233,10 @@ document.addEventListener('DOMContentLoaded', function () {
         if (message) alert(message);
     }
 
-    // ?open=<id> (e.g. from a dashboard activity link) opens that
-    // reservation's details right away, even if it isn't in this tab.
-    let openRequest = null;
-    const openId = new URLSearchParams(window.location.search).get('open');
-
     detailsModalEl.addEventListener('show.bs.modal', function (event) {
         const button = event.relatedTarget;
-        const url = button ? button.getAttribute('data-details-url') : openRequest.url;
-        activeReservationId = button ? button.closest('[data-reservation-row]').getAttribute('data-reservation-row') : openRequest.id;
+        const url = button.getAttribute('data-details-url');
+        activeReservationId = button.closest('[data-reservation-row]').getAttribute('data-reservation-row');
         body.innerHTML = '<div class="text-center py-5"><i class="fas fa-spinner fa-spin fa-2x"></i></div>';
         fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
             .then(r => r.text())
@@ -249,16 +244,37 @@ document.addEventListener('DOMContentLoaded', function () {
             .catch(() => { body.innerHTML = '<div class="alert alert-danger">Failed to load details.</div>'; });
     });
 
-    if (openId && /^\d+$/.test(openId)) {
-        openRequest = {
-            id: openId,
-            url: @json(route('receptionist.reservations.details', ['reservation' => '__ID__'])).replace('__ID__', openId),
-        };
-        detailsModal.show();
-        const cleanUrl = new URL(window.location.href);
-        cleanUrl.searchParams.delete('open');
-        window.history.replaceState({}, '', cleanUrl);
+    // Cash form: the amount applied must be the full total or a 20-50% deposit, the cash received at least that much;
+    // the difference is the change shown to the receptionist. The server re-checks all of it.
+    const pesoText = (n) => '₱' + Number(n).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    function validateCashForm() {
+        const applied = body.querySelector('#detailsCashAmount');
+        const receivedInput = body.querySelector('#detailsCashReceived');
+        const error = body.querySelector('#detailsCashError');
+        const changeBox = body.querySelector('#detailsCashChange');
+        if (!applied || !receivedInput) return true;
+        const total = Math.round(parseFloat(applied.dataset.total) * 100);
+        const min = Math.round(parseFloat(applied.dataset.min) * 100);
+        const max = Math.round(parseFloat(applied.dataset.max) * 100);
+        const a = Math.round(parseFloat(applied.value) * 100);
+        const r = Math.round(parseFloat(receivedInput.value) * 100);
+        let message = '';
+        if (isNaN(a) || a <= 0) message = 'Enter the amount to apply (more than ₱0.00).';
+        else if (a !== total && (a < min || a > max)) message = 'The amount applied must be the full ' + pesoText(total / 100) + ' or between ' + pesoText(min / 100) + ' and ' + pesoText(max / 100) + '.';
+        else if (isNaN(r) || r < a) message = 'The cash received must be at least the amount applied.';
+        error.textContent = message;
+        error.classList.toggle('d-none', message === '');
+        if (message === '' && r > a) {
+            changeBox.textContent = 'Change due: ' + pesoText((r - a) / 100);
+            changeBox.classList.remove('d-none');
+        } else {
+            changeBox.classList.add('d-none');
+        }
+        return message === '';
     }
+    body.addEventListener('input', function (e) {
+        if (e.target.id === 'detailsCashAmount' || e.target.id === 'detailsCashReceived') validateCashForm();
+    });
 
     body.addEventListener('click', async function (e) {
         // Reveal the inline reject form in place of the main action row
@@ -286,14 +302,11 @@ document.addEventListener('DOMContentLoaded', function () {
             return;
         }
         if (e.target.closest('#detailsSubmitCashBtn')) {
-            const amountInput = body.querySelector('#detailsCashAmount');
-            const amount = parseFloat(amountInput.value);
-            if (!amount || amount <= 0) {
-                showError('Enter a valid amount greater than ₱0.');
-                return;
-            }
+            if (!validateCashForm()) return;
+            const amount = parseFloat(body.querySelector('#detailsCashAmount').value);
+            const received = parseFloat(body.querySelector('#detailsCashReceived').value);
             try {
-                const data = await postJson(buildUrl(urls.confirmCash, activeReservationId), { amount_received: amount });
+                const data = await postJson(buildUrl(urls.confirmCash, activeReservationId), { amount_received: amount, cash_received: received });
                 removeRowAndClose(data.message);
             } catch (err) {
                 showError(err.message);

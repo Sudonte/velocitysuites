@@ -301,6 +301,9 @@
                 <dl class="detail-list mb-3">
                     <div><dt>Room Total</dt><dd>₱{{ number_format($roomTotal, 2) }}</dd></div>
                     <div><dt>Amenities Total</dt><dd>₱{{ number_format($amenitiesTotal, 2) }}</dd></div>
+                    @if($billDiscount > 0.009)
+                        <div><dt>Discount ({{ $discountLabel }})</dt><dd class="text-success">-₱{{ number_format($billDiscount, 2) }}</dd></div>
+                    @endif
                     <div><dt>Grand Total</dt><dd class="fw-bold text-brand">₱{{ number_format($totalDue, 2) }}</dd></div>
                     <div><dt>Payment Method</dt><dd>{{ $gcashPayment ? 'GCash' : 'Cash' }}</dd></div>
                     <div><dt>Payment Percentage</dt>
@@ -327,39 +330,54 @@
                     <hr>
                     <h6 class="text-brand"><i class="fas fa-hand-holding-dollar"></i> Record Walk-In Payment</h6>
                     <p class="text-muted small">Any remaining balance is settled through a walk-in cash payment at the hotel - record it here as it's received.</p>
-                    <form action="{{ route('receptionist.bookings.record-payment', $booking) }}" method="POST" class="row g-2 align-items-end"
+                    <form action="{{ route('receptionist.bookings.record-payment', $booking) }}" method="POST" class="row g-2 align-items-start" id="walkInForm"
                           data-confirm="Record this cash payment against the booking's remaining balance?" data-confirm-title="Record this cash payment against the booking's remaining balance?" data-confirm-button="Record Payment" data-confirm-variant="success">
                         @csrf
                         <div class="col-sm-6">
-                            <label class="form-label small mb-1" for="walkInAmount">Amount Received (₱)</label>
-                            <input type="number" name="amount_paid" id="walkInAmount" class="form-control" min="0.01" max="{{ $remainingBalance }}" step="0.01" required placeholder="0.00" data-balance="{{ $remainingBalance }}" aria-describedby="walkInHelp walkInError">
-                            <div class="form-text" id="walkInHelp">Remaining balance: <strong>₱{{ number_format($remainingBalance, 2) }}</strong></div>
-                            <div class="text-danger small d-none mt-1" id="walkInError" role="alert"></div>
+                            <label class="form-label small mb-1" for="walkInReceived">Cash Received (₱)</label>
+                            <input type="number" name="amount_received" id="walkInReceived" class="form-control" min="0.01" step="0.01" required placeholder="0.00">
                         </div>
                         <div class="col-sm-6">
+                            <label class="form-label small mb-1" for="walkInAmount">Amount Applied (₱)</label>
+                            <input type="number" name="amount_paid" id="walkInAmount" class="form-control" min="0.01" max="{{ $remainingBalance }}" step="0.01" required placeholder="0.00" data-balance="{{ $remainingBalance }}" aria-describedby="walkInHelp walkInError">
+                            <div class="form-text" id="walkInHelp">Remaining balance: <strong>₱{{ number_format($remainingBalance, 2) }}</strong> - the amount applied can't be more than this.</div>
+                        </div>
+                        <div class="col-12">
+                            <div class="text-danger small d-none" id="walkInError" role="alert"></div>
+                            <div class="alert alert-info py-2 mb-2 d-none" id="walkInChange" role="status"></div>
                             <button type="submit" class="btn btn-success w-100" id="walkInSubmit" disabled>
                                 <i class="fas fa-check"></i> Confirm Cash Payment
                             </button>
                         </div>
                         <script>
                             (function () {
-                                const input = document.getElementById('walkInAmount');
+                                const applied = document.getElementById('walkInAmount');
+                                const received = document.getElementById('walkInReceived');
                                 const error = document.getElementById('walkInError');
+                                const changeBox = document.getElementById('walkInChange');
                                 const submit = document.getElementById('walkInSubmit');
-                                const balanceCents = Math.round(parseFloat(input.dataset.balance) * 100);
+                                const balanceCents = Math.round(parseFloat(applied.dataset.balance) * 100);
+                                const peso = (c) => '₱' + (c / 100).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
                                 function check() {
-                                    const raw = input.value.trim();
-                                    const amount = parseFloat(raw);
+                                    const a = Math.round(parseFloat(applied.value) * 100);
+                                    const r = Math.round(parseFloat(received.value) * 100);
                                     let message = '';
-                                    if (raw === '' || isNaN(amount)) message = '';
-                                    else if (amount <= 0) message = 'The amount must be greater than ₱0.00.';
-                                    else if (Math.round(amount * 100) > balanceCents) message = 'The amount can\'t be more than the remaining balance of ₱' + (balanceCents / 100).toLocaleString('en-PH', { minimumFractionDigits: 2 }) + '.';
+                                    if (applied.value.trim() !== '' && (isNaN(a) || a <= 0)) message = 'The amount applied must be greater than ₱0.00.';
+                                    else if (!isNaN(a) && a > balanceCents) message = 'The amount applied can\'t be more than the remaining balance of ' + peso(balanceCents) + '.';
+                                    else if (!isNaN(a) && !isNaN(r) && r < a) message = 'The cash received must be at least the amount applied.';
                                     error.textContent = message;
                                     error.classList.toggle('d-none', message === '');
-                                    input.classList.toggle('is-invalid', message !== '');
-                                    submit.disabled = message !== '' || raw === '' || isNaN(amount);
+                                    applied.classList.toggle('is-invalid', message !== '' && !isNaN(a) && a > balanceCents);
+                                    if (message === '' && !isNaN(a) && !isNaN(r) && r > a) {
+                                        changeBox.textContent = 'Change due: ' + peso(r - a);
+                                        changeBox.classList.remove('d-none');
+                                    } else {
+                                        changeBox.classList.add('d-none');
+                                    }
+                                    submit.disabled = message !== '' || isNaN(a) || a <= 0 || isNaN(r);
                                 }
-                                input.addEventListener('input', check);
+                                applied.addEventListener('input', check);
+                                received.addEventListener('input', check);
                                 check();
                             })();
                         </script>

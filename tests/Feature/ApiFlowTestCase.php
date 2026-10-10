@@ -238,6 +238,8 @@ abstract class ApiFlowTestCase extends TestCase
             $table->string('receipt_path')->nullable();
             $table->string('gcash_number', 15)->nullable();
             $table->decimal('amount_paid', 10, 2);
+            $table->decimal('cash_received', 10, 2)->nullable();
+            $table->decimal('change_given', 10, 2)->nullable();
             $table->string('payment_status', 20);
             $table->string('payment_stage', 20);
             $table->string('idempotency_key')->nullable()->unique();

@@ -73,8 +73,16 @@
                     <option value="gcash">GCash</option>
                 </select>
             </div>
+            <div class="mb-3" id="cashReceivedGroup">
+                <label class="form-label" for="cashReceivedInput">Cash Received <span class="text-danger">*</span></label>
+                <div class="input-group">
+                    <span class="input-group-text">₱</span>
+                    <input type="number" step="0.01" min="0.01" name="amount_received" id="cashReceivedInput" class="form-control" value="{{ $balance }}">
+                </div>
+                <div class="form-text">The cash the guest hands over. Only the amount applied below is recorded as paid.</div>
+            </div>
             <div class="mb-3">
-                <label class="form-label" for="amountPaidInput">Amount Received <span class="text-danger">*</span></label>
+                <label class="form-label" for="amountPaidInput">Amount Applied <span class="text-danger">*</span></label>
                 <div class="input-group">
                     <span class="input-group-text">₱</span>
                     <input type="number" step="0.01" min="0.01" max="{{ $balance }}" name="amount_paid" id="amountPaidInput" class="form-control" value="{{ $balance }}" data-balance="{{ $balance }}" required aria-describedby="amountPaidHelp amountPaidError">
@@ -82,6 +90,7 @@
                 <div class="form-text" id="amountPaidHelp">Remaining balance: <strong>₱{{ number_format($balance, 2) }}</strong> - the payment can't be more than this.</div>
                 <div class="text-danger small d-none mt-1" id="amountPaidError" role="alert"></div>
             </div>
+            <div class="alert alert-info py-2 d-none" id="changeDueBox" role="status"></div>
             <div class="mb-3 d-none" id="referenceNumberGroup">
                 <label class="form-label">Reference Number <span class="text-danger">*</span></label>
                 <input type="text" name="reference_number" id="referenceNumberInput" class="form-control" placeholder="GCash reference number">

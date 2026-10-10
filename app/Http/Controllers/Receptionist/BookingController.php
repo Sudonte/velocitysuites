@@ -329,7 +329,11 @@ class BookingController extends Controller
         // across every sibling in the detected group (never just this one
         // row) so the receptionist sees the complete transaction's true
         // total, not one room type's own share of it.
-        $totalDue = round((float) $transactionBookings->sum(fn (Booking $b) => $b->total_amount_due), 2);
+        // payableTotal(): the StayBill total (or the billing's once billed), so an APPROVED discount ID already lowers it.
+        $totalDue = round((float) $transactionBookings->sum(fn (Booking $b) => $b->payableTotal()), 2);
+        $stayBills = $transactionBookings->map(fn (Booking $b) => \App\Support\StayBill::forBooking($b, \App\Support\StayBill::PROJECTED));
+        $billDiscount = round((float) $stayBills->sum('discount'), 2);
+        $discountLabel = $stayBills->pluck('discount_name')->filter()->unique()->implode(', ') ?: 'ID discount';
         $amountPaid = (float) $transactionBookings->sum(
             fn (Booking $b) => (float) $b->allPayments()->where('payment_status', 'completed')->sum('amount_paid')
         );
@@ -383,7 +387,7 @@ class BookingController extends Controller
 
         return view('receptionist.bookings.show', compact(
             'booking', 'totalDue', 'amountPaid', 'remainingBalance',
-            'siblings', 'roomLines', 'roomTotal', 'amenityRows', 'amenitiesTotal', 'history',
+            'siblings', 'roomLines', 'roomTotal', 'amenityRows', 'amenitiesTotal', 'history', 'billDiscount', 'discountLabel',
             'discountChoices', 'claimedDiscount', 'discountIdDecidable'
         ));
     }
@@ -420,50 +424,79 @@ class BookingController extends Controller
             return back()->with('error', 'Only a Cash booking can have a walk-in payment recorded here.');
         }
 
+        // The cap is the balance of what is actually payable NOW - the booking's StayBill total, so an APPROVED discount ID
+        // already lowers it (see Booking::payableTotal()). Checked here for the form's sake and again under the row lock below.
         $booking->loadMissing(['reservation.payments', 'payments']);
-        $totalDue = $booking->total_amount_due;
-        $amountPaid = (float) $booking->allPayments()->where('payment_status', 'completed')->sum('amount_paid');
-        $remainingBalance = max(0, round($totalDue - $amountPaid, 2));
+        $remainingBalance = max(0, round($booking->payableTotal() - $booking->paidTotal(), 2));
 
         $validated = $request->validate([
             'amount_paid' => ['required', 'numeric', 'min:0.01', 'max:' . max(0.01, $remainingBalance)],
+            'amount_received' => ['nullable', 'numeric', 'min:0.01'],
         ], [
-            'amount_paid.max' => "The amount cannot exceed the remaining balance (₱{$remainingBalance}).",
+            'amount_paid.max' => "The amount cannot exceed the remaining balance (₱" . number_format($remainingBalance, 2) . ").",
         ]);
 
-        DB::transaction(function () use ($booking, $validated) {
+        $applied = round((float) $validated['amount_paid'], 2);
+        $tender = \App\Support\CashTender::resolve('cash', $applied, isset($validated['amount_received']) ? (float) $validated['amount_received'] : null);
+
+        $result = DB::transaction(function () use ($booking, $applied, $tender) {
+            // Lock the booking row and re-read the balance from the payments committed so far, so two submissions racing
+            // for the same balance can't both pass the cap and overpay it together.
+            $locked = Booking::whereKey($booking->id)->lockForUpdate()->firstOrFail();
+            $locked->unsetRelation('payments')->unsetRelation('reservation')->unsetRelation('billing');
+            if (! in_array($locked->booking_status, [Booking::STATUS_ACTIVE, Booking::STATUS_CHECKED_IN], true)) {
+                return ['error' => 'This booking can no longer have a payment recorded.'];
+            }
+            $remaining = max(0, round($locked->payableTotal() - $locked->paidTotal(), 2));
+            if ($applied > $remaining + 0.004) {
+                return ['error' => 'The amount cannot exceed the remaining balance (₱' . number_format($remaining, 2) . ').'];
+            }
+
             $paymentData = [
                 'payment_method' => 'cash',
-                'amount_paid' => $validated['amount_paid'],
+                'amount_paid' => $applied,
+                'cash_received' => $tender['cash_received'],
+                'change_given' => $tender['change_given'],
                 'payment_stage' => 'deposit',
                 'payment_status' => 'completed',
                 'payment_date' => now(),
                 'verified_by' => auth()->id(),
                 'verified_at' => now(),
             ];
-            if ($booking->reservation_id) {
-                $paymentData['reservation_id'] = $booking->reservation_id;
+            if ($locked->reservation_id) {
+                $paymentData['reservation_id'] = $locked->reservation_id;
             } else {
-                $paymentData['booking_id'] = $booking->id;
+                $paymentData['booking_id'] = $locked->id;
             }
             Payment::create($paymentData);
+
+            return ['remaining' => round($remaining - $applied, 2)];
         });
 
-        $newRemaining = max(0, round($remainingBalance - (float) $validated['amount_paid'], 2));
+        if (isset($result['error'])) {
+            return back()->with('error', $result['error']);
+        }
+        $newRemaining = $result['remaining'];
 
         $booking->loadMissing(['reservation.guest.user', 'guest.user']);
         Activity::log(
             'Recorded walk-in payment',
             "Booking #{$booking->id} - {$booking->guest_display_name} - ₱"
-                . number_format((float) $validated['amount_paid'], 2) . " (cash) - remaining balance now ₱" . number_format($newRemaining, 2),
+                . number_format($applied, 2) . " (cash" . ($tender['change_given'] > 0 ? ', ₱' . number_format($tender['cash_received'], 2) . ' received, ₱' . number_format($tender['change_given'], 2) . ' change' : '')
+                . ") - remaining balance now ₱" . number_format($newRemaining, 2),
             $booking
         );
 
         if ($guest = $booking->account_guest?->user) {
-            $this->notifications->notifyPaymentReceived($guest, (float) $validated['amount_paid'], $booking->roomType->name ?? null, $booking->reservation_id ?? $booking->id);
+            $this->notifications->notifyPaymentReceived($guest, $applied, $booking->roomType->name ?? null, $booking->reservation_id ?? $booking->id);
         }
 
-        return back()->with('success', 'Payment recorded. Remaining balance: ₱' . number_format($newRemaining, 2) . '.');
+        $message = 'Payment recorded. Remaining balance: ₱' . number_format($newRemaining, 2) . '.';
+        if ($tender['change_given'] > 0) {
+            $message .= ' Change due: ₱' . number_format($tender['change_given'], 2) . '.';
+        }
+
+        return back()->with('success', $message);
     }
 
     /**

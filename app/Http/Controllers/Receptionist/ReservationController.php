@@ -385,10 +385,18 @@ class ReservationController extends Controller
             return response()->json(['message' => 'Only an active reservation can have its cash payment confirmed.'], 422);
         }
 
+        // 'amount_received' is the amount APPLIED to the reservation (the name the existing form already sends);
+        // 'cash_received' is the cash actually handed over, which may be more - the difference is change.
         $validated = $request->validate([
             'amount_received' => ['required', 'numeric', 'min:0.01'],
+            'cash_received' => ['nullable', 'numeric', 'min:0.01'],
         ]);
         $amount = (float) $validated['amount_received'];
+        try {
+            $tender = \App\Support\CashTender::resolve('cash', $amount, isset($validated['cash_received']) ? (float) $validated['cash_received'] : null);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json(['message' => collect($e->errors())->flatten()->first()], 422);
+        }
 
         $reservation->loadMissing('roomType');
         $nights = abs($reservation->check_out->diffInDays($reservation->check_in));
@@ -413,7 +421,13 @@ class ReservationController extends Controller
         }
 
         try {
-            $booking = DB::transaction(function () use ($reservation, $amount, $isFull) {
+            $booking = DB::transaction(function () use ($reservation, $amount, $isFull, $tender) {
+                // Lock the reservation and re-check it under the lock: two confirmations racing for the same
+                // reservation must not both record a payment.
+                $lockedReservation = Reservation::whereKey($reservation->id)->lockForUpdate()->firstOrFail();
+                if (! in_array($lockedReservation->status, Reservation::ACTIVE_STATUSES, true)) {
+                    abort(422, 'This reservation was already confirmed or closed.');
+                }
                 // Reuse the pending "cash intent" Payment row if the guest
                 // already declared one at reservation time (recordCashIntent());
                 // otherwise this is the first record of any amount at all -
@@ -430,6 +444,8 @@ class ReservationController extends Controller
                 if ($payment) {
                     $payment->update([
                         'amount_paid' => $amount,
+                        'cash_received' => $tender['cash_received'],
+                        'change_given' => $tender['change_given'],
                         'payment_status' => 'completed',
                         'verified_by' => auth()->id(),
                         'verified_at' => now(),
@@ -439,6 +455,8 @@ class ReservationController extends Controller
                         'reservation_id' => $reservation->id,
                         'payment_method' => 'cash',
                         'amount_paid' => $amount,
+                        'cash_received' => $tender['cash_received'],
+                        'change_given' => $tender['change_given'],
                         'payment_stage' => $isFull ? 'final' : 'deposit',
                         'payment_status' => 'completed',
                         'payment_date' => now(),
@@ -469,7 +487,9 @@ class ReservationController extends Controller
         }
 
         return response()->json([
-            'message' => 'Cash payment confirmed - reservation converted to a confirmed booking!',
+            'message' => 'Cash payment confirmed - reservation converted to a confirmed booking!'
+                . ($tender['change_given'] > 0 ? ' Change due: ₱' . number_format($tender['change_given'], 2) . '.' : ''),
+            'change_due' => $tender['change_given'] ?? 0,
             'booking_url' => route('receptionist.bookings.show', $booking),
         ]);
     }

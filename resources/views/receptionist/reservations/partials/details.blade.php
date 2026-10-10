@@ -244,7 +244,7 @@
                                 <label for="rejectDepositReason{{ $depositPayment->id }}" class="form-label small">Reason (sent to the guest) <span class="text-danger">*</span></label>
                                 <textarea name="reason" id="rejectDepositReason{{ $depositPayment->id }}" class="form-control form-control-sm mb-2" rows="2" maxlength="500" required
                                           placeholder="e.g. the receipt doesn't match the declared amount"></textarea>
-                                <button type="submit" class="btn btn-outline-danger btn-sm"><i class="fas fa-times"></i> Reject Payment</button>
+                                <button type="submit" class="btn btn-sm btn-danger"><i class="fas fa-times"></i> Reject Payment</button>
                             </form>
                         </div>
                     @endif
@@ -320,13 +320,26 @@
     @if($reservation->payment_method === 'cash')
         <div id="detailsCashPaymentForm" class="d-none">
             <h6 class="text-brand"><i class="fas fa-money-bill-wave"></i> Convert to Booking</h6>
-            <p class="text-muted small">Enter the amount actually received from the guest at the front desk. Must be
-                the full ₱{{ number_format($grandTotal, 2) }}, or a deposit between 20%-50% of that total.</p>
-            <div class="mb-2">
-                <label class="form-label">Amount Received (₱) <span class="text-danger">*</span></label>
-                <input type="number" id="detailsCashAmount" class="form-control" min="0.01" step="0.01" required
-                       placeholder="0.00">
+            @php
+                $cashMin = round($grandTotal * (float) config('hotel.minimum_payment_ratio', 0.20), 2);
+                $cashMax = round($grandTotal * (float) config('hotel.maximum_payment_ratio', 0.50), 2);
+            @endphp
+            <p class="text-muted small">Enter the cash handed over and the amount to apply to this reservation. The amount applied must be
+                the full ₱{{ number_format($grandTotal, 2) }}, or a deposit between ₱{{ number_format($cashMin, 2) }} and
+                ₱{{ number_format($cashMax, 2) }}. Any extra cash is change - only the applied amount is recorded.</p>
+            <div class="row g-2 mb-2">
+                <div class="col-sm-6">
+                    <label class="form-label" for="detailsCashReceived">Cash Received (₱) <span class="text-danger">*</span></label>
+                    <input type="number" id="detailsCashReceived" class="form-control" min="0.01" step="0.01" required placeholder="0.00">
+                </div>
+                <div class="col-sm-6">
+                    <label class="form-label" for="detailsCashAmount">Amount Applied (₱) <span class="text-danger">*</span></label>
+                    <input type="number" id="detailsCashAmount" class="form-control" min="0.01" step="0.01" required placeholder="0.00"
+                           data-total="{{ $grandTotal }}" data-min="{{ $cashMin }}" data-max="{{ $cashMax }}">
+                </div>
             </div>
+            <div class="text-danger small d-none mb-2" id="detailsCashError" role="alert"></div>
+            <div class="alert alert-info py-2 mb-2 d-none" id="detailsCashChange" role="status"></div>
             <div class="d-flex gap-2 justify-content-end">
                 <button type="button" class="btn btn-secondary" id="detailsCancelCashBtn">Cancel</button>
                 <button type="button" class="btn btn-success" id="detailsSubmitCashBtn">

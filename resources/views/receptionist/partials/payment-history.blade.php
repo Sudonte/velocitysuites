@@ -117,6 +117,10 @@
                         </div>
                         <div class="text-end">
                             <div class="fw-bold">₱{{ number_format($tx['amount_paid'], 2) }}</div>
+                            @if(($tx['change_given'] ?? 0) > 0)
+                                <div class="small text-muted">Cash received ₱{{ number_format($tx['cash_received'], 2) }}</div>
+                                <div class="small text-muted">Change due ₱{{ number_format($tx['change_given'], 2) }}</div>
+                            @endif
                             {{-- A guest-submitted GCash payment shows its
                                  verification_status ("Verified"/"Pending
                                  Verification"/"Rejected") - more specific

@@ -242,10 +242,9 @@ final class StayBill
 
     private static function amenityCharge(Booking $booking): float
     {
-        $query = AmenityRequest::where($booking->reservation_id ? 'reservation_id' : 'booking_id', $booking->reservation_id ?? $booking->id)
-            ->where('status', 'approved');
-
-        return round((float) $query->sum(DB::raw('charge * quantity')), 2);
+        // Before a Billing exists the amenities are the ones the guest committed to and paid for at booking time
+        // (everything not rejected) - exactly what Booking::total_amount_due counts.
+        return $booking->billableAmenityTotal();
     }
 
     /** A moment -> the hotel-local calendar day at 00:00. */

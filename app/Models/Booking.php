@@ -359,11 +359,37 @@ class Booking extends Model
             $roomTotal = (float) ($this->roomType->rate ?? 0) * $nights * max(1, $this->rooms_requested);
         }
 
-        $amenityTotal = (float) $this->billableAmenityRequests()
-            ->selectRaw('COALESCE(SUM(charge * quantity), 0) as total')
-            ->value('total');
+        return round($roomTotal + $this->billableAmenityTotal(), 2);
+    }
 
-        return round($roomTotal + $amenityTotal, 2);
+    /** Every billable (not rejected) amenity request's charge x quantity - the amenity half of total_amount_due. */
+    public function billableAmenityTotal(): float
+    {
+        return round((float) $this->billableAmenityRequests()
+            ->selectRaw('COALESCE(SUM(charge * quantity), 0) as total')
+            ->value('total'), 2);
+    }
+
+    /** Completed payments received against this booking so far (reservation-level and booking-level alike). */
+    public function paidTotal(): float
+    {
+        return round((float) $this->allPayments()->where('payment_status', 'completed')->sum('amount_paid'), 2);
+    }
+
+    /**
+     * What is payable on this booking RIGHT NOW. Once a Billing exists, its total. Before that, the StayBill total - the
+     * same calculation the check-out bill uses - so a discount whose ID is APPROVED is already taken off (a pending or
+     * rejected one is not), and a stay that has run past its scheduled check-out is not under-billed. Used for the
+     * walk-in payment cap and the guest-facing grand total.
+     */
+    public function payableTotal(): float
+    {
+        $billing = $this->billing()->first();
+        if ($billing) {
+            return round((float) $billing->total_amount, 2);
+        }
+
+        return (float) \App\Support\StayBill::forBooking($this, \App\Support\StayBill::PROJECTED)['total'];
     }
 
     /**

@@ -21,6 +21,8 @@ class Payment extends Model
         'receipt_path',
         'gcash_number',
         'amount_paid',
+        'cash_received',
+        'change_given',
         'payment_status',
         'payment_stage',
         'verified_by',
@@ -39,6 +41,8 @@ class Payment extends Model
         'verified_at' => 'datetime',
         'rejected_at' => 'datetime',
         'amount_paid' => 'decimal:2',
+        'cash_received' => 'decimal:2',
+        'change_given' => 'decimal:2',
     ];
 
     /**

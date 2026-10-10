@@ -46,7 +46,7 @@ class ReceiptService
     {
         $billing = $this->billingOf($booking);
 
-        return $billing ? (float) $billing->total_amount : (float) $booking->total_amount_due;
+        return $billing ? (float) $billing->total_amount : $booking->payableTotal();
     }
 
     /**
@@ -111,6 +111,10 @@ class ReceiptService
                 'payment_stage' => $payment->payment_stage,
                 'transaction_type' => $this->transactionType($payment),
                 'amount_paid' => (float) $payment->amount_paid,
+                // Cash handed over and change returned (null for GCash and for older payments). amount_paid above is the
+                // amount APPLIED - the only money recorded as paid.
+                'cash_received' => $payment->cash_received !== null ? (float) $payment->cash_received : null,
+                'change_given' => $payment->change_given !== null ? (float) $payment->change_given : null,
                 'payment_status' => $payment->payment_status,
                 'verification_status' => $payment->verification_status,
                 'gcash_number' => $payment->gcash_number,
@@ -425,6 +429,8 @@ class ReceiptService
             'payment_transactions' => $paymentTransactionsForReceipt,
             'anchor_payment' => $anchorPayment ? [
                 'amount_paid' => (float) $anchorPayment->amount_paid,
+                'cash_received' => $anchorPayment->cash_received !== null ? (float) $anchorPayment->cash_received : null,
+                'change_given' => $anchorPayment->change_given !== null ? (float) $anchorPayment->change_given : null,
                 'payment_method' => $anchorPayment->payment_method,
                 'payment_percentage' => $anchorPayment->payment_stage === 'deposit'
                     ? PaymentMath::normalizePercentage($booking->selected_payment_percentage)

@@ -350,9 +350,20 @@ class CheckOutController extends Controller
             'payment_method' => 'required|in:cash,gcash',
             'reference_number' => 'required_if:payment_method,gcash|nullable|string|max:255',
             'amount_paid' => 'required|numeric|min:0',
+            'amount_received' => 'nullable|numeric|min:0',
         ]);
 
-        $result = DB::transaction(function () use ($validated, $billing) {
+        // Cash: the amount RECEIVED may exceed the amount APPLIED (change is handed back); only the applied amount is
+        // recorded as paid. GCash and a 0 completion carry no tender.
+        $tender = (float) $validated['amount_paid'] > 0
+            ? \App\Support\CashTender::resolve(
+                $validated['payment_method'],
+                (float) $validated['amount_paid'],
+                isset($validated['amount_received']) ? (float) $validated['amount_received'] : null
+            )
+            : ['cash_received' => null, 'change_given' => null];
+
+        $result = DB::transaction(function () use ($validated, $billing, $tender) {
             // Re-fetch WITH a row lock - the $billing the route model binder
             // handed in was read before this transaction started and before
             // any lock was held, so it may already be stale by the time we
@@ -404,6 +415,8 @@ class CheckOutController extends Controller
                     'payment_method' => $validated['payment_method'],
                     'reference_number' => $referenceNumber,
                     'amount_paid' => $amountPaid,
+                    'cash_received' => $tender['cash_received'],
+                    'change_given' => $tender['change_given'],
                     'payment_status' => 'completed',
                     'payment_stage' => 'final',
                     'payment_date' => now(),
@@ -529,7 +542,9 @@ class CheckOutController extends Controller
         return response()->json([
             'completed' => $result['completed'],
             'balance' => $result['balance'],
-            'message' => $result['completed'] ? 'Payment complete. Guest checked out.' : 'Partial payment recorded.',
+            'message' => ($result['completed'] ? 'Payment complete. Guest checked out.' : 'Partial payment recorded.')
+                . ($tender['change_given'] > 0 ? ' Change due: ₱' . number_format($tender['change_given'], 2) . '.' : ''),
+            'change_due' => $tender['change_given'] ?? 0,
             'receipt_url' => $result['completed'] ? route('receptionist.billing.receipt', $lockedBilling) : null,
             'official_receipt_number' => $result['completed'] ? $lockedBilling->receipt_number : null,
         ]);
