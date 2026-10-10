@@ -6,36 +6,40 @@
 <div class="container-fluid py-4">
     <x-page-header icon="fas fa-home" title="Welcome, {{ auth()->user()->full_name }}!" subtitle="Here's today's front-desk overview." :showClock="true" />
 
-    <!-- KPI Cards: live work-queue counts (click through to each module) -->
-    <div class="detail-section-title"><i class="fas fa-list-check"></i> Front Desk Overview</div>
-    <div class="row mb-4">
-        <div class="col-md-6 col-lg-3 mb-3">
-            <x-stat-card icon="fas fa-inbox" label="Reservations" :value="$bookingRequests" color="warning" :href="route('receptionist.reservations.index')" />
+    {{-- Today's work queues; each number matches the list it opens. --}}
+    <div class="row g-3 mb-4">
+        <div class="col-6 col-md-4 col-xl-2">
+            <x-stat-card icon="fas fa-inbox" label="Reservations to Review" :value="$bookingRequests" color="warning" :href="route('receptionist.reservations.index')" />
         </div>
-
-        <div class="col-md-6 col-lg-3 mb-3">
-            <x-stat-card icon="fas fa-sign-in-alt" label="Awaiting Check-In" :value="$awaitingCheckIn" color="primary" :href="route('receptionist.check-in.index')" />
+        <div class="col-6 col-md-4 col-xl-2">
+            <x-stat-card icon="fas fa-receipt" label="Bookings to Verify" :value="$bookingsToVerify" color="danger" :href="route('receptionist.bookings.index', ['tab' => 'pending'])" />
         </div>
-
-        <div class="col-md-6 col-lg-3 mb-3">
-            <x-stat-card icon="fas fa-concierge-bell" label="In-House Guests" :value="$inHouseGuests" color="info" :href="route('receptionist.check-out.index')" />
+        <div class="col-6 col-md-4 col-xl-2">
+            <x-stat-card icon="fas fa-sign-in-alt" label="Expected Check-ins" :value="$awaitingCheckIn" color="primary" :href="route('receptionist.check-in.index', ['tab' => 'expected', 'range' => 'all'])" />
         </div>
-
-        <div class="col-md-6 col-lg-3 mb-3">
+        <div class="col-6 col-md-4 col-xl-2">
+            <x-stat-card icon="fas fa-sign-out-alt" label="Departures Today" :value="$todayDepartures->count()" color="info" :href="route('receptionist.check-out.index')" />
+        </div>
+        <div class="col-6 col-md-4 col-xl-2">
+            <x-stat-card icon="fas fa-concierge-bell" label="In-House Guests" :value="$inHouseGuests" color="secondary" :href="route('receptionist.check-in.index', ['tab' => 'checked_in'])" />
+        </div>
+        <div class="col-6 col-md-4 col-xl-2">
             <x-stat-card icon="fas fa-door-open" label="Available Rooms" :value="$availableRooms" color="success" :href="route('receptionist.rooms.index')" />
         </div>
     </div>
 
     <!-- Current Occupancy Status -->
     @php $totalKnownRooms = max(1, $availableRooms + $occupiedRooms + $maintenanceRooms); @endphp
-    <x-collapsible-card id="receptionistOccupancyStatus" title="Current Occupancy Status" icon="fas fa-chart-pie" bodyClass="card-body" class="mb-4">
+    <div class="row g-3 mb-4">
+    <div class="col-xl-4">
+    <x-collapsible-card id="receptionistOccupancyStatus" title="Current Occupancy" icon="fas fa-chart-pie" bodyClass="card-body" class="h-100">
         <div class="row align-items-center">
-            <div class="col-md-5 col-lg-4">
+            <div class="col-5 col-xl-12">
                 <div class="chart-card-canvas-wrap">
                     <canvas id="occupancyStatusChart"></canvas>
                 </div>
             </div>
-            <div class="col-md-7 col-lg-8">
+            <div class="col-7 col-xl-12">
                 <ul class="chart-card-legend list-unstyled mb-0 mt-3 mt-md-0">
                     <li class="d-flex align-items-center justify-content-between">
                         <span class="d-flex align-items-center gap-2">
@@ -71,12 +75,11 @@
             </div>
         </div>
     </x-collapsible-card>
+    </div>
 
-    <div class="detail-section-title"><i class="fas fa-calendar-day"></i> Today's Schedule</div>
-    <div class="row">
         <!-- Pending Arrivals (today's confirmed bookings not yet checked in) -->
-        <div class="col-lg-6">
-            <x-collapsible-card id="receptionistPendingArrivals" title="Pending Arrivals" icon="fas fa-sign-in-alt" bodyClass="table-responsive" class="mb-4">
+        <div class="col-md-6 col-xl-4">
+            <x-collapsible-card id="receptionistPendingArrivals" title="Arrivals Today" icon="fas fa-sign-in-alt" bodyClass="table-responsive" class="h-100">
                 <table class="table table-hover mb-0">
                     <thead>
                         <tr>
@@ -101,8 +104,8 @@
         </div>
 
         <!-- Today's Departures -->
-        <div class="col-lg-6">
-            <x-collapsible-card id="receptionistTodayDepartures" title="Today's Departures" icon="fas fa-sign-out-alt" bodyClass="table-responsive" class="mb-4">
+        <div class="col-md-6 col-xl-4">
+            <x-collapsible-card id="receptionistTodayDepartures" title="Departures Today" icon="fas fa-sign-out-alt" bodyClass="table-responsive" class="h-100">
                 <table class="table table-hover mb-0">
                     <thead>
                         <tr>

@@ -6,184 +6,56 @@
 <div class="container-fluid py-4">
     <x-page-header icon="fas fa-chart-line" title="Welcome, {{ auth()->user()->full_name }}!" subtitle="Here's what's happening across Velocity Suites today." :showClock="true" />
 
-    <!-- Statistics Cards -->
-    <div class="detail-section-title"><i class="fas fa-users"></i> User Overview</div>
-    <div class="row mb-3">
-        <div class="col-md-6 col-lg-3 mb-3">
-            <x-stat-card icon="fas fa-users" label="Total Users" :value="$totalUsers" :change="$totalUsersChange" color="primary" href="{{ route('admin.users.index') }}" />
+    {{-- Key indicators only; detailed user, promotion, amenity and room
+         breakdowns live in Reports. Each linked card's number matches the
+         page it opens. --}}
+    <div class="row g-3 mb-4 dashboard-kpis">
+        <div class="col-6 col-md-4 col-xl-2">
+            <x-stat-card icon="fas fa-peso-sign" label="Today's Revenue" value="₱{{ number_format($todayRevenue, 2) }}" :change="$todayRevenueChange" color="success" :href="route('admin.reports.index', ['period' => 'daily'])" />
         </div>
-        <div class="col-md-6 col-lg-3 mb-3">
-            <x-stat-card icon="fas fa-user-check" label="Active Users" :value="$activeUsers" color="success" href="{{ route('admin.users.index', ['status' => 'active']) }}" />
+        <div class="col-6 col-md-4 col-xl-2">
+            <x-stat-card icon="fas fa-money-bill-wave" label="This Month" value="₱{{ number_format($monthlyRevenue, 2) }}" :change="$monthlyRevenueChange" color="success" :href="route('admin.reports.index', ['period' => 'monthly'])" />
         </div>
-        <div class="col-md-6 col-lg-3 mb-3">
-            <x-stat-card icon="fas fa-user-slash" label="Suspended Users" :value="$suspendedUsers" color="danger" href="{{ route('admin.users.index', ['status' => 'suspended']) }}" />
+        <div class="col-6 col-md-4 col-xl-2">
+            <x-stat-card icon="fas fa-bed" label="Rooms Occupied" value="{{ $occupiedRooms }} / {{ $totalRooms }}" color="primary" :href="route('admin.room-types.index')" />
         </div>
-        <div class="col-md-6 col-lg-3 mb-3">
-            <x-stat-card icon="fas fa-user-friends" label="Total Guests" :value="$totalGuests" color="secondary" href="{{ route('admin.users.index', ['role' => 'guest']) }}" />
+        <div class="col-6 col-md-4 col-xl-2">
+            {{-- status=PENDING covers both awaiting-cash and awaiting-GCash. --}}
+            <x-stat-card icon="fas fa-hourglass-half" label="Pending Reservations" :value="$pendingReservations" color="warning" :href="route('admin.reservations.index', ['status' => 'PENDING'])" />
         </div>
-    </div>
-
-    <!-- Promotions & Discounts -->
-    <div class="detail-section-title"><i class="fas fa-tags"></i> Promotions &amp; Discounts</div>
-    <div class="row mb-3">
-        <div class="col-md-6 col-lg-3 mb-3">
-            <x-stat-card icon="fas fa-tag" label="Active Promotions" :value="$activePromotions" color="success" href="{{ route('admin.promotions.index', ['status' => 'active']) }}" />
+        <div class="col-6 col-md-4 col-xl-2">
+            <x-stat-card icon="fas fa-receipt" label="Payments to Verify" :value="$pendingPaymentVerifications" color="danger" :href="route('admin.reservations.index', ['payment_status' => 'pending'])" />
         </div>
-        <div class="col-md-6 col-lg-3 mb-3">
-            <x-stat-card icon="fas fa-tag" label="Inactive Promotions" :value="$inactivePromotions" color="secondary" href="{{ route('admin.promotions.index', ['status' => 'inactive']) }}" />
-        </div>
-        <div class="col-md-6 col-lg-3 mb-3">
-            <x-stat-card icon="fas fa-percent" label="Active Discounts" :value="$activeDiscounts" color="success" href="{{ route('admin.discounts.index', ['status' => 'active']) }}" />
-        </div>
-        <div class="col-md-6 col-lg-3 mb-3">
-            <x-stat-card icon="fas fa-percent" label="Inactive Discounts" :value="$inactiveDiscounts" color="secondary" href="{{ route('admin.discounts.index', ['status' => 'inactive']) }}" />
+        <div class="col-6 col-md-4 col-xl-2">
+            <x-stat-card icon="fas fa-user-check" label="Active Users" :value="$activeUsers" color="info" :href="route('admin.users.index', ['status' => 'active'])" />
         </div>
     </div>
 
-    <!-- Room Statistics -->
-    <div class="detail-section-title"><i class="fas fa-door-open"></i> Room Overview</div>
-    <div class="row mb-3">
-        <div class="col-md-6 col-lg-3 mb-3">
-            <x-stat-card icon="fas fa-door-open" label="Available Rooms" :value="$availableRooms" color="success" href="{{ route('admin.room-types.index') }}" />
-        </div>
-        <div class="col-md-6 col-lg-3 mb-3">
-            <x-stat-card icon="fas fa-bed" label="Occupied Rooms" :value="$occupiedRooms" color="primary" href="{{ route('admin.room-types.index') }}" />
-        </div>
-        <div class="col-md-6 col-lg-3 mb-3">
-            <x-stat-card icon="fas fa-tools" label="Maintenance Rooms" :value="$maintenanceRooms" color="warning" href="{{ route('admin.room-types.index') }}" />
-        </div>
-        <div class="col-md-6 col-lg-3 mb-3">
-            <x-stat-card icon="fas fa-building" label="Total Rooms" :value="$totalRooms" :change="$totalRoomsChange" color="secondary" href="{{ route('admin.room-types.index') }}" />
-        </div>
-    </div>
-
-    <!-- Amenities -->
-    <div class="detail-section-title"><i class="fas fa-concierge-bell"></i> Amenities</div>
-    <div class="row mb-3">
-        <div class="col-md-6 col-lg-6 mb-3">
-            <x-stat-card icon="fas fa-concierge-bell" label="Active Amenities" :value="$activeAmenities" color="success" href="{{ route('admin.amenities.index', ['status' => 'active']) }}" />
-        </div>
-        <div class="col-md-6 col-lg-6 mb-3">
-            <x-stat-card icon="fas fa-concierge-bell" label="Inactive Amenities" :value="$inactiveAmenities" color="secondary" href="{{ route('admin.amenities.index', ['status' => 'inactive']) }}" />
-        </div>
-    </div>
-
-    <!-- Revenue -->
-    <div class="detail-section-title"><i class="fas fa-peso-sign"></i> Revenue</div>
-    <div class="row mb-3">
-        <div class="col-md-4 mb-3">
-            {{-- :href (not href="{{ }}") - a colon-bound prop passes the raw
-                 route() string straight to <x-stat-card>, which escapes it
-                 exactly once itself. href="{{ route(...) }}" double-escapes
-                 any URL with 2+ query params (the calling template's {{ }}
-                 escapes it once, then the component's own {{ $href }}
-                 escapes it again), turning "&" into the literal text
-                 "&amp;" in the rendered link - which a browser can't split
-                 back into separate query params, silently dropping every
-                 parameter after the first. --}}
-            <x-stat-card icon="fas fa-peso-sign" label="Today's Revenue" value="₱{{ number_format($todayRevenue, 2) }}" :change="$todayRevenueChange" color="success" :href="route('admin.reports.index', ['start_date' => today()->toDateString(), 'end_date' => today()->toDateString()])" />
-        </div>
-        <div class="col-md-4 mb-3">
-            <x-stat-card icon="fas fa-money-bill-wave" label="Monthly Revenue" value="₱{{ number_format($monthlyRevenue, 2) }}" :change="$monthlyRevenueChange" color="success" :href="route('admin.reports.index', ['start_date' => now()->startOfMonth()->toDateString(), 'end_date' => now()->toDateString()])" />
-        </div>
-        <div class="col-md-4 mb-3">
-            <x-stat-card icon="fas fa-sack-dollar" label="Yearly Revenue" value="₱{{ number_format($yearlyRevenue, 2) }}" :change="$yearlyRevenueChange" color="success" :href="route('admin.reports.index', ['start_date' => now()->startOfYear()->toDateString(), 'end_date' => now()->toDateString()])" />
-        </div>
-    </div>
-
-    <!-- Reservation / Booking Status -->
-    <div class="detail-section-title"><i class="fas fa-calendar-check"></i> Reservations &amp; Payments</div>
-    <div class="row mb-3">
-        <div class="col-md-6 col-lg-3 mb-3">
-            {{-- status=PENDING - $pendingReservations counts BOTH
-                 awaiting-cash AND awaiting-gcash reservations, but
-                 status=AWAITING_CASH_CONFIRMATION alone only ever showed the
-                 first half of what the card promised; PENDING is a
-                 synthetic value ReservationMonitoringController::index()
-                 recognizes as "either awaiting status". --}}
-            <x-stat-card icon="fas fa-hourglass-half" label="Pending Reservations" :value="$pendingReservations" color="warning" href="{{ route('admin.reservations.index', ['status' => 'PENDING']) }}" />
-        </div>
-        <div class="col-md-6 col-lg-3 mb-3">
-            <x-stat-card icon="fas fa-calendar-check" label="Active Reservations" :value="$activeReservations" color="primary" href="{{ route('admin.reservations.index', ['status' => 'ACTIVE_BOOKING']) }}" />
-        </div>
-        <div class="col-md-6 col-lg-3 mb-3">
-            {{-- color="primary" - matches "Bookings" everywhere else this
-                 concept appears (Manager Dashboard's own Bookings card, and
-                 both the Admin/Manager Booking and Reservation Monitoring
-                 pages' Bookings summary card) - was "info" here only,
-                 disagreeing with the very page this card links to. --}}
-            <x-stat-card icon="fas fa-credit-card" label="Total Bookings" :value="$totalBookings" :change="$totalBookingsChange" color="primary" href="{{ route('admin.reservations.index', ['type' => 'booking']) }}" />
-        </div>
-        <div class="col-md-6 col-lg-3 mb-3">
-            <x-stat-card icon="fas fa-clock" label="Pending Payment Verifications" :value="$pendingPaymentVerifications" color="danger" href="{{ route('admin.reservations.index', ['payment_status' => 'pending']) }}" />
-        </div>
-    </div>
-
-    <!-- Category Breakdown Charts -->
     @php
-        $usersByRoleLegend = [
-            ['label' => 'Guests', 'value' => $totalGuests, 'color' => '#D6414B'],
-            ['label' => 'Staff', 'value' => $totalAdmins + $totalManagers + $totalReceptionists, 'color' => '#D4AF37'],
-        ];
-        $usersByStatusLegend = [
-            ['label' => 'Active', 'value' => $activeUsers, 'color' => '#28a745'],
-            ['label' => 'Suspended', 'value' => $suspendedUsers, 'color' => '#dc3545'],
-        ];
         $roomsByStatusLegend = [
             ['label' => 'Available', 'value' => $availableRooms, 'color' => '#28a745'],
             ['label' => 'Occupied', 'value' => $occupiedRooms, 'color' => '#D6414B'],
             ['label' => 'Maintenance', 'value' => $maintenanceRooms, 'color' => '#ffc107'],
         ];
     @endphp
-    <div class="row mb-4">
-        <div class="col-lg-4 mb-3">
-            <x-chart-card
-                icon="fas fa-users"
-                title="Users by Role"
-                canvasId="usersByRoleChart"
-                href="{{ route('admin.users.index') }}"
-                :legend="$usersByRoleLegend" />
+    <div class="row g-3 mb-4">
+        <div class="col-lg-8">
+            <x-card title="Revenue - Last 7 Days (₱)" icon="fas fa-chart-line" bodyClass="card-body" class="h-100">
+                <div style="height: 240px;"><canvas id="revenueTrendChart"></canvas></div>
+            </x-card>
         </div>
-        <div class="col-lg-4 mb-3">
-            <x-chart-card
-                icon="fas fa-user-check"
-                title="Users by Status"
-                canvasId="usersByStatusChart"
-                href="{{ route('admin.users.index') }}"
-                :legend="$usersByStatusLegend" />
-        </div>
-        <div class="col-lg-4 mb-3">
+        <div class="col-lg-4">
             <x-chart-card
                 icon="fas fa-door-open"
                 title="Rooms by Status"
                 canvasId="roomsByStatusChart"
-                href="{{ route('admin.room-types.index') }}"
+                :href="route('admin.room-types.index')"
                 :legend="$roomsByStatusLegend" />
         </div>
     </div>
 
-    <!-- Trend Charts -->
-    <div class="row mb-4">
-        <div class="col-lg-4 mb-3">
-            <x-card title="Users Overview" icon="fas fa-users" bodyClass="card-body">
-                <canvas id="usersTrendChart" height="160"></canvas>
-            </x-card>
-        </div>
-        <div class="col-lg-4 mb-3">
-            <x-card title="Reservations Overview" icon="fas fa-calendar-alt" bodyClass="card-body">
-                <canvas id="reservationsTrendChart" height="160"></canvas>
-            </x-card>
-        </div>
-        <div class="col-lg-4 mb-3">
-            <x-card title="Revenue Overview (₱)" icon="fas fa-chart-line" bodyClass="card-body">
-                <canvas id="revenueTrendChart" height="160"></canvas>
-            </x-card>
-        </div>
-    </div>
-
-    <!-- Recent Booking & Reservations -->
-    <div class="row mb-4">
-        <div class="col-12">
+    <div class="row g-3 mb-4">
+        <div class="col-xl-8">
             <x-collapsible-card id="adminRecentBookingReservations" title="Recent Booking & Reservations" icon="fas fa-calendar-alt" bodyClass="table-responsive">
                 <div id="adminRecentBookingReservations-list" data-preview-list data-preview-persist-key="dash-preview-adminRecentBookingReservations">
                     <table class="table table-hover mb-0">
@@ -242,11 +114,7 @@
                 </div>
             </x-collapsible-card>
         </div>
-    </div>
-
-    <!-- Recent Activities -->
-    <div class="row mb-4">
-        <div class="col-12">
+        <div class="col-xl-4">
             <x-collapsible-card id="adminRecentActivities" title="Recent Activities" icon="fas fa-history" bodyClass="card-body">
                 <div id="adminRecentActivities-list" data-preview-list data-preview-persist-key="dash-preview-adminRecentActivities">
                     @forelse($recentActivities as $activity)
@@ -283,13 +151,7 @@
                     @endif
                 </div>
             </x-collapsible-card>
-        </div>
-    </div>
-
-    <!-- System Notifications & Alerts -->
-    <div class="row mb-4">
-        <div class="col-12">
-            <x-collapsible-card id="adminSystemNotifications" title="System Notifications & Alerts" icon="fas fa-bell" bodyClass="card-body">
+            <x-collapsible-card id="adminSystemNotifications" title="System Notifications & Alerts" icon="fas fa-bell" bodyClass="card-body" class="mt-3">
                 <div id="adminSystemNotifications-list" data-preview-list data-preview-persist-key="dash-preview-adminSystemNotifications">
                     @forelse($systemNotifications as $notification)
                         <div class="d-flex mb-3 {{ $loop->index >= 5 ? 'preview-extra d-none' : '' }}">
@@ -376,12 +238,7 @@
         // destroy them before drawing fresh ones on the new nodes.
         dashboardCharts.splice(0).forEach(chart => chart.destroy());
 
-        lineChart('usersTrendChart', @json($usersTrend['labels']), @json($usersTrend['values']), '#D6414B');
-        lineChart('reservationsTrendChart', @json($reservationsTrend['labels']), @json($reservationsTrend['values']), '#28a745');
-        lineChart('revenueTrendChart', @json($revenueTrend['labels']), @json($revenueTrend['values']), '#6f42c1');
-
-        doughnutChart('usersByRoleChart', ['Guests', 'Staff'], [{{ $totalGuests }}, {{ $totalAdmins + $totalManagers + $totalReceptionists }}], ['#D6414B', '#D4AF37']);
-        doughnutChart('usersByStatusChart', ['Active', 'Suspended'], [{{ $activeUsers }}, {{ $suspendedUsers }}], ['#28a745', '#dc3545']);
+        lineChart('revenueTrendChart', @json($revenueTrend['labels']), @json($revenueTrend['values']), '#D6414B');
         doughnutChart('roomsByStatusChart', ['Available', 'Occupied', 'Maintenance'], [{{ $availableRooms }}, {{ $occupiedRooms }}, {{ $maintenanceRooms }}], ['#28a745', '#D6414B', '#ffc107']);
     }
 

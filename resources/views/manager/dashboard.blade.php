@@ -31,70 +31,55 @@
         </form>
     </x-card>
 
-    <!-- Right-now operational snapshot - NOT period-filtered -->
+    {{-- Management view: occupancy now, then activity for the selected
+         period. No revenue (Admin only); front-desk queues live on the
+         Receptionist dashboard. --}}
     <div class="detail-section-title"><i class="fas fa-bolt"></i> Right Now</div>
-    <div class="row mb-4">
-        <div class="col-md-6 col-lg-3 mb-3">
-            <x-stat-card icon="fas fa-building" label="Total Rooms" :value="$totalRooms" color="secondary" href="{{ route('admin.room-types.index') }}" />
+    <div class="row g-3 mb-4">
+        <div class="col-6 col-xl-3">
+            <x-stat-card icon="fas fa-bed" label="Occupancy ({{ $occupiedRooms }}/{{ $totalRooms }} rooms)" value="{{ $occupancyRate }}%" color="primary" />
         </div>
-        <div class="col-md-6 col-lg-3 mb-3">
-            <x-stat-card icon="fas fa-bed" label="Occupancy Rate" value="{{ $occupancyRate }}%" color="primary" />
+        <div class="col-6 col-xl-3">
+            <x-stat-card icon="fas fa-sign-in-alt" label="Check-Ins Today" :value="$todayCheckIns" color="success" />
         </div>
-        <div class="col-md-6 col-lg-3 mb-3">
-            <x-stat-card icon="fas fa-sign-in-alt" label="Today's Check-Ins" :value="$todayCheckIns" color="success" href="{{ route('receptionist.check-in.index') }}" />
+        <div class="col-6 col-xl-3">
+            <x-stat-card icon="fas fa-sign-out-alt" label="Check-Outs Today" :value="$todayCheckOuts" color="info" />
         </div>
-        <div class="col-md-6 col-lg-3 mb-3">
-            <x-stat-card icon="fas fa-sign-out-alt" label="Today's Check-Outs" :value="$todayCheckOuts" color="info" href="{{ route('receptionist.check-out.index') }}" />
-        </div>
-    </div>
-
-    <div class="row mb-4">
-        <div class="col-md-6 col-lg-3 mb-3">
-            <x-stat-card icon="fas fa-door-open" label="Available Rooms" :value="$availableRooms" color="success" href="{{ route('admin.room-types.index') }}" />
-        </div>
-        <div class="col-md-6 col-lg-3 mb-3">
-            <x-stat-card icon="fas fa-bed" label="Occupied Rooms" :value="$occupiedRooms" color="primary" href="{{ route('admin.room-types.index') }}" />
-        </div>
-        <div class="col-md-6 col-lg-3 mb-3">
-            <x-stat-card icon="fas fa-users" label="Check-In Guests" :value="$inHouseGuests" color="warning" />
-        </div>
-        <div class="col-md-6 col-lg-3 mb-3">
-            <x-stat-card icon="fas fa-hourglass-half" label="Pending Payment Verifications" :value="$pendingPaymentVerifications" color="danger" />
+        <div class="col-6 col-xl-3">
+            <x-stat-card icon="fas fa-users" label="In-House Guests" :value="$inHouseGuests" color="warning" />
         </div>
     </div>
 
-    <!-- Period-filtered performance -->
-    <div class="detail-section-title"><i class="fas fa-chart-line"></i> Performance for the Selected Period</div>
-    <div class="row mb-4">
-        <div class="col-md-6 col-lg-4 mb-3">
-            {{-- type=reservation - without it this linked to the combined
-                 reservations+bookings view, which could show more rows than
-                 $totalReservations (a pure Reservation count) promised.
-                 color="info" matches "Reservations" everywhere else this
-                 concept appears (both Admin/Manager Booking and Reservation
-                 Monitoring pages' Reservations summary card) - was
-                 "secondary" (gray) here only. --}}
+    <div class="detail-section-title"><i class="fas fa-chart-line"></i> Selected Period &middot; {{ $periodFrom->format('M d') }} &ndash; {{ $periodTo->format('M d, Y') }}</div>
+    <div class="row g-3 mb-4">
+        <div class="col-6 col-xl-3">
+            {{-- type filters keep each card's number equal to the list it opens. --}}
             <x-stat-card icon="fas fa-calendar-alt" label="Reservations" :value="$totalReservations" color="info" :href="route('manager.reservations.index', ['type' => 'reservation', 'from' => $periodFrom->toDateString(), 'to' => $periodTo->toDateString()])" />
         </div>
-        <div class="col-md-6 col-lg-3 mb-3">
+        <div class="col-6 col-xl-3">
             <x-stat-card icon="fas fa-credit-card" label="Bookings" :value="$totalBookings" color="primary" :href="route('manager.reservations.index', ['type' => 'booking', 'from' => $periodFrom->toDateString(), 'to' => $periodTo->toDateString()])" />
         </div>
-        <div class="col-md-6 col-lg-3 mb-3">
-            <x-stat-card icon="fas fa-moon" label="Avg. Length of Stay" value="{{ $averageLengthOfStay }} nights" color="info" />
+        <div class="col-6 col-xl-3">
+            <x-stat-card icon="fas fa-moon" label="Avg. Length of Stay" value="{{ $averageLengthOfStay }} nights" color="secondary" />
+        </div>
+        <div class="col-6 col-xl-3">
+            <x-stat-card icon="fas fa-ban" label="Cancellation Rate" value="{{ $cancellationRate }}%" color="{{ $cancellationRate > 15 ? 'danger' : 'warning' }}" />
         </div>
     </div>
 
-    <div class="row mb-4">
-        <div class="col-md-6 col-lg-6 mb-3">
-            <x-stat-card icon="fas fa-ban" label="Cancellation Rate" value="{{ $cancellationRate }}%" color="{{ $cancellationRate > 15 ? 'danger' : 'warning' }}" />
+    <div class="row g-3 mb-4">
+        <div class="col-lg-8">
+            <x-card title="Booking Trend" icon="fas fa-chart-line" bodyClass="card-body" class="h-100">
+                <div style="height: 240px;"><canvas id="bookingTrendChart"></canvas></div>
+            </x-card>
         </div>
-        <div class="col-md-6 col-lg-6 mb-3">
-            <x-collapsible-card id="managerRoomUtilization" title="Room Utilization by Type" icon="fas fa-percentage" bodyClass="card-body py-2">
+        <div class="col-lg-4">
+            <x-card title="Room Utilization by Type" icon="fas fa-percentage" bodyClass="card-body" class="h-100">
                 @forelse($roomUtilization as $row)
                     <div class="d-flex justify-content-between align-items-center mb-2">
-                        <span class="small">{{ $row['room_type'] }}</span>
+                        <span class="small text-truncate" style="max-width: 40%;">{{ $row['room_type'] }}</span>
                         <div class="flex-grow-1 mx-2">
-                            <div class="progress" style="height: 8px;">
+                            <div class="progress" style="height: 8px;" role="progressbar" aria-label="{{ $row['room_type'] }} utilization" aria-valuenow="{{ $row['utilization'] }}" aria-valuemin="0" aria-valuemax="100">
                                 <div class="progress-bar bg-brand" style="width: {{ $row['utilization'] }}%"></div>
                             </div>
                         </div>
@@ -103,66 +88,12 @@
                 @empty
                     <x-empty-state icon="fas fa-percentage" message="No room types yet." />
                 @endforelse
-            </x-collapsible-card>
+            </x-card>
         </div>
     </div>
 
-    <!-- Booking Trend -->
-    <div class="row mb-4">
-        <div class="col-12">
-            <x-collapsible-card id="managerBookingTrend" title="Booking Trend" icon="fas fa-chart-line" bodyClass="card-body">
-                <canvas id="bookingTrendChart" height="90"></canvas>
-            </x-collapsible-card>
-        </div>
-    </div>
-
-    <!-- Category Breakdown Charts -->
-    @php
-        $bookingsByStatusLegend = [
-            ['label' => 'Confirmed', 'value' => $bookingsByStatus['ACTIVE_BOOKING'] ?? 0, 'color' => '#17a2b8'],
-            ['label' => 'Checked In', 'value' => $bookingsByStatus['CHECKED_IN'] ?? 0, 'color' => '#D6414B'],
-            ['label' => 'Checked Out', 'value' => $bookingsByStatus['COMPLETED_BOOKING'] ?? 0, 'color' => '#28a745'],
-            ['label' => 'Cancelled', 'value' => $bookingsByStatus['CANCELLED_BOOKING'] ?? 0, 'color' => '#6c757d'],
-        ];
-        $mgrRoomsByStatusLegend = [
-            ['label' => 'Available', 'value' => $availableRooms, 'color' => '#28a745'],
-            ['label' => 'Occupied', 'value' => $occupiedRooms, 'color' => '#D6414B'],
-            ['label' => 'Maintenance', 'value' => $maintenanceRooms, 'color' => '#ffc107'],
-        ];
-        $roomTypeColors = ['#D6414B', '#D4AF37', '#28a745', '#17a2b8', '#6c757d'];
-        $topRoomTypesLegend = [];
-        foreach ($topRoomTypes as $i => $rt) {
-            $topRoomTypesLegend[] = ['label' => $rt->name, 'value' => $rt->bookings_count, 'color' => $roomTypeColors[$i % count($roomTypeColors)]];
-        }
-    @endphp
-    <div class="row mb-4">
-        <div class="col-lg-4 mb-3">
-            <x-chart-card
-                icon="fas fa-calendar-check"
-                title="Bookings by Status"
-                canvasId="bookingsByStatusChart"
-                href="{{ route('manager.reservations.index') }}"
-                :legend="$bookingsByStatusLegend" />
-        </div>
-        <div class="col-lg-4 mb-3">
-            <x-chart-card
-                icon="fas fa-door-open"
-                title="Rooms by Status"
-                canvasId="mgrRoomsByStatusChart"
-                :legend="$mgrRoomsByStatusLegend" />
-        </div>
-        <div class="col-lg-4 mb-3">
-            <x-chart-card
-                icon="fas fa-star"
-                title="Top Room Types"
-                canvasId="topRoomTypesChart"
-                :legend="$topRoomTypesLegend" />
-        </div>
-    </div>
-
-    <!-- Top Room Types -->
-    <div class="row mb-4">
-        <div class="col-12">
+    <div class="row g-3">
+        <div class="col-xl-4 order-xl-2">
             <x-collapsible-card id="managerTopRoomTypes" title="Top Room Types" icon="fas fa-star" bodyClass="card-body">
                 <div id="managerTopRoomTypes-list" data-preview-list data-preview-persist-key="dash-preview-managerTopRoomTypes">
                     @forelse($topRoomTypesList as $roomType)
@@ -184,11 +115,7 @@
                 </div>
             </x-collapsible-card>
         </div>
-    </div>
-
-    <!-- Recent Booking & Reservations -->
-    <div class="row">
-        <div class="col-12">
+        <div class="col-xl-8 order-xl-1">
             <x-collapsible-card id="managerRecentBookingReservations" title="Recent Booking & Reservations" icon="fas fa-calendar-alt" bodyClass="table-responsive">
                 <div id="managerRecentBookingReservations-list" data-preview-list data-preview-persist-key="dash-preview-managerRecentBookingReservations">
                     <table class="table table-hover mb-0">
@@ -312,24 +239,6 @@
 
         lineChart('bookingTrendChart', @json($bookingTrend['labels']), @json($bookingTrend['values']), '#D6414B');
 
-        doughnutChart(
-            'bookingsByStatusChart',
-            ['Confirmed', 'Checked In', 'Checked Out', 'Cancelled'],
-            [{{ $bookingsByStatus['ACTIVE_BOOKING'] ?? 0 }}, {{ $bookingsByStatus['CHECKED_IN'] ?? 0 }}, {{ $bookingsByStatus['COMPLETED_BOOKING'] ?? 0 }}, {{ $bookingsByStatus['CANCELLED_BOOKING'] ?? 0 }}],
-            ['#17a2b8', '#D6414B', '#28a745', '#6c757d']
-        );
-        doughnutChart(
-            'mgrRoomsByStatusChart',
-            ['Available', 'Occupied', 'Maintenance'],
-            [{{ $availableRooms }}, {{ $occupiedRooms }}, {{ $maintenanceRooms }}],
-            ['#28a745', '#D6414B', '#ffc107']
-        );
-        doughnutChart(
-            'topRoomTypesChart',
-            @json($topRoomTypes->pluck('name')),
-            @json($topRoomTypes->pluck('bookings_count')),
-            @json($roomTypeColors)
-        );
     }
 
     document.addEventListener('DOMContentLoaded', initDashboardCharts);
