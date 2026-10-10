@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use Illuminate\Pagination\Paginator;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -19,6 +20,8 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        //
+        // Laravel's default pagination views are Tailwind markup; on this
+        // Bootstrap app their unstyled SVG arrows rendered huge.
+        Paginator::useBootstrapFive();
     }
 }

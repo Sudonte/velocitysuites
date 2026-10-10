@@ -154,7 +154,9 @@
         <x-card title="Payment Summary" icon="fas fa-receipt" bodyClass="card-body" class="mb-4">
             <dl class="detail-list mb-2">
                 <div><dt>Room Total ({{ $nights }} night{{ $nights == 1 ? '' : 's' }})</dt><dd>₱{{ number_format($roomTotal, 2) }}</dd></div>
-                <div><dt>Amenities Total</dt><dd>₱{{ number_format($amenitiesTotal, 2) }}</dd></div>
+                @if($amenitiesTotal > 0)
+                    <div><dt>Amenities Total</dt><dd>₱{{ number_format($amenitiesTotal, 2) }}</dd></div>
+                @endif
                 @if(($reservation->discount_preview['discount'] ?? 0) > 0)
                     <div><dt>Discount</dt><dd class="text-success">- ₱{{ number_format($reservation->discount_preview['discount'], 2) }}</dd></div>
                 @endif

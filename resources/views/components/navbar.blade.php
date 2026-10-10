@@ -50,9 +50,8 @@
                      profile.show (ProfileController). Archived Bookings only shows for
                      receptionist - it moved here from a since-removed standalone
                      Settings page, same as the Appearance toggle below (see
-                     ProfileController::updateTheme()). Logout also lives at the bottom
-                     of the sidebar (components/sidebar-logout.blade.php) - this is a
-                     second, quicker entry point, not a replacement for that one. --}}
+                     ProfileController::updateTheme()). This is the only Logout entry
+                     point, gated behind the confirmation modal pushed below. --}}
                 @php
                     $navProfileUrl = auth()->user()->role === 'guest' ? route('guest.profile.show') : route('profile.show');
                 @endphp
@@ -95,7 +94,8 @@
                         <hr class="my-0">
                         <ul class="list-unstyled mb-0 py-2">
                             <li>
-                                <a class="dropdown-item d-flex align-items-center gap-2" href="#" id="navLogoutLink">
+                                <a class="dropdown-item d-flex align-items-center gap-2" href="#" id="navLogoutLink"
+                                   data-bs-toggle="modal" data-bs-target="#logoutConfirmModal">
                                     <i class="fas fa-sign-out-alt fa-fw"></i> Log out
                                 </a>
                             </li>
@@ -105,6 +105,31 @@
                         @csrf
                     </form>
                 </li>
+                {{-- Pushed to the 'modals' stack so it renders as a direct child of
+                     <body>, never clipped by the sticky header. --}}
+                @push('modals')
+                <div class="modal fade" id="logoutConfirmModal" tabindex="-1" aria-labelledby="logoutConfirmModalLabel" aria-hidden="true">
+                    <div class="modal-dialog modal-dialog-centered">
+                        <div class="modal-content logout-confirm-modal">
+                            <div class="modal-header border-0">
+                                <h5 class="modal-title" id="logoutConfirmModalLabel">
+                                    <i class="fas fa-sign-out-alt text-brand"></i> Confirm Logout
+                                </h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                            </div>
+                            <div class="modal-body">
+                                Are you sure you want to log out?
+                            </div>
+                            <div class="modal-footer border-0">
+                                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                                <button type="button" class="btn btn-primary" id="navLogoutConfirmBtn">
+                                    <i class="fas fa-sign-out-alt"></i> Logout
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                @endpush
             @else
                 <li class="nav-item">
                     <a class="nav-link text-dark" href="{{ route('login') }}">Login</a>
@@ -149,10 +174,10 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
-    const logoutLink = document.getElementById('navLogoutLink');
-    if (logoutLink) {
-        logoutLink.addEventListener('click', function (e) {
-            e.preventDefault();
+    const logoutConfirmBtn = document.getElementById('navLogoutConfirmBtn');
+    if (logoutConfirmBtn) {
+        logoutConfirmBtn.addEventListener('click', function () {
+            logoutConfirmBtn.disabled = true;
             document.getElementById('navLogoutForm').submit();
         });
     }

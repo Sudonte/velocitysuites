@@ -40,10 +40,6 @@
             <div class="offcanvas-body p-0">
                 @include('components.sidebar')
             </div>
-            {{-- Sibling of .offcanvas-body (which scrolls on its own via Bootstrap's
-                 default offcanvas CSS), not nested inside it - keeps Logout pinned at
-                 the bottom of the mobile menu regardless of how long the list above is. --}}
-            @include('components.sidebar-logout', ['idSuffix' => 'Mobile'])
         </div>
     @endif
 
@@ -59,14 +55,13 @@
              See components/sidebar.blade.php for the actual width/collapse rules. --}}
         <div class="app-shell">
             <nav class="d-none d-md-flex sidebar">
-                {{-- Scrollable menu and the pinned Logout+collapse footer are separate
+                {{-- Scrollable menu and the pinned collapse-toggle footer are separate
                      flex children of <nav> (see components/sidebar.blade.php's CSS) so
-                     they always stay at the bottom of the rail, never pushed off by a
-                     long menu or scrolled away with it. --}}
+                     the toggle always stays at the bottom of the rail. --}}
                 <div class="sidebar-scroll-wrap">
                     @include('components.sidebar')
                 </div>
-                @include('components.sidebar-logout', ['idSuffix' => 'Desktop'])
+                @include('components.sidebar-footer')
             </nav>
             <div class="content-column">
                 @include('components.navbar')
@@ -95,7 +90,7 @@
         </div>
     @endif
 
-    {{-- Modals pushed here (e.g. the Logout confirmation in components/sidebar-logout.blade.php)
+    {{-- Modals pushed here (e.g. the Logout confirmation in components/navbar.blade.php)
          render as a direct child of <body>, outside nav.sidebar's own scrollable/overflow
          container - keeps them reliably on top instead of risking being clipped or stacked
          behind the sticky sidebar/header. --}}

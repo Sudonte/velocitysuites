@@ -155,7 +155,7 @@
        badge beneath, all centered. Subtle red-tint gradient (not a solid
        fill) is the "red accent" for this white-based theme - white surface
        everywhere else, red reserved for this header tint, icons, hover/
-       active states, and the logout link. */
+       and active states. */
     .sidebar-brand {
         flex-direction: column;
         text-align: center;
@@ -250,8 +250,7 @@
         margin-bottom: 0.75rem;
     }
 
-    .sidebar-inner .nav-link,
-    .sidebar-footer .nav-link {
+    .sidebar-inner .nav-link {
         color: var(--text-dark);
         padding: 0.6rem 0.85rem;
         display: flex;
@@ -269,8 +268,7 @@
         margin-bottom: 0;
     }
 
-    .sidebar-inner .nav-link i,
-    .sidebar-footer .nav-link i {
+    .sidebar-inner .nav-link i {
         width: 1.5rem;
         text-align: center;
         margin-right: 0.5rem;
@@ -280,8 +278,7 @@
         transition: transform 0.2s ease, margin 0.2s ease;
     }
 
-    .sidebar-inner .nav-link:hover,
-    .sidebar-footer .nav-link:hover {
+    .sidebar-inner .nav-link:hover {
         background-color: rgba(193, 18, 31, 0.08);
         color: var(--primary-color);
     }
@@ -291,14 +288,12 @@
        above), matching WCAG's expectation that focus is always visually
        distinguishable from a plain hover. */
     .sidebar-inner .nav-link:focus-visible,
-    .sidebar-footer .nav-link:focus-visible,
     .sidebar-toggle-btn:focus-visible {
         outline: 2px solid var(--primary-color);
         outline-offset: 2px;
     }
 
-    .sidebar-inner .nav-link:hover i,
-    .sidebar-footer .nav-link:hover i {
+    .sidebar-inner .nav-link:hover i {
         transform: translateX(2px);
     }
 
@@ -353,37 +348,20 @@
        every <a> below) becomes the only label - still fully usable, just
        compact. Never applies inside the mobile offcanvas copy since
        .sidebar-collapsed is only ever toggled by the desktop-only button
-       in the footer below. */
-    body.sidebar-collapsed .sidebar-inner .nav-link,
-    body.sidebar-collapsed .sidebar-footer .nav-link {
+       in the sidebar footer. */
+    body.sidebar-collapsed .sidebar-inner .nav-link {
         justify-content: center;
         padding: 0.55rem 0;
     }
 
     body.sidebar-collapsed .sidebar-inner .nav-link .link-text,
-    body.sidebar-collapsed .sidebar-footer .nav-link .link-text,
     body.sidebar-collapsed .sidebar-section-label {
         display: none;
     }
 
-    body.sidebar-collapsed .sidebar-inner .nav-link i,
-    body.sidebar-collapsed .sidebar-footer .nav-link i {
+    body.sidebar-collapsed .sidebar-inner .nav-link i {
         margin-right: 0;
         font-size: 1.05rem;
-    }
-
-    /* Logout gets a distinct red tone even at rest (not just on hover, like
-       the rest of the menu) so it visually reads as a different kind of
-       action - placed last so it wins the cascade over the generic
-       .sidebar-footer .nav-link color rule above at equal specificity. */
-    .sidebar-footer .sidebar-logout-link,
-    .sidebar-footer .sidebar-logout-link i {
-        color: var(--primary-color);
-    }
-
-    .sidebar-footer .sidebar-logout-link:hover {
-        background-color: rgba(193, 18, 31, 0.1);
-        color: var(--accent-color);
     }
 </style>
 

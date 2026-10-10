@@ -163,18 +163,24 @@
                                 <td>Room Charge</td>
                                 <td class="text-end">₱{{ number_format($billing->room_charge, 2) }}</td>
                             </tr>
-                            <tr>
-                                <td>Additional Guest Fee</td>
-                                <td class="text-end">₱{{ number_format($billing->additional_guest_fee, 2) }}</td>
-                            </tr>
-                            <tr>
-                                <td>Amenity Charge</td>
-                                <td class="text-end">₱{{ number_format($billing->amenity_charge, 2) }}</td>
-                            </tr>
-                            <tr>
-                                <td>Discount</td>
-                                <td class="text-end text-success">- ₱{{ number_format($billing->discount, 2) }}</td>
-                            </tr>
+                            @if($billing->additional_guest_fee > 0)
+                                <tr>
+                                    <td>Additional Guest Fee</td>
+                                    <td class="text-end">₱{{ number_format($billing->additional_guest_fee, 2) }}</td>
+                                </tr>
+                            @endif
+                            @if($billing->amenity_charge > 0)
+                                <tr>
+                                    <td>Amenity Charge</td>
+                                    <td class="text-end">₱{{ number_format($billing->amenity_charge, 2) }}</td>
+                                </tr>
+                            @endif
+                            @if($billing->discount > 0)
+                                <tr>
+                                    <td>Discount</td>
+                                    <td class="text-end text-success">- ₱{{ number_format($billing->discount, 2) }}</td>
+                                </tr>
+                            @endif
                             <tr class="fw-bold border-top">
                                 <td>Total</td>
                                 <td class="text-end text-brand">₱{{ number_format($billing->total_amount, 2) }}</td>

@@ -47,24 +47,30 @@
                         <td>Room Charge</td>
                         <td class="text-end">₱{{ number_format($billing->room_charge, 2) }}</td>
                     </tr>
-                    <tr>
-                        <td>Additional Guest Fee</td>
-                        <td class="text-end">₱{{ number_format($billing->additional_guest_fee, 2) }}</td>
-                    </tr>
-                    <tr>
-                        <td>Amenity Charges</td>
-                        <td class="text-end">₱{{ number_format($billing->amenity_charge, 2) }}</td>
-                    </tr>
+                    @if($billing->additional_guest_fee > 0)
+                        <tr>
+                            <td>Additional Guest Fee</td>
+                            <td class="text-end">₱{{ number_format($billing->additional_guest_fee, 2) }}</td>
+                        </tr>
+                    @endif
+                    @if($billing->amenity_charge > 0)
+                        <tr>
+                            <td>Amenity Charges</td>
+                            <td class="text-end">₱{{ number_format($billing->amenity_charge, 2) }}</td>
+                        </tr>
+                    @endif
                     @foreach($billing->additionalCharges as $charge)
                         <tr>
                             <td>{{ $charge->category_label }} — {{ $charge->description }}</td>
                             <td class="text-end">₱{{ number_format($charge->amount, 2) }}</td>
                         </tr>
                     @endforeach
-                    <tr>
-                        <td>Discount</td>
-                        <td class="text-end text-success">-₱{{ number_format($billing->discount, 2) }}</td>
-                    </tr>
+                    @if($billing->discount > 0)
+                        <tr>
+                            <td>Discount</td>
+                            <td class="text-end text-success">-₱{{ number_format($billing->discount, 2) }}</td>
+                        </tr>
+                    @endif
                     <tr class="fw-bold fs-5">
                         <td>Total</td>
                         <td class="text-end text-brand">₱{{ number_format($paymentSummary['grand_total'], 2) }}</td>
