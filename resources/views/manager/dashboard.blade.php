@@ -66,22 +66,7 @@
     <!-- Period-filtered performance -->
     <div class="detail-section-title"><i class="fas fa-chart-line"></i> Performance for the Selected Period</div>
     <div class="row mb-4">
-        <div class="col-md-6 col-lg-3 mb-3">
-            {{-- :href (not href="{{ }}") - a colon-bound prop passes the raw
-                 route() string straight to <x-stat-card>, which escapes it
-                 exactly once itself. href="{{ route(...) }}" double-escapes
-                 any URL with 2+ query params (the calling template's {{ }}
-                 escapes it once, then the component's own {{ $href }}
-                 escapes it again), turning "&" into the literal text
-                 "&amp;" in the rendered link - which silently drops every
-                 query parameter after the first once a browser tries to
-                 follow it. This is exactly what made the Reservations card
-                 below link to "type=reservation" but silently lose its
-                 "from" bound, pulling in every historical reservation
-                 instead of just this period's. --}}
-            <x-stat-card icon="fas fa-money-bill-wave" label="Revenue" value="₱{{ number_format($periodRevenue, 2) }}" color="success" :href="route('manager.reports.index', ['from' => $periodFrom->toDateString(), 'to' => $periodTo->toDateString()])" />
-        </div>
-        <div class="col-md-6 col-lg-3 mb-3">
+        <div class="col-md-6 col-lg-4 mb-3">
             {{-- type=reservation - without it this linked to the combined
                  reservations+bookings view, which could show more rows than
                  $totalReservations (a pure Reservation count) promised.

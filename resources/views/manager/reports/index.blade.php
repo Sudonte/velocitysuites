@@ -46,41 +46,16 @@
 
     <!-- Summary Cards -->
     <div class="row mb-4">
-        <div class="col-md-6 col-lg-3 mb-3">
-            <x-stat-card icon="fas fa-money-bill-wave" label="Total Revenue" value="₱{{ number_format($totalRevenue, 2) }}" color="success" />
-        </div>
-        <div class="col-md-6 col-lg-3 mb-3">
+        <div class="col-md-6 col-lg-4 mb-3">
             <x-stat-card icon="fas fa-calendar-alt" label="Total Reservations" :value="$totalReservations" color="primary" />
         </div>
-        <div class="col-md-6 col-lg-3 mb-3">
+        <div class="col-md-6 col-lg-4 mb-3">
             <x-stat-card icon="fas fa-credit-card" label="Total Bookings" :value="$totalBookings" color="secondary" />
         </div>
-        <div class="col-md-6 col-lg-3 mb-3">
+        <div class="col-md-6 col-lg-4 mb-3">
             <x-stat-card icon="fas fa-moon" label="Average Stay" value="{{ number_format($averageStay, 1) }} nights" color="info" />
         </div>
     </div>
-
-    <!-- Revenue by Day -->
-    <x-card title="Revenue by Day" icon="fas fa-chart-line" bodyClass="table-responsive" class="mb-4">
-        <table class="table table-hover mb-0">
-            <thead>
-                <tr>
-                    <th>Date</th>
-                    <th class="text-end">Revenue</th>
-                </tr>
-            </thead>
-            <tbody>
-                @forelse($revenueByDay as $row)
-                    <tr>
-                        <td>{{ \Carbon\Carbon::parse($row->day)->format('M d, Y') }}</td>
-                        <td class="text-end">₱{{ number_format($row->total, 2) }}</td>
-                    </tr>
-                @empty
-                    <tr><td colspan="2"><x-empty-state icon="fas fa-chart-line" message="No revenue in this period." /></td></tr>
-                @endforelse
-            </tbody>
-        </table>
-    </x-card>
 
     <!-- Top Room Types -->
     <x-card title="Top Room Types" icon="fas fa-star" bodyClass="table-responsive" class="mb-4">

@@ -18,11 +18,6 @@
         </thead>
         <tbody>
             <tr>
-                <td>Period Revenue</td>
-                <td>&#8369;{{ number_format($totalRevenue, 2) }}</td>
-                <td>From completed payments, {{ $periodLabel }}</td>
-            </tr>
-            <tr>
                 <td>Total Reservations</td>
                 <td>{{ number_format($totalReservations) }}</td>
                 <td>Check-ins scheduled within {{ $periodLabel }}</td>

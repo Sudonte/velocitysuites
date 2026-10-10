@@ -365,11 +365,6 @@ class DashboardStatsService
             Reservation::whereBetween('check_in', [$from, $to])->where('status', Reservation::STATUS_CANCELLED)
         )->count();
 
-
-        $periodRevenue = (float) TestAccountScope::excludeFromPayments(
-            Payment::where('payment_status', 'completed')->whereBetween('payment_date', [$from, $to])
-        )->sum('amount_paid');
-
         $averageStay = (float) (TestAccountScope::excludeFromReservations(
             Reservation::whereBetween('check_in', [$from, $to])
         )->selectRaw('AVG(DATEDIFF(check_out, check_in)) as avg_nights')->value('avg_nights') ?? 0);
@@ -387,7 +382,6 @@ class DashboardStatsService
             'totalReservations' => $periodReservations,
             'totalBookings' => $periodBookings,
             'pendingPaymentVerifications' => Payment::where('payment_status', 'pending')->count(),
-            'periodRevenue' => $periodRevenue,
 
             // New KPIs - percentages guard against a zero-reservation
             // period (a brand-new hotel, or a custom range with no

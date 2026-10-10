@@ -3,7 +3,6 @@
 namespace App\Http\Controllers\Manager;
 
 use App\Http\Controllers\Controller;
-use App\Models\Payment;
 use App\Models\Reservation;
 use App\Models\RoomType;
 use App\Services\DashboardStatsService;
@@ -99,18 +98,9 @@ class ReportController extends Controller
 
     private function computeReport(Carbon $from, Carbon $to): array
     {
-        // Revenue by day - excludes confirmed internal/test accounts (see
-        // App\Support\TestAccountScope) so this reads as real business
-        // performance, not development noise.
-        $revenueByDay = TestAccountScope::excludeFromPayments(
-            Payment::where('payment_status', 'completed')->whereBetween('payment_date', [$from, $to])
-        )
-            ->selectRaw('DATE(payment_date) as day, SUM(amount_paid) as total')
-            ->groupBy('day')
-            ->orderBy('day')
-            ->get();
-
-        $totalRevenue = (float) $revenueByDay->sum('total');
+        // Managers never receive revenue figures; revenue reporting is
+        // Admin-only (Admin\AdminReportController). Excludes confirmed
+        // internal/test accounts (App\Support\TestAccountScope).
         $totalReservations = TestAccountScope::excludeFromReservations(
             Reservation::whereBetween('check_in', [$from, $to])
         )->count();
@@ -153,8 +143,6 @@ class ReportController extends Controller
             ->get();
 
         return compact(
-            'revenueByDay',
-            'totalRevenue',
             'totalReservations',
             'totalBookings',
             'averageStay',
