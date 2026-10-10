@@ -7,6 +7,7 @@ use App\Models\Booking;
 use App\Models\Notification;
 use App\Models\Promotion;
 use App\Models\User;
+use App\Support\StayBill;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 
@@ -333,12 +334,17 @@ class NotificationService
     /**
      * Notify about check-in.
      */
-    public function notifyCheckIn(User $guest, string $roomName, ?int $referenceId = null): void
+    public function notifyCheckIn(User $guest, string $roomName, ?int $referenceId = null, ?Booking $booking = null): void
     {
+        // The guest is told both ends of the stay: today's check-in and the check-out day they booked.
+        $dates = $booking
+            ? ' Your stay: ' . $booking->check_in->format('M j, Y') . ' to ' . $booking->check_out->format('M j, Y')
+                . ' (' . StayBill::nightsLabel(max(1, (int) $booking->check_in->copy()->startOfDay()->diffInDays($booking->check_out->copy()->startOfDay()))) . ').'
+            : '';
         $this->toUser(
             $guest,
             'Checked In',
-            "Welcome! You have been checked into {$roomName}.",
+            "Welcome! You have been checked into {$roomName}.{$dates}",
             'check_in',
             $referenceId
         );
@@ -349,6 +355,30 @@ class NotificationService
             "{$guest->full_name} has checked into {$roomName}.",
             'check_in',
             null,
+            $referenceId
+        );
+    }
+
+    /**
+     * The guest's stay ended on different dates than the ones they booked (a late check-out bills the extra
+     * nights, an early one only the nights stayed): tell them the dates, the nights and the amount that now apply.
+     * $stay is App\Support\StayBill - the same figures their Payment Receipt shows.
+     */
+    public function notifyStayUpdated(User $guest, string $roomName, array $stay, ?int $referenceId = null): void
+    {
+        $fmt = fn (string $d) => \Carbon\Carbon::parse($d)->format('M j, Y');
+        $nights = StayBill::nightsLabel($stay['actual_nights']);
+        $was = StayBill::nightsLabel($stay['scheduled_nights']);
+        $extra = $stay['extra_nights'] > 0
+            ? ' ' . StayBill::nightsLabel($stay['extra_nights']) . ' extra ' . ($stay['extra_nights'] === 1 ? 'was' : 'were') . ' added to your bill.'
+            : '';
+
+        $this->toUser(
+            $guest,
+            'Your Stay Dates Changed',
+            "Your stay in {$roomName} is now {$fmt($stay['check_in'])} to {$fmt($stay['actual_check_out'])} ({$nights}, booked as {$was})."
+                . "{$extra} Updated total: ₱" . number_format($stay['total'], 2) . '.',
+            'check_out',
             $referenceId
         );
     }
@@ -405,7 +435,7 @@ class NotificationService
             $guest,
             'Upcoming Check-In Reminder',
             "{$referenceLabel} for {$booking->roomType->name} is scheduled to check in on "
-                . "{$checkIn->format('F j, Y')} at {$checkIn->format('g:i A')}. We look forward to welcoming you!",
+                . "{$checkIn->format('F j, Y')} at {$checkIn->format('g:i A')} and check out on {$booking->check_out->format('F j, Y')}. We look forward to welcoming you!",
             'checkin_reminder',
             // notifications.reference_id has no FK constraint (relax_
             // notifications_reference_id_constraint migration), so it can

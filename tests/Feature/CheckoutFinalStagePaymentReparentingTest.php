@@ -260,8 +260,9 @@ class CheckoutFinalStagePaymentReparentingTest extends TestCase
         $reservation = Reservation::create([
             'room_type_id' => $roomType->id,
             'rooms_requested' => 1,
-            'check_in' => now()->subDay(),
-            'check_out' => now(),
+            // hotel-local calendar days (Asia/Manila), the way StayBill counts nights - not the UTC clock
+            'check_in' => \App\Support\CheckInWindow::today()->subDay(),
+            'check_out' => \App\Support\CheckInWindow::today(),
             'number_of_guests' => 1,
             'adults' => 1,
             'children' => 0,
@@ -371,8 +372,9 @@ class CheckoutFinalStagePaymentReparentingTest extends TestCase
             'reservation_id' => null,
             'room_type_id' => $roomType->id,
             'rooms_requested' => 1,
-            'check_in' => now()->subDay(),
-            'check_out' => now(),
+            // hotel-local calendar days (Asia/Manila), the way StayBill counts nights - not the UTC clock
+            'check_in' => \App\Support\CheckInWindow::today()->subDay(),
+            'check_out' => \App\Support\CheckInWindow::today(),
             'adults' => 1,
             'children' => 0,
             'number_of_guests' => 1,

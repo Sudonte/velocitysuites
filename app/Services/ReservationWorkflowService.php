@@ -488,7 +488,9 @@ class ReservationWorkflowService
             'Only an active reservation can be rejected.'
         );
 
-        DB::transaction(function () use ($reservation, $reason, $staff) {
+        $discountIds = app(DiscountIdVerificationService::class);
+
+        $idRejected = DB::transaction(function () use ($reservation, $reason, $staff, $discountIds) {
             $reservation->update(['status' => Reservation::STATUS_REJECTED, 'rejection_reason' => $reason]);
 
             // Not stage-filtered: a Pay-Now-Full GCash submission is
@@ -511,7 +513,15 @@ class ReservationWorkflowService
             AmenityRequest::where('reservation_id', $reservation->id)
                 ->where('status', 'pending')
                 ->update(['status' => 'rejected']);
+
+            // The guest's discount ID is rejected together with the transaction (same commit) - no discount survives
+            // a rejected request.
+            return $discountIds->cascadeFromTransactionRejection($reservation);
         });
+
+        if ($idRejected) {
+            $discountIds->notifyRejectedWithTransaction($reservation);
+        }
 
         Activity::log(
             'Rejected reservation request',
@@ -926,9 +936,9 @@ class ReservationWorkflowService
         abort_unless($isCancelled || $isCompleted, 422, 'Only completed or cancelled bookings/reservations can be deleted.');
 
         DB::transaction(function () use ($reservation, $booking) {
-            $reservation->update(['hidden_at' => now()]);
+            $reservation->update(['hidden_at' => now(), 'hidden_by_guest_at' => now()]);
             if ($booking) {
-                $booking->update(['hidden_at' => now()]);
+                $booking->update(['hidden_at' => now(), 'hidden_by_guest_at' => now()]);
             }
         });
 

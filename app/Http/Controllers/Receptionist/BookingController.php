@@ -8,6 +8,7 @@ use App\Models\Payment;
 use App\Models\RoomType;
 use App\Models\ActivityLog;
 use App\Models\AmenityRequest;
+use App\Services\DiscountIdVerificationService;
 use App\Services\NotificationService;
 use App\Services\ReservationWorkflowService;
 use App\Services\RoomAvailabilityService;
@@ -44,6 +45,7 @@ class BookingController extends Controller
         private NotificationService $notifications,
         private RoomAvailabilityService $availability,
         private TransactionGroupingService $grouping,
+        private DiscountIdVerificationService $discountIds,
     ) {
     }
 
@@ -373,9 +375,16 @@ class BookingController extends Controller
             }
         })->with('user')->orderByDesc('created_at')->get();
 
+        // The discount ID is decided here, in the Booking module, separately from verifying the transaction.
+        $discountChoices = $this->discountIds->choices($booking);
+        $claimedDiscount = $this->discountIds->claimed($booking);
+        $discountIdDecidable = in_array($booking->booking_status, [Booking::STATUS_ACTIVE, Booking::STATUS_CHECKED_IN], true)
+            && $booking->hidden_at === null;
+
         return view('receptionist.bookings.show', compact(
             'booking', 'totalDue', 'amountPaid', 'remainingBalance',
-            'siblings', 'roomLines', 'roomTotal', 'amenityRows', 'amenitiesTotal', 'history'
+            'siblings', 'roomLines', 'roomTotal', 'amenityRows', 'amenitiesTotal', 'history',
+            'discountChoices', 'claimedDiscount', 'discountIdDecidable'
         ));
     }
 
@@ -512,12 +521,16 @@ class BookingController extends Controller
 
         $previousStatus = $booking->booking_status;
 
-        DB::transaction(function () use ($booking, $validated) {
+        $idRejected = DB::transaction(function () use ($booking, $validated) {
             $booking->update(['booking_status' => Booking::STATUS_CANCELLED, 'rejection_reason' => $validated['reason']]);
 
             $booking->allPayments()
                 ->where('payment_status', 'pending')
                 ->each(fn ($payment) => $payment->update(['payment_status' => 'failed']));
+
+            // Rejecting the TRANSACTION rejects the guest's discount ID with it - same commit, so there is never a
+            // rejected booking still carrying a pending/approved discount.
+            return $this->discountIds->cascadeFromTransactionRejection($booking);
         });
 
         $booking->loadMissing(['reservation.guest.user', 'guest.user']);
@@ -531,7 +544,42 @@ class BookingController extends Controller
             $this->notifications->notifyBookingRejected($guest, $booking->roomType->name ?? 'your stay', $validated['reason'], $booking->reservation_id ?? $booking->id);
         }
 
+        if ($idRejected) {
+            $this->discountIds->notifyRejectedWithTransaction($booking);
+        }
+
         return back()->with('success', 'Booking rejected.');
+    }
+
+    /**
+     * Approve the guest's discount ID (Senior / PWD / ...) - independent of Verify/Reject Transaction above. Only a
+     * Booking can have its ID decided; the Reservation module has no equivalent (see DiscountIdVerificationService).
+     */
+    public function approveId(Request $request, Booking $booking): RedirectResponse
+    {
+        $validated = $request->validate(['discount_id' => 'nullable|integer|exists:discounts,id']);
+
+        try {
+            $this->discountIds->approve($booking, isset($validated['discount_id']) ? (int) $validated['discount_id'] : null, auth()->user());
+        } catch (ValidationException $e) {
+            return back()->with('error', collect($e->errors())->flatten()->first());
+        }
+
+        return back()->with('success', 'Discount ID approved. The discount now applies to the bill.');
+    }
+
+    /** Reject the guest's discount ID on its own - the booking itself stays as it is. */
+    public function rejectId(Request $request, Booking $booking): RedirectResponse
+    {
+        $validated = $request->validate(['reason' => 'required|string|max:500']);
+
+        try {
+            $this->discountIds->reject($booking, $validated['reason'], auth()->user());
+        } catch (ValidationException $e) {
+            return back()->with('error', collect($e->errors())->flatten()->first());
+        }
+
+        return back()->with('success', 'Discount ID rejected. No discount applies to the bill.');
     }
 
     /**

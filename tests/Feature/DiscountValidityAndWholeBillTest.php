@@ -191,6 +191,14 @@ class DiscountValidityAndWholeBillTest extends ApiFlowTestCase
         return [$reservation->fresh(), $billing->fresh()];
     }
 
+    /** The ID is decided in the Booking module first; only then can the check-out panel choose/change the discount. */
+    private function approveId(\App\Models\Billing $billing, Discount $d, User $receptionist): void
+    {
+        $this->actingAs($receptionist)
+            ->put(route('receptionist.bookings.discount-id.approve', $billing->booking_id), ['discount_id' => $d->id])
+            ->assertSessionHasNoErrors();
+    }
+
     public function test_the_guest_estimate_and_receptionist_billing_agree_for_room_only_and_room_plus_add_ons_percentage_and_fixed(): void
     {
         $receptionist = $this->staff('receptionist');
@@ -210,6 +218,7 @@ class DiscountValidityAndWholeBillTest extends ApiFlowTestCase
             $quote = app(BookingService::class)->quoteRoomCharge($reservation);
             $this->assertEquals($expected, $quote['discount'], "$label: guest estimate");
 
+            $this->approveId($billing, $d, $receptionist);
             $this->actingAs($receptionist)->postJson(route('receptionist.billing.discount.store', $billing), ['discount_id' => $d->id])->assertOk();
             $billing = $billing->fresh();
             $this->assertEquals($quote['discount'], (float) $billing->discount, "$label: Billing equals the estimate");
@@ -222,6 +231,7 @@ class DiscountValidityAndWholeBillTest extends ApiFlowTestCase
     {
         $d = $this->discount('Senior Citizen', ['value' => 20]);
         [$reservation, $billing] = $this->billedBooking($d, [500]);
+        $this->approveId($billing, $d, $this->staff('receptionist'));
         $this->actingAs($this->staff('receptionist'))->postJson(route('receptionist.billing.discount.store', $billing), ['discount_id' => $d->id])->assertOk();
         $summary = app(\App\Services\ReceiptService::class)->paymentSummary($billing->fresh()->booking->fresh());
         $this->assertEquals(500.0, $summary['discount']);
@@ -232,6 +242,7 @@ class DiscountValidityAndWholeBillTest extends ApiFlowTestCase
     {
         $d = $this->discount('Senior Citizen', ['value' => 20]);
         [, $billing] = $this->billedBooking($d, [500]);
+        $this->approveId($billing, $d, $this->staff('receptionist'));
         $billing->update(['additional_guest_fee' => 100]); // room 2000 + amenities 500 + extra-guest fee 100 = 2600
         $this->actingAs($this->staff('receptionist'))->postJson(route('receptionist.billing.discount.store', $billing), ['discount_id' => $d->id])->assertOk();
         $this->assertEquals(520.00, (float) $billing->fresh()->discount);
@@ -261,6 +272,7 @@ class DiscountValidityAndWholeBillTest extends ApiFlowTestCase
 
         $this->assertEquals(440.0, app(BookingService::class)->quoteRoomCharge($reservation->fresh())['discount'], 'estimate still honors it');
         $receptionist = $this->staff('receptionist');
+        $this->approveId($billing, $sc, $receptionist);
         $this->actingAs($receptionist)->postJson(route('receptionist.billing.discount.store', $billing), ['discount_id' => $sc->id])->assertOk();
         $this->assertEquals(440.0, (float) $billing->fresh()->discount, 'Billing honors the discount the guest booked with');
 

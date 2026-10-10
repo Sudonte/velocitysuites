@@ -74,17 +74,19 @@
                 </select>
             </div>
             <div class="mb-3">
-                <label class="form-label">Amount Received <span class="text-danger">*</span></label>
-                <input type="number" step="0.01" min="0.01" name="amount_paid" id="amountPaidInput" class="form-control" value="{{ $balance }}" data-balance="{{ $balance }}" required>
+                <label class="form-label" for="amountPaidInput">Amount Received <span class="text-danger">*</span></label>
+                <div class="input-group">
+                    <span class="input-group-text">₱</span>
+                    <input type="number" step="0.01" min="0.01" max="{{ $balance }}" name="amount_paid" id="amountPaidInput" class="form-control" value="{{ $balance }}" data-balance="{{ $balance }}" required aria-describedby="amountPaidHelp amountPaidError">
+                </div>
+                <div class="form-text" id="amountPaidHelp">Remaining balance: <strong>₱{{ number_format($balance, 2) }}</strong> - the payment can't be more than this.</div>
+                <div class="text-danger small d-none mt-1" id="amountPaidError" role="alert"></div>
             </div>
             <div class="mb-3 d-none" id="referenceNumberGroup">
                 <label class="form-label">Reference Number <span class="text-danger">*</span></label>
                 <input type="text" name="reference_number" id="referenceNumberInput" class="form-control" placeholder="GCash reference number">
             </div>
-            <div class="mb-3 d-none" id="changeDueGroup">
-                <label class="form-label">Change Due</label>
-                <input type="text" class="form-control" id="changeDueDisplay" readonly>
-            </div>
+
         @else
             {{-- Grand Total already fully covered by prior verified payments
                  (e.g. a 100%-tier reservation converted with its payment
@@ -100,7 +102,7 @@
     </form>
 </div>
 <div class="modal-footer">
-    <button type="button" class="btn btn-outline-secondary" id="backToBillingBtn">
+    <button type="button" class="btn btn-secondary" id="backToBillingBtn">
         <i class="fas fa-arrow-left"></i> Back to Billing
     </button>
     <button type="submit" form="paymentForm" class="btn btn-success" id="completePaymentBtn">

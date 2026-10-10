@@ -22,11 +22,26 @@
         </div>
     </div>
 
-    <p class="text-muted small mb-3">
+    <p class="text-muted small mb-2">
         <i class="fas fa-circle-info"></i>
-        This booking has {{ $booking->rooms->count() }} rooms. Check out each room individually -
-        an extended stay on one room never re-bills a room that already checked out.
+        This booking has {{ $booking->rooms->count() }} rooms. Tick the rooms leaving now, or check out all of them -
+        each room keeps its own check-out date, and a room that already left is never re-billed.
+        The booking closes (and billing opens) once every room is out.
     </p>
+    @if($remainingCount > 0)
+        <div class="d-flex flex-wrap gap-2 align-items-center mb-3">
+            <div class="form-check mb-0">
+                <input class="form-check-input" type="checkbox" id="selectAllRooms">
+                <label class="form-check-label" for="selectAllRooms">Select all</label>
+            </div>
+            <button type="button" class="btn btn-sm btn-primary" id="btnCheckoutSelected" disabled>
+                <i class="fas fa-sign-out-alt"></i> Check Out Selected (<span id="selectedRoomCount">0</span>)
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-primary" id="btnCheckoutAllRooms" data-remaining="{{ $remainingCount }}">
+                <i class="fas fa-door-open"></i> Check Out All Remaining ({{ $remainingCount }})
+            </button>
+        </div>
+    @endif
 
     <div class="row g-3" id="roomsCardGrid">
         @foreach($booking->rooms as $room)
@@ -35,6 +50,9 @@
                 <div class="card h-100 {{ $isCheckedOut ? 'border-secondary' : 'border-primary' }}">
                     <div class="card-body">
                         <h6 class="card-title mb-1">
+                            @unless($isCheckedOut)
+                                <input type="checkbox" class="form-check-input me-1 room-select" value="{{ $room->id }}" data-room-number="{{ $room->room_number }}" aria-label="Select Room {{ $room->room_number }}">
+                            @endunless
                             <i class="fas fa-door-closed"></i> Room {{ $room->room_number }}
                         </h6>
                         <p class="text-muted small mb-2">{{ $room->roomType->name ?? '' }}</p>

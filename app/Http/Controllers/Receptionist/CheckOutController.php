@@ -10,13 +10,16 @@ use App\Models\Booking;
 use App\Models\Discount;
 use App\Models\Payment;
 use App\Models\Room;
+use App\Services\DiscountIdVerificationService;
 use App\Services\NotificationService;
 use App\Support\Activity;
+use App\Support\StayBill;
 use Carbon\Carbon;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 /**
@@ -27,8 +30,10 @@ use Illuminate\View\View;
  */
 class CheckOutController extends Controller
 {
-    public function __construct(private NotificationService $notificationService)
-    {
+    public function __construct(
+        private NotificationService $notificationService,
+        private DiscountIdVerificationService $discountIds,
+    ) {
     }
 
     public function index(Request $request): View
@@ -97,18 +102,16 @@ class CheckOutController extends Controller
 
         $discounts = $this->billableDiscounts($booking->reservation ?? $booking);
 
-        // Displayed instead of the originally scheduled check_out/
-        // number_of_nights so the panel's "Nights"/"Check-Out" labels never
-        // disagree with the room_charge amount actually billed below (see
-        // computeRoomCharge()'s identical early/late-checkout handling).
-        $effectiveCheckOutDate = $this->effectiveCheckOutDate($booking);
-        $effectiveNights = max(1, abs($effectiveCheckOutDate->diffInDays($booking->check_in->copy()->startOfDay())));
-        $scheduledCheckOutDate = $booking->check_out->copy()->startOfDay();
-        $isEarlyCheckout = $effectiveCheckOutDate->lt($scheduledCheckOutDate);
-        $isLateCheckout = $effectiveCheckOutDate->gt($scheduledCheckOutDate);
+        // The panel's labels and the amounts below both come from the one StayBill the billing was just synced
+        // from (and the guest's receipt reads), so "Nights" can never disagree with the room charge billed.
+        $stay = StayBill::forBooking($booking, StayBill::FINAL, null, $billing);
+        $effectiveCheckOutDate = Carbon::parse($stay['actual_check_out']);
+        $effectiveNights = $stay['actual_nights'];
+        $isEarlyCheckout = $stay['is_early_checkout'];
+        $isLateCheckout = $stay['is_late_checkout'];
 
         return view('receptionist.check-out.partials.billing-panel', compact(
-            'booking', 'billing', 'amenityRequests', 'discounts',
+            'booking', 'billing', 'amenityRequests', 'discounts', 'stay',
             'effectiveCheckOutDate', 'effectiveNights', 'isEarlyCheckout', 'isLateCheckout'
         ));
     }
@@ -185,6 +188,77 @@ class CheckOutController extends Controller
         return response()->json([
             'final' => false,
             'message' => "Room {$room->room_number} checked out. {$remaining} room(s) still checked in.",
+            'html' => view('receptionist.check-out.partials.rooms-panel', compact('booking'))->render(),
+        ]);
+    }
+
+    /**
+     * Check out SELECTED rooms of a booking (room_ids[]) or ALL rooms still in house (all=1) in one action. Each room
+     * keeps its own status and check-out moment; rooms not named stay checked in, and the booking only closes - the
+     * flow only moves on to billing - once every room is out. Same rules as checkOutRoom(), just for several rooms
+     * under one row lock so two receptionists can't both claim the last room.
+     */
+    public function checkOutRooms(Request $request, Booking $booking)
+    {
+        $validated = $request->validate([
+            'all' => 'sometimes|boolean',
+            'room_ids' => 'required_without:all|array|min:1',
+            'room_ids.*' => 'integer',
+        ]);
+
+        $result = DB::transaction(function () use ($booking, $validated) {
+            $locked = Booking::whereKey($booking->id)->lockForUpdate()->first();
+            if (! $locked || $locked->booking_status !== Booking::STATUS_CHECKED_IN) {
+                return ['error' => 'Only checked-in bookings can be checked out.'];
+            }
+
+            $active = $locked->rooms()->wherePivotNull('checked_out_at')->get();
+            if (! empty($validated['all'])) {
+                $targets = $active;
+            } else {
+                $wanted = collect($validated['room_ids'])->map(fn ($id) => (int) $id)->unique();
+                $targets = $active->whereIn('id', $wanted->all());
+                if ($targets->count() !== $wanted->count()) {
+                    return ['error' => 'Every selected room must be assigned to this booking and still checked in.'];
+                }
+            }
+            if ($targets->isEmpty()) {
+                return ['error' => 'There is no room left to check out.'];
+            }
+
+            $at = now();
+            foreach ($targets as $room) {
+                $locked->rooms()->updateExistingPivot($room->id, ['checked_out_at' => $at]);
+            }
+
+            $remaining = $active->count() - $targets->count();
+            if ($remaining === 0 && $locked->checked_out_at === null) {
+                // Timeline: the last room just left - that is the stay's check-out moment.
+                $locked->update(['checked_out_at' => $at]);
+            }
+
+            return ['rooms' => $targets, 'remaining' => $remaining];
+        });
+
+        if (isset($result['error'])) {
+            return response()->json(['message' => $result['error']], 422);
+        }
+
+        $numbers = $result['rooms']->pluck('room_number')->implode(', ');
+        Activity::log('Checked out rooms', "Booking #{$booking->id} - Room {$numbers}", $booking);
+
+        if ($result['remaining'] === 0) {
+            return response()->json([
+                'final' => true,
+                'message' => 'Last room checked out - proceeding to billing.',
+            ]);
+        }
+
+        $booking->refresh()->load('rooms.roomType');
+
+        return response()->json([
+            'final' => false,
+            'message' => "Room {$numbers} checked out. {$result['remaining']} room(s) still checked in.",
             'html' => view('receptionist.check-out.partials.rooms-panel', compact('booking'))->render(),
         ]);
     }
@@ -298,6 +372,10 @@ class CheckOutController extends Controller
                 return ['status' => 'not_awaiting_checkout'];
             }
 
+            // Settle against today's bill: re-price it first (nights actually stayed up to now, discount only if the
+            // ID is approved), so the balance checked below is the same figure the guest's receipt will show.
+            $lockedBilling->syncFromStayBill($lockedBooking);
+
             // Re-derive the balance from the LOCKED billing's own fresh
             // payment sum - never the pre-transaction $billing->balance,
             // which could be stale relative to a payment another request
@@ -305,9 +383,14 @@ class CheckOutController extends Controller
             $currentPaid = (float) $lockedBilling->payments()->where('payment_status', 'completed')->sum('amount_paid');
             $currentBalance = max(0, (float) $lockedBilling->total_amount - $currentPaid);
 
-            $amountPaid = (float) $validated['amount_paid'];
+            $amountPaid = round((float) $validated['amount_paid'], 2);
             if ($amountPaid <= 0 && $currentBalance > 0.009) {
                 return ['status' => 'amount_required', 'balance' => $currentBalance];
+            }
+            // Never more than what is still owed. Checked here, INSIDE the lock and against the freshly re-derived
+            // balance, so two submissions racing for the same balance can't both pass and overpay it together.
+            if ($amountPaid > round($currentBalance, 2) + 0.004) {
+                return ['status' => 'overpayment', 'balance' => $currentBalance];
             }
 
             if ($amountPaid > 0) {
@@ -365,6 +448,12 @@ class CheckOutController extends Controller
                     'completed_at' => now(),
                     'checked_out_at' => $lockedBooking->checked_out_at ?? now(),
                 ]);
+                // Every room leaves with the stay: stamp the ones that never went through the room-by-room
+                // check-out (every room of a single-room stay), so each room carries its own check-out moment.
+                DB::table('booking_rooms')
+                    ->where('booking_id', $lockedBooking->id)
+                    ->whereNull('checked_out_at')
+                    ->update(['checked_out_at' => $lockedBooking->checked_out_at]);
                 foreach ($rooms as $room) {
                     $room->update(['status' => 'available']);
                 }
@@ -382,6 +471,12 @@ class CheckOutController extends Controller
                 $officialReceiptNumber = $lockedBilling->ensureOfficialReceiptNumber();
 
                 if ($guest) {
+                    // Check-out came earlier or later than the dates the guest booked: tell them the dates, nights and
+                    // amount that now apply (the same StayBill their receipt shows).
+                    $stay = StayBill::forBooking($lockedBooking->unsetRelation('rooms')->unsetRelation('billing'), StayBill::FINAL);
+                    if ($stay['extra_nights'] > 0 || $stay['is_early_checkout']) {
+                        $this->notificationService->notifyStayUpdated($guest, $roomName, $stay, $lockedBooking->reservation_id ?? $lockedBooking->id);
+                    }
                     $this->notificationService->notifyCheckOut($guest, $roomName, $lockedBooking->reservation_id ?? $lockedBooking->id);
                     $this->notificationService->notifyPaymentComplete($guest, $lockedBooking->reservation_id ?? $lockedBooking->id, $officialReceiptNumber);
                 }
@@ -417,6 +512,12 @@ class CheckOutController extends Controller
         if ($result['status'] === 'not_awaiting_checkout') {
             return response()->json(['message' => 'This booking is not awaiting checkout.'], 422);
         }
+        if ($result['status'] === 'overpayment') {
+            return response()->json([
+                'message' => 'The amount cannot be more than the remaining balance of ₱' . number_format($result['balance'], 2) . '.',
+                'balance' => $result['balance'],
+            ], 422);
+        }
         if ($result['status'] === 'amount_required') {
             return response()->json([
                 'message' => 'A payment amount is required - the remaining balance is ₱' . number_format($result['balance'], 2) . '.',
@@ -448,56 +549,26 @@ class CheckOutController extends Controller
             return response()->json(['message' => 'Cannot change the discount on a paid bill.'], 422);
         }
 
-        // A reservation-derived booking's discount request lives on its
-        // Reservation; a direct "New Booking" transaction (no reservation
-        // at all) carries the exact same fields directly on the Booking
-        // itself instead (see the discount_requested/discount_verification_status
-        // migration mirroring reservations' equivalent columns).
         $booking = $billing->booking;
-        $discountTarget = $booking->reservation ?? $booking;
-        if (!$discountTarget->discount_requested) {
-            return response()->json(['message' => 'This guest did not request a discount.'], 422);
+        if (StayBill::discountIdStatus($booking) !== 'approved') {
+            // The ID is decided ONCE, in the Booking module (Approve / Reject ID) - this panel only chooses which
+            // discount an already-approved ID earns. A discount never reaches a bill before that.
+            return response()->json(['message' => "The guest's discount ID is not approved yet. Approve it in the Booking module first."], 422);
         }
 
         $validated = $request->validate([
             'discount_id' => 'required|exists:discounts,id',
         ]);
 
-        $discount = Discount::where('status', 'active')->findOrFail($validated['discount_id']);
-        // A discount that has expired since the guest booked is still honored for THAT guest; anyone else may only be
-        // given a discount that is valid today.
-        if (! $discount->isValidOn() && $discount->id !== $this->claimedDiscountId($discountTarget)) {
-            return response()->json(['message' => 'That discount is not valid today ('.$discount->validityLabel().').'], 422);
+        try {
+            // Re-points the approved ID at the chosen discount and re-prices this open billing through StayBill.
+            $this->discountIds->approve($booking, (int) $validated['discount_id'], auth()->user());
+        } catch (ValidationException $e) {
+            return response()->json(['message' => collect($e->errors())->flatten()->first()], 422);
         }
 
-        DB::transaction(function () use ($billing, $discount, $discountTarget) {
-            // Whole bill (room + amenities + additional charges) through the SAME function
-            // the guest's estimate uses (App\Support\BillDiscount), so the two can never disagree.
-            $addOns = (float) $billing->additional_guest_fee
-                + (float) $billing->amenity_charge
-                + $billing->additional_charges_total;
-
-            $billing->update([
-                'discount' => \App\Support\BillDiscount::amount($discount, (float) $billing->room_charge, $addOns),
-                'discount_id' => $discount->id,
-                'discount_verified_by' => auth()->id(),
-                'discount_verified_at' => now(),
-            ]);
-            $billing->recalculateTotal();
-
-            if ($discountTarget->discount_verification_status !== 'approved') {
-                $discountTarget->update(['discount_verification_status' => 'approved']);
-            }
-
-            // Timeline: stamp the booking (what the guest's timeline reads) every time the
-            // receptionist verifies/changes the discount - add-or-update, newest wins.
-            $billing->booking->update(['discount_verified_at' => now()]);
-            if ($billing->booking->discount_verification_status !== 'approved') {
-                $billing->booking->update(['discount_verification_status' => 'approved']);
-            }
-        });
-
         $billing->refresh()->load('discountApplied');
+        $discountTarget = $booking->reservation ?? $booking;
         $discounts = $this->billableDiscounts($discountTarget);
 
         return response()->json([
@@ -679,7 +750,10 @@ class CheckOutController extends Controller
             'additional_guest_fee' => 0,
             'amenity_charge' => round($amenityCharge, 2),
         ]);
-        $billing->recalculateTotal();
+        // Room charge (rate x ACTUAL nights, per room), the discount (only once the guest's ID is approved) and the
+        // total all come from the one StayBill calculation - re-run on every open, so a late check-out's extra
+        // nights, or an ID decision, reach the bill instead of the figure frozen at creation.
+        $billing->syncFromStayBill($booking);
 
         // Reservation-derived: re-parent every completed, still-unparented
         // payment regardless of stage. A prior version of this only
@@ -749,21 +823,17 @@ class CheckOutController extends Controller
      */
     private function generateBilling(Booking $booking): Billing
     {
-        $roomCharge = $this->computeRoomCharge($booking);
-
-        // No automatic discount - Promotions are package/amenity-only now
-        // (their inclusions are zero-charge amenity requests granted at
-        // conversion time, handled separately via amenity_charge below).
-        // Authorized discounts (Senior Citizen, PWD, etc.) are applied
-        // manually here by the receptionist after verifying the guest's
-        // uploaded ID, via applyDiscount() above.
+        // Created empty and priced straight away by refreshStayCharges() below, which runs the one StayBill
+        // calculation (room charge for the ACTUAL nights, amenities, the discount once the guest's ID is
+        // approved) - so the opening figure and every later reopen can never be computed two different ways.
+        return DB::transaction(function () use ($booking) {
         $billing = Billing::create([
             'booking_id' => $booking->id,
-            'room_charge' => round($roomCharge, 2),
+            'room_charge' => 0,
             'additional_guest_fee' => 0,
             'amenity_charge' => 0,
             'discount' => 0,
-            'total_amount' => round($roomCharge, 2),
+            'total_amount' => 0,
             'billing_status' => 'pending',
         ]);
 
@@ -775,60 +845,7 @@ class CheckOutController extends Controller
         $this->refreshStayCharges($booking, $billing);
 
         return $billing;
-    }
-
-    /**
-     * Sums each assigned room's own rate x its own actual nights - not a
-     * single lump sum over the whole booking's check_out date. A room
-     * already individually checked out (see checkOutRoom()) is capped at
-     * ITS OWN checked_out_at, never the booking's current check_out -
-     * which may since have been pushed later by an extension covering
-     * only the room(s) still active - so an earlier-departing room in a
-     * multi-room booking is never re-billed for nights it was never
-     * actually occupied. A still-active room - which, by the time billing
-     * is actually generated, is every room in an ordinary single-room
-     * booking (those never go through checkOutRoom() at all - see
-     * index.blade.php's JS) - is charged through TODAY, the day this
-     * checkout is genuinely happening, not the originally scheduled
-     * check_out date: a guest checking out early must only pay for the
-     * nights they actually stayed, and one checking out late (an overstay)
-     * must pay for the extra nights actually used - see this page's own
-     * subtitle ("Checkout can happen before or after the scheduled date;
-     * the bill is settled either way"). Falls back to the legacy single
-     * room() relation for the rare pre-migration booking with no pivot rows.
-     */
-    private function computeRoomCharge(Booking $booking): float
-    {
-        $rooms = $booking->rooms->isNotEmpty() ? $booking->rooms : collect([$booking->room])->filter();
-
-        return (float) $rooms->sum(function ($room) use ($booking) {
-            $roomCheckOut = $room->pivot && $room->pivot->checked_out_at
-                ? Carbon::parse($room->pivot->checked_out_at)->startOfDay()
-                : today();
-
-            $nights = max(1, abs($roomCheckOut->diffInDays($booking->check_in)));
-
-            return (float) $room->room_rate * $nights;
         });
-    }
-
-    /**
-     * The date this booking's stay actually ends, for display alongside
-     * computeRoomCharge()'s money - not necessarily the originally
-     * scheduled check_out date (see that method's doc for the early/late
-     * checkout rationale, identical here). Returns the latest of however
-     * many rooms this booking has, since that's the day the whole stay is
-     * genuinely over.
-     */
-    private function effectiveCheckOutDate(Booking $booking): Carbon
-    {
-        $rooms = $booking->rooms->isNotEmpty() ? $booking->rooms : collect([$booking->room])->filter();
-
-        $dates = $rooms->map(fn ($room) => $room->pivot && $room->pivot->checked_out_at
-            ? Carbon::parse($room->pivot->checked_out_at)->startOfDay()
-            : today());
-
-        return $dates->max() ?? today();
     }
 
     /**

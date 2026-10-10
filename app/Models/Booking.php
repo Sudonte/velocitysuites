@@ -56,6 +56,7 @@ class Booking extends Model
         'verified_at',
         'verified_by',
         'hidden_at',
+        'hidden_by_guest_at',
         'viewed_at',
         'selected_payment_percentage',
         'required_payment_amount',
@@ -76,6 +77,7 @@ class Booking extends Model
         'discount_verified_at' => 'datetime',
         'verified_at' => 'datetime',
         'hidden_at' => 'datetime',
+        'hidden_by_guest_at' => 'datetime',
         'viewed_at' => 'datetime',
         'checkin_reminder_sent_at' => 'datetime',
         'deleted_at' => 'datetime',
@@ -102,7 +104,17 @@ class Booking extends Model
     protected $appends = [
         'display_status',
         'room_lines',
+        'hidden_by_guest',
     ];
+
+    /**
+     * The guest took this off their Bookings & Reservations list. Only that list honors it - Transaction History
+     * keeps the record forever (nothing here is ever hard-deleted).
+     */
+    public function getHiddenByGuestAttribute(): bool
+    {
+        return $this->hidden_by_guest_at !== null;
+    }
 
     /**
      * Get the reservation associated with the booking - null for a

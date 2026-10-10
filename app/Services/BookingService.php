@@ -299,7 +299,10 @@ class BookingService
             'booking_id' => $booking->id,
             'room_charge' => $quote['room_charge'],
             'amenity_charge' => $amenityCharge,
-            'discount' => $quote['discount'],
+            // The discount reaches the bill only once the guest's ID is APPROVED (Booking module). A pending or
+            // rejected one leaves the bill whole - approval re-prices it (DiscountIdVerificationService).
+            'discount' => $reservation->discount_verification_status === 'approved' ? $quote['discount'] : 0,
+            'discount_id' => $reservation->discount_verification_status === 'approved' ? $reservation->discount_id : null,
             'total_amount' => 0,
             'billing_status' => 'pending',
         ]);

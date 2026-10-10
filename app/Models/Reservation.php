@@ -72,12 +72,23 @@ class Reservation extends Model
         'verified_at',
         'verified_by',
         'hidden_at',
+        'hidden_by_guest_at',
         'viewed_at',
         'selected_payment_percentage',
         'required_payment_amount',
         'idempotency_key',
         'edited_at',
     ];
+
+
+    /**
+     * The guest took this off their Bookings & Reservations list. Only that list honors it - Transaction History
+     * keeps the record forever (nothing here is ever hard-deleted).
+     */
+    public function getHiddenByGuestAttribute(): bool
+    {
+        return $this->hidden_by_guest_at !== null;
+    }
 
     protected $casts = [
         'check_in' => 'datetime',
@@ -86,6 +97,7 @@ class Reservation extends Model
         'additional_guest_details' => 'array',
         'verified_at' => 'datetime',
         'hidden_at' => 'datetime',
+        'hidden_by_guest_at' => 'datetime',
         'viewed_at' => 'datetime',
         'payment_method_locked_at' => 'datetime',
         'payment_reminder_sent_at' => 'datetime',
@@ -106,7 +118,7 @@ class Reservation extends Model
      * payment_deadline is the 48-hour Pay Later/Pay Now cutoff (see
      * getPaymentDeadlineAttribute()) - also always derived, never stored.
      */
-    protected $appends = ['discount_preview', 'payment_deadline', 'room_lines', 'deposit_cap'];
+    protected $appends = ['discount_preview', 'payment_deadline', 'room_lines', 'deposit_cap', 'hidden_by_guest'];
 
     /**
      * Get the guest associated with the reservation.

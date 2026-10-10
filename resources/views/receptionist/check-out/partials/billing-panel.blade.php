@@ -25,10 +25,30 @@
     </div>
 
     <h6><i class="fas fa-calculator"></i> Charges</h6>
+    <p class="small text-muted mb-2">
+        Booked {{ \Carbon\Carbon::parse($stay['check_in'])->format('M j, Y') }} to {{ \Carbon\Carbon::parse($stay['scheduled_check_out'])->format('M j, Y') }}
+        ({{ $stay['scheduled_nights'] }} night{{ $stay['scheduled_nights'] === 1 ? '' : 's' }}).
+        @if($stay['extra_nights'] > 0)
+            Actual stay: <strong>{{ $stay['actual_nights'] }} nights</strong> - {{ $stay['extra_nights'] }} extra night{{ $stay['extra_nights'] === 1 ? '' : 's' }} billed (₱{{ number_format($stay['extra_nights_charge'], 2) }}).
+        @elseif($isEarlyCheckout)
+            Actual stay: <strong>{{ $stay['actual_nights'] }} night{{ $stay['actual_nights'] === 1 ? '' : 's' }}</strong> - billed for the nights stayed.
+        @endif
+    </p>
     <div class="table-responsive">
     <table class="table table-sm table-borderless mb-3">
-        <tr>
-            <td>Room Charge ({{ $effectiveNights }} night{{ $effectiveNights === 1 ? '' : 's' }})</td>
+        @foreach($stay['rooms'] as $line)
+            <tr>
+                <td>
+                    Room {{ $line['room_number'] }}@if($line['room_type']) <span class="text-muted">({{ $line['room_type'] }})</span>@endif
+                    - ₱{{ number_format($line['rate'], 2) }} x {{ $line['nights'] }} night{{ $line['nights'] === 1 ? '' : 's' }}
+                    @if($line['extra_nights'] > 0)<span class="badge bg-warning text-dark">+{{ $line['extra_nights'] }} extra</span>@endif
+                    @if($line['status'] === 'checked_out')<span class="badge bg-secondary">out {{ \Carbon\Carbon::parse($line['checked_out_on'])->format('M j') }}</span>@endif
+                </td>
+                <td class="text-end">₱{{ number_format($line['subtotal'], 2) }}</td>
+            </tr>
+        @endforeach
+        <tr class="fw-semibold">
+            <td>Room Charge</td>
             <td class="text-end">₱{{ number_format($billing->room_charge, 2) }}</td>
         </tr>
         @if($billing->additional_guest_fee > 0)

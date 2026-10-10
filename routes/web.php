@@ -238,12 +238,6 @@ Route::middleware(['auth', 'account.status', 'log.activity', 'no.cache'])->group
         Route::get('/direct-bookings/{booking}', [ReservationViewController::class, 'showBooking'])->name('bookings.show');
     });
 
-    // Guest History - read-only, shared by Receptionist and Manager.
-    Route::middleware('role:receptionist,manager')->prefix('guest-history')->name('guest-history.')->group(function () {
-        Route::get('/', [\App\Http\Controllers\Staff\GuestHistoryController::class, 'index'])->name('index');
-        Route::get('/{guest}', [\App\Http\Controllers\Staff\GuestHistoryController::class, 'show'])->name('show');
-    });
-
     // Receptionist Routes
     Route::middleware('role:receptionist')->prefix('receptionist')->name('receptionist.')->group(function () {
         Route::get('/dashboard', [ReceptionistController::class, 'dashboard'])->name('dashboard');
@@ -291,6 +285,10 @@ Route::middleware(['auth', 'account.status', 'log.activity', 'no.cache'])->group
         Route::get('/bookings/{booking}/id-card', [ReceptionistBookingController::class, 'idCard'])->name('bookings.id-card');
         Route::put('/bookings/{booking}/verify', [ReceptionistBookingController::class, 'verify'])->name('bookings.verify');
         Route::put('/bookings/{booking}/reject', [ReceptionistBookingController::class, 'reject'])->name('bookings.reject');
+        // Discount ID verification - a decision of its own, separate from Verify/Reject above. Bookings only: the
+        // Reservation module deliberately has no route that can decide a discount ID.
+        Route::put('/bookings/{booking}/discount-id/approve', [ReceptionistBookingController::class, 'approveId'])->name('bookings.discount-id.approve');
+        Route::put('/bookings/{booking}/discount-id/reject', [ReceptionistBookingController::class, 'rejectId'])->name('bookings.discount-id.reject');
         // Walk-in top-up payment against an active booking's remaining
         // balance, reachable any time during the stay - see
         // ReceptionistBookingController::recordPayment()'s docblock for why
@@ -339,6 +337,7 @@ Route::middleware(['auth', 'account.status', 'log.activity', 'no.cache'])->group
         Route::get('/check-out/{booking}/billing', [ReceptionistCheckOutController::class, 'checkOutBilling'])->name('check-out.billing');
         Route::get('/check-out/{booking}/rooms', [ReceptionistCheckOutController::class, 'roomsPanel'])->name('check-out.rooms');
         Route::put('/check-out/{booking}/rooms/{room}', [ReceptionistCheckOutController::class, 'checkOutRoom'])->name('check-out.rooms.checkout');
+        Route::put('/check-out/{booking}/rooms', [ReceptionistCheckOutController::class, 'checkOutRooms'])->name('check-out.rooms.checkout-many');
         Route::delete('/check-out/billing/{billing}', [ReceptionistCheckOutController::class, 'checkOutCancelBilling'])->name('check-out.billing.cancel');
         Route::get('/check-out/billing/{billing}/payment', [ReceptionistCheckOutController::class, 'checkOutPaymentPanel'])->name('check-out.payment');
 

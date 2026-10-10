@@ -416,7 +416,8 @@ class CheckInController extends Controller
             $this->notificationService->notifyCheckIn(
                 $accountGuest,
                 $rooms->pluck('room_name')->implode(', '),
-                $booking->reservation_id ?? $booking->id
+                $booking->reservation_id ?? $booking->id,
+                $booking
             );
         }
 

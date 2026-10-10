@@ -56,7 +56,19 @@
                 </div>
             @endif
 
-            @if($editable)
+            @if($discountInfo['status'] !== 'approved')
+                {{-- The ID is decided once, in the Booking module (Approve / Reject ID). Until it is approved no discount
+                     reaches this bill, and this panel can't apply one. --}}
+                <div class="alert {{ $discountInfo['status'] === 'rejected' ? 'alert-danger' : 'alert-warning' }} py-2 mb-0">
+                    <i class="fas fa-id-card"></i>
+                    @if($discountInfo['status'] === 'rejected')
+                        The discount ID was rejected - no discount applies to this bill.
+                    @else
+                        The discount ID has not been approved, so no discount applies yet. Approve it on the
+                        <a href="{{ route('receptionist.bookings.show', $billing->booking_id) }}" target="_blank" rel="noopener">booking page</a>.
+                    @endif
+                </div>
+            @elseif($editable)
                 <form id="applyDiscountForm" class="row g-2">
                     <div class="col-md-8">
                         <select name="discount_id" class="form-select form-select-sm" required>

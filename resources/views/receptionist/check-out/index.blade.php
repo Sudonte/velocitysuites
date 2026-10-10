@@ -91,7 +91,7 @@
                                              see the Rooms Panel modal below. Billing only
                                              starts once every room in this booking has
                                              checked out. --}}
-                                        <button type="button" class="btn btn-outline-primary btn-sm btn-view-rooms"
+                                        <button type="button" class="btn btn-sm btn-outline-primary btn-view-rooms"
                                             data-booking-id="{{ $booking->id }}">
                                             <i class="fas fa-eye"></i> View Rooms
                                         </button>
@@ -137,7 +137,7 @@
                 <p class="text-muted mt-3 mb-0">Are you sure you want to begin the check-out process?</p>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
                 <button type="button" class="btn btn-primary" id="continueToBillingBtn">
                     <i class="fas fa-arrow-right"></i> Continue to Billing
                 </button>
@@ -207,6 +207,7 @@ document.addEventListener('DOMContentLoaded', function () {
         recordPayment: @json(route('receptionist.billing.payment.store', ['billing' => '__ID__'])),
         rooms: @json(route('receptionist.check-out.rooms', ['booking' => '__ID__'])),
         roomCheckout: @json(route('receptionist.check-out.rooms.checkout', ['booking' => '__BOOKING__', 'room' => '__ROOM__'])),
+        roomsCheckout: @json(route('receptionist.check-out.rooms.checkout-many', ['booking' => '__ID__'])),
     };
 
     function buildUrl(template, id) {
@@ -273,6 +274,75 @@ document.addEventListener('DOMContentLoaded', function () {
             alert(err.message);
         }
     }
+
+    // ---- Rooms Panel: tick rooms, or check out everything still in house ----
+    function selectedRoomIds() {
+        return Array.from(roomsPanelContent.querySelectorAll('.room-select:checked')).map((box) => Number(box.value));
+    }
+
+    function refreshRoomSelection() {
+        const boxes = roomsPanelContent.querySelectorAll('.room-select');
+        const picked = selectedRoomIds().length;
+        const count = roomsPanelContent.querySelector('#selectedRoomCount');
+        const go = roomsPanelContent.querySelector('#btnCheckoutSelected');
+        const all = roomsPanelContent.querySelector('#selectAllRooms');
+        if (count) count.textContent = picked;
+        if (go) go.disabled = picked === 0;
+        if (all) all.checked = boxes.length > 0 && picked === boxes.length;
+    }
+
+    roomsPanelContent.addEventListener('change', function (e) {
+        if (e.target.id === 'selectAllRooms') {
+            roomsPanelContent.querySelectorAll('.room-select').forEach((box) => { box.checked = e.target.checked; });
+        }
+        if (e.target.id === 'selectAllRooms' || e.target.classList.contains('room-select')) refreshRoomSelection();
+    });
+
+    async function checkoutRooms(btn, body, title, message) {
+        const proceed = await window.confirmAction({ title: title, message: message, button: 'Check Out', variant: 'primary' }, btn);
+        if (!proceed) return;
+
+        btn.disabled = true;
+        try {
+            const data = await fetchJson(buildUrl(urls.roomsCheckout, activeBookingId), {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body),
+            });
+
+            if (data.final) {
+                roomsModal.hide();
+                const html = await fetchHtml(buildUrl(urls.billing, activeBookingId));
+                billingPanelContent.innerHTML = html;
+                billingModal.show();
+            } else {
+                roomsPanelContent.innerHTML = data.html;
+            }
+        } catch (err) {
+            const alertBox = roomsPanelContent.querySelector('#roomsErrorAlert');
+            if (alertBox) {
+                alertBox.textContent = err.message;
+                alertBox.classList.remove('d-none');
+            } else {
+                alert(err.message);
+            }
+            btn.disabled = false;
+        }
+    }
+
+    roomsPanelContent.addEventListener('click', function (e) {
+        const selectedBtn = e.target.closest('#btnCheckoutSelected');
+        if (selectedBtn) {
+            const ids = selectedRoomIds();
+            if (ids.length === 0) return;
+            checkoutRooms(selectedBtn, { room_ids: ids }, 'Check out ' + ids.length + ' room(s)?', 'They become free right away; any room not ticked stays checked in.');
+            return;
+        }
+        const allBtn = e.target.closest('#btnCheckoutAllRooms');
+        if (allBtn) {
+            checkoutRooms(allBtn, { all: true }, 'Check out all remaining rooms?', 'Every room still in house leaves now and billing opens next.');
+        }
+    });
 
     // ---- Rooms Panel interactions: check out one room at a time ----
     roomsPanelContent.addEventListener('click', async function (e) {
@@ -470,34 +540,48 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     // ---- Payment Panel interactions ----
-    function updateChangeDue() {
-        const methodSelect = paymentPanelContent.querySelector('#paymentMethodSelect');
-        const amountInput = paymentPanelContent.querySelector('#amountPaidInput');
-        const refGroup = paymentPanelContent.querySelector('#referenceNumberGroup');
-        const changeGroup = paymentPanelContent.querySelector('#changeDueGroup');
-        const changeDisplay = paymentPanelContent.querySelector('#changeDueDisplay');
-        if (!methodSelect) return;
+    const peso = (n) => '₱' + Number(n).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-        const balance = parseFloat(amountInput.dataset.balance);
-        const amount = parseFloat(amountInput.value) || 0;
+    // The amount must be more than 0 and no more than the remaining balance. Shown inline, and the submit button is
+    // disabled while it isn't - the server re-checks the same rule under a row lock, this is only the early warning.
+    function validateAmount() {
+        const input = paymentPanelContent.querySelector('#amountPaidInput');
+        const error = paymentPanelContent.querySelector('#amountPaidError');
+        const submit = paymentPanelContent.querySelector('#completePaymentBtn');
+        if (!input) return true; // fully-paid stay: nothing to collect, nothing to validate
 
-        refGroup.classList.toggle('d-none', methodSelect.value !== 'gcash');
-
-        if (methodSelect.value === 'cash' && amount > balance) {
-            changeGroup.classList.remove('d-none');
-            changeDisplay.value = '₱' + (amount - balance).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-        } else {
-            changeGroup.classList.add('d-none');
+        const balanceCents = Math.round(parseFloat(input.dataset.balance) * 100);
+        const raw = input.value.trim();
+        const amount = parseFloat(raw);
+        let message = '';
+        if (raw === '' || isNaN(amount)) {
+            message = 'Enter the amount received.';
+        } else if (amount <= 0) {
+            message = 'The amount must be greater than ₱0.00.';
+        } else if (Math.round(amount * 100) > balanceCents) {
+            message = 'The amount can\'t be more than the remaining balance of ' + peso(balanceCents / 100) + '.';
         }
+
+        error.textContent = message;
+        error.classList.toggle('d-none', message === '');
+        input.classList.toggle('is-invalid', message !== '');
+        if (submit) submit.disabled = message !== '';
+        return message === '';
     }
 
+    function syncPaymentMethod() {
+        const methodSelect = paymentPanelContent.querySelector('#paymentMethodSelect');
+        const refGroup = paymentPanelContent.querySelector('#referenceNumberGroup');
+        if (methodSelect && refGroup) refGroup.classList.toggle('d-none', methodSelect.value !== 'gcash');
+    }
+
+    paymentModalEl.addEventListener('shown.bs.modal', function () { syncPaymentMethod(); validateAmount(); });
     paymentPanelContent.addEventListener('change', function (e) {
-        if (e.target.id === 'paymentMethodSelect' || e.target.id === 'amountPaidInput') {
-            updateChangeDue();
-        }
+        if (e.target.id === 'paymentMethodSelect') syncPaymentMethod();
+        if (e.target.id === 'amountPaidInput') validateAmount();
     });
     paymentPanelContent.addEventListener('input', function (e) {
-        if (e.target.id === 'amountPaidInput') updateChangeDue();
+        if (e.target.id === 'amountPaidInput') validateAmount();
     });
 
     function currentPaymentBillingId() {
@@ -534,6 +618,7 @@ document.addEventListener('DOMContentLoaded', function () {
         e.preventDefault();
 
         const form = e.target;
+        if (!validateAmount()) return;
         const payload = Object.fromEntries(new FormData(form).entries());
         const method = payload.payment_method;
 
@@ -582,6 +667,7 @@ document.addEventListener('DOMContentLoaded', function () {
             showPaymentError(err.message);
         } finally {
             if (submitBtn) submitBtn.disabled = false;
+            validateAmount();
         }
     });
 });

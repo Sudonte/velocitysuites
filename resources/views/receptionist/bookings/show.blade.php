@@ -4,7 +4,7 @@
 
 @section('content')
 <div class="container-fluid py-4">
-    <a href="{{ route('receptionist.bookings.index') }}" class="btn btn-outline-secondary btn-sm mb-3">
+    <a href="{{ route('receptionist.bookings.index') }}" class="btn btn-sm btn-secondary mb-3">
         <i class="fas fa-arrow-left"></i> Back to Bookings
     </a>
 
@@ -236,8 +236,11 @@
             @if($booking->discount_requested)
                 <x-card title="Senior Citizen / PWD Identification" icon="fas fa-id-card" bodyClass="card-body" class="mb-4">
                     <p class="mb-2">
-                        <strong>Status:</strong>
+                        <strong>ID status:</strong>
                         <x-status-badge :status="$booking->discount_verification_status" domain="discount_verification" />
+                        @if($booking->discount_verification_status === 'approved' && $discountChoices->firstWhere('id', $booking->discount_id))
+                            <span class="small text-muted ms-1">{{ $discountChoices->firstWhere('id', $booking->discount_id)->name }}</span>
+                        @endif
                     </p>
                     @if($booking->id_card_image_path)
                         <a href="{{ route('receptionist.bookings.id-card', $booking) }}" target="_blank" rel="noopener" class="d-block mt-1">
@@ -250,6 +253,45 @@
                         </a>
                     @else
                         <p class="text-muted mb-0">Requested but no ID uploaded.</p>
+                    @endif
+
+                    {{-- The ID is decided HERE, separately from verifying / rejecting the transaction above: two
+                         statuses, two actions. The discount reaches the bill only while the ID is approved. --}}
+                    @if($discountIdDecidable)
+                        <hr>
+                        <form action="{{ route('receptionist.bookings.discount-id.approve', $booking) }}" method="POST" class="row g-2 align-items-end mb-2">
+                            @csrf
+                            @method('PUT')
+                            <div class="col-sm-8">
+                                <label class="form-label small mb-1" for="approveIdDiscount">Discount this ID earns</label>
+                                <select name="discount_id" id="approveIdDiscount" class="form-select form-select-sm" required>
+                                    @foreach($discountChoices as $choice)
+                                        <option value="{{ $choice->id }}" @selected(($booking->discount_id ?? $claimedDiscount?->id) == $choice->id)>
+                                            {{ $choice->name }} ({{ $choice->discount_type === 'percentage' ? rtrim(rtrim(number_format($choice->value, 2), '0'), '.') . '%' : '₱' . number_format($choice->value, 2) }})
+                                        </option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div class="col-sm-4">
+                                <button type="submit" class="btn btn-success btn-sm w-100" @disabled($discountChoices->isEmpty() || ! $booking->id_card_image_path)>
+                                    <i class="fas fa-check"></i> {{ $booking->discount_verification_status === 'approved' ? 'Change Discount' : 'Approve ID' }}
+                                </button>
+                            </div>
+                        </form>
+                        @if($booking->discount_verification_status !== 'rejected')
+                            <button type="button" class="btn btn-outline-danger btn-sm" data-bs-toggle="collapse" data-bs-target="#rejectIdForm">
+                                <i class="fas fa-times"></i> Reject ID
+                            </button>
+                            <div class="collapse mt-2" id="rejectIdForm">
+                                <form action="{{ route('receptionist.bookings.discount-id.reject', $booking) }}" method="POST">
+                                    @csrf
+                                    @method('PUT')
+                                    <textarea name="reason" class="form-control form-control-sm mb-2" rows="2" required maxlength="500" placeholder="Why is this ID not accepted? The guest is told."></textarea>
+                                    <button type="submit" class="btn btn-danger btn-sm">Confirm Reject ID</button>
+                                </form>
+                            </div>
+                        @endif
+                        <p class="text-muted small mt-2 mb-0"><i class="fas fa-info-circle"></i> Approving or rejecting the ID does not verify or reject the transaction. Rejecting the whole booking rejects the ID too.</p>
                     @endif
                 </x-card>
             @endif
@@ -289,14 +331,38 @@
                           data-confirm="Record this cash payment against the booking's remaining balance?" data-confirm-title="Record this cash payment against the booking's remaining balance?" data-confirm-button="Record Payment" data-confirm-variant="success">
                         @csrf
                         <div class="col-sm-6">
-                            <label class="form-label small mb-1">Amount Received (₱)</label>
-                            <input type="number" name="amount_paid" class="form-control" min="0.01" max="{{ $remainingBalance }}" step="0.01" required placeholder="0.00">
+                            <label class="form-label small mb-1" for="walkInAmount">Amount Received (₱)</label>
+                            <input type="number" name="amount_paid" id="walkInAmount" class="form-control" min="0.01" max="{{ $remainingBalance }}" step="0.01" required placeholder="0.00" data-balance="{{ $remainingBalance }}" aria-describedby="walkInHelp walkInError">
+                            <div class="form-text" id="walkInHelp">Remaining balance: <strong>₱{{ number_format($remainingBalance, 2) }}</strong></div>
+                            <div class="text-danger small d-none mt-1" id="walkInError" role="alert"></div>
                         </div>
                         <div class="col-sm-6">
-                            <button type="submit" class="btn btn-success w-100">
+                            <button type="submit" class="btn btn-success w-100" id="walkInSubmit" disabled>
                                 <i class="fas fa-check"></i> Confirm Cash Payment
                             </button>
                         </div>
+                        <script>
+                            (function () {
+                                const input = document.getElementById('walkInAmount');
+                                const error = document.getElementById('walkInError');
+                                const submit = document.getElementById('walkInSubmit');
+                                const balanceCents = Math.round(parseFloat(input.dataset.balance) * 100);
+                                function check() {
+                                    const raw = input.value.trim();
+                                    const amount = parseFloat(raw);
+                                    let message = '';
+                                    if (raw === '' || isNaN(amount)) message = '';
+                                    else if (amount <= 0) message = 'The amount must be greater than ₱0.00.';
+                                    else if (Math.round(amount * 100) > balanceCents) message = 'The amount can\'t be more than the remaining balance of ₱' + (balanceCents / 100).toLocaleString('en-PH', { minimumFractionDigits: 2 }) + '.';
+                                    error.textContent = message;
+                                    error.classList.toggle('d-none', message === '');
+                                    input.classList.toggle('is-invalid', message !== '');
+                                    submit.disabled = message !== '' || raw === '' || isNaN(amount);
+                                }
+                                input.addEventListener('input', check);
+                                check();
+                            })();
+                        </script>
                     </form>
                 @elseif($booking->payment_method === 'gcash' && in_array($booking->booking_status, [\App\Models\Booking::STATUS_ACTIVE, \App\Models\Booking::STATUS_CHECKED_IN]) && $remainingBalance > 0.009)
                     <hr>

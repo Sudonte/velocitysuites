@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\StayBill;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
@@ -19,7 +20,7 @@ class Billing extends Model
      * see getAmenitiesAttribute() below, previously missing entirely (see
      * that accessor's own doc for the guest-facing symptom this caused).
      */
-    protected $appends = ['room_lines', 'amenities'];
+    protected $appends = ['room_lines', 'amenities', 'stay_bill'];
 
     protected $fillable = [
         'booking_id',
@@ -148,6 +149,43 @@ class Billing extends Model
     public function getAmenitiesAttribute(): array
     {
         return $this->booking?->amenities ?? [];
+    }
+
+    /**
+     * The itemized stay for the guest's app (scheduled vs actual check-out, nights, extra nights, per-room lines,
+     * discount, total) - the very same App\Support\StayBill the receptionist's check-out bill is built from, so the
+     * two can never show different amounts. Only a stay that is in house or finished has anything to itemize
+     * beyond what room_lines already says, so every other billing returns null (and costs no extra queries).
+     */
+    public function getStayBillAttribute(): ?array
+    {
+        // A fresh Booking, not $this->booking: wiring the two relations to each other would make this model
+        // un-serializable (booking -> billing -> booking ...).
+        $booking = Booking::find($this->booking_id);
+        if (! $booking || ! in_array($booking->booking_status, [Booking::STATUS_CHECKED_IN, Booking::STATUS_COMPLETED], true)) {
+            return null;
+        }
+
+        return StayBill::forBooking($booking, StayBill::FINAL, null, $this);
+    }
+
+    /**
+     * Re-prices this billing from the one StayBill calculation: room charge (rate x actual nights per room),
+     * the discount (only while the guest's discount ID is approved) and the total. Add-ons already on the row
+     * (amenity_charge, additional charges) are kept - the caller refreshes those first.
+     */
+    public function syncFromStayBill(Booking $booking): void
+    {
+        $bill = StayBill::forBooking($booking, StayBill::FINAL, null, $this);
+
+        $this->room_charge = $bill['room_charge'];
+        $this->discount = $bill['discount'];
+        $this->discount_id = $bill['discount_id'];
+        if ($bill['discount_id'] === null) {
+            $this->discount_verified_by = null;
+            $this->discount_verified_at = null;
+        }
+        $this->recalculateTotal();
     }
 
     /**
