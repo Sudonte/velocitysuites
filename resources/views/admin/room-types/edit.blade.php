@@ -53,7 +53,7 @@
 
                                 @if($roomType->image)
                                     @if($roomType->canChangeImage())
-                                        <button type="button" class="btn btn-sm btn-outline-danger" data-bs-toggle="modal" data-bs-target="#removeRoomTypeImageModal">
+                                        <button type="button" class="btn btn-outline-danger btn-sm" data-bs-toggle="modal" data-bs-target="#removeRoomTypeImageModal">
                                             <i class="fas fa-trash"></i> Remove Photo
                                         </button>
                                     @else
@@ -230,7 +230,7 @@
                     <button type="submit" class="btn btn-primary">
                         <i class="fas fa-save"></i> Save Changes
                     </button>
-                    <a href="{{ route('admin.room-types.index') }}" class="btn btn-secondary">Cancel</a>
+                    <a href="{{ route('admin.room-types.index') }}" class="btn btn-outline-secondary">Cancel</a>
                 </form>
             </x-card>
 
@@ -271,7 +271,7 @@
                     </p>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">No</button>
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">No</button>
                     <button type="submit" form="removeMainImageForm" class="btn btn-danger">
                         <i class="fas fa-trash"></i> Yes, Remove Photo
                     </button>

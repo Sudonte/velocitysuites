@@ -244,7 +244,7 @@
                                 <label for="rejectDepositReason{{ $depositPayment->id }}" class="form-label small">Reason (sent to the guest) <span class="text-danger">*</span></label>
                                 <textarea name="reason" id="rejectDepositReason{{ $depositPayment->id }}" class="form-control form-control-sm mb-2" rows="2" maxlength="500" required
                                           placeholder="e.g. the receipt doesn't match the declared amount"></textarea>
-                                <button type="submit" class="btn btn-sm btn-danger"><i class="fas fa-times"></i> Reject Payment</button>
+                                <button type="submit" class="btn btn-outline-danger btn-sm"><i class="fas fa-times"></i> Reject Payment</button>
                             </form>
                         </div>
                     @endif

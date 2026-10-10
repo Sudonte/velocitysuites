@@ -152,8 +152,8 @@
                                         @endif
                                     </td>
                                     <td>
-                                        <a href="{{ route('manager.reservations.show', $reservation) }}" class="btn btn-sm btn-primary">
-                                            <i class="fas fa-eye"></i>
+                                        <a href="{{ route('manager.reservations.show', $reservation) }}" class="btn btn-outline-primary btn-sm">
+                                            <i class="fas fa-eye"></i> View
                                         </a>
                                     </td>
                                 </tr>

@@ -110,7 +110,7 @@
                         <button type="submit" class="btn btn-primary">
                             <i class="fas fa-save"></i> Create Booking
                         </button>
-                        <a href="{{ route('receptionist.bookings.index') }}" class="btn btn-secondary">
+                        <a href="{{ route('receptionist.bookings.index') }}" class="btn btn-outline-secondary">
                             <i class="fas fa-times"></i> Cancel
                         </a>
                     </div>

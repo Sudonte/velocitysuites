@@ -2,7 +2,7 @@
 <div class="d-flex justify-content-between align-items-center mb-2">
     <h6 class="mb-0"><i class="fas fa-plus-circle"></i> Additional Charges</h6>
     @if($editable)
-        <button type="button" class="btn btn-sm btn-outline-dark" id="showAddChargeFormBtn">
+        <button type="button" class="btn btn-outline-primary btn-sm" id="showAddChargeFormBtn">
             <i class="fas fa-plus"></i> Add Charge
         </button>
     @endif
@@ -60,14 +60,14 @@
                 </td>
                 @if($editable)
                     <td class="text-end text-nowrap">
-                        <button type="button" class="btn btn-sm btn-outline-primary charge-edit-btn" title="Edit">
-                            <i class="fas fa-edit"></i>
+                        <button type="button" class="btn btn-outline-secondary btn-sm charge-edit-btn" title="Edit">
+                            <i class="fas fa-pen"></i> Edit
                         </button>
                         <button type="button" class="btn btn-sm btn-outline-success charge-save-btn d-none" title="Save">
                             <i class="fas fa-check"></i>
                         </button>
-                        <button type="button" class="btn btn-sm btn-outline-danger charge-delete-btn" title="Remove">
-                            <i class="fas fa-trash"></i>
+                        <button type="button" class="btn btn-outline-danger btn-sm charge-delete-btn" title="Remove">
+                            <i class="fas fa-trash"></i> Delete
                         </button>
                     </td>
                 @endif

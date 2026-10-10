@@ -119,7 +119,7 @@
                           data-confirm="This cannot be undone." data-confirm-title="Delete this notification?" data-confirm-button="Delete" data-confirm-variant="danger">
                         @csrf
                         @method('DELETE')
-                        <button type="submit" class="btn btn-sm btn-outline-danger">
+                        <button type="submit" class="btn btn-outline-danger btn-sm">
                             <i class="fas fa-trash"></i> Delete
                         </button>
                     </form>
@@ -154,7 +154,7 @@
                                 <p class="mb-0" style="white-space: pre-line;">{{ $notification->message }}</p>
                             </div>
                             <div class="modal-footer">
-                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Close</button>
                             </div>
                         </div>
                     </div>

@@ -66,7 +66,7 @@
                         </span>
                     </div>
                     <div class="d-flex flex-wrap gap-2 mt-2">
-                        <button type="button" class="btn btn-sm btn-primary flex-fill" data-bs-toggle="modal"
+                        <button type="button" class="btn btn-outline-primary btn-sm flex-fill" data-bs-toggle="modal"
                                 data-bs-target="#detailsModal" data-details-url="{{ route('receptionist.reservations.details', $reservation) }}">
                             <i class="fas fa-eye"></i> View / Manage
                         </button>
@@ -130,7 +130,7 @@
                             @endif
                         </td>
                         <td class="text-nowrap">
-                            <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal"
+                            <button type="button" class="btn btn-outline-primary btn-sm" data-bs-toggle="modal"
                                     data-bs-target="#detailsModal" data-details-url="{{ route('receptionist.reservations.details', $reservation) }}">
                                 <i class="fas fa-eye"></i> View / Manage
                             </button>

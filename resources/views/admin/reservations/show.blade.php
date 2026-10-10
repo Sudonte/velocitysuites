@@ -6,7 +6,7 @@
 <div class="container-fluid py-4">
     <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-4">
         <div>
-            <a href="{{ route('admin.reservations.index') }}" class="btn btn-sm btn-secondary mb-2">
+            <a href="{{ route('admin.reservations.index') }}" class="btn btn-outline-secondary btn-sm mb-2">
                 <i class="fas fa-arrow-left"></i> Back to Monitoring
             </a>
             <h1 class="mb-0">

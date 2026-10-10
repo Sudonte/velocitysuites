@@ -5,7 +5,7 @@
 @section('content')
 <div class="container-fluid py-4">
     <div class="mb-2">
-        <a href="{{ route('receptionist.rooms.show', $roomType) }}" class="btn btn-sm btn-secondary">
+        <a href="{{ route('receptionist.rooms.show', $roomType) }}" class="btn btn-outline-secondary btn-sm">
             <i class="fas fa-arrow-left"></i> {{ $roomType->name }} Rooms
         </a>
     </div>

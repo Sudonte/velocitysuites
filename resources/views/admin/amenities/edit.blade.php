@@ -114,7 +114,7 @@
                         <button type="submit" class="btn btn-primary">
                             <i class="fas fa-save"></i> Save Changes
                         </button>
-                        <a href="{{ route('admin.amenities.index') }}" class="btn btn-secondary">
+                        <a href="{{ route('admin.amenities.index') }}" class="btn btn-outline-secondary">
                             <i class="fas fa-times"></i> Cancel
                         </a>
                     </div>
@@ -127,10 +127,9 @@
                 <form action="{{ route('admin.amenities.toggle', $amenity) }}" method="POST" class="mb-2">
                     @csrf
                     @method('PUT')
-                    <button type="submit" class="btn btn-{{ $amenity->status === 'active' ? 'warning' : 'success' }} w-100">
-                        <i class="fas fa-{{ $amenity->status === 'active' ? 'ban' : 'check' }}"></i>
-                        {{ $amenity->status === 'active' ? 'Deactivate' : 'Activate' }}
-                    </button>
+                    <button type="submit" class="btn btn-outline-{{ $amenity->status === 'active' ? 'warning' : 'success' }} w-100">
+                                    <i class="fas fa-{{ $amenity->status === 'active' ? 'ban' : 'check' }}"></i> {{ $amenity->status === 'active' ? 'Deactivate' : 'Activate' }}
+                                </button>
                 </form>
             </x-card>
 

@@ -110,7 +110,7 @@
                         <button type="submit" class="btn btn-primary" id="createReservationSubmit">
                             <i class="fas fa-save"></i> Create Reservation
                         </button>
-                        <a href="{{ route('receptionist.reservations.index') }}" class="btn btn-secondary">
+                        <a href="{{ route('receptionist.reservations.index') }}" class="btn btn-outline-secondary">
                             <i class="fas fa-times"></i> Cancel
                         </a>
                     </div>

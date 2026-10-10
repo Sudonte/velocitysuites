@@ -115,7 +115,7 @@
                         <button type="submit" class="btn btn-primary">
                             <i class="fas fa-arrow-right"></i> Continue to Room Assignment
                         </button>
-                        <a href="{{ route('receptionist.check-in.index') }}" class="btn btn-secondary">
+                        <a href="{{ route('receptionist.check-in.index') }}" class="btn btn-outline-secondary">
                             <i class="fas fa-times"></i> Cancel
                         </a>
                     </div>

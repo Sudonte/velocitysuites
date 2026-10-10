@@ -7,7 +7,7 @@
     <div class="row mb-4">
         <div class="col-12">
             @if($backRoute)
-                <a href="{{ $backRoute }}" class="btn btn-sm btn-secondary mb-2">
+                <a href="{{ $backRoute }}" class="btn btn-outline-secondary btn-sm mb-2">
                     <i class="fas fa-arrow-left"></i> Back
                 </a>
             @endif

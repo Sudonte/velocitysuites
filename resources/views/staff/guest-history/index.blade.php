@@ -52,7 +52,7 @@
                             <td class="text-center">{{ $guest->reservations_count }}</td>
                             <td class="text-center">{{ $guest->direct_bookings_count }}</td>
                             <td>{{ $guest->last_reservation_check_in ? \Illuminate\Support\Carbon::parse($guest->last_reservation_check_in)->format('M d, Y') : '-' }}</td>
-                            <td class="text-end"><a href="{{ route('guest-history.show', $guest) }}" class="btn btn-sm btn-primary"><i class="fas fa-eye"></i> View history</a></td>
+                            <td class="text-end"><a href="{{ route('guest-history.show', $guest) }}" class="btn btn-outline-primary btn-sm"><i class="fas fa-eye"></i> View history</a></td>
                         </tr>
                     @empty
                         <tr><td colspan="6"><x-empty-state icon="fas fa-address-book" message="No guests match your search." /></td></tr>

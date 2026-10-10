@@ -137,7 +137,7 @@
                 <p class="text-muted mt-3 mb-0">Are you sure you want to begin the check-out process?</p>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
                 <button type="button" class="btn btn-primary" id="continueToBillingBtn">
                     <i class="fas fa-arrow-right"></i> Continue to Billing
                 </button>

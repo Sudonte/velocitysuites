@@ -5,7 +5,7 @@
 @section('content')
 <div class="container-fluid py-4">
     <div class="mb-2">
-        <a href="{{ route('admin.room-types.index') }}" class="btn btn-sm btn-secondary">
+        <a href="{{ route('admin.room-types.index') }}" class="btn btn-outline-secondary btn-sm">
             <i class="fas fa-arrow-left"></i> All Room Types
         </a>
     </div>
@@ -93,7 +93,7 @@
                             <i class="fas fa-plus"></i> Add Room
                         </button>
                         <a href="{{ route('admin.room-types.edit', $roomType) }}" class="btn btn-outline-secondary">
-                            <i class="fas fa-edit"></i> Edit Type
+                            <i class="fas fa-pen"></i> Edit Type
                         </a>
                     </div>
                 </div>
@@ -113,8 +113,8 @@
     <x-card icon="fas fa-eye" bodyClass="card-body" class="mb-4">
         <x-slot:title>
             All Amenities Available to Guests
-            <a href="{{ route('admin.room-types.edit', $roomType) }}" class="btn btn-sm btn-outline-secondary float-end">
-                <i class="fas fa-edit"></i> Manage in Edit Type
+            <a href="{{ route('admin.room-types.edit', $roomType) }}" class="btn btn-outline-secondary btn-sm float-end">
+                <i class="fas fa-pen"></i> Manage in Edit Type
             </a>
         </x-slot:title>
         <small class="text-muted d-block mb-2">
@@ -203,8 +203,8 @@
                             </div>
                         </div>
                         <div class="card-footer d-flex justify-content-between align-items-center">
-                            <a href="{{ route('admin.rooms.edit', $room) }}" class="btn btn-sm btn-outline-primary">
-                                <i class="fas fa-edit"></i> Edit
+                            <a href="{{ route('admin.rooms.edit', $room) }}" class="btn btn-outline-secondary btn-sm">
+                                <i class="fas fa-pen"></i> Edit
                             </a>
                             <div class="d-flex gap-2">
                                 @if($room->isArchived())
@@ -244,7 +244,7 @@
                                           data-confirm-title="Archive Room {{ $room->room_number }}?" data-confirm-button="Archive Room" data-confirm-variant="danger">
                                         @csrf
                                         @method('PUT')
-                                        <button type="submit" class="btn btn-sm btn-outline-danger">
+                                        <button type="submit" class="btn btn-outline-secondary btn-sm">
                                             <i class="fas fa-box-archive"></i> Archive
                                         </button>
                                     </form>
@@ -314,7 +314,7 @@
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
                     <button type="submit" class="btn btn-primary"><i class="fas fa-plus"></i> Add Room</button>
                 </div>
             </form>

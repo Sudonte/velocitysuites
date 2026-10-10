@@ -250,7 +250,7 @@
     <section class="detail-section mt-2">
         <div class="d-flex align-items-center justify-content-between">
             <h6 class="detail-section-title mb-0"><i class="fas fa-spa"></i> Amenity Requests</h6>
-            <button type="button" class="btn btn-sm btn-outline-secondary" id="showAddAmenityFormBtn">
+            <button type="button" class="btn btn-outline-primary btn-sm" id="showAddAmenityFormBtn">
                 <i class="fas fa-plus"></i> Add
             </button>
         </div>
@@ -314,5 +314,5 @@
 </div>
 
 <div class="modal-footer">
-    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Close</button>
 </div>

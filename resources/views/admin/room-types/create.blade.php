@@ -176,7 +176,7 @@
                     <button type="submit" class="btn btn-primary">
                         <i class="fas fa-save"></i> Create Room Type
                     </button>
-                    <a href="{{ route('admin.room-types.index') }}" class="btn btn-secondary">Cancel</a>
+                    <a href="{{ route('admin.room-types.index') }}" class="btn btn-outline-secondary">Cancel</a>
                 </form>
             </x-card>
         </div>

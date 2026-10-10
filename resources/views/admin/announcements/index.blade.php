@@ -89,8 +89,8 @@
                                         data-bs-toggle="modal" data-bs-target="#announcementViewModal{{ $announcement->id }}">
                                     <i class="fas fa-eye"></i>
                                 </button>
-                                <a href="{{ route('admin.announcements.edit', $announcement) }}" class="btn btn-sm btn-outline-primary" title="Edit">
-                                    <i class="fas fa-edit"></i>
+                                <a href="{{ route('admin.announcements.edit', $announcement) }}" class="btn btn-outline-secondary btn-sm" title="Edit">
+                                    <i class="fas fa-pen"></i> Edit
                                 </a>
                                 @if($announcement->status === 'published')
                                     <form action="{{ route('admin.announcements.unpublish', $announcement) }}" method="POST" class="d-inline"
@@ -98,7 +98,7 @@
                                         @csrf
                                         @method('PUT')
                                         <button type="submit" class="btn btn-sm btn-outline-warning" title="Unpublish">
-                                            <i class="fas fa-eye-slash"></i>
+                                            <i class="fas fa-eye-slash"></i> Unpublish
                                         </button>
                                     </form>
                                 @else
@@ -106,8 +106,8 @@
                                           data-confirm="This will notify the selected target audience." data-confirm-title="Publish &quot;{{ $announcement->title }}&quot; now?" data-confirm-button="Publish Now" data-confirm-variant="primary">
                                         @csrf
                                         @method('PUT')
-                                        <button type="submit" class="btn btn-sm btn-outline-success" title="Publish">
-                                            <i class="fas fa-eye"></i>
+                                        <button type="submit" class="btn btn-outline-primary btn-sm" title="Publish">
+                                            <i class="fas fa-eye"></i> View
                                         </button>
                                     </form>
                                 @endif
@@ -115,8 +115,8 @@
                                       data-confirm="This cannot be undone. Already-sent notifications will not be affected." data-confirm-title="Permanently delete &quot;{{ $announcement->title }}&quot;?" data-confirm-button="Delete Permanently" data-confirm-variant="danger">
                                     @csrf
                                     @method('DELETE')
-                                    <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete">
-                                        <i class="fas fa-trash"></i>
+                                    <button type="submit" class="btn btn-outline-danger btn-sm" title="Delete">
+                                        <i class="fas fa-trash"></i> Delete
                                     </button>
                                 </form>
                             </div>
@@ -153,10 +153,10 @@
                                     </dl>
                                 </div>
                                 <div class="modal-footer">
-                                    <a href="{{ route('admin.announcements.edit', $announcement) }}" class="btn btn-primary">
-                                        <i class="fas fa-edit"></i> Edit
+                                    <a href="{{ route('admin.announcements.edit', $announcement) }}" class="btn btn-outline-secondary">
+                                        <i class="fas fa-pen"></i> Edit
                                     </a>
-                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Close</button>
                                 </div>
                             </div>
                         </div>

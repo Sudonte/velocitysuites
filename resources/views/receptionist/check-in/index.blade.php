@@ -150,7 +150,7 @@
                                               data-confirm-title="Archive booking - guest did not arrive?" data-confirm-button="Archive Booking" data-confirm-variant="danger">
                                             @csrf
                                             @method('PUT')
-                                            <button type="submit" class="btn btn-sm btn-outline-secondary" title="Guest did not arrive">
+                                            <button type="submit" class="btn btn-outline-secondary btn-sm" title="Guest did not arrive">
                                                 <i class="fas fa-box-archive"></i> Archive (did not arrive)
                                             </button>
                                         </form>

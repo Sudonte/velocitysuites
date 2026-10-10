@@ -150,7 +150,7 @@
                         </div>
                     @endif
                     <div class="d-flex flex-wrap gap-2 mt-2">
-                        <a href="{{ route('receptionist.bookings.show', $booking) }}" class="btn btn-sm btn-primary flex-fill">
+                        <a href="{{ route('receptionist.bookings.show', $booking) }}" class="btn btn-outline-primary btn-sm flex-fill">
                             <i class="fas fa-eye"></i> View
                         </a>
                         @if($tab === 'pending')
@@ -171,7 +171,7 @@
                             <form action="{{ route('receptionist.bookings.archive', $booking) }}" method="POST" class="flex-fill" data-confirm="It will move to Archived Bookings." data-confirm-title="Archive this booking?" data-confirm-button="Archive Booking" data-confirm-variant="secondary">
                                 @csrf
                                 @method('PUT')
-                                <button type="submit" class="btn btn-sm btn-outline-secondary w-100">
+                                <button type="submit" class="btn btn-outline-secondary btn-sm w-100">
                                     <i class="fas fa-box-archive"></i> Archive
                                 </button>
                             </form>
@@ -180,7 +180,7 @@
                             <form action="{{ route('receptionist.bookings.destroy', $booking) }}" method="POST" class="flex-fill" data-confirm="It will no longer appear anywhere in the Bookings module." data-confirm-title="Delete this booking?" data-confirm-button="Delete" data-confirm-variant="danger">
                                 @csrf
                                 @method('DELETE')
-                                <button type="submit" class="btn btn-sm btn-outline-danger w-100">
+                                <button type="submit" class="btn btn-outline-danger btn-sm w-100">
                                     <i class="fas fa-trash"></i> Delete
                                 </button>
                             </form>
@@ -279,7 +279,7 @@
                             </td>
                         @endif
                         <td class="text-nowrap">
-                            <a href="{{ route('receptionist.bookings.show', $booking) }}" class="btn btn-sm btn-primary">
+                            <a href="{{ route('receptionist.bookings.show', $booking) }}" class="btn btn-outline-primary btn-sm">
                                 <i class="fas fa-eye"></i> View
                             </a>
                             @if($tab === 'pending')
@@ -300,7 +300,7 @@
                                 <form action="{{ route('receptionist.bookings.archive', $booking) }}" method="POST" class="d-inline" data-confirm="It will move to the Archived list." data-confirm-title="Archive this completed booking?" data-confirm-button="Archive Booking" data-confirm-variant="secondary">
                                     @csrf
                                     @method('PUT')
-                                    <button type="submit" class="btn btn-sm btn-outline-secondary" title="Archive">
+                                    <button type="submit" class="btn btn-outline-secondary btn-sm" title="Archive">
                                         <i class="fas fa-box-archive"></i> Archive
                                     </button>
                                 </form>
@@ -308,14 +308,14 @@
                                 <form action="{{ route('receptionist.bookings.archive', $booking) }}" method="POST" class="d-inline">
                                     @csrf
                                     @method('PUT')
-                                    <button type="submit" class="btn btn-sm btn-outline-secondary" title="Archive">
+                                    <button type="submit" class="btn btn-outline-secondary btn-sm" title="Archive">
                                         <i class="fas fa-box-archive"></i> Archive
                                     </button>
                                 </form>
                                 <form action="{{ route('receptionist.bookings.destroy', $booking) }}" method="POST" class="d-inline" data-confirm="It will no longer appear anywhere in the Bookings module." data-confirm-title="Delete this booking?" data-confirm-button="Delete" data-confirm-variant="danger">
                                     @csrf
                                     @method('DELETE')
-                                    <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete">
+                                    <button type="submit" class="btn btn-outline-danger btn-sm" title="Delete">
                                         <i class="fas fa-trash"></i> Delete
                                     </button>
                                 </form>
@@ -323,7 +323,7 @@
                                 <form action="{{ route('receptionist.bookings.destroy', $booking) }}" method="POST" class="d-inline" data-confirm="It will no longer appear anywhere in the Bookings module." data-confirm-title="Delete this booking?" data-confirm-button="Delete" data-confirm-variant="danger">
                                     @csrf
                                     @method('DELETE')
-                                    <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete">
+                                    <button type="submit" class="btn btn-outline-danger btn-sm" title="Delete">
                                         <i class="fas fa-trash"></i> Delete
                                     </button>
                                 </form>

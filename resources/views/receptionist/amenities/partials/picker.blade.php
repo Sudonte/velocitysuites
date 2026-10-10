@@ -61,7 +61,7 @@
     @endif
 </div>
 <div class="modal-footer">
-    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
     @if($amenities->isNotEmpty())
         <button type="button" id="amenitySubmitBtn" class="btn btn-primary" disabled>
             <i class="fas fa-save"></i> Save Request(s)

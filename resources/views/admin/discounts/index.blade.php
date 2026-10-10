@@ -70,21 +70,21 @@
                         <td>{{ $discount->end_date ? $discount->end_date->format('M j, Y') : 'No expiry' }}</td>
                         <td><x-status-badge :status="$discount->status" domain="active_flag" /></td>
                         <td>
-                            <a href="{{ route('admin.discounts.edit', $discount) }}" class="btn btn-sm btn-info">
-                                <i class="fas fa-edit"></i>
+                            <a href="{{ route('admin.discounts.edit', $discount) }}" class="btn btn-outline-secondary btn-sm">
+                                <i class="fas fa-pen"></i> Edit
                             </a>
                             <form action="{{ route('admin.discounts.toggle', $discount) }}" method="POST" class="d-inline" data-confirm="It will switch between active and inactive." data-confirm-title="Toggle this discount status?" data-confirm-button="Change Status" data-confirm-variant="warning">
                                 @csrf
                                 @method('PUT')
-                                <button type="submit" class="btn btn-sm btn-{{ $discount->status === 'active' ? 'warning' : 'success' }}">
-                                    <i class="fas fa-{{ $discount->status === 'active' ? 'ban' : 'check' }}"></i>
+                                <button type="submit" class="btn btn-sm btn-outline-{{ $discount->status === 'active' ? 'warning' : 'success' }}">
+                                    <i class="fas fa-{{ $discount->status === 'active' ? 'ban' : 'check' }}"></i> {{ $discount->status === 'active' ? 'Deactivate' : 'Activate' }}
                                 </button>
                             </form>
                             <form action="{{ route('admin.discounts.destroy', $discount) }}" method="POST" class="d-inline" data-confirm="This can't be undone." data-confirm-title="Delete this discount?" data-confirm-button="Delete" data-confirm-variant="danger">
                                 @csrf
                                 @method('DELETE')
-                                <button type="submit" class="btn btn-sm btn-danger">
-                                    <i class="fas fa-trash"></i>
+                                <button type="submit" class="btn btn-outline-danger btn-sm">
+                                    <i class="fas fa-trash"></i> Delete
                                 </button>
                             </form>
                         </td>

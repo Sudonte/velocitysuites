@@ -113,7 +113,7 @@
                         <button type="submit" class="btn btn-primary">
                             <i class="fas fa-save"></i> Create Amenity
                         </button>
-                        <a href="{{ route('admin.amenities.index') }}" class="btn btn-secondary">
+                        <a href="{{ route('admin.amenities.index') }}" class="btn btn-outline-secondary">
                             <i class="fas fa-times"></i> Cancel
                         </a>
                     </div>

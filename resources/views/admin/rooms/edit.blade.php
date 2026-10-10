@@ -171,7 +171,7 @@
                         <button type="submit" class="btn btn-primary">
                             <i class="fas fa-save"></i> Save Changes
                         </button>
-                        <a href="{{ route('admin.rooms.index') }}" class="btn btn-secondary">
+                        <a href="{{ route('admin.rooms.index') }}" class="btn btn-outline-secondary">
                             <i class="fas fa-times"></i> Cancel
                         </a>
                     </div>
@@ -211,9 +211,9 @@
                                         <form action="{{ route('admin.rooms.gallery.destroy', $image) }}" method="POST" data-confirm="This can't be undone." data-confirm-title="Delete this gallery image?" data-confirm-button="Delete" data-confirm-variant="danger">
                                             @csrf
                                             @method('DELETE')
-                                            <button type="submit" class="btn btn-sm btn-danger"
+                                            <button type="submit" class="btn btn-outline-danger btn-sm"
                                                     {{ $galleryCount <= 4 ? 'disabled title="Room must keep at least 4 photos - replace instead"' : '' }}>
-                                                <i class="fas fa-trash"></i>
+                                                <i class="fas fa-trash"></i> Delete
                                             </button>
                                         </form>
                                     </div>
@@ -291,7 +291,7 @@
                           data-confirm-title="Archive Room {{ $room->room_number }}?" data-confirm-button="Archive Room" data-confirm-variant="danger">
                         @csrf
                         @method('PUT')
-                        <button type="submit" class="btn btn-outline-danger w-100">
+                        <button type="submit" class="btn btn-outline-secondary w-100">
                             <i class="fas fa-box-archive"></i> Archive Room
                         </button>
                     </form>

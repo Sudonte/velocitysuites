@@ -319,8 +319,8 @@
                         <p class="text-warning mb-3">
                             <i class="fas fa-hourglass"></i> Your reservation is awaiting staff review.
                         </p>
-                        <button class="btn btn-info w-100 mb-2" data-bs-toggle="modal" data-bs-target="#modifyModal">
-                            <i class="fas fa-edit"></i> Modify Dates
+                        <button class="btn btn-outline-secondary w-100 mb-2" data-bs-toggle="modal" data-bs-target="#modifyModal">
+                            <i class="fas fa-pen"></i> Modify Dates
                         </button>
                     @else
                         @if($booking && $booking->display_status === 'AWAITING_VERIFICATION')
@@ -442,7 +442,7 @@
                         </div>
                     </div>
                     <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Close</button>
                         <button type="submit" class="btn btn-primary">Save Changes</button>
                     </div>
                 </form>

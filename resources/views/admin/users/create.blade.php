@@ -79,7 +79,7 @@
                         <button type="submit" class="btn btn-primary">
                             <i class="fas fa-save"></i> Create Account
                         </button>
-                        <a href="{{ route('admin.users.index') }}" class="btn btn-secondary">
+                        <a href="{{ route('admin.users.index') }}" class="btn btn-outline-secondary">
                             <i class="fas fa-times"></i> Cancel
                         </a>
                     </div>

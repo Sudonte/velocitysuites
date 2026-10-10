@@ -5,7 +5,7 @@
 @section('content')
 <div class="container-fluid py-4">
     <div class="mb-2">
-        <a href="{{ route('receptionist.rooms.index') }}" class="btn btn-sm btn-secondary">
+        <a href="{{ route('receptionist.rooms.index') }}" class="btn btn-outline-secondary btn-sm">
             <i class="fas fa-arrow-left"></i> All Room Types
         </a>
     </div>
@@ -125,7 +125,7 @@
                             </div>
                         </div>
                         <div class="card-footer">
-                            <a href="{{ route('receptionist.rooms.room-details', [$roomType, $room]) }}" class="btn btn-sm btn-outline-primary w-100">
+                            <a href="{{ route('receptionist.rooms.room-details', [$roomType, $room]) }}" class="btn btn-outline-primary btn-sm w-100">
                                 <i class="fas fa-eye"></i> View Details
                             </a>
                         </div>

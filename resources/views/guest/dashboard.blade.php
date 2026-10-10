@@ -68,7 +68,7 @@
                     </div>
                 </div>
                 <div class="mt-3">
-                    <a href="{{ route('guest.reservations.show', $currentReservation) }}" class="btn btn-sm btn-primary">
+                    <a href="{{ route('guest.reservations.show', $currentReservation) }}" class="btn btn-outline-primary btn-sm">
                         <i class="fas fa-eye"></i> View Reservation Details
                     </a>
                     @if($currentReservation->booking && $currentReservation->booking->billing)
@@ -225,8 +225,8 @@
                                     @endif
                                 </td>
                                 <td>
-                                    <a href="{{ route('guest.reservations.show', $reservation) }}" class="btn btn-sm btn-primary">
-                                        <i class="fas fa-eye"></i>
+                                    <a href="{{ route('guest.reservations.show', $reservation) }}" class="btn btn-outline-primary btn-sm">
+                                        <i class="fas fa-eye"></i> View
                                     </a>
                                 </td>
                             </tr>
@@ -355,8 +355,8 @@
                                     @endif
                                 </td>
                                 <td>
-                                    <a href="{{ route('guest.reservations.show', $reservation) }}" class="btn btn-sm btn-outline-secondary">
-                                        <i class="fas fa-eye"></i>
+                                    <a href="{{ route('guest.reservations.show', $reservation) }}" class="btn btn-outline-primary btn-sm">
+                                        <i class="fas fa-eye"></i> View
                                     </a>
                                 </td>
                             </tr>

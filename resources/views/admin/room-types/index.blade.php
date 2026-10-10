@@ -71,23 +71,23 @@
                         </a>
                         <span>
                             {{-- position-relative + own z-index keeps these clickable above the stretched-link --}}
-                            <a href="{{ route('admin.room-types.edit', $roomType) }}" class="btn btn-sm btn-outline-primary position-relative" style="z-index: 2;">
-                                <i class="fas fa-edit"></i>
+                            <a href="{{ route('admin.room-types.edit', $roomType) }}" class="btn btn-outline-secondary btn-sm position-relative" style="z-index: 2;">
+                                <i class="fas fa-pen"></i> Edit
                             </a>
                             @if($roomType->status === 'inactive')
                                 <form action="{{ route('admin.room-types.reactivate', $roomType) }}" method="POST" class="d-inline position-relative" style="z-index: 2;" data-confirm="Guests will be able to browse and book it again." data-confirm-title="Reactivate this room type?" data-confirm-button="Reactivate Room Type" data-confirm-variant="success">
                                     @csrf
                                     @method('PUT')
                                     <button type="submit" class="btn btn-sm btn-outline-success">
-                                        <i class="fas fa-undo"></i>
+                                        <i class="fas fa-undo"></i> Reactivate
                                     </button>
                                 </form>
                             @else
                                 <form action="{{ route('admin.room-types.deactivate', $roomType) }}" method="POST" class="d-inline position-relative" style="z-index: 2;" data-confirm="Guests will no longer be able to browse or book it." data-confirm-title="Deactivate this room type?" data-confirm-button="Deactivate Room Type" data-confirm-variant="warning">
                                     @csrf
                                     @method('PUT')
-                                    <button type="submit" class="btn btn-sm btn-outline-danger">
-                                        <i class="fas fa-ban"></i>
+                                    <button type="submit" class="btn btn-sm btn-outline-warning">
+                                        <i class="fas fa-ban"></i> Deactivate
                                     </button>
                                 </form>
                             @endif

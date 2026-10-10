@@ -88,7 +88,7 @@
                         <button type="submit" class="btn btn-primary">
                             <i class="fas fa-save"></i> Create Announcement
                         </button>
-                        <a href="{{ route('admin.announcements.index') }}" class="btn btn-secondary">
+                        <a href="{{ route('admin.announcements.index') }}" class="btn btn-outline-secondary">
                             <i class="fas fa-times"></i> Cancel
                         </a>
                     </div>

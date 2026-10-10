@@ -108,7 +108,7 @@
                     <button type="submit" class="btn btn-primary">
                         <i class="fas fa-save"></i> Update Discount
                     </button>
-                    <a href="{{ route('admin.discounts.index') }}" class="btn btn-secondary">Cancel</a>
+                    <a href="{{ route('admin.discounts.index') }}" class="btn btn-outline-secondary">Cancel</a>
                 </form>
             </x-card>
         </div>

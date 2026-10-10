@@ -100,7 +100,7 @@
     </form>
 </div>
 <div class="modal-footer">
-    <button type="button" class="btn btn-secondary" id="backToBillingBtn">
+    <button type="button" class="btn btn-outline-secondary" id="backToBillingBtn">
         <i class="fas fa-arrow-left"></i> Back to Billing
     </button>
     <button type="submit" form="paymentForm" class="btn btn-success" id="completePaymentBtn">
