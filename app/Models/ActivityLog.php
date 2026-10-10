@@ -46,6 +46,30 @@ class ActivityLog extends Model
         // own. A single hardcoded route here would 403/redirect whichever
         // role isn't that one, exactly the "sent to another role's page"
         // bug this module was built to avoid.
+        // The log outlives the records it mentions; never link to one that's gone.
+        if (in_array($this->subject_type, ['reservation', 'booking'], true)) {
+            $model = $this->subject_type === 'reservation' ? Reservation::class : Booking::class;
+            if (! $model::whereKey($this->subject_id)->exists()) {
+                return null;
+            }
+        }
+
+        if ($this->subject_type === 'booking') {
+            $role = auth()->user()?->role;
+            if ($role === 'receptionist') {
+                return route('receptionist.bookings.show', $this->subject_id);
+            }
+            if (! in_array($role, ['admin', 'manager'], true)) {
+                return null;
+            }
+            // Admin/Manager open a converted booking through its reservation.
+            $reservationId = Booking::whereKey($this->subject_id)->value('reservation_id');
+
+            return $reservationId
+                ? route("{$role}.reservations.show", $reservationId)
+                : route("{$role}.bookings.show", $this->subject_id);
+        }
+
         if ($this->subject_type === 'reservation') {
             return match (auth()->user()?->role) {
                 'admin' => route('admin.reservations.show', $this->subject_id),
@@ -56,7 +80,6 @@ class ActivityLog extends Model
         }
 
         return match ($this->subject_type) {
-            'booking' => route('receptionist.bookings.show', $this->subject_id),
             'user' => route('admin.users.show', $this->subject_id),
             'promotion' => route('admin.promotions.index'),
             'discount' => route('admin.discounts.index'),
