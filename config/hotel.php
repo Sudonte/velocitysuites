@@ -41,25 +41,6 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | No-Show Cutoff
-    |--------------------------------------------------------------------------
-    |
-    | A reservation that's still unpaid/unconverted once check_in's date has
-    | reached this hour of day, plus this many grace hours, is automatically
-    | cancelled as a No-Show (see ReservationWorkflowService::processNoShow(),
-    | reservations:process-no-shows). Applies to every still-active
-    | reservation regardless of whether it ever had a 48-hour payment
-    | deadline - short-notice reservations (checking in tomorrow or the day
-    | after, exempt from payment_deadline_hours above) are only ever
-    | resolved by this check.
-    |
-    */
-
-    'no_show_checkin_hour' => 14,
-    'no_show_grace_hours' => 5,
-
-    /*
-    |--------------------------------------------------------------------------
     | Staff Password Reset Request Expiry
     |--------------------------------------------------------------------------
     |

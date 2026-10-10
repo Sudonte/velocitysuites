@@ -205,6 +205,14 @@ deny-all rule is active).
   above the maximum are blocked, so there is no extra-guest fee. Past bills
   keep any fee already stored on them. `rooms.room_capacity` is no longer
   read by the app; it only mirrors the type's maximum for the mobile API.
+- `no_show_checkin_hour` / `no_show_grace_hours` were removed (2026-10-10)
+  together with the `reservations:process-no-shows` and
+  `bookings:process-no-shows` scheduled commands. No-show automation is gone:
+  staff archive a booking whose guest never arrived from Check-In >
+  Expected Check-ins. Unpaid reservations still auto-expire via
+  `reservations:expire-unpaid` (48-hour deadline, or the end of the check-in
+  date for short-notice reservations). No cron entry needs changing; the
+  single `schedule:run` entry simply stops running the removed commands.
 
 ### Permissions
 ```bash

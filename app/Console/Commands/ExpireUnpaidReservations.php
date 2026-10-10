@@ -31,14 +31,16 @@ class ExpireUnpaidReservations extends Command
             ->whereDoesntHave('payments', fn ($q) => $q->where('payment_status', 'completed'))
             ->with(['roomType', 'guest.user', 'payments'])
             ->get()
-            ->filter(fn (Reservation $r) => $r->payment_deadline !== null && now()->gte($r->payment_deadline));
+            ->filter(fn (Reservation $r) => $r->payment_deadline !== null
+                ? now()->gte($r->payment_deadline)
+                : now()->gt($r->check_in->copy()->endOfDay()));
 
         foreach ($candidates as $reservation) {
             Log::info("Expiring unpaid reservation: id={$reservation->id}, deadline={$reservation->payment_deadline}");
             $workflow->expireUnpaid($reservation);
         }
 
-        $this->info("Expired {$candidates->count()} unpaid reservation(s) past their payment deadline.");
+        $this->info("Expired {$candidates->count()} unpaid reservation(s) past their payment deadline or check-in date.");
 
         return self::SUCCESS;
     }

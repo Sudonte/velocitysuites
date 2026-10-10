@@ -296,62 +296,6 @@ class NotificationService
     }
 
     /**
-     * Notify about a reservation automatically cancelled as a No-Show -
-     * the guest never arrived or paid before the configured check-in
-     * cutoff. See ReservationWorkflowService::processNoShow(). For a direct
-     * Booking's own, separate no-show path see notifyBookingNoShow() below -
-     * this method is reservation-only, category='reservation'.
-     */
-    public function notifyNoShow(User $guest, string $roomName, ?int $referenceId = null): void
-    {
-        $this->toUser(
-            $guest,
-            'Reservation Cancelled - No Show',
-            "Your reservation for {$roomName} was cancelled because you did not arrive before the allowed check-in deadline.",
-            'reservation',
-            $referenceId
-        );
-
-        $this->toRole(
-            'receptionist',
-            'Reservation Cancelled - No Show',
-            "A reservation for {$roomName} was automatically cancelled as a No-Show.",
-            'reservation',
-            null,
-            $referenceId
-        );
-    }
-
-    /**
-     * Notify about a direct Booking (never derived from a Reservation)
-     * automatically cancelled as a No-Show - see
-     * ReservationWorkflowService::processBookingNoShow(). Distinct title/
-     * category from notifyNoShow() above for the same Booking-vs-Reservation
-     * reason as notifyNewDirectBooking() - this call site used to reuse
-     * notifyNoShow() and always said "Reservation Cancelled - No Show" even
-     * for a direct Booking with no reservation at all.
-     */
-    public function notifyBookingNoShow(User $guest, string $roomName, ?int $referenceId = null): void
-    {
-        $this->toUser(
-            $guest,
-            'Booking Cancelled - No Show',
-            "Your booking for {$roomName} was cancelled because you did not arrive before the allowed check-in deadline.",
-            'booking',
-            $referenceId
-        );
-
-        $this->toRole(
-            'receptionist',
-            'Booking Cancelled - No Show',
-            "A booking for {$roomName} was automatically cancelled as a No-Show.",
-            'booking',
-            null,
-            $referenceId
-        );
-    }
-
-    /**
      * Remind the guest their 48-hour payment deadline is approaching -
      * fired once per reservation by reservations:send-payment-reminders
      * (guarded by Reservation::payment_reminder_sent_at so it never repeats).

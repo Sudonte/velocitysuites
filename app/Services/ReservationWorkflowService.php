@@ -419,11 +419,21 @@ class ReservationWorkflowService
      */
     public function expireUnpaid(Reservation $reservation): void
     {
-        if ($reservation->payment_deadline === null || now()->lt($reservation->payment_deadline)) {
+        $deadline = $reservation->payment_deadline;
+
+        if ($deadline !== null) {
+            if (now()->lt($deadline)) {
+                return;
+            }
+            $reason = 'Automatically rejected: the required payment was not completed within the 48-hour deadline.';
+        } elseif ($this->isUnpaidPastCheckInDay($reservation)) {
+            // Short-notice reservations have no 48-hour deadline (see
+            // Reservation::getPaymentDeadlineAttribute()); they expire once
+            // their check-in day ends still unpaid.
+            $reason = 'Automatically rejected: the reservation was not paid or confirmed by the end of its check-in date.';
+        } else {
             return;
         }
-
-        $reason = 'Automatically rejected: the required payment was not completed within the 48-hour deadline.';
 
         DB::transaction(function () use ($reservation, $reason) {
             $reservation->update(['status' => Reservation::STATUS_REJECTED, 'rejection_reason' => $reason]);
@@ -443,116 +453,11 @@ class ReservationWorkflowService
         }
     }
 
-    /**
-     * Automatically cancels a still-active (awaiting cash or GCash),
-     * still-unpaid reservation once its check-in date has reached the
-     * configured no-show cutoff (hotel.no_show_checkin_hour + grace hours -
-     * see config/hotel.php's docblock). Deliberately not restricted to
-     * reservations that never had a 48-hour payment_deadline: a deadline-
-     * bearing reservation is normally already expired by expireUnpaid()
-     * well before its check-in date arrives, but this is the sole,
-     * unconditional catch-all for the short-notice (tomorrow/2-days-out)
-     * reservations that are exempt from that deadline entirely - no
-     * special-casing needed, this one check covers both. Called both from
-     * reservations:process-no-shows and, like expireUnpaid(), as a
-     * cron-independent safety net inline from Api\ReservationController/
-     * Guest\ReservationController's own index()/show().
-     */
-    public function processNoShow(Reservation $reservation): void
+    private function isUnpaidPastCheckInDay(Reservation $reservation): bool
     {
-        if (! in_array($reservation->status, Reservation::ACTIVE_STATUSES, true)) {
-            return;
-        }
-
-        if ($reservation->payments()->where('payment_status', 'completed')->exists()) {
-            return;
-        }
-
-        $cutoff = $reservation->check_in->copy()
-            ->setTime((int) config('hotel.no_show_checkin_hour', 14), 0)
-            ->addHours((int) config('hotel.no_show_grace_hours', 5));
-
-        if (now()->lt($cutoff)) {
-            return;
-        }
-
-        // Recognizable prefix so the mobile app can render its existing
-        // "NO-SHOW" badge (see Android's status_no_show string) instead of
-        // a generic Cancelled/Rejected one, without needing a whole new
-        // status column - same technique payment_deadline's rejection_reason
-        // already uses to distinguish an auto-expiry from a manual reject.
-        $reason = 'NO_SHOW: guest did not arrive or complete payment before the check-in deadline.';
-
-        DB::transaction(function () use ($reservation, $reason) {
-            $reservation->update(['status' => Reservation::STATUS_CANCELLED, 'rejection_reason' => $reason]);
-
-            // Not stage-filtered - see reject()'s identical comment above.
-            $reservation->payments()
-                ->where('payment_status', 'pending')
-                ->update(['payment_status' => 'failed']);
-
-            AmenityRequest::where('reservation_id', $reservation->id)
-                ->where('status', 'pending')
-                ->update(['status' => 'rejected']);
-        });
-
-        if ($guest = $reservation->guest?->user) {
-            $this->notifications->notifyNoShow($guest, $reservation->roomType->name, $reservation->id);
-        }
-    }
-
-    /**
-     * Automatically cancels a still-confirmed Booking (already paid/verified and past
-     * receptionist accept - the "will the guest actually show up" stage, distinct from
-     * processNoShow()'s unpaid-Reservation check) once its check-in date reaches the same
-     * configured no-show cutoff (hotel.no_show_checkin_hour + grace hours). A booking that
-     * has already progressed to checked_in/checked_out/cancelled is left alone entirely -
-     * "confirmed" is the only status that means "hasn't shown up yet".
-     *
-     * Uses a conditional atomic UPDATE (not a fetch-then-save like processNoShow() above)
-     * so a receptionist checking the guest in at the same moment this runs can never lose
-     * the race: the update only takes effect if booking_status is still 'confirmed' at the
-     * instant it executes, and the notification/log only fire if a row actually changed.
-     *
-     * Reuses the exact same "NO_SHOW:" rejection_reason prefix convention as
-     * processNoShow() - Android's Booking.isNoShow()/getNoShowReason() already read this
-     * generically, and the receptionist web module's rejected tab already filters on
-     * booking_status='cancelled', so both surfaces pick this up with no further changes.
-     */
-    public function processBookingNoShow(Booking $booking): void
-    {
-        if ($booking->booking_status !== Booking::STATUS_ACTIVE) {
-            return;
-        }
-
-        $cutoff = $booking->check_in->copy()
-            ->setTime((int) config('hotel.no_show_checkin_hour', 14), 0)
-            ->addHours((int) config('hotel.no_show_grace_hours', 5));
-
-        if (now()->lt($cutoff)) {
-            return;
-        }
-
-        $reason = 'NO_SHOW: guest did not arrive within the scheduled check-in period.';
-
-        $affected = Booking::where('id', $booking->id)
-            ->where('booking_status', Booking::STATUS_ACTIVE)
-            ->update(['booking_status' => Booking::STATUS_CANCELLED, 'rejection_reason' => $reason]);
-
-        if (! $affected) {
-            // Lost the race - a receptionist check-in or other update landed first.
-            return;
-        }
-
-        Activity::log(
-            'Auto-cancelled booking',
-            "Booking #{$booking->id} for {$booking->roomType->name} - guest did not arrive before the check-in deadline.",
-            $booking
-        );
-
-        if ($guest = $booking->account_guest?->user) {
-            $this->notifications->notifyBookingNoShow($guest, $booking->roomType->name ?? 'your stay', $booking->id);
-        }
+        return in_array($reservation->status, Reservation::ACTIVE_STATUSES, true)
+            && now()->gt($reservation->check_in->copy()->endOfDay())
+            && ! $reservation->payments()->where('payment_status', 'completed')->exists();
     }
 
     /**

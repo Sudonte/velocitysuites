@@ -82,7 +82,6 @@ class ReservationController extends Controller
         // already uses for its own lazy sweep.
         $reservations->getCollection()->each(function (Reservation $r) {
             $this->workflow->expireUnpaid($r);
-            $this->workflow->processNoShow($r);
             // total_amount_due/amenities are computed accessors,
             // deliberately not in the model's own $appends (would add
             // extra queries per row to every listing) - appended here at
@@ -105,7 +104,6 @@ class ReservationController extends Controller
 
         $reservation->load(['roomType', 'booking.room', 'booking.billing.payments', 'payments', 'bookingAmenities']);
         $this->workflow->expireUnpaid($reservation);
-        $this->workflow->processNoShow($reservation);
 
         // payment_summary/payment_transactions/receipts delegate to the
         // converted Booking's own authoritative values once one exists

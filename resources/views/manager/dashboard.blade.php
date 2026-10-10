@@ -100,11 +100,8 @@
     </div>
 
     <div class="row mb-4">
-        <div class="col-md-6 col-lg-3 mb-3">
+        <div class="col-md-6 col-lg-6 mb-3">
             <x-stat-card icon="fas fa-ban" label="Cancellation Rate" value="{{ $cancellationRate }}%" color="{{ $cancellationRate > 15 ? 'danger' : 'warning' }}" />
-        </div>
-        <div class="col-md-6 col-lg-3 mb-3">
-            <x-stat-card icon="fas fa-user-clock" label="No-Show Rate" value="{{ $noShowRate }}%" color="{{ $noShowRate > 10 ? 'danger' : 'warning' }}" />
         </div>
         <div class="col-md-6 col-lg-6 mb-3">
             <x-collapsible-card id="managerRoomUtilization" title="Room Utilization by Type" icon="fas fa-percentage" bodyClass="card-body py-2">

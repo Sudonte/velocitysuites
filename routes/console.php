@@ -32,19 +32,7 @@ Schedule::command('amenity-requests:archive-completed')->daily();
 // reservation still gets expired even before hPanel cron is configured.
 Schedule::command('reservations:expire-unpaid')->hourly();
 
-// Same cron-setup caveat as above; a lazy safety-net check also runs
-// inline from Api\ReservationController and Guest\ReservationController's
-// own index()/show() (see ReservationWorkflowService::processNoShow()'s
-// docblock).
-Schedule::command('reservations:process-no-shows')->hourly();
-
-// Distinct from the reservation-level command above: this handles the
-// later stage, where a Booking is already confirmed/paid but the guest
-// never physically arrives (see ReservationWorkflowService::processBookingNoShow()'s
-// docblock). Same cron-setup caveat as above.
-Schedule::command('bookings:process-no-shows')->hourly();
-
 // Same cron-setup caveat as above. No inline safety net needed (unlike the
-// two commands above) - a missed reminder just means the guest sees one
+// expiry command above) - a missed reminder just means the guest sees one
 // later or not at all before their deadline, not an incorrect state.
 Schedule::command('reservations:send-payment-reminders')->hourly();

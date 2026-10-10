@@ -41,7 +41,6 @@ class ReservationController extends Controller
 
         $reservation->loadMissing('roomType', 'bookingAmenities');
         $this->workflow->expireUnpaid($reservation);
-        $this->workflow->processNoShow($reservation);
         $nights = abs($reservation->check_out->diffInDays($reservation->check_in));
         $depositRange = $this->workflow->depositRange($reservation->roomType, $nights, $reservation->rooms_requested);
 

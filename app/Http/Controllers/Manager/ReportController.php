@@ -48,7 +48,7 @@ class ReportController extends Controller
      * than an actual report. This renders a dedicated tabular layout
      * (manager.reports.export-pdf) instead, branded with the Velocity
      * Suites logo/name, built from the exact same figures as the on-screen
-     * report plus the occupancy/cancellation/no-show rates already computed
+     * report plus the occupancy/cancellation rates already computed
      * by DashboardStatsService::managerStats() for the Manager dashboard.
      */
     public function exportPdf(Request $request)

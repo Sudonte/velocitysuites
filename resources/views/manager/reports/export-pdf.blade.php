@@ -47,11 +47,6 @@
                 <td class="{{ $managerStats['cancellationRate'] > 15 ? 'rate-high' : '' }}">{{ number_format($managerStats['cancellationRate'], 1) }}%</td>
                 <td>Cancelled reservations in {{ $periodLabel }}</td>
             </tr>
-            <tr>
-                <td>No-Show Rate</td>
-                <td class="{{ $managerStats['noShowRate'] > 15 ? 'rate-high' : '' }}">{{ number_format($managerStats['noShowRate'], 1) }}%</td>
-                <td>Confirmed bookings never arrived in {{ $periodLabel }}</td>
-            </tr>
         </tbody>
     </table>
 

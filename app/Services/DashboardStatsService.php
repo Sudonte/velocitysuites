@@ -289,7 +289,7 @@ class DashboardStatsService
 
     /**
      * $from/$to scope every period-dependent figure (reservations,
-     * bookings, revenue, cancellation/no-show rate, average stay, room
+     * bookings, revenue, cancellation rate, average stay, room
      * utilization, the booking-trend chart) - see App\Support\DateRange.
      * Room-status counts and today's check-in/check-out/in-house figures
      * deliberately stay "right now" regardless of the filter, since
@@ -365,14 +365,6 @@ class DashboardStatsService
             Reservation::whereBetween('check_in', [$from, $to])->where('status', Reservation::STATUS_CANCELLED)
         )->count();
 
-        $periodConfirmedBookings = TestAccountScope::excludeFromBookings(
-            Booking::whereBetween('check_in', [$from, $to])
-        )->count();
-        $periodNoShows = TestAccountScope::excludeFromBookings(
-            Booking::where('booking_status', Booking::STATUS_ACTIVE)
-                ->whereBetween('check_in', [$from, $to])
-                ->where('check_in', '<', now())
-        )->count();
 
         $periodRevenue = (float) TestAccountScope::excludeFromPayments(
             Payment::where('payment_status', 'completed')->whereBetween('payment_date', [$from, $to])
@@ -401,7 +393,6 @@ class DashboardStatsService
             // period (a brand-new hotel, or a custom range with no
             // activity) rather than dividing by zero.
             'cancellationRate' => $periodReservations > 0 ? round($periodCancelled / $periodReservations * 100, 1) : 0.0,
-            'noShowRate' => $periodConfirmedBookings > 0 ? round($periodNoShows / $periodConfirmedBookings * 100, 1) : 0.0,
             'averageLengthOfStay' => round($averageStay, 1),
             'roomUtilization' => $this->availability->utilizationByRoomType($from, $to),
 

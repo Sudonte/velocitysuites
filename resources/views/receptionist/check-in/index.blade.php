@@ -138,9 +138,24 @@
                             <td>{{ $booking->check_out->format('M d, Y') }}</td>
                             <td>{{ $booking->number_of_guests }}</td>
                             <td class="text-nowrap">
-                                <button type="button" class="btn btn-sm btn-success btn-open-check-in" data-booking-id="{{ $booking->id }}">
-                                    <i class="fas fa-sign-in-alt"></i> Check In
-                                </button>
+                                <div class="d-flex gap-2">
+                                    <button type="button" class="btn btn-sm btn-success btn-open-check-in" data-booking-id="{{ $booking->id }}">
+                                        <i class="fas fa-sign-in-alt"></i> Check In
+                                    </button>
+                                    {{-- Replaces the old automatic no-show: staff archive a
+                                         booking whose guest never arrived. --}}
+                                    @if($booking->check_in->lt(today()))
+                                        <form action="{{ route('receptionist.bookings.archive', $booking) }}" method="POST"
+                                              data-confirm="Booking #{{ $booking->id }} for {{ $booking->guest_display_name }} (check-in {{ $booking->check_in->format('M d, Y') }}) will be moved to Archived Bookings and removed from Expected Check-ins. Its records and payments are kept."
+                                              data-confirm-title="Archive booking - guest did not arrive?" data-confirm-button="Archive Booking" data-confirm-variant="danger">
+                                            @csrf
+                                            @method('PUT')
+                                            <button type="submit" class="btn btn-sm btn-outline-secondary" title="Guest did not arrive">
+                                                <i class="fas fa-box-archive"></i> Archive (did not arrive)
+                                            </button>
+                                        </form>
+                                    @endif
+                                </div>
                             </td>
                         </tr>
                     @empty
