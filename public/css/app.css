@@ -1795,3 +1795,8 @@ tbody tr:hover {
 
 /* Compact KPI row: long currency values shrink instead of overflowing. */
 .dashboard-kpis .stat-fill-value { font-size: clamp(1.1rem, 1.5vw, 1.6rem); overflow-wrap: anywhere; }
+
+/* Tabs in brand colors */
+.nav-tabs .nav-link { color: var(--primary-color); }
+.nav-tabs .nav-link:hover { color: var(--accent-color, var(--primary-color)); }
+.nav-tabs .nav-link.active { color: var(--text-dark); font-weight: 600; }

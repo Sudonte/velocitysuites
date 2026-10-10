@@ -214,6 +214,13 @@ deny-all rule is active).
   date for short-notice reservations). No cron entry needs changing; the
   single `schedule:run` entry simply stops running the removed commands.
 
+### Front-end libraries (CDN)
+- Loaded from CDNs by the layouts (no npm/Vite build step): Bootstrap 5.3,
+  Font Awesome 6.4, Chart.js 4.4 (dashboards) and Flatpickr 4.6.13
+  (cdnjs, added 2026-10-10; wired up by `public/js/date-pickers.js` for every
+  `<input type="date">`). The server needs no extra setup; browsers need
+  internet access to those CDNs.
+
 ### Permissions
 ```bash
 chmod -R 755 storage bootstrap/cache
