@@ -48,6 +48,7 @@ class CheckoutFinalStagePaymentReparentingTest extends TestCase
             $table->integer('room_capacity')->default(2);
             $table->decimal('rate_override', 10, 2)->nullable();
             $table->string('status', 20)->default('available');
+            $table->timestamp('archived_at')->nullable();
             $table->timestamps();
         });
 

@@ -94,6 +94,7 @@
          render as a direct child of <body>, outside nav.sidebar's own scrollable/overflow
          container - keeps them reliably on top instead of risking being clipped or stacked
          behind the sticky sidebar/header. --}}
+    @include('components.confirm-modal')
     @stack('modals')
 
     <!-- Scripts -->

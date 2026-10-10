@@ -29,7 +29,7 @@ $maps = [
         'pending' => 'warning', 'approved' => 'info', 'in_progress' => 'primary', 'completed' => 'success', 'rejected' => 'danger',
     ],
     'room' => [
-        'available' => 'success', 'occupied' => 'primary', 'reserved' => 'warning', 'maintenance' => 'secondary',
+        'available' => 'success', 'occupied' => 'primary', 'reserved' => 'warning', 'maintenance' => 'secondary', 'archived' => 'dark',
     ],
     'user' => [
         'active' => 'success', 'suspended' => 'danger',

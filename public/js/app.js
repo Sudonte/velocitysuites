@@ -362,3 +362,52 @@ window.initGuestCapacity = initGuestCapacity;
 document.addEventListener('DOMContentLoaded', function () {
     document.querySelectorAll('form[data-guest-capacity]').forEach(initGuestCapacity);
 });
+
+// Global confirmation modal (components/confirm-modal.blade.php). A form with
+// data-confirm="<message>" is held on submit until the user confirms; the
+// confirm button is then disabled so the action can't be sent twice.
+(function () {
+    let pendingForm = null;
+    let pendingSubmitter = null;
+
+    document.addEventListener('submit', function (event) {
+        const form = event.target;
+        if (!form.matches || !form.matches('form[data-confirm]')) return;
+        if (form.dataset.confirmGranted === '1') {
+            delete form.dataset.confirmGranted;
+            return;
+        }
+        const modalEl = document.getElementById('globalConfirmModal');
+        if (!modalEl || !window.bootstrap) return;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+
+        pendingForm = form;
+        pendingSubmitter = event.submitter || null;
+        document.getElementById('globalConfirmTitle').textContent = form.dataset.confirmTitle || 'Please confirm';
+        document.getElementById('globalConfirmMessage').textContent = form.dataset.confirm;
+        const btn = document.getElementById('globalConfirmButton');
+        btn.textContent = form.dataset.confirmButton || 'Confirm';
+        btn.className = 'btn btn-' + (form.dataset.confirmVariant || 'primary');
+        btn.disabled = false;
+        bootstrap.Modal.getOrCreateInstance(modalEl).show();
+    }, true);
+
+    document.addEventListener('click', function (event) {
+        if (!event.target.closest('#globalConfirmButton') || !pendingForm) return;
+        const btn = document.getElementById('globalConfirmButton');
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1" aria-hidden="true"></span>' + btn.textContent;
+        const form = pendingForm;
+        const submitter = pendingSubmitter;
+        pendingForm = null;
+        pendingSubmitter = null;
+        form.dataset.confirmGranted = '1';
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('globalConfirmModal')).hide();
+        if (form.requestSubmit) {
+            submitter ? form.requestSubmit(submitter) : form.requestSubmit();
+        } else {
+            form.submit();
+        }
+    });
+})();

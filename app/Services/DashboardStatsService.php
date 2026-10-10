@@ -137,8 +137,8 @@ class DashboardStatsService
             User::where('created_at', '<=', now()->subMonth())
         )->count();
 
-        $totalRooms = Room::count();
-        $totalRoomsLastMonth = Room::where('created_at', '<=', now()->subMonth())->count();
+        $totalRooms = Room::notArchived()->count();
+        $totalRoomsLastMonth = Room::notArchived()->where('created_at', '<=', now()->subMonth())->count();
 
         return [
             // User stats - only Total Users gets a growth badge; Active/
@@ -177,17 +177,17 @@ class DashboardStatsService
             // individually checked out (CheckOutController::checkOutRoom(),
             // a multi-room booking whose siblings are still checked in) is
             // free again immediately, matching Room::isCurrentlyOccupied().
-            'availableRooms' => Room::where('status', '!=', 'maintenance')
+            'availableRooms' => Room::notArchived()->where('status', '!=', 'maintenance')
                 ->whereDoesntHave('assignedBookings', fn ($q) => TestAccountScope::excludeFromBookings(
                     $q->where('booking_status', Booking::STATUS_CHECKED_IN)
                 )->whereNull('booking_rooms.checked_out_at'))
                 ->count(),
-            'occupiedRooms' => Room::where('status', '!=', 'maintenance')
+            'occupiedRooms' => Room::notArchived()->where('status', '!=', 'maintenance')
                 ->whereHas('assignedBookings', fn ($q) => TestAccountScope::excludeFromBookings(
                     $q->where('booking_status', Booking::STATUS_CHECKED_IN)
                 )->whereNull('booking_rooms.checked_out_at'))
                 ->count(),
-            'maintenanceRooms' => Room::where('status', 'maintenance')->count(),
+            'maintenanceRooms' => Room::notArchived()->where('status', 'maintenance')->count(),
 
             // Promotions/Discounts/Amenities - plain status counts (not
             // date-range-qualified) so they match exactly what clicking
@@ -318,20 +318,20 @@ class DashboardStatsService
 
     private function computeManagerStats(Carbon $from, Carbon $to): array
     {
-        $totalRooms = Room::count();
+        $totalRooms = Room::notArchived()->count();
         // See adminStats()'s identical fix above - derived from an actual
         // CHECKED_IN booking assignment, not the stored `status` column.
-        $occupiedRooms = Room::where('status', '!=', 'maintenance')
+        $occupiedRooms = Room::notArchived()->where('status', '!=', 'maintenance')
             ->whereHas('assignedBookings', fn ($q) => TestAccountScope::excludeFromBookings(
                 $q->where('booking_status', Booking::STATUS_CHECKED_IN)
             )->whereNull('booking_rooms.checked_out_at'))
             ->count();
-        $availableRooms = Room::where('status', '!=', 'maintenance')
+        $availableRooms = Room::notArchived()->where('status', '!=', 'maintenance')
             ->whereDoesntHave('assignedBookings', fn ($q) => TestAccountScope::excludeFromBookings(
                 $q->where('booking_status', Booking::STATUS_CHECKED_IN)
             )->whereNull('booking_rooms.checked_out_at'))
             ->count();
-        $maintenanceRooms = Room::where('status', 'maintenance')->count();
+        $maintenanceRooms = Room::notArchived()->where('status', 'maintenance')->count();
         $occupancyRate = $totalRooms > 0
             ? round(($occupiedRooms / $totalRooms) * 100, 1)
             : 0;

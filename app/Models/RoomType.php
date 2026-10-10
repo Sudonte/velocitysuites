@@ -136,7 +136,7 @@ class RoomType extends Model
      */
     public function getGalleryAttribute(): array
     {
-        return $this->rooms()->with('images')->orderBy('room_number')->get()
+        return $this->rooms()->notArchived()->with('images')->orderBy('room_number')->get()
             ->flatMap(function (Room $room) {
                 return $room->images->map(function (RoomImage $image) use ($room) {
                     return [

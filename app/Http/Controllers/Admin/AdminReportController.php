@@ -173,18 +173,18 @@ class AdminReportController extends Controller
         // held only by a test-account booking counts as available here
         // (business-facing figure) - see TestAccountScope's own doc.
         $roomReports = [
-            'total' => Room::count(),
-            'available' => Room::where('status', '!=', 'maintenance')
+            'total' => Room::notArchived()->count(),
+            'available' => Room::notArchived()->where('status', '!=', 'maintenance')
                 ->whereDoesntHave('assignedBookings', fn ($q) => TestAccountScope::excludeFromBookings(
                     $q->where('booking_status', Booking::STATUS_CHECKED_IN)
                 )->whereNull('booking_rooms.checked_out_at'))
                 ->count(),
-            'occupied' => Room::where('status', '!=', 'maintenance')
+            'occupied' => Room::notArchived()->where('status', '!=', 'maintenance')
                 ->whereHas('assignedBookings', fn ($q) => TestAccountScope::excludeFromBookings(
                     $q->where('booking_status', Booking::STATUS_CHECKED_IN)
                 )->whereNull('booking_rooms.checked_out_at'))
                 ->count(),
-            'maintenance' => Room::where('status', 'maintenance')->count(),
+            'maintenance' => Room::notArchived()->where('status', 'maintenance')->count(),
         ];
 
         // Revenue summary (from completed payments), date-range scoped when set

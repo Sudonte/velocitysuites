@@ -21,6 +21,7 @@ class Room extends Model
 
     protected $casts = [
         'rate_override' => 'decimal:2',
+        'archived_at' => 'datetime',
     ];
 
     protected $appends = [
@@ -169,6 +170,51 @@ class Room extends Model
      * checked out yet) - that specific room is free again immediately,
      * it doesn't wait for the whole multi-room booking to finish.
      */
+    /** Rooms still in inventory (not archived). */
+    public function scopeNotArchived($query)
+    {
+        return $query->whereNull($query->getModel()->getTable() . '.archived_at');
+    }
+
+    public function isArchived(): bool
+    {
+        return $this->archived_at !== null;
+    }
+
+    /**
+     * Why this room can't be archived right now, or null if it can. Blocked
+     * while a guest is checked into it, and when removing it from inventory
+     * would leave a confirmed or checked-in booking of its type without a
+     * room for its dates.
+     */
+    public function archiveBlockReason(): ?string
+    {
+        if ($this->isCurrentlyOccupied()) {
+            return "Room {$this->room_number} is occupied - check the guest out before archiving it.";
+        }
+
+        // A room already under maintenance isn't counted as available, so
+        // archiving it doesn't reduce what bookings can rely on.
+        if ($this->status === 'maintenance' || ! $this->roomType) {
+            return null;
+        }
+
+        $availability = app(\App\Services\RoomAvailabilityService::class);
+        $bookings = Booking::where('room_type_id', $this->room_type_id)
+            ->whereIn('booking_status', [Booking::STATUS_ACTIVE, Booking::STATUS_CHECKED_IN])
+            ->where('check_out', '>', now()->startOfDay())
+            ->get(['id', 'check_in', 'check_out']);
+
+        foreach ($bookings as $booking) {
+            if ($availability->availableCount($this->roomType, $booking->check_in, $booking->check_out) < 1) {
+                return "Archiving Room {$this->room_number} would leave confirmed bookings of {$this->roomType->name} without a room "
+                    . "({$booking->check_in->format('M d')} - {$booking->check_out->format('M d, Y')}). Wait until those stays end.";
+            }
+        }
+
+        return null;
+    }
+
     public function isCurrentlyOccupied(): bool
     {
         return $this->assignedBookings()
@@ -188,6 +234,10 @@ class Room extends Model
      */
     public function getEffectiveStatusAttribute(): string
     {
+        if ($this->archived_at !== null) {
+            return 'archived';
+        }
+
         if ($this->status === 'maintenance') {
             return 'maintenance';
         }

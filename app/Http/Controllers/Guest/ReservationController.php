@@ -194,7 +194,7 @@ class ReservationController extends Controller
         if ($roomType->status !== 'active') {
             return back()->with('error', 'This room type is not currently offered.');
         }
-        if (!$roomType->rooms()->where('status', '!=', 'maintenance')->exists()) {
+        if (!$roomType->rooms()->notArchived()->where('status', '!=', 'maintenance')->exists()) {
             return back()->with('error', 'No rooms of this type are currently in service.');
         }
         $capacityError = GuestCapacity::error(

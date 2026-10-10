@@ -150,6 +150,7 @@
                     <option value="available" {{ request('status') === 'available' ? 'selected' : '' }}>Available</option>
                     <option value="occupied" {{ request('status') === 'occupied' ? 'selected' : '' }}>Occupied</option>
                     <option value="maintenance" {{ request('status') === 'maintenance' ? 'selected' : '' }}>Maintenance</option>
+                    <option value="archived" {{ request('status') === 'archived' ? 'selected' : '' }}>Archived ({{ $archivedCount }})</option>
                 </select>
             </div>
             <div class="col-md-3">
@@ -205,23 +206,50 @@
                             <a href="{{ route('admin.rooms.edit', $room) }}" class="btn btn-sm btn-outline-primary">
                                 <i class="fas fa-edit"></i> Edit
                             </a>
-                            @if($room->status === 'maintenance')
-                                <form action="{{ route('admin.rooms.reactivate', $room) }}" method="POST">
-                                    @csrf
-                                    @method('PUT')
-                                    <button type="submit" class="btn btn-sm btn-outline-success" onclick="return confirm('Reactivate Room {{ $room->room_number }} and make it available again?')">
-                                        <i class="fas fa-undo"></i> Reactivate
-                                    </button>
-                                </form>
-                            @else
-                                <form action="{{ route('admin.rooms.deactivate', $room) }}" method="POST">
-                                    @csrf
-                                    @method('PUT')
-                                    <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('Deactivate Room {{ $room->room_number }}? It will be set to maintenance and removed from availability.')">
-                                        <i class="fas fa-ban"></i> Deactivate
-                                    </button>
-                                </form>
-                            @endif
+                            <div class="d-flex gap-2">
+                                @if($room->isArchived())
+                                    <form action="{{ route('admin.rooms.restore', $room) }}" method="POST"
+                                          data-confirm="Room {{ $room->room_number }} will return to inventory and count toward availability again."
+                                          data-confirm-title="Restore Room {{ $room->room_number }}?" data-confirm-button="Restore Room" data-confirm-variant="success">
+                                        @csrf
+                                        @method('PUT')
+                                        <button type="submit" class="btn btn-sm btn-outline-success">
+                                            <i class="fas fa-box-open"></i> Restore
+                                        </button>
+                                    </form>
+                                @else
+                                    @if($room->status === 'maintenance')
+                                        <form action="{{ route('admin.rooms.reactivate', $room) }}" method="POST"
+                                              data-confirm="Room {{ $room->room_number }} will be set to available again."
+                                              data-confirm-title="Reactivate Room {{ $room->room_number }}?" data-confirm-button="Reactivate" data-confirm-variant="success">
+                                            @csrf
+                                            @method('PUT')
+                                            <button type="submit" class="btn btn-sm btn-outline-success">
+                                                <i class="fas fa-undo"></i> Reactivate
+                                            </button>
+                                        </form>
+                                    @else
+                                        <form action="{{ route('admin.rooms.deactivate', $room) }}" method="POST"
+                                              data-confirm="Room {{ $room->room_number }} will be set to maintenance and can't be booked or assigned until reactivated."
+                                              data-confirm-title="Deactivate Room {{ $room->room_number }}?" data-confirm-button="Set to Maintenance" data-confirm-variant="warning">
+                                            @csrf
+                                            @method('PUT')
+                                            <button type="submit" class="btn btn-sm btn-outline-warning">
+                                                <i class="fas fa-tools"></i> Maintenance
+                                            </button>
+                                        </form>
+                                    @endif
+                                    <form action="{{ route('admin.rooms.archive', $room) }}" method="POST"
+                                          data-confirm="Room {{ $room->room_number }} will be removed from inventory: it won't be bookable, assignable or counted. Its booking history is kept and you can restore it later."
+                                          data-confirm-title="Archive Room {{ $room->room_number }}?" data-confirm-button="Archive Room" data-confirm-variant="danger">
+                                        @csrf
+                                        @method('PUT')
+                                        <button type="submit" class="btn btn-sm btn-outline-danger">
+                                            <i class="fas fa-box-archive"></i> Archive
+                                        </button>
+                                    </form>
+                                @endif
+                            </div>
                         </div>
                     </div>
                 </div>

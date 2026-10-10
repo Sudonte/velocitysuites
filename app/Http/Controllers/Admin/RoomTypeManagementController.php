@@ -27,8 +27,8 @@ class RoomTypeManagementController extends Controller
         // docblock) - matches DashboardStatsService/AdminReportController's
         // own available-room counts instead of disagreeing with them.
         $query = RoomType::withCount([
-            'rooms',
-            'rooms as available_rooms_count' => fn ($q) => $q->where('status', '!=', 'maintenance')
+            'rooms' => fn ($q) => $q->notArchived(),
+            'rooms as available_rooms_count' => fn ($q) => $q->notArchived()->where('status', '!=', 'maintenance')
                 ->whereDoesntHave('assignedBookings', fn ($qq) => $qq->where('booking_status', Booking::STATUS_CHECKED_IN)->whereNull('booking_rooms.checked_out_at')),
         ]);
 
@@ -67,15 +67,17 @@ class RoomTypeManagementController extends Controller
             });
         }
 
-        if ($request->filled('status')) {
-            $query->where('status', $request->status);
+        if ($request->get('status') === 'archived') {
+            $query->whereNotNull('archived_at');
+        } else {
+            $query->notArchived();
+            if ($request->filled('status')) {
+                $query->where('status', $request->status);
+            }
         }
 
-        // simplePaginate (Previous/Next only, no numbered page-link boxes) -
-        // the numbered links render broken/oversized here for reasons that
-        // don't trace back to anything in this app's own CSS, same fix
-        // already applied everywhere else in the app.
         $rooms = $query->orderBy('room_number')->simplePaginate(20)->withQueryString();
+        $archivedCount = $roomType->rooms()->whereNotNull('archived_at')->count();
 
         // Preview of the next numbers the bulk-add would generate.
         $nextNumbers = $roomType->nextRoomNumbers(3);
@@ -84,7 +86,7 @@ class RoomTypeManagementController extends Controller
         // RoomType::getGalleryAttribute().
         $mergedGallery = collect($roomType->gallery);
 
-        return view('admin.room-types.show', compact('roomType', 'rooms', 'nextNumbers', 'mergedGallery'));
+        return view('admin.room-types.show', compact('roomType', 'rooms', 'nextNumbers', 'mergedGallery', 'archivedCount'));
     }
 
     /**

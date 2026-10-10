@@ -20,7 +20,8 @@ use Illuminate\Support\Collection;
 class RoomAvailabilityService
 {
     /**
-     * Total physical rooms of this type, regardless of status. This is the
+     * Physical rooms of this type still in inventory (archived rooms are
+     * excluded), regardless of status. This is the
      * denominator used in "fully booked" messaging (e.g. "3 of 3 rooms
      * booked") - a room under maintenance still counts as physical
      * inventory, it just can't currently be assigned (handled separately
@@ -28,7 +29,7 @@ class RoomAvailabilityService
      */
     public function totalInventory(RoomType $roomType): int
     {
-        return Room::where('room_type_id', $roomType->id)->count();
+        return Room::notArchived()->where('room_type_id', $roomType->id)->count();
     }
 
     /**
@@ -70,7 +71,7 @@ class RoomAvailabilityService
      */
     public function availableCount(RoomType $roomType, Carbon $checkIn, Carbon $checkOut, ?int $excludingBookingId = null): int
     {
-        $maintenanceCount = Room::where('room_type_id', $roomType->id)
+        $maintenanceCount = Room::notArchived()->where('room_type_id', $roomType->id)
             ->where('status', 'maintenance')
             ->count();
 
@@ -188,7 +189,7 @@ class RoomAvailabilityService
      */
     public function assignableRoomsOfType(int $roomTypeId, Booking $booking): Collection
     {
-        return Room::where('room_type_id', $roomTypeId)
+        return Room::notArchived()->where('room_type_id', $roomTypeId)
             ->where('status', '!=', 'maintenance')
             ->whereDoesntHave('assignedBookings', function ($q) use ($booking) {
                 $q->whereIn('bookings.booking_status', [Booking::STATUS_ACTIVE, Booking::STATUS_CHECKED_IN])

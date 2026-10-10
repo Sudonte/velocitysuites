@@ -7,8 +7,10 @@ use App\Models\Room;
 use App\Models\RoomImage;
 use App\Models\RoomType;
 use App\Services\NotificationService;
+use App\Support\Activity;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
 
@@ -206,6 +208,48 @@ class RoomManagementController extends Controller
         $room->update(['status' => 'maintenance']);
 
         return redirect()->route('admin.rooms.index')->with('success', 'Room deactivated (set to maintenance).');
+    }
+
+    /**
+     * Archive a room: it leaves inventory (availability, assignment, room
+     * counts) but is never deleted, so every booking that used it keeps it.
+     */
+    public function archive(Room $room): RedirectResponse
+    {
+        if ($room->isArchived()) {
+            return back()->with('error', "Room {$room->room_number} is already archived.");
+        }
+
+        $reason = DB::transaction(function () use ($room) {
+            app(\App\Services\RoomAvailabilityService::class)->lockRoomTypesForAvailabilityCheck([$room->room_type_id]);
+            $reason = $room->archiveBlockReason();
+            if ($reason === null) {
+                $room->forceFill(['archived_at' => now()])->save();
+            }
+
+            return $reason;
+        });
+
+        if ($reason !== null) {
+            return back()->with('error', $reason);
+        }
+
+        Activity::log('Archived room', "Room {$room->room_number} ({$room->roomType?->name}) archived", $room);
+
+        return back()->with('success', "Room {$room->room_number} archived. It no longer counts toward availability.");
+    }
+
+    /** Return an archived room to inventory. */
+    public function restore(Room $room): RedirectResponse
+    {
+        if (! $room->isArchived()) {
+            return back()->with('error', "Room {$room->room_number} is not archived.");
+        }
+
+        $room->forceFill(['archived_at' => null])->save();
+        Activity::log('Restored room', "Room {$room->room_number} ({$room->roomType?->name}) restored from archive", $room);
+
+        return back()->with('success', "Room {$room->room_number} restored to inventory.");
     }
 
     /**

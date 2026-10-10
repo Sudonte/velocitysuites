@@ -56,6 +56,7 @@ abstract class ApiFlowTestCase extends TestCase
             $table->string('name');
             $table->decimal('rate', 10, 2);
             $table->integer('capacity')->default(2);
+            $table->unsignedSmallInteger('min_capacity')->default(1);
             $table->string('status', 20)->default('active');
             $table->timestamps();
         });
@@ -68,6 +69,7 @@ abstract class ApiFlowTestCase extends TestCase
             $table->integer('room_capacity')->default(2);
             $table->decimal('rate_override', 10, 2)->nullable();
             $table->string('status', 20)->default('available');
+            $table->timestamp('archived_at')->nullable();
             $table->timestamps();
         });
 

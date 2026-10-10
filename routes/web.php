@@ -154,6 +154,8 @@ Route::middleware(['auth', 'account.status', 'log.activity', 'no.cache'])->group
         Route::delete('/room-types/{room_type}/image', [\App\Http\Controllers\Admin\RoomTypeManagementController::class, 'removeImage'])->name('room-types.image.remove');
         Route::put('/rooms/{room}/deactivate', [\App\Http\Controllers\Admin\RoomManagementController::class, 'deactivate'])->name('rooms.deactivate');
         Route::put('/rooms/{room}/reactivate', [\App\Http\Controllers\Admin\RoomManagementController::class, 'reactivate'])->name('rooms.reactivate');
+        Route::put('/rooms/{room}/archive', [\App\Http\Controllers\Admin\RoomManagementController::class, 'archive'])->name('rooms.archive');
+        Route::put('/rooms/{room}/restore', [\App\Http\Controllers\Admin\RoomManagementController::class, 'restore'])->name('rooms.restore');
         // Gallery images belong to the individual Room (see Room::images()),
         // not the Room Type - managed from each room's own Edit page. The
         // Room Type's merged gallery (RoomType::mergedGalleryWithLabels())

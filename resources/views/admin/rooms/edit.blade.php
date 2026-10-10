@@ -27,6 +27,12 @@
                         <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
                     </div>
                 @endif
+                @if (session('error'))
+                    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                        <i class="fas fa-exclamation-circle"></i> {{ session('error') }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                @endif
 
                 <form action="{{ route('admin.rooms.update', $room) }}" method="POST">
                     @csrf
@@ -248,21 +254,46 @@
             </x-card>
 
             <x-card title="Quick Actions" bodyClass="card-body">
-                @if($room->status === 'maintenance')
-                    <form action="{{ route('admin.rooms.reactivate', $room) }}" method="POST">
+                @if($room->isArchived())
+                    <p class="text-muted small">Archived {{ $room->archived_at->format('M d, Y') }} - not bookable, assignable or counted.</p>
+                    <form action="{{ route('admin.rooms.restore', $room) }}" method="POST"
+                          data-confirm="Room {{ $room->room_number }} will return to inventory and count toward availability again."
+                          data-confirm-title="Restore Room {{ $room->room_number }}?" data-confirm-button="Restore Room" data-confirm-variant="success">
                         @csrf
                         @method('PUT')
                         <button type="submit" class="btn btn-success w-100">
-                            <i class="fas fa-undo"></i> Reactivate
+                            <i class="fas fa-box-open"></i> Restore Room
                         </button>
                     </form>
                 @else
-                    <form action="{{ route('admin.rooms.deactivate', $room) }}" method="POST">
+                    @if($room->status === 'maintenance')
+                        <form action="{{ route('admin.rooms.reactivate', $room) }}" method="POST" class="mb-2"
+                              data-confirm="Room {{ $room->room_number }} will be set to available again."
+                              data-confirm-title="Reactivate Room {{ $room->room_number }}?" data-confirm-button="Reactivate" data-confirm-variant="success">
+                            @csrf
+                            @method('PUT')
+                            <button type="submit" class="btn btn-success w-100">
+                                <i class="fas fa-undo"></i> Reactivate
+                            </button>
+                        </form>
+                    @else
+                        <form action="{{ route('admin.rooms.deactivate', $room) }}" method="POST" class="mb-2"
+                              data-confirm="Room {{ $room->room_number }} will be set to maintenance and can't be booked or assigned until reactivated."
+                              data-confirm-title="Deactivate Room {{ $room->room_number }}?" data-confirm-button="Set to Maintenance" data-confirm-variant="warning">
+                            @csrf
+                            @method('PUT')
+                            <button type="submit" class="btn btn-warning w-100">
+                                <i class="fas fa-tools"></i> Set to Maintenance
+                            </button>
+                        </form>
+                    @endif
+                    <form action="{{ route('admin.rooms.archive', $room) }}" method="POST"
+                          data-confirm="Room {{ $room->room_number }} will be removed from inventory: it won't be bookable, assignable or counted. Its booking history is kept and you can restore it later."
+                          data-confirm-title="Archive Room {{ $room->room_number }}?" data-confirm-button="Archive Room" data-confirm-variant="danger">
                         @csrf
                         @method('PUT')
-                        <button type="submit" class="btn btn-warning w-100"
-                                onclick="return confirm('Deactivate this room? It will be set to maintenance and removed from availability.')">
-                            <i class="fas fa-ban"></i> Deactivate
+                        <button type="submit" class="btn btn-outline-danger w-100">
+                            <i class="fas fa-box-archive"></i> Archive Room
                         </button>
                     </form>
                 @endif

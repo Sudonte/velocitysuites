@@ -259,7 +259,7 @@ class ReservationController extends Controller
                 return response()->json(['message' => "{$roomType->name} is not currently offered."], 422);
             }
 
-            if (! $roomType->rooms()->where('status', '!=', 'maintenance')->exists()) {
+            if (! $roomType->rooms()->notArchived()->where('status', '!=', 'maintenance')->exists()) {
                 return response()->json(['message' => "No {$roomType->name} rooms are currently in service."], 422);
             }
 
@@ -611,7 +611,7 @@ class ReservationController extends Controller
                 if ($roomType->status !== 'active') {
                     return response()->json(['message' => "{$roomType->name} is not currently offered."], 422);
                 }
-                if (! $roomType->rooms()->where('status', '!=', 'maintenance')->exists()) {
+                if (! $roomType->rooms()->notArchived()->where('status', '!=', 'maintenance')->exists()) {
                     return response()->json(['message' => "No {$roomType->name} rooms are currently in service."], 422);
                 }
                 // Excludes this reservation itself (see

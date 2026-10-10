@@ -42,15 +42,15 @@ class ReceptionistController extends Controller
         // right now. Maintenance stays a plain column read since it's a
         // deliberate manual designation with no booking signal to derive it
         // from - see Room::getEffectiveStatusAttribute()'s docblock.
-        $maintenanceRooms = Room::where('status', 'maintenance')->count();
+        $maintenanceRooms = Room::notArchived()->where('status', 'maintenance')->count();
         // whereNull('booking_rooms.checked_out_at') - a room individually
         // checked out (CheckOutController::checkOutRoom(), a multi-room
         // booking whose siblings are still checked in) is free again
         // immediately, matching Room::isCurrentlyOccupied().
-        $occupiedRooms = Room::where('status', '!=', 'maintenance')
+        $occupiedRooms = Room::notArchived()->where('status', '!=', 'maintenance')
             ->whereHas('assignedBookings', fn ($q) => $q->where('booking_status', Booking::STATUS_CHECKED_IN)->whereNull('booking_rooms.checked_out_at'))
             ->count();
-        $availableRooms = Room::where('status', '!=', 'maintenance')
+        $availableRooms = Room::notArchived()->where('status', '!=', 'maintenance')
             ->whereDoesntHave('assignedBookings', fn ($q) => $q->where('booking_status', Booking::STATUS_CHECKED_IN)->whereNull('booking_rooms.checked_out_at'))
             ->count();
         $bookingRequests = Reservation::whereIn('status', Reservation::ACTIVE_STATUSES)->count();
@@ -128,9 +128,9 @@ class ReceptionistController extends Controller
     public function roomsIndex(): View
     {
         $roomTypes = \App\Models\RoomType::withCount([
-            'rooms',
+            'rooms' => fn ($q) => $q->notArchived(),
             'rooms as available_rooms_count' => function ($q) {
-                $q->where('status', 'available');
+                $q->notArchived()->where('status', 'available');
             },
         ])->orderBy('name')->get();
 
@@ -143,7 +143,7 @@ class ReceptionistController extends Controller
      */
     public function roomsShow(\App\Models\RoomType $roomType): View
     {
-        $rooms = $roomType->rooms()->with('images')->orderBy('room_number')->paginate(20);
+        $rooms = $roomType->rooms()->notArchived()->with('images')->orderBy('room_number')->paginate(20);
         $mergedGallery = collect($roomType->gallery);
 
         return view('receptionist.rooms.show', compact('roomType', 'rooms', 'mergedGallery'));
