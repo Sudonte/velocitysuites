@@ -116,7 +116,7 @@
                         <span class="text-muted">Archived</span>
                         <span>{{ $req->archived_at?->format('M d, Y') }}</span>
                     </div>
-                    <button type="button" class="btn btn-sm btn-outline-secondary w-100 mt-2" data-bs-toggle="modal"
+                    <button type="button" class="btn btn-outline-primary btn-sm w-100 mt-2" data-bs-toggle="modal"
                             data-bs-target="#amenityRequestDetail{{ $req->id }}">
                         <i class="fas fa-eye"></i> View Details
                     </button>
@@ -167,9 +167,9 @@
                             <td class="d-none d-lg-table-cell">{{ $req->archived_at?->format('M d, Y h:i A') }}</td>
                             <td><x-status-badge :status="$req->status" domain="amenity_request" /></td>
                             <td class="text-nowrap">
-                                <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal"
+                                <button type="button" class="btn btn-outline-primary btn-sm" data-bs-toggle="modal"
                                         data-bs-target="#amenityRequestDetail{{ $req->id }}" title="View details">
-                                    <i class="fas fa-eye"></i>
+                                    <i class="fas fa-eye"></i> View
                                 </button>
                             </td>
                         </tr>

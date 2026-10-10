@@ -78,7 +78,7 @@
                                 @endif
                             </td>
                             <td class="text-end">
-                                <a href="{{ $row['kind'] === 'booking' ? $bookingUrl($m) : $reservationUrl($m->id) }}" class="btn btn-sm btn-outline-primary"><i class="fas fa-eye"></i> View</a>
+                                <a href="{{ $row['kind'] === 'booking' ? $bookingUrl($m) : $reservationUrl($m->id) }}" class="btn btn-outline-primary btn-sm"><i class="fas fa-eye"></i> View</a>
                             </td>
                         </tr>
                     @empty

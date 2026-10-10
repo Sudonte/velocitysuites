@@ -69,7 +69,7 @@
                         <td>{{ $discount->start_date ? $discount->start_date->format('M j, Y') : '-' }}</td>
                         <td>{{ $discount->end_date ? $discount->end_date->format('M j, Y') : 'No expiry' }}</td>
                         <td><x-status-badge :status="$discount->status" domain="active_flag" /></td>
-                        <td>
+                        <td class="table-actions">
                             <a href="{{ route('admin.discounts.edit', $discount) }}" class="btn btn-outline-secondary btn-sm">
                                 <i class="fas fa-pen"></i> Edit
                             </a>

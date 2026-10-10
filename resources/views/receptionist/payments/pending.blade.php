@@ -46,8 +46,8 @@
                         <td>
                             <div class="d-flex gap-1">
                                 @if($reservation)
-                                    <button type="button" class="btn btn-sm btn-outline-secondary btn-open-detail" data-reservation-id="{{ $reservation->id }}">
-                                        <i class="fas fa-eye"></i>
+                                    <button type="button" class="btn btn-outline-primary btn-sm btn-open-detail" data-reservation-id="{{ $reservation->id }}">
+                                        <i class="fas fa-eye"></i> View
                                     </button>
                                 @endif
                                 <form action="{{ route('receptionist.payments.verify', $payment) }}" method="POST"

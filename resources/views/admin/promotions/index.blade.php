@@ -103,7 +103,7 @@
                         <td>
                             <x-status-badge :status="$promotion->status" domain="active_flag" />
                         </td>
-                        <td>
+                        <td class="table-actions">
                             <a href="{{ route('admin.promotions.edit', $promotion) }}" class="btn btn-outline-secondary btn-sm">
                                 <i class="fas fa-pen"></i> Edit
                             </a>

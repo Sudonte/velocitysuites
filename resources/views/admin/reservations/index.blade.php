@@ -133,7 +133,7 @@
                         <span class="text-muted">Status</span>
                         <x-status-badge :status="$item->monitor_status_value" :domain="$item->monitor_status_domain" />
                     </div>
-                    <a href="{{ $item->monitor_show_route }}" class="btn btn-sm btn-primary w-100 mt-2">
+                    <a href="{{ $item->monitor_show_route }}" class="btn btn-outline-primary btn-sm w-100 mt-2">
                         <i class="fas fa-eye"></i> View Details
                     </a>
                 </div>
@@ -197,8 +197,8 @@
                                 <x-status-badge :status="$item->monitor_status_value" :domain="$item->monitor_status_domain" />
                             </td>
                             <td>
-                                <a href="{{ $item->monitor_show_route }}" class="btn btn-sm btn-primary">
-                                    <i class="fas fa-eye"></i>
+                                <a href="{{ $item->monitor_show_route }}" class="btn btn-outline-primary btn-sm">
+                                    <i class="fas fa-eye"></i> View
                                 </a>
                             </td>
                         </tr>

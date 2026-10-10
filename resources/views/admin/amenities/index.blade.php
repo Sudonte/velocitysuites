@@ -112,9 +112,9 @@
                             <x-status-badge :status="$amenity->status" domain="active_flag" />
                         </td>
                         <td class="text-nowrap">
-                            <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal"
+                            <button type="button" class="btn btn-outline-primary btn-sm" data-bs-toggle="modal"
                                     data-bs-target="#amenityDetail{{ $amenity->id }}" title="View Details">
-                                <i class="fas fa-eye"></i>
+                                <i class="fas fa-eye"></i> View
                             </button>
                             <a href="{{ route('admin.amenities.edit', $amenity) }}" class="btn btn-outline-secondary btn-sm" title="Edit">
                                 <i class="fas fa-pen"></i> Edit

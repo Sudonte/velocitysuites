@@ -97,7 +97,7 @@
                                             <i class="fas fa-check"></i> Approve
                                         </button>
                                     </form>
-                                    <button type="button" class="btn btn-sm btn-danger" data-bs-toggle="modal" data-bs-target="#rejectModal{{ $req->id }}">
+                                    <button type="button" class="btn btn-outline-danger btn-sm" data-bs-toggle="modal" data-bs-target="#rejectModal{{ $req->id }}">
                                         <i class="fas fa-times"></i> Reject
                                     </button>
                                 </div>

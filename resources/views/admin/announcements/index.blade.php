@@ -85,9 +85,9 @@
                         </td>
                         <td class="text-end">
                             <div class="d-inline-flex flex-wrap justify-content-end gap-1">
-                                <button type="button" class="btn btn-sm btn-outline-secondary" title="View full details"
+                                <button type="button" class="btn btn-outline-primary btn-sm" title="View full details"
                                         data-bs-toggle="modal" data-bs-target="#announcementViewModal{{ $announcement->id }}">
-                                    <i class="fas fa-eye"></i>
+                                    <i class="fas fa-eye"></i> View
                                 </button>
                                 <a href="{{ route('admin.announcements.edit', $announcement) }}" class="btn btn-outline-secondary btn-sm" title="Edit">
                                     <i class="fas fa-pen"></i> Edit

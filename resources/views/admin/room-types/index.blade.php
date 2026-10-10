@@ -65,11 +65,11 @@
                         <p class="text-muted mb-2">{{ Str::limit($roomType->description, 130) ?: 'No description yet.' }}</p>
                         <p class="room-price mb-0">₱{{ number_format($roomType->rate, 2) }} <small class="text-muted">/night</small></p>
                     </div>
-                    <div class="card-footer d-flex justify-content-between align-items-center">
+                    <div class="card-footer d-flex flex-wrap justify-content-between align-items-center gap-2">
                         <a href="{{ route('admin.room-types.show', $roomType) }}" class="btn btn-primary btn-sm position-relative" style="z-index: 2;">
-                            <i class="fas fa-door-open"></i> Manage Room
+                            <i class="fas fa-door-open"></i> Manage Rooms
                         </a>
-                        <span>
+                        <span class="d-flex flex-wrap gap-2">
                             {{-- position-relative + own z-index keeps these clickable above the stretched-link --}}
                             <a href="{{ route('admin.room-types.edit', $roomType) }}" class="btn btn-outline-secondary btn-sm position-relative" style="z-index: 2;">
                                 <i class="fas fa-pen"></i> Edit

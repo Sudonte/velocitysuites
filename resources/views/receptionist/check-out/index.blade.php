@@ -91,7 +91,7 @@
                                              see the Rooms Panel modal below. Billing only
                                              starts once every room in this booking has
                                              checked out. --}}
-                                        <button type="button" class="btn btn-sm btn-outline-primary btn-view-rooms"
+                                        <button type="button" class="btn btn-outline-primary btn-sm btn-view-rooms"
                                             data-booking-id="{{ $booking->id }}">
                                             <i class="fas fa-eye"></i> View Rooms
                                         </button>

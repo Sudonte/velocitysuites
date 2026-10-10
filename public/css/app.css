@@ -1800,3 +1800,8 @@ tbody tr:hover {
 .nav-tabs .nav-link { color: var(--primary-color); }
 .nav-tabs .nav-link:hover { color: var(--accent-color, var(--primary-color)); }
 .nav-tabs .nav-link.active { color: var(--text-dark); font-weight: 600; }
+
+/* Row action buttons stay on one line; the table scrolls instead. */
+td.table-actions { white-space: nowrap; }
+td.table-actions form { display: inline-block; }
+td.table-actions > * + * { margin-left: 0.25rem; }
