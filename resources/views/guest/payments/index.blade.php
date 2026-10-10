@@ -117,14 +117,14 @@
                             @if($payment->isPendingVerification())
                                 <div class="d-flex gap-1">
                                     <form action="{{ route('guest.payments.void', $payment) }}" method="POST"
-                                          onsubmit="return confirm('Clear this payment attempt so you can submit a new one? The reservation itself will stay as-is.');">
+                                          data-confirm="The reservation itself will stay as-is." data-confirm-title="Clear this payment attempt so you can submit a new one?" data-confirm-button="Clear Payment" data-confirm-variant="warning">
                                         @csrf @method('PUT')
                                         <button type="submit" class="btn btn-sm btn-outline-secondary" title="Clear this attempt and try again">
                                             <i class="fas fa-rotate-left"></i> Void
                                         </button>
                                     </form>
                                     <form action="{{ route('guest.payments.cancel', $payment) }}" method="POST"
-                                          onsubmit="return confirm('Cancel this payment AND its reservation? This cannot be undone.');">
+                                          data-confirm="This cannot be undone." data-confirm-title="Cancel this payment AND its reservation?" data-confirm-button="Cancel Payment & Reservation" data-confirm-variant="danger">
                                         @csrf @method('PUT')
                                         <button type="submit" class="btn btn-sm btn-outline-danger" title="Cancel payment and reservation">
                                             <i class="fas fa-ban"></i> Cancel

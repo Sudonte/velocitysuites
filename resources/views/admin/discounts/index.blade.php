@@ -73,19 +73,17 @@
                             <a href="{{ route('admin.discounts.edit', $discount) }}" class="btn btn-sm btn-info">
                                 <i class="fas fa-edit"></i>
                             </a>
-                            <form action="{{ route('admin.discounts.toggle', $discount) }}" method="POST" class="d-inline">
+                            <form action="{{ route('admin.discounts.toggle', $discount) }}" method="POST" class="d-inline" data-confirm="It will switch between active and inactive." data-confirm-title="Toggle this discount status?" data-confirm-button="Change Status" data-confirm-variant="warning">
                                 @csrf
                                 @method('PUT')
-                                <button type="submit" class="btn btn-sm btn-{{ $discount->status === 'active' ? 'warning' : 'success' }}"
-                                        onclick="return confirm('Toggle this discount status?')">
+                                <button type="submit" class="btn btn-sm btn-{{ $discount->status === 'active' ? 'warning' : 'success' }}">
                                     <i class="fas fa-{{ $discount->status === 'active' ? 'ban' : 'check' }}"></i>
                                 </button>
                             </form>
-                            <form action="{{ route('admin.discounts.destroy', $discount) }}" method="POST" class="d-inline">
+                            <form action="{{ route('admin.discounts.destroy', $discount) }}" method="POST" class="d-inline" data-confirm="This can't be undone." data-confirm-title="Delete this discount?" data-confirm-button="Delete" data-confirm-variant="danger">
                                 @csrf
                                 @method('DELETE')
-                                <button type="submit" class="btn btn-sm btn-danger"
-                                        onclick="return confirm('Delete this discount?')">
+                                <button type="submit" class="btn btn-sm btn-danger">
                                     <i class="fas fa-trash"></i>
                                 </button>
                             </form>

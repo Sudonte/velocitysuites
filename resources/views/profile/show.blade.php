@@ -121,7 +121,7 @@
                         </form>
 
                         @if($user->profile_picture)
-                            <form action="{{ route('profile.picture.remove') }}" method="POST" onsubmit="return confirm('Remove your profile picture?');">
+                            <form action="{{ route('profile.picture.remove') }}" method="POST" data-confirm="Your avatar will show your initials instead." data-confirm-title="Remove your profile picture?" data-confirm-button="Remove Picture" data-confirm-variant="danger">
                                 @csrf
                                 @method('DELETE')
                                 <button type="submit" class="btn btn-outline-danger">

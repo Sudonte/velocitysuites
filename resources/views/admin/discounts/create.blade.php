@@ -21,7 +21,7 @@
                     </div>
                 @endif
 
-                <form action="{{ route('admin.discounts.store') }}" method="POST">
+                <form action="{{ route('admin.discounts.store') }}" method="POST" data-confirm="Staff will be able to apply it at billing." data-confirm-title="Create this discount?" data-confirm-button="Create Discount" data-confirm-variant="success">
                     @csrf
 
                     <div class="form-group mb-3">

@@ -107,19 +107,17 @@
                             <a href="{{ route('admin.promotions.edit', $promotion) }}" class="btn btn-sm btn-info">
                                 <i class="fas fa-edit"></i>
                             </a>
-                            <form action="{{ route('admin.promotions.toggle', $promotion) }}" method="POST" class="d-inline">
+                            <form action="{{ route('admin.promotions.toggle', $promotion) }}" method="POST" class="d-inline" data-confirm="It will switch between active and inactive." data-confirm-title="Toggle this promotion status?" data-confirm-button="Change Status" data-confirm-variant="warning">
                                 @csrf
                                 @method('PUT')
-                                <button type="submit" class="btn btn-sm btn-{{ $promotion->status === 'active' ? 'warning' : 'success' }}"
-                                        onclick="return confirm('Toggle this promotion status?')">
+                                <button type="submit" class="btn btn-sm btn-{{ $promotion->status === 'active' ? 'warning' : 'success' }}">
                                     <i class="fas fa-{{ $promotion->status === 'active' ? 'ban' : 'check' }}"></i>
                                 </button>
                             </form>
-                            <form action="{{ route('admin.promotions.destroy', $promotion) }}" method="POST" class="d-inline">
+                            <form action="{{ route('admin.promotions.destroy', $promotion) }}" method="POST" class="d-inline" data-confirm="This can't be undone." data-confirm-title="Delete this promotion?" data-confirm-button="Delete" data-confirm-variant="danger">
                                 @csrf
                                 @method('DELETE')
-                                <button type="submit" class="btn btn-sm btn-danger"
-                                        onclick="return confirm('Delete this promotion?')">
+                                <button type="submit" class="btn btn-sm btn-danger">
                                     <i class="fas fa-trash"></i>
                                 </button>
                             </form>

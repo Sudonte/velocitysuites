@@ -21,7 +21,7 @@
                     </div>
                 @endif
 
-                <form action="{{ route('admin.users.store') }}" method="POST">
+                <form action="{{ route('admin.users.store') }}" method="POST" data-confirm="The new user will be able to log in with the details you entered." data-confirm-title="Create this account?" data-confirm-button="Create Account" data-confirm-variant="success">
                     @csrf
 
                     <div class="row">

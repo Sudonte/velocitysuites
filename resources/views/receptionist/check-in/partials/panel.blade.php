@@ -41,7 +41,7 @@
         </div>
     @else
         @php $panelCapacity = \App\Support\GuestCapacity::range(\App\Support\GuestCapacity::linesForBooking($booking)); @endphp
-        <form id="checkInForm" data-guest-capacity data-capacity-min="{{ $panelCapacity['min'] }}" data-capacity-max="{{ $panelCapacity['max'] }}">
+        <form id="checkInForm" data-confirm="The selected rooms will be marked occupied and the stay starts now." data-confirm-title="Complete check-in for {{ $booking->guest_display_name }}?" data-confirm-button="Confirm Check-in" data-confirm-variant="success" data-guest-capacity data-capacity-min="{{ $panelCapacity['min'] }}" data-capacity-max="{{ $panelCapacity['max'] }}">
             {{-- Step 1: Guest Details (registration card) - confirmed before room
                  assignment, since who's actually at the counter (and how many of
                  them there are) can differ from what was booked. --}}

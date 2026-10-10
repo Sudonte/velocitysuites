@@ -51,7 +51,7 @@
                                     </button>
                                 @endif
                                 <form action="{{ route('receptionist.payments.verify', $payment) }}" method="POST"
-                                      onsubmit="return confirm('Verify this payment as received?');">
+                                      data-confirm="It will be marked as verified." data-confirm-title="Verify this payment as received?" data-confirm-button="Verify Payment" data-confirm-variant="success">
                                     @csrf
                                     <button type="submit" class="btn btn-sm btn-success">
                                         <i class="fas fa-check"></i> Verify

@@ -279,6 +279,15 @@ document.addEventListener('DOMContentLoaded', function () {
         const btn = e.target.closest('.btn-checkout-room');
         if (!btn) return;
 
+        const isLast = btn.dataset.lastRoom === '1';
+        const proceed = await window.confirmAction({
+            title: 'Check out Room ' + btn.dataset.roomNumber + '?',
+            message: isLast ? 'This is the last room - billing opens next.' : 'The room becomes free right away; the booking stays open for its other rooms.',
+            button: 'Check Out Room',
+            variant: 'primary',
+        }, btn);
+        if (!proceed) return;
+
         btn.disabled = true;
         try {
             const data = await fetchJson(buildRoomCheckoutUrl(activeBookingId, btn.dataset.roomId), { method: 'PUT' });
@@ -348,7 +357,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
         // Cancel Billing
         if (e.target.closest('#cancelBillingBtn')) {
-            if (!confirm('Discard this bill? Nothing will be saved.')) return;
+            if (!(await window.confirmAction({ title: 'Discard this bill?', message: 'Nothing on it will be saved.', button: 'Discard Bill', variant: 'danger' }, e.target))) return;
             try {
                 await fetchJson(buildUrl(urls.cancelBilling, currentBillingId()), { method: 'DELETE' });
                 billingModal.hide();
@@ -408,7 +417,7 @@ document.addEventListener('DOMContentLoaded', function () {
         // Delete charge row
         const deleteBtn = e.target.closest('.charge-delete-btn');
         if (deleteBtn) {
-            if (!confirm('Remove this charge?')) return;
+            if (!(await window.confirmAction({ title: 'Remove this charge?', message: 'It will be taken off the bill.', button: 'Remove Charge', variant: 'danger' }, e.target))) return;
             const row = deleteBtn.closest('tr');
             const chargeId = row.dataset.chargeId;
             try {

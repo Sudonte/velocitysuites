@@ -94,7 +94,7 @@
                                 </a>
                                 @if($announcement->status === 'published')
                                     <form action="{{ route('admin.announcements.unpublish', $announcement) }}" method="POST" class="d-inline"
-                                          onsubmit="return confirm('Unpublish &quot;{{ addslashes($announcement->title) }}&quot;? It will stop appearing on the public Home page and dashboards.');">
+                                          data-confirm="It will stop appearing on the public Home page and dashboards." data-confirm-title="Unpublish &quot;{{ $announcement->title }}&quot;?" data-confirm-button="Unpublish" data-confirm-variant="warning">
                                         @csrf
                                         @method('PUT')
                                         <button type="submit" class="btn btn-sm btn-outline-warning" title="Unpublish">
@@ -103,7 +103,7 @@
                                     </form>
                                 @else
                                     <form action="{{ route('admin.announcements.publish', $announcement) }}" method="POST" class="d-inline"
-                                          onsubmit="return confirm('Publish &quot;{{ addslashes($announcement->title) }}&quot; now? This will notify the selected target audience.');">
+                                          data-confirm="This will notify the selected target audience." data-confirm-title="Publish &quot;{{ $announcement->title }}&quot; now?" data-confirm-button="Publish Now" data-confirm-variant="primary">
                                         @csrf
                                         @method('PUT')
                                         <button type="submit" class="btn btn-sm btn-outline-success" title="Publish">
@@ -112,7 +112,7 @@
                                     </form>
                                 @endif
                                 <form action="{{ route('admin.announcements.destroy', $announcement) }}" method="POST" class="d-inline"
-                                      onsubmit="return confirm('Permanently delete &quot;{{ addslashes($announcement->title) }}&quot;? This cannot be undone. Already-sent notifications will not be affected.');">
+                                      data-confirm="This cannot be undone. Already-sent notifications will not be affected." data-confirm-title="Permanently delete &quot;{{ $announcement->title }}&quot;?" data-confirm-button="Delete Permanently" data-confirm-variant="danger">
                                     @csrf
                                     @method('DELETE')
                                     <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete">

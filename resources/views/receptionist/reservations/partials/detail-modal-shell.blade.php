@@ -119,10 +119,10 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     });
 
-    modalContent.addEventListener('click', function (e) {
+    modalContent.addEventListener('click', async function (e) {
         // Confirm Reservation
         if (e.target.closest('#confirmReservationBtn')) {
-            if (!confirm('Confirm this reservation?')) return;
+            if (!(await window.confirmAction({ title: 'Confirm this reservation?', message: 'The guest will be notified.', button: 'Confirm Reservation', variant: 'success' }, e.target))) return;
             postJson(buildUrl(confirmUrlTemplate, activeReservationId))
                 .then(data => refreshDetail(data.html, data.message))
                 .catch(err => showDetailError(err.message));
@@ -149,7 +149,7 @@ document.addEventListener('DOMContentLoaded', function () {
         // checked in, so close the modal (triggering the list reload
         // below) instead of refreshing the modal body in place.
         if (e.target.closest('#checkInGuestBtn')) {
-            if (!confirm('Check in this guest now?')) return;
+            if (!(await window.confirmAction({ title: 'Check in this guest now?', message: 'The stay starts now.', button: 'Confirm Check-in', variant: 'success' }, e.target))) return;
             postJson(buildUrl(checkInUrlTemplate, activeReservationId))
                 .then(data => {
                     listNeedsRefresh = true;

@@ -21,7 +21,7 @@
                     </div>
                 @endif
 
-                <form action="{{ route('admin.amenities.store') }}" method="POST">
+                <form action="{{ route('admin.amenities.store') }}" method="POST" data-confirm="It will be added to the amenity catalog." data-confirm-title="Create this amenity?" data-confirm-button="Create Amenity" data-confirm-variant="success">
                     @csrf
 
                     <div class="form-group mb-3">

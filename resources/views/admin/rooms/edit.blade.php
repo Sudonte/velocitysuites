@@ -208,12 +208,11 @@
                                                 onclick="document.getElementById('replaceRoomImageForm{{ $image->id }}').classList.toggle('d-none')">
                                             <i class="fas fa-rotate"></i>
                                         </button>
-                                        <form action="{{ route('admin.rooms.gallery.destroy', $image) }}" method="POST">
+                                        <form action="{{ route('admin.rooms.gallery.destroy', $image) }}" method="POST" data-confirm="This can't be undone." data-confirm-title="Delete this gallery image?" data-confirm-button="Delete" data-confirm-variant="danger">
                                             @csrf
                                             @method('DELETE')
                                             <button type="submit" class="btn btn-sm btn-danger"
-                                                    {{ $galleryCount <= 4 ? 'disabled title="Room must keep at least 4 photos - replace instead"' : '' }}
-                                                    onclick="return confirm('Delete this gallery image?')">
+                                                    {{ $galleryCount <= 4 ? 'disabled title="Room must keep at least 4 photos - replace instead"' : '' }}>
                                                 <i class="fas fa-trash"></i>
                                             </button>
                                         </form>

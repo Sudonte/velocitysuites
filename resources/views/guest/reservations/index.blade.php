@@ -105,7 +105,7 @@
                             @endif
                             @if($isCancelled || $isCompleted)
                                 <form action="{{ route('guest.reservations.hide', $reservation) }}" method="POST" class="d-inline"
-                                      onsubmit="return confirm('Remove this from your list? This only hides it from your view - staff records are kept.');">
+                                      data-confirm="This only hides it from your view - staff records are kept." data-confirm-title="Remove this from your list?" data-confirm-button="Remove from List" data-confirm-variant="secondary">
                                     @csrf @method('PUT')
                                     <button type="submit" class="btn btn-sm btn-outline-danger" title="Remove from my list">
                                         <i class="fas fa-trash"></i>

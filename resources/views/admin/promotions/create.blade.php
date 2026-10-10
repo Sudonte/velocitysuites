@@ -21,7 +21,7 @@
                     </div>
                 @endif
 
-                <form action="{{ route('admin.promotions.store') }}" method="POST" enctype="multipart/form-data">
+                <form action="{{ route('admin.promotions.store') }}" method="POST" data-confirm="Its included amenities are granted when a reservation converts to a booking." data-confirm-title="Create this promotion?" data-confirm-button="Create Promotion" data-confirm-variant="success" enctype="multipart/form-data">
                     @csrf
 
                     <div class="form-group mb-3">

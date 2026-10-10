@@ -119,20 +119,22 @@
                             <a href="{{ route('admin.amenities.edit', $amenity) }}" class="btn btn-sm btn-info" title="Edit">
                                 <i class="fas fa-edit"></i>
                             </a>
-                            <form action="{{ route('admin.amenities.toggle', $amenity) }}" method="POST" class="d-inline">
+                            @php $amenityActive = $amenity->status === 'active'; @endphp
+                            <form action="{{ route('admin.amenities.toggle', $amenity) }}" method="POST" class="d-inline"
+                                  data-confirm="{{ $amenityActive ? 'Guests and staff will no longer be able to select it.' : 'Guests and staff will be able to select it again.' }}"
+                                  data-confirm-title="{{ $amenityActive ? 'Deactivate' : 'Activate' }} &quot;{{ $amenity->amenity_name }}&quot;?"
+                                  data-confirm-button="{{ $amenityActive ? 'Deactivate' : 'Activate' }}" data-confirm-variant="{{ $amenityActive ? 'warning' : 'success' }}">
                                 @csrf
                                 @method('PUT')
                                 <button type="submit" class="btn btn-sm btn-{{ $amenity->status === 'active' ? 'warning' : 'success' }}"
-                                        title="{{ $amenity->status === 'active' ? 'Deactivate' : 'Activate' }}"
-                                        onclick="return confirm('{{ $amenity->status === 'active' ? 'Deactivate' : 'Activate' }} this amenity?')">
+                                        title="{{ $amenity->status === 'active' ? 'Deactivate' : 'Activate' }}">
                                     <i class="fas fa-{{ $amenity->status === 'active' ? 'ban' : 'check' }}"></i>
                                 </button>
                             </form>
-                            <form action="{{ route('admin.amenities.destroy', $amenity) }}" method="POST" class="d-inline">
+                            <form action="{{ route('admin.amenities.destroy', $amenity) }}" method="POST" class="d-inline" data-confirm="This cannot be undone from this screen, though historical requests referencing it are preserved." data-confirm-title="Delete &quot;{{ $amenity->amenity_name }}&quot;?" data-confirm-button="Delete" data-confirm-variant="danger">
                                 @csrf
                                 @method('DELETE')
-                                <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete"
-                                        onclick="return confirm('Delete &quot;{{ $amenity->amenity_name }}&quot;? This cannot be undone from this screen, though historical requests referencing it are preserved.')">
+                                <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete">
                                     <i class="fas fa-trash"></i>
                                 </button>
                             </form>

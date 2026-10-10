@@ -215,10 +215,10 @@
 
                     @unless($gcashPayment->isVerified() || $gcashPayment->isRejected())
                         <div class="d-flex gap-2">
-                            <form action="{{ route('receptionist.payments.verify', $gcashPayment) }}" method="POST" class="d-inline">
+                            <form action="{{ route('receptionist.payments.verify', $gcashPayment) }}" method="POST" class="d-inline" data-confirm="Make sure the registered number and receipt have both been checked against the booking details." data-confirm-title="Verify this GCash payment?" data-confirm-button="Verify Payment" data-confirm-variant="success">
                                 @csrf
                                 @method('PUT')
-                                <button type="submit" class="btn btn-sm btn-success" onclick="return confirm('Verify this GCash payment? Make sure the registered number and receipt have both been checked against the booking details.')">
+                                <button type="submit" class="btn btn-sm btn-success">
                                     <i class="fas fa-check"></i> Verify Payment
                                 </button>
                             </form>
@@ -283,7 +283,7 @@
                     <h6 class="text-brand"><i class="fas fa-hand-holding-dollar"></i> Record Walk-In Payment</h6>
                     <p class="text-muted small">Any remaining balance is settled through a walk-in cash payment at the hotel - record it here as it's received.</p>
                     <form action="{{ route('receptionist.bookings.record-payment', $booking) }}" method="POST" class="row g-2 align-items-end"
-                          onsubmit="return confirm('Record this cash payment against the booking\'s remaining balance?')">
+                          data-confirm="Record this cash payment against the booking's remaining balance?" data-confirm-title="Record this cash payment against the booking's remaining balance?" data-confirm-button="Record Payment" data-confirm-variant="success">
                         @csrf
                         <div class="col-sm-6">
                             <label class="form-label small mb-1">Amount Received (₱)</label>
@@ -361,7 +361,7 @@
                                 </button>
                             </form>
                         @endunless
-                        <form action="{{ route('receptionist.bookings.destroy', $booking) }}" method="POST" onsubmit="return confirm('Delete this booking? It will no longer appear anywhere in the Bookings module.');">
+                        <form action="{{ route('receptionist.bookings.destroy', $booking) }}" method="POST" data-confirm="It will no longer appear anywhere in the Bookings module." data-confirm-title="Delete this booking?" data-confirm-button="Delete" data-confirm-variant="danger">
                             @csrf
                             @method('DELETE')
                             <button type="submit" class="btn btn-outline-danger">
@@ -380,10 +380,10 @@
                         </div>
                     @else
                         <div class="d-flex gap-2 mb-3">
-                            <form action="{{ route('receptionist.bookings.verify', $booking) }}" method="POST">
+                            <form action="{{ route('receptionist.bookings.verify', $booking) }}" method="POST" data-confirm="The booking will be marked as verified." data-confirm-title="Verify this booking?" data-confirm-button="Verify Booking" data-confirm-variant="success">
                                 @csrf
                                 @method('PUT')
-                                <button type="submit" class="btn btn-success" onclick="return confirm('Verify this booking?')">
+                                <button type="submit" class="btn btn-success">
                                     <i class="fas fa-check"></i> Verify Booking
                                 </button>
                             </form>
@@ -392,7 +392,7 @@
                             </button>
                         </div>
                         <div class="collapse" id="rejectBookingForm">
-                            <form action="{{ route('receptionist.bookings.reject', $booking) }}" method="POST" onsubmit="return confirm('Reject this booking? This cannot be undone.')">
+                            <form action="{{ route('receptionist.bookings.reject', $booking) }}" method="POST" data-confirm="This cannot be undone." data-confirm-title="Reject this booking?" data-confirm-button="Reject Booking" data-confirm-variant="danger">
                                 @csrf
                                 @method('PUT')
                                 <div class="mb-2">
@@ -414,7 +414,7 @@
                         verification, assignment, or other changes can be made.
                     </p>
                     <p class="text-muted small mb-3"><i class="fas fa-box-archive"></i> Archived {{ $booking->hidden_at->format('M d, Y h:i A') }}</p>
-                    <form action="{{ route('receptionist.bookings.destroy', $booking) }}" method="POST" onsubmit="return confirm('Delete this booking? It will no longer appear anywhere in the Bookings module.');">
+                    <form action="{{ route('receptionist.bookings.destroy', $booking) }}" method="POST" data-confirm="It will no longer appear anywhere in the Bookings module." data-confirm-title="Delete this booking?" data-confirm-button="Delete" data-confirm-variant="danger">
                         @csrf
                         @method('DELETE')
                         <button type="submit" class="btn btn-outline-danger">
@@ -425,10 +425,10 @@
             @else
                 <x-card title="Completed Booking" icon="fas fa-check-circle" bodyClass="card-body">
                     <p class="mb-3">This booking has been verified and completed.</p>
-                    <form action="{{ route('receptionist.bookings.archive', $booking) }}" method="POST">
+                    <form action="{{ route('receptionist.bookings.archive', $booking) }}" method="POST" data-confirm="It will move to the Archived list." data-confirm-title="Archive this completed booking?" data-confirm-button="Archive Booking" data-confirm-variant="secondary">
                         @csrf
                         @method('PUT')
-                        <button type="submit" class="btn btn-outline-secondary" onclick="return confirm('Archive this completed booking? It will move to the Archived list.')">
+                        <button type="submit" class="btn btn-outline-secondary">
                             <i class="fas fa-box-archive"></i> Archive
                         </button>
                     </form>

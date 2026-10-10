@@ -123,7 +123,7 @@
                                         <li>
                                             @if($user->status === 'active')
                                                 <form action="{{ route('admin.users.deactivate', $user) }}" method="POST"
-                                                      onsubmit="return confirm('Deactivate this user?')">
+                                                      data-confirm="They won't be able to log in until reactivated." data-confirm-title="Deactivate this user?" data-confirm-button="Deactivate User" data-confirm-variant="warning">
                                                     @csrf
                                                     @method('PUT')
                                                     <button type="submit" class="dropdown-item text-warning">
@@ -132,7 +132,7 @@
                                                 </form>
                                             @else
                                                 <form action="{{ route('admin.users.reactivate', $user) }}" method="POST"
-                                                      onsubmit="return confirm('Reactivate this user?')">
+                                                      data-confirm="They'll be able to log in again." data-confirm-title="Reactivate this user?" data-confirm-button="Reactivate User" data-confirm-variant="success">
                                                     @csrf
                                                     @method('PUT')
                                                     <button type="submit" class="dropdown-item text-success">
@@ -143,7 +143,7 @@
                                         </li>
                                         <li>
                                             <form action="{{ route('admin.users.resetPassword', $user) }}" method="POST"
-                                                  onsubmit="return confirm('Reset password to the default (velocitysuites123)?')">
+                                                  data-confirm="They will be asked to choose a new password at their next login." data-confirm-title="Reset password to the default (velocitysuites123)?" data-confirm-button="Reset Password" data-confirm-variant="warning">
                                                 @csrf
                                                 @method('PUT')
                                                 <button type="submit" class="dropdown-item">

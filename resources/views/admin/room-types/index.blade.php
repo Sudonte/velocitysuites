@@ -75,18 +75,18 @@
                                 <i class="fas fa-edit"></i>
                             </a>
                             @if($roomType->status === 'inactive')
-                                <form action="{{ route('admin.room-types.reactivate', $roomType) }}" method="POST" class="d-inline position-relative" style="z-index: 2;">
+                                <form action="{{ route('admin.room-types.reactivate', $roomType) }}" method="POST" class="d-inline position-relative" style="z-index: 2;" data-confirm="Guests will be able to browse and book it again." data-confirm-title="Reactivate this room type?" data-confirm-button="Reactivate Room Type" data-confirm-variant="success">
                                     @csrf
                                     @method('PUT')
-                                    <button type="submit" class="btn btn-sm btn-outline-success" onclick="return confirm('Reactivate this room type? Guests will be able to browse and book it again.')">
+                                    <button type="submit" class="btn btn-sm btn-outline-success">
                                         <i class="fas fa-undo"></i>
                                     </button>
                                 </form>
                             @else
-                                <form action="{{ route('admin.room-types.deactivate', $roomType) }}" method="POST" class="d-inline position-relative" style="z-index: 2;">
+                                <form action="{{ route('admin.room-types.deactivate', $roomType) }}" method="POST" class="d-inline position-relative" style="z-index: 2;" data-confirm="Guests will no longer be able to browse or book it." data-confirm-title="Deactivate this room type?" data-confirm-button="Deactivate Room Type" data-confirm-variant="warning">
                                     @csrf
                                     @method('PUT')
-                                    <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('Deactivate this room type? Guests will no longer be able to browse or book it.')">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger">
                                         <i class="fas fa-ban"></i>
                                     </button>
                                 </form>

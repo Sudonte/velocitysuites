@@ -29,7 +29,7 @@
                     </div>
                 @endif
 
-                <form action="{{ route('admin.promotions.update', $promotion) }}" method="POST" enctype="multipart/form-data">
+                <form action="{{ route('admin.promotions.update', $promotion) }}" method="POST" data-confirm="The promotion and its included amenities will be updated." data-confirm-title="Save changes to {{ $promotion->promo_name }}?" data-confirm-button="Save Changes" data-confirm-variant="primary" enctype="multipart/form-data">
                     @csrf
                     @method('PUT')
 

@@ -157,28 +157,28 @@
                             @if($booking->gcashPaymentNeedsVerification())
                                 <span class="badge bg-secondary align-self-center">Review payment first</span>
                             @else
-                                <form action="{{ route('receptionist.bookings.verify', $booking) }}" method="POST" class="flex-fill">
+                                <form action="{{ route('receptionist.bookings.verify', $booking) }}" method="POST" class="flex-fill" data-confirm="The booking will be marked as verified." data-confirm-title="Verify this booking?" data-confirm-button="Verify Booking" data-confirm-variant="success">
                                     @csrf
                                     @method('PUT')
-                                    <button type="submit" class="btn btn-sm btn-success w-100" onclick="return confirm('Verify this booking?')">
+                                    <button type="submit" class="btn btn-sm btn-success w-100">
                                         <i class="fas fa-check"></i> Verify
                                     </button>
                                 </form>
                             @endif
                         @elseif($tab === 'verified' || $tab === 'rejected')
-                            <form action="{{ route('receptionist.bookings.archive', $booking) }}" method="POST" class="flex-fill">
+                            <form action="{{ route('receptionist.bookings.archive', $booking) }}" method="POST" class="flex-fill" data-confirm="It will move to Archived Bookings." data-confirm-title="Archive this booking?" data-confirm-button="Archive Booking" data-confirm-variant="secondary">
                                 @csrf
                                 @method('PUT')
-                                <button type="submit" class="btn btn-sm btn-outline-secondary w-100" onclick="return confirm('Archive this booking?')">
+                                <button type="submit" class="btn btn-sm btn-outline-secondary w-100">
                                     <i class="fas fa-box-archive"></i> Archive
                                 </button>
                             </form>
                         @endif
                         @if($tab === 'rejected' || $tab === 'archived')
-                            <form action="{{ route('receptionist.bookings.destroy', $booking) }}" method="POST" class="flex-fill">
+                            <form action="{{ route('receptionist.bookings.destroy', $booking) }}" method="POST" class="flex-fill" data-confirm="It will no longer appear anywhere in the Bookings module." data-confirm-title="Delete this booking?" data-confirm-button="Delete" data-confirm-variant="danger">
                                 @csrf
                                 @method('DELETE')
-                                <button type="submit" class="btn btn-sm btn-outline-danger w-100" onclick="return confirm('Delete this booking? It will no longer appear anywhere in the Bookings module.')">
+                                <button type="submit" class="btn btn-sm btn-outline-danger w-100">
                                     <i class="fas fa-trash"></i> Delete
                                 </button>
                             </form>
@@ -286,19 +286,19 @@
                                         <i class="fas fa-hourglass-half"></i> Review payment first
                                     </span>
                                 @else
-                                    <form action="{{ route('receptionist.bookings.verify', $booking) }}" method="POST" class="d-inline">
+                                    <form action="{{ route('receptionist.bookings.verify', $booking) }}" method="POST" class="d-inline" data-confirm="The booking will be marked as verified." data-confirm-title="Verify this booking?" data-confirm-button="Verify Booking" data-confirm-variant="success">
                                         @csrf
                                         @method('PUT')
-                                        <button type="submit" class="btn btn-sm btn-success" onclick="return confirm('Verify this booking?')">
+                                        <button type="submit" class="btn btn-sm btn-success">
                                             <i class="fas fa-check"></i> Verify Booking
                                         </button>
                                     </form>
                                 @endif
                             @elseif($tab === 'verified')
-                                <form action="{{ route('receptionist.bookings.archive', $booking) }}" method="POST" class="d-inline">
+                                <form action="{{ route('receptionist.bookings.archive', $booking) }}" method="POST" class="d-inline" data-confirm="It will move to the Archived list." data-confirm-title="Archive this completed booking?" data-confirm-button="Archive Booking" data-confirm-variant="secondary">
                                     @csrf
                                     @method('PUT')
-                                    <button type="submit" class="btn btn-sm btn-outline-secondary" title="Archive" onclick="return confirm('Archive this completed booking? It will move to the Archived list.')">
+                                    <button type="submit" class="btn btn-sm btn-outline-secondary" title="Archive">
                                         <i class="fas fa-box-archive"></i> Archive
                                     </button>
                                 </form>
@@ -310,18 +310,18 @@
                                         <i class="fas fa-box-archive"></i> Archive
                                     </button>
                                 </form>
-                                <form action="{{ route('receptionist.bookings.destroy', $booking) }}" method="POST" class="d-inline">
+                                <form action="{{ route('receptionist.bookings.destroy', $booking) }}" method="POST" class="d-inline" data-confirm="It will no longer appear anywhere in the Bookings module." data-confirm-title="Delete this booking?" data-confirm-button="Delete" data-confirm-variant="danger">
                                     @csrf
                                     @method('DELETE')
-                                    <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete" onclick="return confirm('Delete this booking? It will no longer appear anywhere in the Bookings module.')">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete">
                                         <i class="fas fa-trash"></i> Delete
                                     </button>
                                 </form>
                             @elseif($tab === 'archived')
-                                <form action="{{ route('receptionist.bookings.destroy', $booking) }}" method="POST" class="d-inline">
+                                <form action="{{ route('receptionist.bookings.destroy', $booking) }}" method="POST" class="d-inline" data-confirm="It will no longer appear anywhere in the Bookings module." data-confirm-title="Delete this booking?" data-confirm-button="Delete" data-confirm-variant="danger">
                                     @csrf
                                     @method('DELETE')
-                                    <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete" onclick="return confirm('Delete this booking? It will no longer appear anywhere in the Bookings module.')">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete">
                                         <i class="fas fa-trash"></i> Delete
                                     </button>
                                 </form>

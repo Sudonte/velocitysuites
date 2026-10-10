@@ -28,7 +28,7 @@
                     </div>
                 @endif
 
-                <form action="{{ route('receptionist.reservations.store') }}" method="POST" data-guest-capacity>
+                <form action="{{ route('receptionist.reservations.store') }}" method="POST" data-confirm="It will be added to the Reservations list for conversion when the guest is ready." data-confirm-title="Create this reservation?" data-confirm-button="Create Reservation" data-confirm-variant="success" data-guest-capacity>
                     @csrf
 
                     <h6 class="form-section-heading">Guest</h6>

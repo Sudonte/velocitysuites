@@ -52,7 +52,8 @@
                                 </span>
                             @endif
                             <button type="button" class="btn btn-sm btn-primary w-100 btn-checkout-room"
-                                    data-room-id="{{ $room->id }}" data-room-number="{{ $room->room_number }}">
+                                    data-room-id="{{ $room->id }}" data-room-number="{{ $room->room_number }}"
+                                    data-last-room="{{ $remainingCount === 1 ? '1' : '' }}">
                                 <i class="fas fa-sign-out-alt"></i> Check Out This Room
                             </button>
                         @endif

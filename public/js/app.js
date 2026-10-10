@@ -51,21 +51,6 @@ function closeModal(modalId) {
     if (modal) modal.hide();
 }
 
-// Confirm delete
-function confirmDelete(url, message = 'Are you sure you want to delete this item?') {
-    if (confirm(message)) {
-        const form = document.createElement('form');
-        form.method = 'POST';
-        form.action = url;
-        form.innerHTML = `
-            <input type="hidden" name="_token" value="${document.querySelector('meta[name="csrf-token"]').getAttribute('content')}">
-            <input type="hidden" name="_method" value="DELETE">
-        `;
-        document.body.appendChild(form);
-        form.submit();
-    }
-}
-
 // Format currency
 function formatCurrency(amount) {
     return new Intl.NumberFormat('en-PH', {
@@ -366,9 +351,81 @@ document.addEventListener('DOMContentLoaded', function () {
 // Global confirmation modal (components/confirm-modal.blade.php). A form with
 // data-confirm="<message>" is held on submit until the user confirms; the
 // confirm button is then disabled so the action can't be sent twice.
+// window.confirmAction({title, message, button, variant}, sourceEl) returns a
+// Promise<boolean> for script-driven actions; when sourceEl sits inside an
+// open modal it shows an inline confirmation bar there instead of stacking a
+// second modal.
 (function () {
     let pendingForm = null;
     let pendingSubmitter = null;
+    let pendingResolve = null;
+
+    function modalParts() {
+        return {
+            el: document.getElementById('globalConfirmModal'),
+            title: document.getElementById('globalConfirmTitle'),
+            message: document.getElementById('globalConfirmMessage'),
+            button: document.getElementById('globalConfirmButton'),
+        };
+    }
+
+    function showModal(opts) {
+        const m = modalParts();
+        m.title.textContent = opts.title || 'Please confirm';
+        m.message.textContent = opts.message || '';
+        m.button.textContent = opts.button || 'Confirm';
+        m.button.className = 'btn btn-' + (opts.variant || 'primary');
+        m.button.disabled = false;
+        bootstrap.Modal.getOrCreateInstance(m.el).show();
+    }
+
+    function inlineConfirm(container, opts) {
+        return new Promise(function (resolve) {
+            container.querySelectorAll('.inline-confirm').forEach(function (old) { old.remove(); });
+            const bar = document.createElement('div');
+            bar.className = 'alert alert-warning d-flex flex-wrap align-items-center gap-2 inline-confirm';
+            bar.setAttribute('role', 'alertdialog');
+            const text = document.createElement('div');
+            text.className = 'flex-grow-1';
+            const strong = document.createElement('strong');
+            strong.className = 'd-block';
+            strong.textContent = opts.title || 'Please confirm';
+            const msg = document.createElement('span');
+            msg.className = 'small';
+            msg.textContent = opts.message || '';
+            text.append(strong, msg);
+            const cancel = document.createElement('button');
+            cancel.type = 'button';
+            cancel.className = 'btn btn-sm btn-outline-secondary';
+            cancel.textContent = 'Cancel';
+            const ok = document.createElement('button');
+            ok.type = 'button';
+            ok.className = 'btn btn-sm btn-' + (opts.variant || 'primary');
+            ok.textContent = opts.button || 'Confirm';
+            bar.append(text, cancel, ok);
+            container.prepend(bar);
+            bar.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+            ok.focus();
+            cancel.addEventListener('click', function () { bar.remove(); resolve(false); });
+            ok.addEventListener('click', function () { bar.remove(); resolve(true); });
+        });
+    }
+
+    window.confirmAction = function (opts, sourceEl) {
+        const inModal = sourceEl && sourceEl.closest ? sourceEl.closest('.modal.show .modal-content') : null;
+        if (inModal) {
+            return inlineConfirm(inModal.querySelector('.modal-body') || inModal, opts);
+        }
+        const m = modalParts();
+        if (!m.el || !window.bootstrap) {
+            return Promise.resolve(window.confirm(opts.message || opts.title || 'Are you sure?'));
+        }
+        return new Promise(function (resolve) {
+            pendingForm = null;
+            pendingResolve = resolve;
+            showModal(opts);
+        });
+    };
 
     document.addEventListener('submit', function (event) {
         const form = event.target;
@@ -377,33 +434,68 @@ document.addEventListener('DOMContentLoaded', function () {
             delete form.dataset.confirmGranted;
             return;
         }
-        const modalEl = document.getElementById('globalConfirmModal');
-        if (!modalEl || !window.bootstrap) return;
+        if (!modalParts().el || !window.bootstrap) return;
         event.preventDefault();
         event.stopImmediatePropagation();
 
+        const opts = {
+            title: form.dataset.confirmTitle,
+            message: form.dataset.confirm,
+            button: form.dataset.confirmButton,
+            variant: form.dataset.confirmVariant,
+        };
+        const hostModal = form.closest('.modal.show .modal-content');
+        if (hostModal) {
+            const submitter = event.submitter || null;
+            inlineConfirm(hostModal.querySelector('.modal-body') || hostModal, opts).then(function (ok) {
+                if (!ok) return;
+                form.dataset.confirmGranted = '1';
+                if (submitter) submitter.disabled = false;
+                submitter ? form.requestSubmit(submitter) : form.requestSubmit();
+            });
+            return;
+        }
+
+        pendingResolve = null;
         pendingForm = form;
         pendingSubmitter = event.submitter || null;
-        document.getElementById('globalConfirmTitle').textContent = form.dataset.confirmTitle || 'Please confirm';
-        document.getElementById('globalConfirmMessage').textContent = form.dataset.confirm;
-        const btn = document.getElementById('globalConfirmButton');
-        btn.textContent = form.dataset.confirmButton || 'Confirm';
-        btn.className = 'btn btn-' + (form.dataset.confirmVariant || 'primary');
-        btn.disabled = false;
-        bootstrap.Modal.getOrCreateInstance(modalEl).show();
+        showModal({
+            title: form.dataset.confirmTitle,
+            message: form.dataset.confirm,
+            button: form.dataset.confirmButton,
+            variant: form.dataset.confirmVariant,
+        });
     }, true);
 
+    document.addEventListener('hidden.bs.modal', function (event) {
+        if (event.target.id !== 'globalConfirmModal') return;
+        if (pendingResolve) {
+            pendingResolve(false);
+            pendingResolve = null;
+        }
+        pendingForm = null;
+        pendingSubmitter = null;
+    });
+
     document.addEventListener('click', function (event) {
-        if (!event.target.closest('#globalConfirmButton') || !pendingForm) return;
-        const btn = document.getElementById('globalConfirmButton');
-        btn.disabled = true;
-        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1" aria-hidden="true"></span>' + btn.textContent;
+        if (!event.target.closest('#globalConfirmButton')) return;
+        const m = modalParts();
+        if (pendingResolve) {
+            const resolve = pendingResolve;
+            pendingResolve = null;
+            bootstrap.Modal.getOrCreateInstance(m.el).hide();
+            resolve(true);
+            return;
+        }
+        if (!pendingForm) return;
+        m.button.disabled = true;
+        m.button.innerHTML = '<span class="spinner-border spinner-border-sm me-1" aria-hidden="true"></span>' + m.button.textContent;
         const form = pendingForm;
         const submitter = pendingSubmitter;
         pendingForm = null;
         pendingSubmitter = null;
         form.dataset.confirmGranted = '1';
-        bootstrap.Modal.getOrCreateInstance(document.getElementById('globalConfirmModal')).hide();
+        bootstrap.Modal.getOrCreateInstance(m.el).hide();
         if (form.requestSubmit) {
             submitter ? form.requestSubmit(submitter) : form.requestSubmit();
         } else {

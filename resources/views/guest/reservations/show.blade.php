@@ -295,21 +295,23 @@
                          switch to GCash exactly once (DB-enforced via payment_method_locked_at),
                          so the guest can pay their deposit online instead of at check-in. --}}
                     @if($reservation->payment_method === 'cash' && !$reservation->payment_method_locked_at)
-                        <form action="{{ route('guest.reservations.switch-to-gcash', $reservation) }}" method="POST" class="d-inline">
+                        <form action="{{ route('guest.reservations.switch-to-gcash', $reservation) }}" method="POST" class="d-inline" data-confirm="This can only be done once." data-confirm-title="Switch this reservation's payment method to GCash?" data-confirm-button="Switch to GCash" data-confirm-variant="primary">
                             @csrf
                             @method('PUT')
-                            <button type="submit" class="btn btn-outline-success w-100 mb-2"
-                                    onclick="return confirm('Switch this reservation\'s payment method to GCash? This can only be done once.')">
+                            <button type="submit" class="btn btn-outline-success w-100 mb-2">
                                 <i class="fas fa-qrcode"></i> Switch to GCash
                             </button>
                         </form>
                     @endif
 
-                    <form action="{{ route('guest.reservations.cancel', $reservation) }}" method="POST" class="d-inline">
+                    @php $cancellingBooking = $reservation->status === \App\Models\Reservation::STATUS_CONVERTED; @endphp
+                    <form action="{{ route('guest.reservations.cancel', $reservation) }}" method="POST" class="d-inline"
+                          data-confirm="{{ $cancellingBooking ? 'Any partial GCash deposit is non-refundable.' : 'Your reservation request will be withdrawn.' }}"
+                          data-confirm-title="{{ $cancellingBooking ? 'Cancel this booking?' : 'Cancel this reservation?' }}"
+                          data-confirm-button="{{ $cancellingBooking ? 'Cancel Booking' : 'Cancel Reservation' }}" data-confirm-variant="danger">
                         @csrf
                         @method('PUT')
-                        <button type="submit" class="btn btn-danger w-100"
-                                onclick="return confirm('{{ $reservation->status === \App\Models\Reservation::STATUS_CONVERTED ? 'Are you sure you want to cancel this booking? Any partial GCash deposit is non-refundable.' : 'Are you sure you want to cancel this reservation?' }}')">
+                        <button type="submit" class="btn btn-danger w-100">
                             <i class="fas fa-times"></i> {{ $reservation->status === \App\Models\Reservation::STATUS_CONVERTED ? 'Cancel Booking' : 'Cancel Reservation' }}
                         </button>
                     </form>

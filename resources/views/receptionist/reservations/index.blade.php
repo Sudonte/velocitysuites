@@ -300,7 +300,7 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         if (e.target.closest('#detailsConvertBtn')) {
-            if (!confirm('Convert this reservation into a confirmed booking?')) return;
+            if (!(await window.confirmAction({ title: 'Convert to booking?', message: 'This reservation becomes a confirmed booking and holds a room for its dates.', button: 'Convert to Booking', variant: 'success' }, e.target))) return;
             try {
                 const data = await postJson(buildUrl(urls.convert, activeReservationId));
                 removeRowAndClose(data.message);

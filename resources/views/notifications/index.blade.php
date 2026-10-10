@@ -116,7 +116,7 @@
                     @endif
 
                     <form action="{{ route('notifications.destroy', $notification) }}" method="POST"
-                          onsubmit="return confirm('Delete this notification? This cannot be undone.');">
+                          data-confirm="This cannot be undone." data-confirm-title="Delete this notification?" data-confirm-button="Delete" data-confirm-variant="danger">
                         @csrf
                         @method('DELETE')
                         <button type="submit" class="btn btn-sm btn-outline-danger">

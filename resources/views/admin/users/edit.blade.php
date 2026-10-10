@@ -27,7 +27,7 @@
                     <div class="small text-muted mt-1">Login email and role are fixed at creation - use the user list to deactivate/reactivate or reset the password.</div>
                 </div>
 
-                <form action="{{ route('admin.users.update', $user) }}" method="POST">
+                <form action="{{ route('admin.users.update', $user) }}" method="POST" data-confirm="Their account details will be updated." data-confirm-title="Save changes to {{ $user->full_name }}?" data-confirm-button="Save Changes" data-confirm-variant="primary">
                     @csrf
                     @method('PUT')
 

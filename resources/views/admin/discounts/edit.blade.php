@@ -21,7 +21,7 @@
                     </div>
                 @endif
 
-                <form action="{{ route('admin.discounts.update', $discount) }}" method="POST">
+                <form action="{{ route('admin.discounts.update', $discount) }}" method="POST" data-confirm="The discount will be updated." data-confirm-title="Save changes to this discount?" data-confirm-button="Save Changes" data-confirm-variant="primary">
                     @csrf
                     @method('PUT')
 

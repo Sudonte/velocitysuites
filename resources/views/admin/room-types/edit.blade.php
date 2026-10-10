@@ -31,7 +31,7 @@
                     </form>
                 @endif
 
-                <form action="{{ route('admin.room-types.update', $roomType) }}" method="POST" enctype="multipart/form-data">
+                <form action="{{ route('admin.room-types.update', $roomType) }}" method="POST" data-confirm="Rate, capacity and amenity changes apply to every room of this type." data-confirm-title="Save changes to {{ $roomType->name }}?" data-confirm-button="Save Changes" data-confirm-variant="primary" enctype="multipart/form-data">
                     @csrf
                     @method('PUT')
 

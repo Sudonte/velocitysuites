@@ -123,7 +123,7 @@
                     You are requesting a <strong>{{ $roomType->name }}</strong> room type.
                     A specific room number is assigned by our staff when you check in.
                 </div>
-                <form action="{{ route('guest.reservations.store') }}" method="POST" enctype="multipart/form-data"
+                <form action="{{ route('guest.reservations.store') }}" method="POST" data-confirm="Our staff will review it shortly." data-confirm-title="Submit this reservation request?" data-confirm-button="Submit Request" data-confirm-variant="success" enctype="multipart/form-data"
                       data-guest-capacity data-capacity-min="{{ \App\Support\GuestCapacity::minOf($roomType) }}" data-capacity-max="{{ $roomType->capacity }}">
                     @csrf
 

@@ -90,7 +90,7 @@
                             @if($req->status === 'pending')
                                 <div class="d-flex gap-2">
                                     <form action="{{ route('admin.users.password-requests.approve', $req) }}" method="POST"
-                                          onsubmit="return confirm('Approve this request? {{ $req->user->full_name }} will be reset to the default password.')">
+                                          data-confirm="{{ $req->user->full_name }} will be reset to the default password." data-confirm-title="Approve this request?" data-confirm-button="Approve Request" data-confirm-variant="success">
                                         @csrf
                                         @method('PUT')
                                         <button type="submit" class="btn btn-sm btn-success">

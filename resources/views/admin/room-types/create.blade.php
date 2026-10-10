@@ -17,7 +17,7 @@
     <div class="row">
         <div class="col-lg-8">
             <x-card title="Room Type Details" icon="fas fa-info-circle" bodyClass="card-body">
-                <form action="{{ route('admin.room-types.store') }}" method="POST" enctype="multipart/form-data">
+                <form action="{{ route('admin.room-types.store') }}" method="POST" data-confirm="You can add its rooms right after." data-confirm-title="Create this room type?" data-confirm-button="Create Room Type" data-confirm-variant="success" enctype="multipart/form-data">
                     @csrf
 
                     <div class="form-subsection">

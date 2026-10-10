@@ -21,7 +21,7 @@
                     </div>
                 @endif
 
-                <form action="{{ route('admin.amenities.update', $amenity) }}" method="POST">
+                <form action="{{ route('admin.amenities.update', $amenity) }}" method="POST" data-confirm="The amenity will be updated everywhere it is offered." data-confirm-title="Save changes to {{ $amenity->amenity_name }}?" data-confirm-button="Save Changes" data-confirm-variant="primary">
                     @csrf
                     @method('PUT')
 
