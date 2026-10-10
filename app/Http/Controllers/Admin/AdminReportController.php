@@ -9,10 +9,12 @@ use App\Models\Payment;
 use App\Models\Reservation;
 use App\Models\Room;
 use App\Models\User;
+use App\Models\RoomType;
 use App\Services\DashboardStatsService;
+use App\Support\PerPage;
+use App\Support\ReportFilters;
 use App\Support\TestAccountScope;
 use Barryvdh\DomPDF\Facade\Pdf;
-use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\View\View;
@@ -24,51 +26,45 @@ class AdminReportController extends Controller
     }
 
     /**
-     * Display the admin reports dashboard. Accepts an optional start_date/
-     * end_date GET filter (validated, order-corrected if reversed) that
-     * scopes only the inherently time-based figures - activity logs,
-     * revenue, reservations, bookings. User/room counts and Recent Logins
-     * stay as live "right now" snapshots regardless of the filter, since
-     * "how many rooms are currently available" isn't a historical question.
+     * Admin reports. Filters (App\Support\ReportFilters, default Today)
+     * scope the time-based figures - activity logs, revenue (optionally by
+     * payment method), reservations and bookings, the last two plus revenue
+     * optionally by room type. User/room snapshots stay "right now", room
+     * counts narrowed to the chosen room type.
      */
     public function index(Request $request): View
     {
-        [$startDate, $endDate, $range] = $this->resolveDateFilter($request);
+        $filters = ReportFilters::resolve($request);
 
         // Activity logs, newest first.
         $activityLogs = ActivityLog::with('user')
-            ->when($startDate, fn ($q) => $q->where('created_at', '>=', $startDate))
-            ->when($endDate, fn ($q) => $q->where('created_at', '<=', $endDate))
+            ->whereBetween('created_at', [$filters['from'], $filters['to']])
             ->latest()
-            ->paginate(\App\Support\PerPage::resolve($request))
+            ->paginate(PerPage::resolve($request))
             ->withQueryString();
 
-        $data = $this->reportData($startDate, $endDate);
+        $data = $this->reportData($filters);
+        $roomTypes = RoomType::orderBy('name')->get(['id', 'name']);
 
-        return view('admin.reports.index', compact('activityLogs', 'range') + $data + [
-            'startDateInput' => $startDate?->toDateString(),
-            'endDateInput' => $endDate?->toDateString(),
-            'isFiltered' => $range !== 'all',
-        ]);
+        return view('admin.reports.index', compact('activityLogs', 'filters', 'roomTypes') + $data);
     }
 
     /**
-     * A real, formal PDF document (dompdf, same library already used for
-     * Guest reservation/payment exports) - the "Print Report" button
-     * previously just called window.print() on this dashboard's live HTML,
-     * which produced a screenshot-like printout of stat cards/icons rather
-     * than an actual report. This renders a dedicated tabular layout
-     * (admin.reports.export-pdf) instead, branded with the Velocity Suites
-     * logo/name, built from the exact same figures as the on-screen report.
+     * The same figures as the on-screen report (same filters, same cached
+     * data) as a branded dompdf document.
      */
     public function exportPdf(Request $request)
     {
-        [$startDate, $endDate] = $this->resolveDateFilter($request);
+        $filters = ReportFilters::resolve($request);
+        $data = $this->reportData($filters);
 
-        $data = $this->reportData($startDate, $endDate);
-        $periodLabel = $startDate || $endDate
-            ? ($startDate?->format('M d, Y') ?? 'the beginning') . ' - ' . ($endDate?->format('M d, Y') ?? 'today')
-            : null;
+        $periodLabel = $filters['from']->format('M d, Y') . ' - ' . $filters['to']->format('M d, Y');
+        if ($filters['room_type_id']) {
+            $periodLabel .= ' | ' . RoomType::whereKey($filters['room_type_id'])->value('name');
+        }
+        if ($filters['payment_method']) {
+            $periodLabel .= ' | ' . ($filters['payment_method'] === 'gcash' ? 'GCash' : 'Cash') . ' payments';
+        }
 
         $pdf = Pdf::loadView('admin.reports.export-pdf', $data + [
             'periodLabel' => $periodLabel,
@@ -80,66 +76,18 @@ class AdminReportController extends Controller
     }
 
     /**
-     * Quick-period buttons (?range=today|week|month|all) plus the existing
-     * custom start_date/end_date fields. Defaults to Today when neither a
-     * range nor explicit dates are given - "All Time" is now its own
-     * opt-in choice (?range=all) rather than the implicit default, so a
-     * fresh visit to this page doesn't silently aggregate the hotel's
-     * entire history.
-     *
-     * @return array{0: ?Carbon, 1: ?Carbon, 2: string}
+     * Cached (short TTL, keyed by every filter) and shared by the screen
+     * and the PDF so the two never disagree.
      */
-    private function resolveDateFilter(Request $request): array
+    private function reportData(array $filters): array
     {
-        $request->validate([
-            'start_date' => ['nullable', 'date'],
-            'end_date' => ['nullable', 'date'],
-            'range' => ['nullable', 'in:today,week,month,all'],
-        ]);
-
-        $range = $request->get('range');
-
-        if ($range === 'all') {
-            return [null, null, 'all'];
-        }
-        if ($range === 'today') {
-            return [today()->startOfDay(), today()->endOfDay(), 'today'];
-        }
-        if ($range === 'week') {
-            return [now()->startOfWeek()->startOfDay(), today()->endOfDay(), 'week'];
-        }
-        if ($range === 'month') {
-            return [now()->startOfMonth()->startOfDay(), today()->endOfDay(), 'month'];
-        }
-
-        if (! $request->filled('start_date') && ! $request->filled('end_date')) {
-            return [today()->startOfDay(), today()->endOfDay(), 'today'];
-        }
-
-        $startDate = $request->filled('start_date') ? Carbon::parse($request->input('start_date'))->startOfDay() : null;
-        $endDate = $request->filled('end_date') ? Carbon::parse($request->input('end_date'))->endOfDay() : null;
-        if ($startDate && $endDate && $startDate->gt($endDate)) {
-            [$startDate, $endDate] = [$endDate->copy()->startOfDay(), $startDate->copy()->endOfDay()];
-        }
-
-        return [$startDate, $endDate, 'custom'];
+        return Cache::remember('admin_report:v2:' . ReportFilters::cacheKey($filters), now()->addSeconds(60), fn () => $this->computeReportData($filters));
     }
 
-    /**
-     * Cached (short TTL, keyed by the date filter) - everything here
-     * (user/room summaries, revenue, reservation/booking counts, login
-     * logs) is a dozen-plus aggregate queries; shared by both the on-screen
-     * report and the PDF export so the two never disagree with each other.
-     */
-    private function reportData(?Carbon $startDate, ?Carbon $endDate): array
+    private function computeReportData(array $filters): array
     {
-        $cacheKey = 'admin_report:' . ($startDate?->toDateString() ?? 'all') . ':' . ($endDate?->toDateString() ?? 'all');
+        ['from' => $from, 'to' => $to, 'room_type_id' => $roomTypeId, 'payment_method' => $paymentMethod] = $filters;
 
-        return Cache::remember($cacheKey, now()->addSeconds(60), fn () => $this->computeReportData($startDate, $endDate));
-    }
-
-    private function computeReportData(?Carbon $startDate, ?Carbon $endDate): array
-    {
         // Login-style logs: users ordered by last_login_at
         $loginLogs = User::whereNotNull('last_login_at')
             ->orderByDesc('last_login_at')
@@ -169,40 +117,45 @@ class AdminReportController extends Controller
         // held only by a test-account booking counts as available here
         // (business-facing figure) - see TestAccountScope's own doc.
         $roomReports = [
-            'total' => Room::notArchived()->count(),
-            'available' => Room::notArchived()->where('status', '!=', 'maintenance')
+            'total' => Room::notArchived()->when($roomTypeId, fn ($q) => $q->where('room_type_id', $roomTypeId))->count(),
+            'available' => Room::notArchived()->when($roomTypeId, fn ($q) => $q->where('room_type_id', $roomTypeId))->where('status', '!=', 'maintenance')
                 ->whereDoesntHave('assignedBookings', fn ($q) => TestAccountScope::excludeFromBookings(
                     $q->where('booking_status', Booking::STATUS_CHECKED_IN)
                 )->whereNull('booking_rooms.checked_out_at'))
                 ->count(),
-            'occupied' => Room::notArchived()->where('status', '!=', 'maintenance')
+            'occupied' => Room::notArchived()->when($roomTypeId, fn ($q) => $q->where('room_type_id', $roomTypeId))->where('status', '!=', 'maintenance')
                 ->whereHas('assignedBookings', fn ($q) => TestAccountScope::excludeFromBookings(
                     $q->where('booking_status', Booking::STATUS_CHECKED_IN)
                 )->whereNull('booking_rooms.checked_out_at'))
                 ->count(),
-            'maintenance' => Room::notArchived()->where('status', 'maintenance')->count(),
+            'maintenance' => Room::notArchived()->when($roomTypeId, fn ($q) => $q->where('room_type_id', $roomTypeId))->where('status', 'maintenance')->count(),
         ];
 
-        // Revenue summary (from completed payments), date-range scoped when set
+        // Revenue: completed payments in range, optionally one payment
+        // method and/or payments for one room type.
         $revenue = TestAccountScope::excludeFromPayments(
             Payment::where('payment_status', 'completed')
-                ->when($startDate, fn ($q) => $q->where('created_at', '>=', $startDate))
-                ->when($endDate, fn ($q) => $q->where('created_at', '<=', $endDate))
+                ->whereBetween('created_at', [$from, $to])
+                ->when($paymentMethod, fn ($q) => $q->where('payment_method', $paymentMethod))
+                ->when($roomTypeId, fn ($q) => $q->where(function ($w) use ($roomTypeId) {
+                    $w->whereHas('reservation', fn ($r) => $r->where('room_type_id', $roomTypeId))
+                      ->orWhereHas('booking', fn ($b) => $b->where('room_type_id', $roomTypeId))
+                      ->orWhereHas('billing.booking', fn ($b) => $b->where('room_type_id', $roomTypeId));
+                }))
         )->sum('amount_paid');
 
-        // Reservations/bookings created within the range (or all-time if unset)
+        // Created in range. "Bookings" are direct bookings (not converted
+        // reservations), the same definition as the dashboard's Bookings card.
         $reservationsCount = TestAccountScope::excludeFromReservations(
-            Reservation::when($startDate, fn ($q) => $q->where('created_at', '>=', $startDate))
-                ->when($endDate, fn ($q) => $q->where('created_at', '<=', $endDate))
+            Reservation::whereBetween('created_at', [$from, $to])
+                ->when($roomTypeId, fn ($q) => $q->where('room_type_id', $roomTypeId))
         )->count();
-        $bookingsCount = TestAccountScope::excludeFromReservations(
-            Reservation::whereHas('booking')
-                ->when($startDate, fn ($q) => $q->where('created_at', '>=', $startDate))
-                ->when($endDate, fn ($q) => $q->where('created_at', '<=', $endDate))
+        $bookingsCount = TestAccountScope::excludeFromBookings(
+            Booking::whereNull('reservation_id')
+                ->whereBetween('created_at', [$from, $to])
+                ->when($roomTypeId, fn ($q) => $q->where('room_type_id', $roomTypeId))
         )->count();
-        // Not test-excluded - an operational queue depth (a real payment
-        // still needing staff review), not a business-performance figure.
-        $pendingPaymentVerifications = Payment::where('payment_status', 'pending')->count();
+        $pendingPaymentVerifications = $this->stats->pendingPaymentVerificationCount();
 
         return compact(
             'loginLogs',

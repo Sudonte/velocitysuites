@@ -53,6 +53,20 @@ class DashboardStatsService
      * close enough to live for figures that only meaningfully change a few
      * times an hour (bookings, payments, check-ins).
      */
+    /**
+     * Transactions (reservations, plus direct bookings) with a payment awaiting
+     * verification, test accounts excluded - one definition for every
+     * dashboard and report card so they always agree.
+     */
+    public function pendingPaymentVerificationCount(): int
+    {
+        return TestAccountScope::excludeFromReservations(
+            Reservation::whereHas('payments', fn ($q) => $q->where('payment_status', 'pending'))
+        )->count() + TestAccountScope::excludeFromBookings(
+            Booking::whereNull('reservation_id')->whereHas('payments', fn ($q) => $q->where('payment_status', 'pending'))
+        )->count();
+    }
+
     public function adminStats(): array
     {
         return Cache::remember('dashboard_stats:admin', now()->addSeconds(60), fn () => $this->computeAdminStats());
@@ -126,11 +140,7 @@ class DashboardStatsService
         // would otherwise inflate this past the number of rows the linked
         // page actually shows), and excluding confirmed test accounts to
         // match that page's own now-test-excluded summary cards.
-        $pendingPaymentVerifications = TestAccountScope::excludeFromReservations(
-            Reservation::whereHas('payments', fn ($q) => $q->where('payment_status', 'pending'))
-        )->count() + TestAccountScope::excludeFromBookings(
-            Booking::whereNull('reservation_id')->whereHas('payments', fn ($q) => $q->where('payment_status', 'pending'))
-        )->count();
+        $pendingPaymentVerifications = $this->pendingPaymentVerificationCount();
 
         $totalUsers = TestAccountScope::excludeFromUsers(User::query())->count();
         $totalUsersLastMonth = TestAccountScope::excludeFromUsers(
@@ -381,7 +391,7 @@ class DashboardStatsService
 
             'totalReservations' => $periodReservations,
             'totalBookings' => $periodBookings,
-            'pendingPaymentVerifications' => Payment::where('payment_status', 'pending')->count(),
+            'pendingPaymentVerifications' => $this->pendingPaymentVerificationCount(),
 
             // New KPIs - percentages guard against a zero-reservation
             // period (a brand-new hotel, or a custom range with no

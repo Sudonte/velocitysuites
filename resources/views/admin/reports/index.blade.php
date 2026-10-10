@@ -10,7 +10,7 @@
                  Velocity Suites logo) - a plain window.print() of this
                  dashboard would just print the stat cards/icons as-is,
                  which looks like a screenshot rather than a report. --}}
-            <a href="{{ route('admin.reports.exportPdf', request()->only(['range', 'start_date', 'end_date'])) }}" class="btn btn-outline-secondary">
+            <a href="{{ route('admin.reports.exportPdf', request()->only(\App\Support\ReportFilters::QUERY_KEYS)) }}" class="btn btn-outline-secondary">
                 <i class="fas fa-file-pdf"></i> Download PDF Report
             </a>
         </x-slot:actions>
@@ -23,53 +23,8 @@
         </div>
     @endif
 
-    <!-- Reporting Period - quick-select presets (defaults to Today) plus a
-         custom start_date/end_date range below; scopes Revenue,
-         Reservations, Bookings, and Activity Logs. User/Room summaries and
-         Recent Logins stay as live "right now" snapshots regardless. -->
-    <x-card title="Reporting Period" icon="fas fa-calendar-alt" class="mb-4" bodyClass="card-body">
-        <div class="d-flex flex-wrap gap-1 mb-3" role="group" aria-label="Reporting period">
-            <a href="{{ route('admin.reports.index', ['range' => 'today']) }}" class="btn btn-sm {{ $range === 'today' ? 'btn-velocity' : 'btn-outline-secondary' }}">Today</a>
-            <a href="{{ route('admin.reports.index', ['range' => 'week']) }}" class="btn btn-sm {{ $range === 'week' ? 'btn-velocity' : 'btn-outline-secondary' }}">This Week</a>
-            <a href="{{ route('admin.reports.index', ['range' => 'month']) }}" class="btn btn-sm {{ $range === 'month' ? 'btn-velocity' : 'btn-outline-secondary' }}">This Month</a>
-            <a href="{{ route('admin.reports.index', ['range' => 'all']) }}" class="btn btn-sm {{ $range === 'all' ? 'btn-velocity' : 'btn-outline-secondary' }}">All Time</a>
-        </div>
-        <form method="GET" action="{{ route('admin.reports.index') }}" class="row g-3 align-items-end">
-            <div class="col-sm-6 col-md-4">
-                <label for="start_date" class="form-label small text-muted mb-1">From</label>
-                <input type="date" id="start_date" name="start_date" class="form-control" value="{{ $startDateInput }}" max="{{ now()->toDateString() }}">
-            </div>
-            <div class="col-sm-6 col-md-4">
-                <label for="end_date" class="form-label small text-muted mb-1">To</label>
-                <input type="date" id="end_date" name="end_date" class="form-control" value="{{ $endDateInput }}" max="{{ now()->toDateString() }}">
-            </div>
-            <div class="col-md-4 d-flex gap-2">
-                <button type="submit" class="btn btn-velocity">
-                    <i class="fas fa-filter"></i> Apply Custom Range
-                </button>
-                @if($isFiltered)
-                    <a href="{{ route('admin.reports.index', ['range' => 'all']) }}" class="btn btn-outline-secondary">
-                        <i class="fas fa-times"></i> Clear
-                    </a>
-                @endif
-            </div>
-        </form>
-        @if($isFiltered)
-            <p class="text-muted small mt-3 mb-0">
-                <i class="fas fa-info-circle"></i>
-                Revenue, Reservations, Bookings, and Activity Logs below are scoped to
-                <strong>{{ $startDateInput ? \Carbon\Carbon::parse($startDateInput)->format('M d, Y') : 'the beginning' }}</strong>
-                &ndash;
-                <strong>{{ $endDateInput ? \Carbon\Carbon::parse($endDateInput)->format('M d, Y') : 'today' }}</strong>.
-                User and Room summaries always reflect current totals.
-            </p>
-        @else
-            <p class="text-muted small mt-3 mb-0">
-                <i class="fas fa-info-circle"></i>
-                Showing all-time totals. User and Room summaries always reflect current totals regardless of period.
-            </p>
-        @endif
-    </x-card>
+    @include('partials.report-filters', ['route' => 'admin.reports.index', 'showPaymentMethod' => true])
+    <p class="text-muted small mt-n3 mb-4"><i class="fas fa-info-circle"></i> Filters apply to revenue, reservations, bookings and activity logs; user and room summaries show current totals (rooms narrowed by room type).</p>
 
     <!-- Summary Cards -->
     <div class="row mb-4">

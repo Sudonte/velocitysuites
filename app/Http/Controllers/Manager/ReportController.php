@@ -3,10 +3,11 @@
 namespace App\Http\Controllers\Manager;
 
 use App\Http\Controllers\Controller;
+use App\Models\Booking;
 use App\Models\Reservation;
 use App\Models\RoomType;
 use App\Services\DashboardStatsService;
-use App\Support\DateRange;
+use App\Support\ReportFilters;
 use App\Support\TestAccountScope;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
@@ -22,41 +23,38 @@ class ReportController extends Controller
     }
 
     /**
-     * Display reports. Accepts the same ?period=daily|weekly|monthly|custom
-     * (+from/to) quick-period selector as the Manager dashboard (see
-     * App\Support\DateRange) instead of this page's own previous from/to-only,
-     * always-"this month"-by-default filter - a manager/admin can now pick
-     * Today/This Week/This Month/Custom before generating a report instead of
-     * only ever getting an implicit "current month" unless they manually typed
-     * both date fields.
+     * Manager reports with the shared filters (ReportFilters: period,
+     * default Today, plus room type). Never includes revenue.
      */
     public function index(Request $request): View
     {
-        [$from, $to, $period] = $this->resolveDateRange($request);
+        $filters = ReportFilters::resolve($request);
+        $data = $this->reportData($filters);
+        $roomTypes = RoomType::orderBy('name')->get(['id', 'name']);
 
-        $data = $this->reportData($from, $to);
-
-        return view('manager.reports.index', array_merge(compact('from', 'to', 'period'), $data));
+        return view('manager.reports.index', array_merge([
+            'filters' => $filters,
+            'roomTypes' => $roomTypes,
+            'from' => $filters['from'],
+            'to' => $filters['to'],
+            'period' => $filters['period'],
+        ], $data));
     }
 
     /**
-     * A real, formal PDF document (dompdf, same library already used for
-     * Guest reservation/payment exports) - the "Print Report" button
-     * previously just called window.print() on this dashboard's live HTML,
-     * which produced a screenshot-like printout of stat cards/icons rather
-     * than an actual report. This renders a dedicated tabular layout
-     * (manager.reports.export-pdf) instead, branded with the Velocity
-     * Suites logo/name, built from the exact same figures as the on-screen
-     * report plus the occupancy/cancellation rates already computed
-     * by DashboardStatsService::managerStats() for the Manager dashboard.
+     * The same figures as the on-screen report (same filters) as a branded
+     * dompdf document, plus the dashboard's occupancy/cancellation rates
+     * for the period.
      */
     public function exportPdf(Request $request)
     {
-        [$from, $to] = $this->resolveDateRange($request);
-
-        $data = $this->reportData($from, $to);
-        $managerStats = $this->stats->managerStats($from, $to);
-        $periodLabel = $from->format('M d, Y') . ' - ' . $to->format('M d, Y');
+        $filters = ReportFilters::resolve($request);
+        $data = $this->reportData($filters);
+        $managerStats = $this->stats->managerStats($filters['from'], $filters['to']);
+        $periodLabel = $filters['from']->format('M d, Y') . ' - ' . $filters['to']->format('M d, Y');
+        if ($filters['room_type_id']) {
+            $periodLabel .= ' | ' . RoomType::whereKey($filters['room_type_id'])->value('name');
+        }
 
         $pdf = Pdf::loadView('manager.reports.export-pdf', $data + [
             'periodLabel' => $periodLabel,
@@ -69,46 +67,32 @@ class ReportController extends Controller
     }
 
     /**
-     * @return array{0: Carbon, 1: Carbon, 2: string}
+     * Cached (short TTL, keyed by every filter) and shared by the screen and
+     * the PDF so the two never disagree.
      */
-    private function resolveDateRange(Request $request): array
+    private function reportData(array $filters): array
     {
-        // Defaults to Today, not DateRange::resolve()'s own 'monthly'
-        // default - a report should open scoped to today unless the
-        // manager/admin picks a wider period, whereas the Manager
-        // Dashboard (DateRange's other caller) keeps its own separate
-        // "current month" default untouched.
-        if (! $request->filled('period')) {
-            $request->merge(['period' => 'daily']);
-        }
-
-        return DateRange::resolve($request);
+        return Cache::remember('manager_report:v2:' . ReportFilters::cacheKey($filters), now()->addSeconds(60),
+            fn () => $this->computeReport($filters['from'], $filters['to'], $filters['room_type_id']));
     }
 
-    /**
-     * Cached (short TTL, keyed by the resolved date range) - shared by both
-     * the on-screen report and the PDF export so the two never disagree.
-     */
-    private function reportData(Carbon $from, Carbon $to): array
-    {
-        $cacheKey = 'manager_report:' . $from->toDateString() . ':' . $to->toDateString();
-
-        return Cache::remember($cacheKey, now()->addSeconds(60), fn () => $this->computeReport($from, $to));
-    }
-
-    private function computeReport(Carbon $from, Carbon $to): array
+    private function computeReport(Carbon $from, Carbon $to, ?int $roomTypeId = null): array
     {
         // Managers never receive revenue figures; revenue reporting is
         // Admin-only (Admin\AdminReportController). Excludes confirmed
         // internal/test accounts (App\Support\TestAccountScope).
         $totalReservations = TestAccountScope::excludeFromReservations(
             Reservation::whereBetween('check_in', [$from, $to])
+                ->when($roomTypeId, fn ($q) => $q->where('room_type_id', $roomTypeId))
         )->count();
-        $totalBookings = TestAccountScope::excludeFromReservations(
-            Reservation::whereBetween('check_in', [$from, $to])->whereHas('booking')
+        // Direct bookings, the same definition as the dashboard's Bookings card.
+        $totalBookings = TestAccountScope::excludeFromBookings(
+            Booking::whereNull('reservation_id')->whereBetween('check_in', [$from, $to])
+                ->when($roomTypeId, fn ($q) => $q->where('room_type_id', $roomTypeId))
         )->count();
         $averageStay = (float) (TestAccountScope::excludeFromReservations(
             Reservation::whereBetween('check_in', [$from, $to])
+                ->when($roomTypeId, fn ($q) => $q->where('room_type_id', $roomTypeId))
         )->selectRaw('AVG(DATEDIFF(check_out, check_in)) as avg_nights')->value('avg_nights') ?? 0);
 
         // Top room types - counted via RoomType's own reservations() relation
@@ -119,6 +103,7 @@ class ReportController extends Controller
         $topRoomTypes = RoomType::withCount(['reservations' => function ($q) use ($from, $to) {
             TestAccountScope::excludeFromReservations($q->whereBetween('check_in', [$from, $to]));
         }])
+            ->when($roomTypeId, fn ($q) => $q->whereKey($roomTypeId))
             ->orderByDesc('reservations_count')
             ->limit(5)
             ->get();
@@ -136,6 +121,7 @@ class ReportController extends Controller
                 ->with('guest.user')
                 ->whereNotNull('guest_id')
                 ->whereBetween('check_in', [$from, $to])
+                ->when($roomTypeId, fn ($q) => $q->where('room_type_id', $roomTypeId))
         )
             ->groupBy('guest_id')
             ->orderByDesc('reservation_count')
