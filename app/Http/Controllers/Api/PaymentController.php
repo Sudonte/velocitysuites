@@ -12,6 +12,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 
 /**
@@ -30,6 +31,47 @@ class PaymentController extends Controller
         private NotificationService $notificationService,
         private ReservationWorkflowService $workflow,
     ) {
+    }
+
+    /** "₱1,400.00" - the one way this controller writes an amount in a message. */
+    private function peso(float $amount): string
+    {
+        return '₱' . number_format($amount, 2);
+    }
+
+    /**
+     * Why $amount is not an acceptable payment right now, as the 422 body (message + errors.amount_paid), or null
+     * if it is. $range comes from ReservationWorkflowService::payableRange().
+     */
+    private function amountError(array $range, string $paymentType, float $amount): ?array
+    {
+        $message = null;
+
+        if ($range['is_settled']) {
+            $message = 'This reservation is already fully paid. There is nothing left to pay.';
+        } elseif ($paymentType === 'full') {
+            if (abs($amount - $range['remaining']) > 0.01) {
+                $message = 'Full payment must equal the remaining balance (' . $this->peso($range['remaining']) . ').';
+            }
+        } elseif (! $range['can_partial']) {
+            $message = 'Full payment is required: the remaining balance (' . $this->peso($range['remaining'])
+                . ') is below the minimum down payment (' . $this->peso($range['min']) . '). Pay the full '
+                . $this->peso($range['remaining']) . ' instead.';
+        } elseif ($amount < $range['min'] - 0.005 || $amount > $range['max'] + 0.005) {
+            $minPercent = (int) round((float) config('hotel.minimum_payment_ratio', 0.20) * 100);
+            $maxPercent = (int) round((float) config('hotel.maximum_payment_ratio', 0.50) * 100);
+            $message = 'The payment must be between ' . $this->peso($range['min']) . ' and ' . $this->peso($range['max'])
+                . " ({$minPercent}%-{$maxPercent}% of the " . $this->peso($range['total']) . ' total, and never more than the '
+                . $this->peso($range['remaining']) . ' still owed).';
+        }
+
+        return $message === null ? null : ['message' => $message, 'errors' => ['amount_paid' => [$message]]];
+    }
+
+    /** 'final' when the payment settles everything still owed (whichever option the guest picked), else 'deposit'. */
+    private function stageFor(array $range, float $amount): string
+    {
+        return abs($amount - $range['remaining']) <= 0.01 ? 'final' : 'deposit';
     }
 
     public function store(Request $request, Reservation $reservation): JsonResponse
@@ -85,7 +127,15 @@ class PaymentController extends Controller
         // guest is allowed to submit, so that error directly caused a
         // guest-visible over/under-payment requirement, not just a display
         // bug.
-        $range = $this->workflow->depositRangeForTotal($reservation->total_amount_due);
+        //
+        // Aware of what has ALREADY been paid (completed payments, the
+        // same definition every payment summary uses), so the rest of the
+        // bill can be paid: Full = exactly the remaining balance, Partial
+        // = 20%-50% of the original total but never more than the
+        // remaining balance. See ReservationWorkflowService::payableRange().
+        // Checked again below on the row-locked reservation, so two
+        // simultaneous submissions can't both fit the same balance.
+        $range = $this->workflow->payableRange($reservation);
 
         $validated = $request->validate([
             'payment_method' => 'required|in:cash,gcash',
@@ -134,25 +184,10 @@ class PaymentController extends Controller
             'reference_number.unique' => 'This GCash reference number has already been used.',
         ]);
 
-        $paymentStageForDupeCheck = $validated['payment_type'] === 'full' ? 'final' : 'deposit';
-
-        if ($validated['payment_type'] === 'full') {
-            if (abs((float) $validated['amount_paid'] - $range['total']) > 0.01) {
-                return response()->json([
-                    'message' => "Full payment must equal the total amount due (₱{$range['total']}).",
-                    'errors' => ['amount_paid' => ["Full payment must equal ₱{$range['total']}."]],
-                ], 422);
-            }
-        } else {
-            if ((float) $validated['amount_paid'] < $range['min'] || (float) $validated['amount_paid'] > $range['max']) {
-                return response()->json([
-                    'message' => "The down payment must be between ₱{$range['min']} and ₱{$range['max']} (20%-50% of the total amount).",
-                    'errors' => ['amount_paid' => ["The down payment must be between ₱{$range['min']} and ₱{$range['max']}."]],
-                ], 422);
-            }
+        $amountError = $this->amountError($range, $validated['payment_type'], (float) $validated['amount_paid']);
+        if ($amountError !== null) {
+            return response()->json($amountError, 422);
         }
-
-        $paymentStage = $validated['payment_type'] === 'full' ? 'final' : 'deposit';
 
         // Receipt upload (disk I/O) happens BEFORE the locked transaction
         // below, not inside it - a slow upload should never extend how
@@ -186,12 +221,26 @@ class PaymentController extends Controller
         $idempotencyKeyForCreate = $validated['idempotency_key'] ?? null;
 
         try {
-            $outcome = DB::transaction(function () use ($reservation, $validated, $paymentStageForDupeCheck, $paymentStage, $receiptPath, $idempotencyKeyForCreate) {
+            $outcome = DB::transaction(function () use ($reservation, $validated, $receiptPath, $idempotencyKeyForCreate) {
             $locked = Reservation::whereKey($reservation->id)->lockForUpdate()->first();
 
             if (! $locked || ! in_array($locked->status, Reservation::ACTIVE_STATUSES, true)) {
                 return ['error' => 'not_payable'];
             }
+
+            // The amount rule again, on the row-locked reservation: what was
+            // already paid may have changed (a receptionist verifying an
+            // earlier payment) between the check above and this lock.
+            $lockedRange = $this->workflow->payableRange($locked);
+            $amountError = $this->amountError($lockedRange, $validated['payment_type'], (float) $validated['amount_paid']);
+            if ($amountError !== null) {
+                return ['error' => 'amount', 'body' => $amountError];
+            }
+            // A payment that settles the whole remaining balance is the FINAL
+            // payment whichever option the guest picked (a partial of exactly
+            // what is left included); anything less is a deposit.
+            $paymentStage = $this->stageFor($lockedRange, (float) $validated['amount_paid']);
+            $paymentStageForDupeCheck = $paymentStage;
 
             // Without this guard, repeated submissions (e.g. cash intent, then GCash, then
             // cash again, all before any of them is verified) would each create a brand-new
@@ -283,6 +332,15 @@ class PaymentController extends Controller
         }
 
         if (isset($outcome['error'])) {
+            // Nothing was recorded, so the receipt stored up front would be an orphan.
+            if ($receiptPath !== null) {
+                Storage::disk('public')->delete($receiptPath);
+            }
+
+            if ($outcome['error'] === 'amount') {
+                return response()->json($outcome['body'], 422);
+            }
+
             $message = $outcome['error'] === 'not_payable'
                 ? 'This reservation is not payable.'
                 : 'A payment for this reservation is already awaiting verification. Cancel or void it before submitting another.';

@@ -10,6 +10,7 @@ use App\Models\Reservation;
 use App\Models\RoomType;
 use App\Models\User;
 use App\Support\Activity;
+use App\Support\PaymentMath;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 
@@ -70,6 +71,46 @@ class ReservationWorkflowService
             'total' => round($total, 2),
             'min' => round($total * (float) config('hotel.minimum_payment_ratio', 0.20), 2),
             'max' => round($total * (float) config('hotel.maximum_payment_ratio', 0.50), 2),
+        ];
+    }
+
+    /**
+     * What a guest may pay RIGHT NOW against this reservation - depositRangeForTotal()'s 20%-50% of the original
+     * total for a first payment, but aware of what has already been paid, so the rest of the bill can be paid:
+     *
+     * - already paid  = completed payments only (PaymentMath::totalPaid - the definition every payment summary uses;
+     *                   a converted reservation delegates to ReceiptService::paymentSummary()).
+     * - remaining     = total due - already paid.
+     * - full payment  = exactly the remaining balance.
+     * - partial       = min..max, where min is 20% of the ORIGINAL total and max is 50% of it, never more than remaining.
+     * - remaining below the minimum -> no partial payment is possible (can_partial false), only a full one.
+     * - remaining zero -> nothing can be paid (is_settled true).
+     *
+     * @return array{total: float, paid: float, remaining: float, min: float, max: float, can_partial: bool, is_settled: bool}
+     */
+    public function payableRange(Reservation $reservation): array
+    {
+        if ($reservation->booking) {
+            $summary = app(ReceiptService::class)->paymentSummary($reservation->booking);
+            $total = (float) $summary['grand_total'];
+            $paid = (float) $summary['total_amount_paid'];
+        } else {
+            $total = round((float) $reservation->total_amount_due, 2);
+            $paid = PaymentMath::totalPaid($reservation->payments()->get());
+        }
+
+        $remaining = PaymentMath::remainingBalance($total, $paid);
+        $range = $this->depositRangeForTotal($total);
+        $max = min($range['max'], $remaining);
+
+        return [
+            'total' => round($total, 2),
+            'paid' => $paid,
+            'remaining' => $remaining,
+            'min' => $range['min'],
+            'max' => $max,
+            'can_partial' => $remaining > 0.009 && $range['min'] <= $max + 0.009,
+            'is_settled' => $remaining <= 0.009,
         ];
     }
 
