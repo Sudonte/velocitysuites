@@ -49,7 +49,8 @@
             <div class="input-group">
                 <span class="input-group-text"><i class="fas fa-envelope"></i></span>
                 <input type="email" class="form-control @error('email') is-invalid @enderror"
-                       id="email" name="email" value="{{ old('email') }}" autocomplete="email" required autofocus>
+                       id="email" name="email" value="{{ old('email') }}" autocomplete="email" required autofocus
+                       placeholder="you@example.com">
             </div>
             @error('email')
                 <div class="invalid-feedback d-block">{{ $message }}</div>
@@ -84,6 +85,9 @@
         <button type="submit" class="btn btn-primary w-100 mb-2" id="loginSubmitBtn">
             <i class="fas fa-sign-in-alt"></i> <span class="btn-label">Sign In</span>
         </button>
+        <p class="text-muted small text-center mb-0">
+            Can't sign in? Use "Forgot password?" above, or contact the hotel if your account has been deactivated.
+        </p>
     </form>
 
     <hr>

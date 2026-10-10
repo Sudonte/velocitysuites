@@ -18,6 +18,10 @@ class LoginController extends Controller
         return view('auth.login');
     }
 
+    private const FAILED_MESSAGE = 'The email or password you entered is incorrect. Check them and try again, or use "Forgot password?" to reset it.';
+
+    private const LOCKED_MESSAGE = 'For your security, sign-in is paused after 3 failed attempts. Reset your password below to continue.';
+
     /**
      * Handle login request.
      */
@@ -30,9 +34,10 @@ class LoginController extends Controller
 
         $user = User::where('email', $credentials['email'])->first();
 
-        // Check if user exists and status is active
+        // Unknown email, wrong password and a suspended account all get the
+        // same message, so the login form never reveals whether an account exists.
         if (! $user || $user->status === 'suspended') {
-            return back()->with('error', 'Account suspended or credentials invalid.');
+            return back()->withInput($request->only('email'))->with('error', self::FAILED_MESSAGE);
         }
 
         // Check account lockout after 3 failed attempts - every role takes
@@ -43,7 +48,7 @@ class LoginController extends Controller
         // approval (see Admin\PasswordResetRequestController).
         if ($user->failed_login_attempts >= 3) {
             return redirect()->route('password.request')
-                ->with('error', 'Too many failed login attempts. Please reset your password to continue.')
+                ->with('error', self::LOCKED_MESSAGE)
                 ->withInput(['email' => $credentials['email']]);
         }
 
@@ -121,13 +126,13 @@ class LoginController extends Controller
 
         if ($user->failed_login_attempts >= 3) {
             return redirect()->route('password.request')
-                ->with('error', 'Too many failed login attempts. Please reset your password to continue.')
+                ->with('error', self::LOCKED_MESSAGE)
                 ->withInput(['email' => $credentials['email']]);
         }
 
         $message = $user->failed_login_attempts === 2
-            ? 'Invalid credentials. One more failed attempt will require you to verify your account by email.'
-            : 'Invalid credentials.';
+            ? self::FAILED_MESSAGE . ' One more failed attempt will lock sign-in until you reset your password.'
+            : self::FAILED_MESSAGE;
 
         return back()->withInput($request->only('email'))->with('error', $message);
     }
