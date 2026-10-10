@@ -423,6 +423,9 @@
                 <li><a href="{{ route('manager.reservations.index') }}" class="nav-link {{ request()->routeIs('manager.reservations.*') ? 'active' : '' }}" title="Booking and Monitoring">
                     <i class="fas fa-calendar-alt"></i> <span class="link-text">Booking and Monitoring</span>
                 </a></li>
+                <li><a href="{{ route('guest-history.index') }}" class="nav-link {{ request()->routeIs('guest-history.*') ? 'active' : '' }}" title="Guest History">
+                    <i class="fas fa-address-book"></i> <span class="link-text">Guest History</span>
+                </a></li>
                 <li><a href="{{ route('manager.reports.index') }}" class="nav-link {{ request()->routeIs('manager.reports.*') ? 'active' : '' }}" title="Reports">
                     <i class="fas fa-file-pdf"></i> <span class="link-text">Reports</span>
                 </a></li>
@@ -468,6 +471,9 @@
                 </a></li>
                 <li><a href="{{ route('receptionist.check-out.index') }}" class="nav-link {{ request()->routeIs('receptionist.check-out.*') ? 'active' : '' }}" title="Check-Out">
                     <span class="nav-icon-wrap"><i class="fas fa-sign-out-alt"></i>@if($sidebarHasNewCheckOuts)<span class="sidebar-nav-dot" title="New"></span>@endif</span> <span class="link-text">Check-Out</span>
+                </a></li>
+                <li><a href="{{ route('guest-history.index') }}" class="nav-link {{ request()->routeIs('guest-history.*') ? 'active' : '' }}" title="Guest History">
+                    <i class="fas fa-address-book"></i> <span class="link-text">Guest History</span>
                 </a></li>
                 <li><a href="{{ route('receptionist.rooms.index') }}" class="nav-link {{ request()->routeIs('receptionist.rooms.*') ? 'active' : '' }}" title="Rooms">
                     <i class="fas fa-door-open"></i> <span class="link-text">Rooms</span>

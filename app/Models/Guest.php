@@ -90,6 +90,12 @@ class Guest extends Model
         return $this->hasMany(Reservation::class);
     }
 
+    /** Direct bookings made on this account (converted ones belong to a reservation). */
+    public function bookings()
+    {
+        return $this->hasMany(Booking::class);
+    }
+
     /**
      * Get the amenity requests for the guest.
      */
