@@ -83,10 +83,18 @@ class PromotionManagementController extends Controller
             'amenities.*' => 'nullable|integer|min:0|max:99',
         ]);
 
+        $amenityIds = array_keys($validated['amenities'] ?? []);
+        $knownIds = \App\Models\Amenity::whereIn('id', $amenityIds)->pluck('id')->map(fn ($id) => (string) $id)->all();
+        if (array_diff(array_map('strval', $amenityIds), $knownIds)) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'amenities' => 'One of the selected amenities no longer exists. Remove it and try again.',
+            ]);
+        }
+
         $included = collect($validated['amenities'] ?? [])->filter(fn ($qty) => (int) $qty > 0);
         if ($included->isEmpty()) {
             throw \Illuminate\Validation\ValidationException::withMessages([
-                'amenities' => 'A promotion must include at least one amenity (set a quantity above 0).',
+                'amenities' => 'Add at least one amenity to this promotion.',
             ]);
         }
 
@@ -148,8 +156,11 @@ class PromotionManagementController extends Controller
     public function edit(Promotion $promotion): View
     {
         $roomTypes = RoomType::orderBy('name')->get();
-        $amenities = \App\Models\Amenity::where('status', 'active')->orderBy('amenity_name')->get();
         $promotion->load('amenities');
+        // Active amenities, plus any already on this promotion even if since deactivated.
+        $amenities = \App\Models\Amenity::where('status', 'active')
+            ->orWhereIn('id', $promotion->amenities->pluck('id'))
+            ->orderBy('amenity_name')->get();
 
         return view('admin.promotions.edit', compact('promotion', 'roomTypes', 'amenities'));
     }

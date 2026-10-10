@@ -59,38 +59,7 @@
                         @enderror
                     </div>
 
-                    <div class="form-group mb-3">
-                        <label>Included Amenities *</label>
-                        <p class="text-muted mb-2">Set how many of each amenity are included free with the stay (leave 0 to exclude).</p>
-                        @error('amenities')
-                            <div class="text-danger mb-2">{{ $message }}</div>
-                        @enderror
-                        <div class="table-responsive">
-                            <table class="table table-sm align-middle mb-0">
-                                <thead>
-                                    <tr>
-                                        <th>Amenity</th>
-                                        <th class="text-end">Normal Charge</th>
-                                        <th style="width: 120px;">Included Qty</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    @foreach($amenities as $amenity)
-                                        @php $pivotQty = $promotion->amenities->firstWhere('id', $amenity->id)?->pivot->quantity ?? 0; @endphp
-                                        <tr>
-                                            <td>{{ $amenity->amenity_name }}</td>
-                                            <td class="text-end">₱{{ number_format($amenity->charge, 2) }}</td>
-                                            <td>
-                                                <input type="number" min="0" max="99" class="form-control form-control-sm"
-                                                       name="amenities[{{ $amenity->id }}]"
-                                                       value="{{ old('amenities.' . $amenity->id, $pivotQty) }}">
-                                            </td>
-                                        </tr>
-                                    @endforeach
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
+                    @include('admin.promotions.partials.amenity-picker', ['selectedAmenities' => $promotion->amenities->mapWithKeys(fn ($a) => [$a->id => $a->pivot->quantity])->all()])
 
                     <div class="form-group mb-3">
                         <label for="room_type_id">Applicable Room Type</label>
