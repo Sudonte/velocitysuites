@@ -170,9 +170,15 @@
             </x-card>
 
             <!-- Pay Deposit Now (Pay Later + GCash, still awaiting review) -->
-            @if($reservation->status === \App\Models\Reservation::STATUS_AWAITING_GCASH && $reservation->payment_method === 'gcash')
+            @if($reservation->status === \App\Models\Reservation::STATUS_AWAITING_GCASH && $reservation->payment_method === 'gcash' && ! $depositRange['is_settled'] && ($depositRange['can_partial'] || ! $depositRange['discount_pending']))
                 <x-card title="Pay Deposit Now" icon="fas fa-qrcode" bodyClass="card-body" class="mb-4">
                     <p class="text-muted small">Complete your GCash payment now to move this reservation straight to booking conversion.</p>
+                    @if($depositRange['paid'] > 0.009)
+                        <p class="small">Already paid: <strong>₱{{ number_format($depositRange['paid'], 2) }}</strong>. Still owed: <strong>₱{{ number_format($depositRange['remaining'], 2) }}</strong>.</p>
+                    @endif
+                    @if($depositRange['discount_pending'])
+                        <p class="small text-info">Your discount is being verified. You can pay a deposit now and the rest after it is applied.</p>
+                    @endif
                     <form action="{{ route('guest.reservations.pay-deposit', $reservation) }}" method="POST" enctype="multipart/form-data">
                         @csrf
                         <div class="mb-3 text-center">
@@ -181,12 +187,17 @@
 
                         <label class="form-label d-block">How much are you paying? *</label>
                         <div class="btn-group w-100 mb-2" role="group" aria-label="Payment amount type">
-                            <input type="radio" class="btn-check" name="payment_type" id="depositTypePartial" value="partial"
-                                   {{ old('payment_type', 'partial') === 'partial' ? 'checked' : '' }} onchange="updateDepositAmountMode()">
-                            <label class="btn btn-outline-secondary" for="depositTypePartial">Partial (Deposit)</label>
-                            <input type="radio" class="btn-check" name="payment_type" id="depositTypeFull" value="full"
-                                   {{ old('payment_type') === 'full' ? 'checked' : '' }} onchange="updateDepositAmountMode()">
-                            <label class="btn btn-outline-secondary" for="depositTypeFull">Full Payment</label>
+                            @if($depositRange['can_partial'])
+                                <input type="radio" class="btn-check" name="payment_type" id="depositTypePartial" value="partial"
+                                       {{ old('payment_type', 'partial') === 'partial' || $depositRange['discount_pending'] ? 'checked' : '' }} onchange="updateDepositAmountMode()">
+                                <label class="btn btn-outline-secondary" for="depositTypePartial">Partial (Deposit)</label>
+                            @endif
+                            {{-- Full Payment = the remaining balance; not offered while a discount waits for its ID check. --}}
+                            @unless($depositRange['discount_pending'])
+                                <input type="radio" class="btn-check" name="payment_type" id="depositTypeFull" value="full"
+                                       {{ old('payment_type') === 'full' || ! $depositRange['can_partial'] ? 'checked' : '' }} onchange="updateDepositAmountMode()">
+                                <label class="btn btn-outline-secondary" for="depositTypeFull">Full Payment</label>
+                            @endunless
                         </div>
                         <div id="depositPercentChips" class="d-flex gap-2 mb-3">
                             <button type="button" class="btn btn-sm btn-outline-primary" onclick="setDepositPercent(0.20)">20%</button>
@@ -239,11 +250,11 @@
                     const amountField = document.getElementById('depositAmount');
                     const chips = document.getElementById('depositPercentChips');
                     const hint = document.getElementById('depositAmountHint');
-                    const total = {{ $depositRange['total'] }};
+                    const total = {{ $depositRange['remaining'] }}; // what Full Payment pays: the remaining balance
                     const depositMin = {{ $depositRange['min'] }};
                     const depositMax = {{ $depositRange['max'] }};
 
-                    chips.classList.toggle('d-none', !!isFull);
+                    chips.classList.toggle('d-none', !!isFull || !document.getElementById('depositTypePartial'));
                     if (isFull) {
                         amountField.value = total.toFixed(2);
                         amountField.readOnly = true;
@@ -261,11 +272,33 @@
                     }
                 }
                 function setDepositPercent(pct) {
-                    document.getElementById('depositAmount').value = ({{ $depositRange['total'] }} * pct).toFixed(2);
+                    document.getElementById('depositAmount').value = Math.min({{ $depositRange['total'] }} * pct, {{ $depositRange['max'] }}).toFixed(2);
                 }
                 document.addEventListener('DOMContentLoaded', updateDepositAmountMode);
                 </script>
                 @endpush
+            @elseif($reservation->status === \App\Models\Reservation::STATUS_AWAITING_GCASH && $reservation->payment_method === 'gcash')
+                <x-card title="Payment" icon="fas fa-qrcode" bodyClass="card-body" class="mb-4">
+                    <p class="mb-0">
+                        @if($depositRange['is_settled'])
+                            This reservation is already fully paid. There is nothing left to pay.
+                        @elseif($depositRange['cap_reached'])
+                            You've paid the maximum deposit while your discount is being verified. The rest is settled at the front desk.
+                        @else
+                            Your discount is being verified. Payment is on hold until it is applied.
+                        @endif
+                    </p>
+                </x-card>
+            @endif
+
+            {{-- A confirmed booking is never paid on the website: the rest of the balance is settled at the front desk. --}}
+            @if($reservation->status === \App\Models\Reservation::STATUS_CONVERTED && $booking)
+                @php $frontDeskBalance = (float) ($reservation->paymentSummary()['remaining_balance'] ?? 0); @endphp
+                @if($frontDeskBalance > 0.009)
+                    <x-card title="Pay at the front desk" icon="fas fa-concierge-bell" bodyClass="card-body" class="mb-4">
+                        <p class="mb-0">Remaining balance: <strong>₱{{ number_format($frontDeskBalance, 2) }}</strong>. Please pay at the Velocity Suites front desk.</p>
+                    </x-card>
+                @endif
             @endif
 
             <!-- Actions -->

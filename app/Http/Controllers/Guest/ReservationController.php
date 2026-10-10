@@ -41,8 +41,10 @@ class ReservationController extends Controller
 
         $reservation->loadMissing('roomType', 'bookingAmenities');
         $this->workflow->expireUnpaid($reservation);
-        $nights = abs($reservation->check_out->diffInDays($reservation->check_in));
-        $depositRange = $this->workflow->depositRange($reservation->roomType, $nights, $reservation->rooms_requested);
+        // The same rule the mobile API enforces (ReservationWorkflowService::payableRange): pay the REST of a partly
+        // paid reservation, deposits only (and capped) while a discount waits for its ID check. min/max/total keep
+        // the shape the view always read; the new keys drive what it offers.
+        $depositRange = $this->workflow->payableRange($reservation);
 
         return view('guest.reservations.show', compact('reservation', 'depositRange'));
     }
@@ -226,7 +228,11 @@ class ReservationController extends Controller
         // until checkout, so "full" here still only means 100% of the
         // quoted room total, not a final bill.
         $nights = abs(\Carbon\Carbon::parse($validated['check_out'])->diffInDays(\Carbon\Carbon::parse($validated['check_in'])));
-        $range = $this->workflow->depositRange($roomType, $nights, $validated['rooms_requested']);
+        // Rooms PLUS the selected paid amenities - the same total the payment endpoint and the app use.
+        $amenityTotal = (float) $resolvedAmenities->sum(fn ($entry) => (float) $entry['amenity']->charge * $entry['quantity']);
+        $range = $this->workflow->depositRangeForTotal(
+            (float) $roomType->rate * max(1, $nights) * max(1, (int) $validated['rooms_requested']) + $amenityTotal
+        );
         $declaredAmount = $paymentMethod === 'gcash' ? ($validated['gcash_amount'] ?? null) : ($validated['cash_amount'] ?? null);
         if ($declaredAmount !== null) {
             if ($paymentMethod === 'gcash' && $paymentType === 'full') {
@@ -238,6 +244,8 @@ class ReservationController extends Controller
                     return back()->withInput()->with('error',
                         "Full payment must equal the total amount due (₱{$range['total']}).");
                 }
+            } elseif ($discountRequested && (float) $declaredAmount > $this->workflow->pendingDepositCapForNewTransaction($range['total'], null) + 0.005) {
+                return back()->withInput()->with('error', $this->workflow->pendingDiscountFullPaymentMessage($range));
             } elseif ((float) $declaredAmount < $range['min'] || (float) $declaredAmount > $range['max']) {
                 return back()->withInput()->with('error',
                     "The deposit amount must be between ₱{$range['min']} and ₱{$range['max']} (20%-50% of the quoted total). " .
@@ -322,8 +330,6 @@ class ReservationController extends Controller
         }
 
         $reservation->loadMissing('roomType', 'bookingAmenities');
-        $nights = abs($reservation->check_out->diffInDays($reservation->check_in));
-        $range = $this->workflow->depositRange($reservation->roomType, $nights, $reservation->rooms_requested);
 
         $validated = $request->validate([
             'payment_type' => 'required|in:partial,full',
@@ -340,36 +346,44 @@ class ReservationController extends Controller
         ], [
             'reference_number.unique' => 'This GCash reference number has already been used.',
         ]);
+        $amount = (float) $validated['gcash_amount'];
 
-        // Same guard as Api\PaymentController::store() - without it, a
-        // double-click/double-tab/retry-after-slow-response here creates a
-        // second live GCash payment row for this reservation, with nothing
-        // ever superseding the first. Cancel/void the existing attempt
-        // first (Guest\PaymentController::cancel()/void()).
-        $paymentStageForDupeCheck = $validated['payment_type'] === 'full' ? 'final' : 'deposit';
-        if ($reservation->payments()->where('payment_stage', $paymentStageForDupeCheck)->where('payment_status', 'pending')->exists()) {
-            return back()->withInput()->with('error', 'A payment for this reservation is already awaiting verification. Cancel or void it before submitting another.');
-        }
-
-        if ($validated['payment_type'] === 'full') {
-            if ($this->workflow->hasPendingDiscount($reservation)) {
-                return back()->withInput()->with('error', $this->workflow->pendingDiscountFullPaymentMessage($range));
+        // Everything below on the row-locked reservation, like Api\PaymentController::store(): the amount rule is
+        // ReservationWorkflowService::payableRange()/amountError() - pay the rest, deposits only (capped) while a
+        // discount waits for its ID check - and the duplicate-pending guard sees any payment racing in.
+        $outcome = DB::transaction(function () use ($reservation, $validated, $request, $amount) {
+            $locked = Reservation::whereKey($reservation->id)->lockForUpdate()->first();
+            if (! $locked || $locked->status !== Reservation::STATUS_AWAITING_GCASH || $locked->payment_method !== 'gcash') {
+                return ['error' => 'This reservation is not awaiting an online payment.'];
             }
-            if (abs((float) $validated['gcash_amount'] - $range['total']) > 0.01) {
-                return back()->withInput()->with('error', "Full payment must equal the total amount due (₱{$range['total']}).");
-            }
-        } elseif ((float) $validated['gcash_amount'] < $range['min'] || (float) $validated['gcash_amount'] > $range['max']) {
-            return back()->withInput()->with('error',
-                "The deposit must be between ₱{$range['min']} and ₱{$range['max']} (20%-50% of the quoted total).");
-        }
 
-        $this->workflow->recordDepositPayment($reservation, [
-            'payment_method' => 'gcash',
-            'reference_number' => $validated['reference_number'],
-            'gcash_number' => $validated['gcash_number'],
-            'receipt_path' => $request->file('gcash_receipt')->store('payment-receipts', 'public'),
-            'amount_paid' => (float) $validated['gcash_amount'],
-        ], $validated['payment_type'] === 'full' ? 'final' : 'deposit');
+            $range = $this->workflow->payableRange($locked);
+            $amountError = $this->workflow->amountError($range, $validated['payment_type'], $amount);
+            if ($amountError !== null) {
+                return ['error' => $amountError['message']];
+            }
+
+            // Same guard as Api\PaymentController::store() - a double-click/retry must not create a second live
+            // GCash payment row (cancel/void the existing attempt first: Guest\PaymentController::cancel()/void()).
+            $stage = $this->workflow->stageFor($range, $amount);
+            if ($locked->payments()->where('payment_stage', $stage)->where('payment_status', 'pending')->exists()) {
+                return ['error' => 'A payment for this reservation is already awaiting verification. Cancel or void it before submitting another.'];
+            }
+
+            $this->workflow->recordDepositPayment($locked, [
+                'payment_method' => 'gcash',
+                'reference_number' => $validated['reference_number'],
+                'gcash_number' => $validated['gcash_number'],
+                'receipt_path' => $request->file('gcash_receipt')->store('payment-receipts', 'public'),
+                'amount_paid' => $amount,
+            ], $stage);
+
+            return ['ok' => true];
+        });
+
+        if (isset($outcome['error'])) {
+            return back()->withInput()->with('error', $outcome['error']);
+        }
 
         Activity::log(
             'Submitted payment (web)',

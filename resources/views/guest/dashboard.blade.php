@@ -165,8 +165,11 @@
                     <tbody>
                         @foreach($pendingPayments as $billing)
                             @php
-                                $paid = $billing->payments()->where('payment_status', 'completed')->sum('amount_paid');
-                                $balance = max(0, (float) $billing->total_amount - (float) $paid);
+                                // The server's payment summary (verified payments only, reservation + booking + billing
+                                // payments merged) - the same figure the mobile app and every receipt show.
+                                $summary = $billing->booking->paymentSummary();
+                                $paid = (float) $summary['total_amount_paid'];
+                                $balance = (float) $summary['remaining_balance'];
                             @endphp
                             <tr>
                                 <td>{{ $billing->booking->room->room_name ?? $billing->booking->roomType->name }}</td>
@@ -176,9 +179,8 @@
                                 <td>₱{{ number_format($paid, 2) }}</td>
                                 <td><span class="text-danger">₱{{ number_format($balance, 2) }}</span></td>
                                 <td>
-                                    <a href="{{ route('guest.payments.index') }}" class="btn btn-sm btn-primary">
-                                        <i class="fas fa-credit-card"></i> Pay Now
-                                    </a>
+                                    {{-- A confirmed booking is paid at the front desk, not on the website. --}}
+                                    <small class="text-muted">Remaining balance: ₱{{ number_format($balance, 2) }}. Please pay at the Velocity Suites front desk.</small>
                                 </td>
                             </tr>
                         @endforeach
