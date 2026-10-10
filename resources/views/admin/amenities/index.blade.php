@@ -156,7 +156,7 @@
 
     <!-- Pagination -->
     <div class="d-flex justify-content-center mt-4">
-        {{ $amenities->links() }}
+        <x-pagination :paginator="$amenities" />
     </div>
 </div>
 

@@ -1770,3 +1770,8 @@ tbody tr:hover {
         padding-left: calc(40px + 1rem);
     }
 }
+
+/* Table pagination footer (components/pagination.blade.php) */
+.table-pagination { padding: 0.75rem 1rem; }
+.table-pagination .pagination { margin-bottom: 0; flex-wrap: wrap; }
+.table-pagination .page-link { min-width: 2.25rem; text-align: center; }

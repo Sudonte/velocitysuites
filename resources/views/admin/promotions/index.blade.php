@@ -141,7 +141,7 @@
 
     <!-- Pagination -->
     <div class="d-flex justify-content-center mt-4">
-        {{ $promotions->links() }}
+        <x-pagination :paginator="$promotions" />
     </div>
 </div>
 @endsection

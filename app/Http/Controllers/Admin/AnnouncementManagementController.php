@@ -44,11 +44,7 @@ class AnnouncementManagementController extends Controller
             default => $query->latest('id'),
         };
 
-        // simplePaginate (Previous/Next only, no numbered page-link boxes) -
-        // the numbered links render broken/oversized here for reasons that
-        // don't trace back to anything in this app's own CSS, same fix
-        // already applied everywhere else in the app.
-        $announcements = $query->simplePaginate(15)->withQueryString();
+        $announcements = $query->paginate(\App\Support\PerPage::resolve($request))->withQueryString();
 
         return view('admin.announcements.index', compact('announcements'));
     }

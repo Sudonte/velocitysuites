@@ -176,7 +176,7 @@
     </x-card>
 
     <div class="d-flex justify-content-center mt-4">
-        {{ $announcements->links() }}
+        <x-pagination :paginator="$announcements" />
     </div>
 </div>
 @endsection

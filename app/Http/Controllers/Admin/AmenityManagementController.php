@@ -71,11 +71,7 @@ class AmenityManagementController extends Controller
             }
         }
 
-        // simplePaginate (Previous/Next only, no numbered page-link boxes) -
-        // the numbered links render broken/oversized here for reasons that
-        // don't trace back to anything in this app's own CSS, same fix
-        // already applied everywhere else in the app.
-        $amenities = $query->withCount('amenityRequests')->latest()->simplePaginate(15)->withQueryString();
+        $amenities = $query->withCount('amenityRequests')->latest()->paginate(\App\Support\PerPage::resolve($request))->withQueryString();
         $categories = self::CATEGORIES;
 
         return view('admin.amenities.index', compact('amenities', 'categories'));

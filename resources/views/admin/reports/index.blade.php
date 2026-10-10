@@ -177,7 +177,7 @@
             </tbody>
         </table>
         <x-slot:footer>
-            {{ $activityLogs->links() }}
+            <x-pagination :paginator="$activityLogs" />
         </x-slot:footer>
     </x-card>
 

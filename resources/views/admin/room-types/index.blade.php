@@ -104,7 +104,7 @@
     </div>
 
     <div class="mt-4">
-        {{ $roomTypes->links() }}
+        <x-pagination :paginator="$roomTypes" />
     </div>
 </div>
 @endsection

@@ -255,7 +255,7 @@
                 </div>
             @endforeach
         </div>
-        {{ $rooms->links() }}
+        <x-pagination :paginator="$rooms" />
     @endif
 </div>
 

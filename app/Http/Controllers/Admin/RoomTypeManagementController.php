@@ -40,11 +40,7 @@ class RoomTypeManagementController extends Controller
             $query->where('status', $request->status);
         }
 
-        // simplePaginate (Previous/Next only, no numbered page-link boxes) -
-        // the numbered links render broken/oversized here for reasons that
-        // don't trace back to anything in this app's own CSS, same fix
-        // already applied everywhere else in the app.
-        $roomTypes = $query->orderBy('name')->simplePaginate(15)->withQueryString();
+        $roomTypes = $query->orderBy('name')->paginate(\App\Support\PerPage::resolve($request))->withQueryString();
 
         return view('admin.room-types.index', compact('roomTypes'));
     }
@@ -76,7 +72,7 @@ class RoomTypeManagementController extends Controller
             }
         }
 
-        $rooms = $query->orderBy('room_number')->simplePaginate(20)->withQueryString();
+        $rooms = $query->orderBy('room_number')->paginate(\App\Support\PerPage::resolve($request))->withQueryString();
         $archivedCount = $roomType->rooms()->whereNotNull('archived_at')->count();
 
         // Preview of the next numbers the bulk-add would generate.

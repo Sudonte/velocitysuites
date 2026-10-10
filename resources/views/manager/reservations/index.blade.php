@@ -230,7 +230,7 @@
             </table>
         </div>
         <x-slot:footer>
-            {{ $reservations->links() }}
+            <x-pagination :paginator="$reservations" />
         </x-slot:footer>
     </x-card>
 </div>

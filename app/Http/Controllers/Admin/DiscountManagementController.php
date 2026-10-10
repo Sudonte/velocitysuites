@@ -28,11 +28,7 @@ class DiscountManagementController extends Controller
             $query->where('status', $request->status);
         }
 
-        // simplePaginate (Previous/Next only, no numbered page-link boxes) -
-        // the numbered links render broken/oversized here for reasons that
-        // don't trace back to anything in this app's own CSS, same fix
-        // already applied everywhere else in the app.
-        $discounts = $query->latest()->simplePaginate(15)->withQueryString();
+        $discounts = $query->latest()->paginate(\App\Support\PerPage::resolve($request))->withQueryString();
 
         return view('admin.discounts.index', compact('discounts'));
     }
