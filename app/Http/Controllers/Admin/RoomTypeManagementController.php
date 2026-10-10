@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Support\Activity;
 use App\Models\Amenity;
 use App\Models\Booking;
 use App\Models\Room;
@@ -128,6 +129,8 @@ class RoomTypeManagementController extends Controller
         $roomType = RoomType::create($validated);
         $roomType->assignedAmenities()->sync($amenityIds);
 
+        Activity::log('Created room type', "{$roomType->name} ({$roomType->capacity_label}, ₱" . number_format($roomType->rate, 2) . '/night)', $roomType);
+
         return redirect()->route('admin.room-types.show', $roomType)->with('success', 'Room type created! You can now add its rooms below.');
     }
 
@@ -228,6 +231,8 @@ class RoomTypeManagementController extends Controller
             ]);
         }
 
+        Activity::log('Added rooms', "{$roomType->name}: " . implode(', ', $numbers), $roomType);
+
         return redirect()->route('admin.room-types.show', $roomType)
             ->with('success', count($numbers) . ' room(s) added: ' . implode(', ', $numbers));
     }
@@ -294,6 +299,8 @@ class RoomTypeManagementController extends Controller
             Room::where('room_type_id', $roomType->id)->update(['room_capacity' => $roomType->capacity]);
         }
 
+        Activity::log('Updated room type', "{$roomType->name} ({$roomType->capacity_label}, ₱" . number_format($roomType->rate, 2) . '/night, ' . $roomType->status . ')', $roomType);
+
         return redirect()->route('admin.room-types.index')->with('success', 'Room type updated successfully!');
     }
 
@@ -333,6 +340,8 @@ class RoomTypeManagementController extends Controller
     {
         $roomType->update(['status' => 'inactive']);
 
+        Activity::log('Deactivated room type', $roomType->name, $roomType);
+
         return redirect()->route('admin.room-types.index')->with('success', 'Room type deactivated.');
     }
 
@@ -342,6 +351,8 @@ class RoomTypeManagementController extends Controller
     public function reactivate(RoomType $roomType): RedirectResponse
     {
         $roomType->update(['status' => 'active']);
+
+        Activity::log('Reactivated room type', $roomType->name, $roomType);
 
         return redirect()->route('admin.room-types.index')->with('success', 'Room type reactivated.');
     }

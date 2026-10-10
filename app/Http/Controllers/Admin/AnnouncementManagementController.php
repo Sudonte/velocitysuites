@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Support\Activity;
 use App\Models\Announcement;
 use App\Services\NotificationService;
 use Illuminate\Http\RedirectResponse;
@@ -62,6 +63,8 @@ class AnnouncementManagementController extends Controller
         $announcement = Announcement::create($validated);
         $this->notifyIfPublished($announcement);
 
+        Activity::log('Created announcement', $request->input('title'));
+
         return redirect()->route('admin.announcements.index')->with('success', 'Announcement created successfully!');
     }
 
@@ -85,6 +88,8 @@ class AnnouncementManagementController extends Controller
         $announcement->update($validated);
         $this->notifyIfPublished($announcement->fresh());
 
+        Activity::log('Updated announcement', $announcement->title, $announcement);
+
         return redirect()->route('admin.announcements.index')->with('success', 'Announcement updated successfully!');
     }
 
@@ -101,12 +106,16 @@ class AnnouncementManagementController extends Controller
         ]);
         $this->notifyIfPublished($announcement->fresh());
 
+        Activity::log('Published announcement', $announcement->title, $announcement);
+
         return redirect()->route('admin.announcements.index')->with('success', 'Announcement published.');
     }
 
     public function unpublish(Announcement $announcement): RedirectResponse
     {
         $announcement->update(['status' => 'archived']);
+
+        Activity::log('Unpublished announcement', $announcement->title, $announcement);
 
         return redirect()->route('admin.announcements.index')->with('success', 'Announcement unpublished.');
     }
@@ -126,6 +135,8 @@ class AnnouncementManagementController extends Controller
         }
 
         $announcement->delete();
+
+        Activity::log('Deleted announcement', $announcement->title);
 
         return redirect()->route('admin.announcements.index')->with('success', 'Announcement deleted.');
     }

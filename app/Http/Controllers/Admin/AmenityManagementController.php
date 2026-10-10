@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Support\Activity;
 use App\Models\Amenity;
 use App\Rules\MeaningfulDescription;
 use Illuminate\Http\RedirectResponse;
@@ -120,6 +121,8 @@ class AmenityManagementController extends Controller
 
         Amenity::create($this->withQuantityMode($validated));
 
+        Activity::log('Created amenity', $request->input('amenity_name'));
+
         return redirect()->route('admin.amenities.index')->with('success', 'Amenity created successfully!');
     }
 
@@ -159,6 +162,8 @@ class AmenityManagementController extends Controller
 
         $amenity->update($this->withQuantityMode($validated, $amenity));
 
+        Activity::log('Updated amenity', $amenity->amenity_name . ' (' . ($amenity->is_unlimited ? 'unlimited' : $amenity->quantity . ' in stock') . ', ' . $amenity->status . ')', $amenity);
+
         return redirect()->route('admin.amenities.index')->with('success', 'Amenity updated successfully!');
     }
 
@@ -188,6 +193,8 @@ class AmenityManagementController extends Controller
         $newStatus = $amenity->status === 'active' ? 'inactive' : 'active';
         $amenity->update(['status' => $newStatus]);
 
+        Activity::log(($amenity->status === 'active' ? 'Activated' : 'Deactivated') . ' amenity', $amenity->amenity_name, $amenity);
+
         return redirect()->route('admin.amenities.index')
             ->with('success', "Amenity {$newStatus}d successfully!");
     }
@@ -206,6 +213,8 @@ class AmenityManagementController extends Controller
     {
         $name = $amenity->amenity_name;
         $amenity->delete();
+
+        Activity::log('Deleted amenity', $name);
 
         return redirect()->route('admin.amenities.index')->with('success', "\"{$name}\" was deleted successfully.");
     }

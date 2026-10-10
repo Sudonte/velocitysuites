@@ -50,6 +50,10 @@ class Activity
             \App\Models\Promotion::class => 'promotion',
             \App\Models\Discount::class => 'discount',
             \App\Models\StaffPasswordResetRequest::class => 'staff_password_reset_request',
+            \App\Models\Room::class => 'room',
+            \App\Models\RoomType::class => 'room_type',
+            \App\Models\Amenity::class => 'amenity',
+            \App\Models\Announcement::class => 'announcement',
             default => class_basename($subject),
         };
     }

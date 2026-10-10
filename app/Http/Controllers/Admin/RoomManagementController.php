@@ -102,6 +102,8 @@ class RoomManagementController extends Controller
             );
         }
 
+        Activity::log('Updated room', "Room {$room->room_number} ({$room->room_name}, {$room->status})", $room);
+
         return redirect()->route('admin.rooms.edit', $room)->with('success', 'Room updated successfully!');
     }
 
@@ -207,6 +209,8 @@ class RoomManagementController extends Controller
 
         $room->update(['status' => 'maintenance']);
 
+        Activity::log('Set room to maintenance', "Room {$room->room_number}", $room);
+
         return redirect()->route('admin.rooms.index')->with('success', 'Room deactivated (set to maintenance).');
     }
 
@@ -258,6 +262,8 @@ class RoomManagementController extends Controller
     public function reactivate(Room $room): RedirectResponse
     {
         $room->update(['status' => 'available']);
+
+        Activity::log('Reactivated room', "Room {$room->room_number}", $room);
 
         return redirect()->route('admin.rooms.index')->with('success', 'Room reactivated.');
     }

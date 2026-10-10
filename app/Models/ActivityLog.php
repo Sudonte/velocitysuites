@@ -61,6 +61,10 @@ class ActivityLog extends Model
             'promotion' => route('admin.promotions.index'),
             'discount' => route('admin.discounts.index'),
             'staff_password_reset_request' => route('admin.users.password-requests.index'),
+            'room' => auth()->user()?->role === 'admin' ? route('admin.rooms.edit', $this->subject_id) : null,
+            'room_type' => auth()->user()?->role === 'admin' ? route('admin.room-types.show', $this->subject_id) : null,
+            'amenity' => auth()->user()?->role === 'admin' ? route('admin.amenities.index') : null,
+            'announcement' => auth()->user()?->role === 'admin' ? route('admin.announcements.index') : null,
             default => null,
         };
     }
