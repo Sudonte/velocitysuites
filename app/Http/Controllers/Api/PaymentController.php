@@ -33,6 +33,24 @@ class PaymentController extends Controller
     ) {
     }
 
+    /**
+     * Why this reservation cannot be paid here. Once it has become a booking the guest settles the rest at the
+     * front desk, so the message says how much is left (the same verified-payments-only figure every payment
+     * summary reports) and where to pay. Same 422 + {message} as before, so older app versions read it unchanged.
+     */
+    private function notPayableMessage(Reservation $reservation): string
+    {
+        if ($reservation->status === Reservation::STATUS_CONVERTED && $reservation->booking) {
+            $remaining = (float) $reservation->paymentSummary()['remaining_balance'];
+
+            return $remaining > 0.009
+                ? 'Remaining balance: ' . $this->peso($remaining) . '. Please pay at the Velocity Suites front desk.'
+                : 'This booking is already fully paid. There is nothing left to pay.';
+        }
+
+        return 'This reservation is not payable.';
+    }
+
     /** "₱1,400.00" - the one way this controller writes an amount in a message. */
     private function peso(float $amount): string
     {
@@ -81,7 +99,7 @@ class PaymentController extends Controller
         }
 
         if (!in_array($reservation->status, Reservation::ACTIVE_STATUSES, true)) {
-            return response()->json(['message' => 'This reservation is not payable.'], 422);
+            return response()->json(['message' => $this->notPayableMessage($reservation)], 422);
         }
 
         // The payment method is fixed at reservation creation (see
@@ -342,7 +360,7 @@ class PaymentController extends Controller
             }
 
             $message = $outcome['error'] === 'not_payable'
-                ? 'This reservation is not payable.'
+                ? $this->notPayableMessage($reservation->refresh())
                 : 'A payment for this reservation is already awaiting verification. Cancel or void it before submitting another.';
 
             return response()->json(['message' => $message], 422);
