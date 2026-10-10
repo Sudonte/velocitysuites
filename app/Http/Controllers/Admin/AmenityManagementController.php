@@ -114,14 +114,15 @@ class AmenityManagementController extends Controller
             ],
             'description' => ['required', 'string', new MeaningfulDescription()],
             'category' => 'required|string|in:' . implode(',', self::CATEGORIES),
-            'quantity' => 'required|integer|min:0',
+            'quantity_mode' => 'required|in:limited,unlimited',
+            'quantity' => 'required_if:quantity_mode,limited|nullable|integer|min:0',
             'charge' => 'required|numeric|min:0',
             'status' => 'required|in:active,inactive',
         ], [
             'amenity_name.unique' => 'An amenity with this name already exists.',
         ]);
 
-        Amenity::create($validated);
+        Amenity::create($this->withQuantityMode($validated));
 
         return redirect()->route('admin.amenities.index')->with('success', 'Amenity created successfully!');
     }
@@ -152,16 +153,35 @@ class AmenityManagementController extends Controller
             ],
             'description' => ['required', 'string', new MeaningfulDescription()],
             'category' => 'required|string|in:' . implode(',', self::CATEGORIES),
-            'quantity' => 'required|integer|min:0',
+            'quantity_mode' => 'required|in:limited,unlimited',
+            'quantity' => 'required_if:quantity_mode,limited|nullable|integer|min:0',
             'charge' => 'required|numeric|min:0',
             'status' => 'required|in:active,inactive',
         ], [
             'amenity_name.unique' => 'An amenity with this name already exists.',
         ]);
 
-        $amenity->update($validated);
+        $amenity->update($this->withQuantityMode($validated, $amenity));
 
         return redirect()->route('admin.amenities.index')->with('success', 'Amenity updated successfully!');
+    }
+
+    /**
+     * Maps the form's quantity mode onto the model: Unlimited sets
+     * is_unlimited and keeps the last stock number (so switching back to
+     * Limited doesn't lose it); Limited uses the entered stock.
+     */
+    private function withQuantityMode(array $validated, ?Amenity $amenity = null): array
+    {
+        $unlimited = $validated['quantity_mode'] === 'unlimited';
+        unset($validated['quantity_mode']);
+
+        $validated['is_unlimited'] = $unlimited;
+        $validated['quantity'] = $unlimited
+            ? (int) ($validated['quantity'] ?? $amenity?->quantity ?? 0)
+            : (int) $validated['quantity'];
+
+        return $validated;
     }
 
     /**

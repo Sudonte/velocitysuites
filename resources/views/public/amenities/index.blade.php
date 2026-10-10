@@ -62,7 +62,7 @@
                                  data-amenity-description="{{ $amenity->description }}"
                                  data-amenity-pricing="{{ $amenity->charge > 0 ? 'paid' : 'complimentary' }}"
                                  data-amenity-charge="{{ number_format($amenity->charge, 2) }}"
-                                 data-amenity-stock="{{ $amenity->quantity }}"
+                                 data-amenity-stock="{{ $amenity->is_unlimited ? 'Unlimited' : $amenity->quantity }}"
                                  role="button" tabindex="0">
                                 <div class="card-body p-4 text-center d-flex flex-column">
                                     <span class="amenity-icon-badge mx-auto"><i class="fas {{ $amenity->icon }}"></i></span>

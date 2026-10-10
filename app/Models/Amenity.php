@@ -16,13 +16,32 @@ class Amenity extends Model
         'description',
         'category',
         'quantity',
+        'is_unlimited',
         'charge',
         'status',
     ];
 
     protected $casts = [
         'charge' => 'decimal:2',
+        'is_unlimited' => 'boolean',
     ];
+
+    /** Remaining stock reported for an Unlimited amenity - never runs out. */
+    public const UNLIMITED_STOCK = PHP_INT_MAX;
+
+    /** Quantity the mobile API reports for an Unlimited amenity (display only). */
+    public const API_UNLIMITED_DISPLAY_QUANTITY = 999;
+
+    /** Display text for stock: "Unlimited" or the configured quantity. */
+    public function getStockLabelAttribute(): string
+    {
+        return $this->is_unlimited ? 'Unlimited' : (string) (int) $this->quantity;
+    }
+
+    public static function isUnlimitedStock(?int $remaining): bool
+    {
+        return $remaining === self::UNLIMITED_STOCK;
+    }
 
     /**
      * Get the amenity requests for this amenity.
@@ -111,6 +130,8 @@ class Amenity extends Model
      * ReservationAmenityService::validateSelection(), post-check-in
      * top-ups via Api\AmenityRequestController) so none of them can
      * approve more of a shared amenity than the hotel actually has.
+     * Unlimited amenities report UNLIMITED_STOCK, so no quantity is ever
+     * refused for them.
      */
     public static function remainingStockFor(iterable $amenityIds): \Illuminate\Support\Collection
     {
@@ -123,9 +144,11 @@ class Amenity extends Model
             ->pluck('used', 'amenity_id');
 
         return static::whereIn('id', $amenityIds)
-            ->get(['id', 'quantity'])
+            ->get(['id', 'quantity', 'is_unlimited'])
             ->mapWithKeys(fn (self $amenity) => [
-                $amenity->id => max(0, (int) $amenity->quantity - (int) ($requested[$amenity->id] ?? 0)),
+                $amenity->id => $amenity->is_unlimited
+                    ? self::UNLIMITED_STOCK
+                    : max(0, (int) $amenity->quantity - (int) ($requested[$amenity->id] ?? 0)),
             ]);
     }
 }

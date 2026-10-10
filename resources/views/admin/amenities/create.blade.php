@@ -60,12 +60,25 @@
                     <div class="row">
                         <div class="col-md-6">
                             <div class="form-group mb-3">
-                                <label for="quantity">Stock Quantity *</label>
-                                <input type="number" min="0" class="form-control @error('quantity') is-invalid @enderror"
-                                       id="quantity" name="quantity" value="{{ old('quantity', 1) }}" required>
-                                <small class="text-muted">Available units for guests to request.</small>
+                                @php $qtyMode = old('quantity_mode', 'limited'); @endphp
+                                <label class="d-block">Quantity *</label>
+                                <div class="btn-group mb-2" role="group" aria-label="Quantity mode">
+                                    <input type="radio" class="btn-check" name="quantity_mode" id="qtyModeLimited" value="limited" {{ $qtyMode === 'limited' ? 'checked' : '' }}>
+                                    <label class="btn btn-outline-primary btn-sm" for="qtyModeLimited">Limited</label>
+                                    <input type="radio" class="btn-check" name="quantity_mode" id="qtyModeUnlimited" value="unlimited" {{ $qtyMode === 'unlimited' ? 'checked' : '' }}>
+                                    <label class="btn btn-outline-primary btn-sm" for="qtyModeUnlimited">Unlimited</label>
+                                </div>
+                                <div id="quantityStockField" class="{{ $qtyMode === 'unlimited' ? 'd-none' : '' }}">
+                                    <input type="number" min="0" class="form-control @error('quantity') is-invalid @enderror"
+                                           id="quantity" name="quantity" value="{{ old('quantity', 1) }}" {{ $qtyMode === 'unlimited' ? 'disabled' : 'required' }}>
+                                    <small class="text-muted">Units in stock. Each request holds units until the stay checks out.</small>
+                                </div>
+                                <small id="quantityUnlimitedNote" class="text-muted {{ $qtyMode === 'unlimited' ? '' : 'd-none' }}">Never runs out - requests are never refused for stock.</small>
                                 @error('quantity')
-                                    <div class="invalid-feedback">{{ $message }}</div>
+                                    <div class="invalid-feedback d-block">{{ $message }}</div>
+                                @enderror
+                                @error('quantity_mode')
+                                    <div class="invalid-feedback d-block">{{ $message }}</div>
                                 @enderror
                             </div>
                         </div>
@@ -131,4 +144,17 @@
         </div>
     </div>
 </div>
+@push('scripts')
+<script>
+document.addEventListener('change', function (e) {
+    if (e.target.name !== 'quantity_mode') return;
+    const unlimited = e.target.value === 'unlimited';
+    const qty = document.getElementById('quantity');
+    document.getElementById('quantityStockField').classList.toggle('d-none', unlimited);
+    document.getElementById('quantityUnlimitedNote').classList.toggle('d-none', !unlimited);
+    qty.disabled = unlimited;
+    qty.required = !unlimited;
+});
+</script>
+@endpush
 @endsection

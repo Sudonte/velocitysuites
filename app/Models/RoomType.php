@@ -99,6 +99,7 @@ class RoomType extends Model
                     'pricing_type' => $amenity->isPaid() ? 'paid' : 'complimentary',
                     'fee' => $amenity->isPaid() ? (string) $amenity->charge : null,
                     'quantity' => $amenity->quantity,
+                    'is_unlimited' => (bool) $amenity->is_unlimited,
                 ];
             })->values()->all();
     }

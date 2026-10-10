@@ -417,6 +417,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const id = card.dataset.amenityId;
         const name = card.dataset.amenityName;
         const charge = parseFloat(card.dataset.amenityCharge) || 0;
+        const unlimited = card.dataset.amenityUnlimited === '1';
         const stock = parseInt(card.dataset.amenityStock, 10) || 0;
 
         const row = document.createElement('div');
@@ -424,7 +425,7 @@ document.addEventListener('DOMContentLoaded', function () {
         row.dataset.amenityId = id;
         row.innerHTML = '<span class="flex-grow-1">' + name + '</span>'
             + '<span class="text-muted small">₱' + charge.toFixed(2) + ' ea.</span>'
-            + '<input type="number" class="form-control form-control-sm amenity-selected-qty" style="width: 5rem;" min="1" max="' + stock + '" step="1" value="1">'
+            + '<input type="number" class="form-control form-control-sm amenity-selected-qty" style="width: 5rem;" min="1"' + (unlimited ? '' : ' max="' + stock + '"') + ' step="1" value="1">'
             + '<button type="button" class="btn btn-sm btn-outline-danger amenity-remove-btn" title="Remove"><i class="fas fa-times"></i></button>';
         amenitySelectedList().appendChild(row);
 

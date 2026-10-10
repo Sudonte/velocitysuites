@@ -16,13 +16,17 @@
         <p class="text-muted small mb-2">Click an amenity to add it below, then set how many.</p>
         <div class="row g-3" id="amenityCardGrid">
             @foreach($amenities as $amenity)
-                @php $inStock = (int) ($remainingStock[$amenity->id] ?? 0); @endphp
+                @php
+                    $inStock = (int) ($remainingStock[$amenity->id] ?? 0);
+                    $unlimited = \App\Models\Amenity::isUnlimitedStock($inStock);
+                @endphp
                 <div class="col-sm-6 col-lg-4">
                     <div class="card h-100 amenity-pick-card {{ $inStock <= 0 ? 'amenity-pick-card-disabled' : '' }}"
                          data-amenity-id="{{ $amenity->id }}"
                          data-amenity-name="{{ $amenity->amenity_name }}"
                          data-amenity-charge="{{ $amenity->charge }}"
-                         data-amenity-stock="{{ max(0, $inStock) }}"
+                         data-amenity-stock="{{ $unlimited ? '' : max(0, $inStock) }}"
+                         data-amenity-unlimited="{{ $unlimited ? '1' : '' }}"
                          role="button" tabindex="0">
                         <div class="card-body d-flex flex-column position-relative">
                             <span class="badge bg-success amenity-pick-check d-none position-absolute top-0 end-0 m-2">
@@ -38,7 +42,7 @@
                             <p class="mb-1 text-brand fw-bold">₱{{ number_format($amenity->charge, 2) }}</p>
                             <p class="mb-0 small {{ $inStock > 0 ? 'text-muted' : 'text-danger' }}">
                                 <i class="fas fa-boxes-stacked"></i>
-                                {{ $inStock > 0 ? "{$inStock} available" : 'Out of stock' }}
+                                {{ $unlimited ? 'Unlimited' : ($inStock > 0 ? "{$inStock} available" : 'Out of stock') }}
                             </p>
                             @if($inStock > 0)
                                 <p class="mb-0 small text-brand mt-2 amenity-pick-hint"><i class="fas fa-plus"></i> Click to add</p>

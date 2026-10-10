@@ -82,7 +82,7 @@
             var stock = trigger.dataset.amenityStock;
             var stockRow = document.getElementById('amenityDetailStockRow');
             if (stock !== undefined && stock !== '') {
-                document.getElementById('amenityDetailStock').textContent = stock + ' available';
+                document.getElementById('amenityDetailStock').textContent = isNaN(Number(stock)) ? stock : stock + ' available';
                 stockRow.style.display = '';
             } else {
                 stockRow.style.display = 'none';

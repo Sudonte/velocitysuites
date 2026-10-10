@@ -112,7 +112,7 @@
                                       data-amenity-description="{{ $amenity['description'] }}"
                                       data-amenity-pricing="{{ $amenity['pricing_type'] === 'paid' ? 'paid' : 'complimentary' }}"
                                       data-amenity-charge="{{ number_format((float) ($amenity['fee'] ?? 0), 2) }}"
-                                      data-amenity-stock="{{ $amenity['quantity'] }}"
+                                      data-amenity-stock="{{ !empty($amenity['is_unlimited']) ? 'Unlimited' : $amenity['quantity'] }}"
                                       role="button" tabindex="0">
                                     <i class="fas fa-circle-check text-brand me-1"></i>{{ $amenity['name'] }}
                                     @if($amenity['pricing_type'] === 'paid')

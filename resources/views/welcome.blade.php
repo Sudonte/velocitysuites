@@ -702,7 +702,7 @@
                          data-amenity-description="{{ $amenity->description }}"
                          data-amenity-pricing="{{ $amenity->charge > 0 ? 'paid' : 'complimentary' }}"
                          data-amenity-charge="{{ number_format($amenity->charge, 2) }}"
-                         data-amenity-stock="{{ $amenity->quantity }}"
+                         data-amenity-stock="{{ $amenity->is_unlimited ? 'Unlimited' : $amenity->quantity }}"
                          role="button" tabindex="0">
                         <i class="fas {{ $amenity->icon }} feature-icon"></i>
                         <h4>{{ $amenity->amenity_name }}</h4>

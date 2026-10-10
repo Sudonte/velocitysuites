@@ -99,7 +99,9 @@
                             @endif
                         </td>
                         <td>
-                            @if($amenity->quantity <= 0)
+                            @if($amenity->is_unlimited)
+                                <span class="badge bg-info text-dark">Unlimited</span>
+                            @elseif($amenity->quantity <= 0)
                                 <span class="badge bg-danger">Out of Stock</span>
                             @else
                                 {{ $amenity->quantity }}
@@ -196,7 +198,7 @@
                         </div>
                         <div class="room-type-detail-row">
                             <span class="room-type-detail-label">Stock:</span>
-                            <span class="room-type-detail-value">{{ $amenity->quantity }} available</span>
+                            <span class="room-type-detail-value">{{ $amenity->is_unlimited ? 'Unlimited' : $amenity->quantity . ' available' }}</span>
                         </div>
                         <div class="room-type-detail-row">
                             <span class="room-type-detail-label">Status:</span>

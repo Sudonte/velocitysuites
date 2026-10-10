@@ -37,9 +37,17 @@ class CatalogController extends Controller
             $query->where('charge', 0);
         }
 
+        // is_unlimited is additive; an unlimited amenity reports a positive
+        // display quantity so app builds that cap selection at `quantity`
+        // still let guests pick it.
         return response()->json(
             $query->orderBy('category')->orderBy('amenity_name')
-                ->get(['id', 'amenity_name', 'category', 'description', 'charge', 'quantity'])
+                ->get(['id', 'amenity_name', 'category', 'description', 'charge', 'quantity', 'is_unlimited'])
+                ->each(function (Amenity $amenity) {
+                    if ($amenity->is_unlimited) {
+                        $amenity->quantity = Amenity::API_UNLIMITED_DISPLAY_QUANTITY;
+                    }
+                })
         );
     }
 

@@ -255,6 +255,7 @@ abstract class ApiFlowTestCase extends TestCase
             $table->text('description')->nullable();
             $table->string('category')->nullable();
             $table->integer('quantity');
+            $table->boolean('is_unlimited')->default(false);
             $table->decimal('charge', 10, 2)->default(0);
             $table->string('status', 20)->default('active');
             $table->timestamps();
