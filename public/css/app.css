@@ -1792,3 +1792,6 @@ tbody tr:hover {
    the rejection sits apart; both stack full-width on small screens. */
 .verification-actions { display: flex; flex-direction: column; gap: 0.5rem; padding-top: 0.75rem; border-top: 1px solid var(--border-color); }
 @media (min-width: 576px) { .verification-actions { flex-direction: row; align-items: stretch; } .verification-actions > .btn-outline-danger { margin-left: 1.5rem; } }
+
+/* Compact KPI row: long currency values shrink instead of overflowing. */
+.dashboard-kpis .stat-fill-value { font-size: clamp(1.1rem, 1.5vw, 1.6rem); overflow-wrap: anywhere; }

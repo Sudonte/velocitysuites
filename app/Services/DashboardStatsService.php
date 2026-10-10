@@ -357,8 +357,11 @@ class DashboardStatsService
             Booking::whereDate('check_out', today())->where('booking_status', Booking::STATUS_CHECKED_IN)
         )->count();
 
+        // Stays with at least one room still occupied (a multi-room booking
+        // whose rooms are all checked out is only waiting on billing).
         $inHouseGuests = TestAccountScope::excludeFromBookings(
             Booking::where('booking_status', Booking::STATUS_CHECKED_IN)
+                ->whereHas('rooms', fn ($q) => $q->whereNull('booking_rooms.checked_out_at'))
         )->count();
 
         $periodReservations = TestAccountScope::excludeFromReservations(

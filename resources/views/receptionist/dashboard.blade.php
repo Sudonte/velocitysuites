@@ -7,7 +7,7 @@
     <x-page-header icon="fas fa-home" title="Welcome, {{ auth()->user()->full_name }}!" subtitle="Here's today's front-desk overview." :showClock="true" />
 
     {{-- Today's work queues; each number matches the list it opens. --}}
-    <div class="row g-3 mb-4">
+    <div class="row g-3 mb-4 dashboard-kpis">
         <div class="col-6 col-md-4 col-xl-2">
             <x-stat-card icon="fas fa-inbox" label="Reservations to Review" :value="$bookingRequests" color="warning" :href="route('receptionist.reservations.index')" />
         </div>

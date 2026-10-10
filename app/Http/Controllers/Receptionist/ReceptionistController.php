@@ -60,7 +60,12 @@ class ReceptionistController extends Controller
         $awaitingCheckIn = Booking::where('booking_status', Booking::STATUS_ACTIVE)->whereNotNull('verified_at')->whereNull('hidden_at')->count();
         // Same set as the Bookings module's "For Verification" tab.
         $bookingsToVerify = Booking::where('booking_status', Booking::STATUS_ACTIVE)->whereNull('verified_at')->count();
-        $inHouseGuests = Booking::where('booking_status', Booking::STATUS_CHECKED_IN)->count();
+        // Stays with at least one room still occupied - the same set the
+        // Checked-in Guests tab lists (a booking whose rooms are all checked
+        // out is only waiting on billing).
+        $inHouseGuests = Booking::where('booking_status', Booking::STATUS_CHECKED_IN)
+            ->whereHas('rooms', fn ($q) => $q->whereNull('booking_rooms.checked_out_at'))
+            ->count();
 
         // Today's schedule stays date-based - it's a schedule. Arrivals due
         // today (not yet checked in, i.e. still pending arrival) and

@@ -35,7 +35,7 @@
          period. No revenue (Admin only); front-desk queues live on the
          Receptionist dashboard. --}}
     <div class="detail-section-title"><i class="fas fa-bolt"></i> Right Now</div>
-    <div class="row g-3 mb-4">
+    <div class="row g-3 mb-4 dashboard-kpis">
         <div class="col-6 col-xl-3">
             <x-stat-card icon="fas fa-bed" label="Occupancy ({{ $occupiedRooms }}/{{ $totalRooms }} rooms)" value="{{ $occupancyRate }}%" color="primary" />
         </div>
@@ -51,7 +51,7 @@
     </div>
 
     <div class="detail-section-title"><i class="fas fa-chart-line"></i> Selected Period &middot; {{ $periodFrom->format('M d') }} &ndash; {{ $periodTo->format('M d, Y') }}</div>
-    <div class="row g-3 mb-4">
+    <div class="row g-3 mb-4 dashboard-kpis">
         <div class="col-6 col-xl-3">
             {{-- type filters keep each card's number equal to the list it opens. --}}
             <x-stat-card icon="fas fa-calendar-alt" label="Reservations" :value="$totalReservations" color="info" :href="route('manager.reservations.index', ['type' => 'reservation', 'from' => $periodFrom->toDateString(), 'to' => $periodTo->toDateString()])" />
