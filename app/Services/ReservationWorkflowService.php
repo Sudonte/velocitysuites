@@ -111,7 +111,30 @@ class ReservationWorkflowService
             'max' => $max,
             'can_partial' => $remaining > 0.009 && $range['min'] <= $max + 0.009,
             'is_settled' => $remaining <= 0.009,
+            'discount_pending' => $this->hasPendingDiscount($reservation),
         ];
+    }
+
+    /**
+     * True while a Senior Citizen / PWD discount the guest asked for is still waiting for the receptionist's ID
+     * check (discount_verification_status = 'pending'). Until it is approved - and included in the total - or
+     * rejected, only a deposit may be paid: the largest deposit (50% of the undiscounted total) is always below the
+     * discounted total, so a deposit can never overpay, while a Full payment of the undiscounted balance could.
+     */
+    public function hasPendingDiscount(Reservation $reservation): bool
+    {
+        return $reservation->discount_verification_status === 'pending';
+    }
+
+    /** Why Full payment is unavailable while a discount is being verified - one wording for every payment entry point. */
+    public function pendingDiscountFullPaymentMessage(?array $depositRange = null): string
+    {
+        $message = 'Your discount is being verified, so Full payment is not available yet. You can pay a deposit now';
+        if ($depositRange !== null && $depositRange['min'] <= $depositRange['max'] + 0.009) {
+            $message .= ' (between ₱' . number_format($depositRange['min'], 2) . ' and ₱' . number_format($depositRange['max'], 2) . ')';
+        }
+
+        return $message . ' and pay the rest after the discount is applied.';
     }
 
     /**

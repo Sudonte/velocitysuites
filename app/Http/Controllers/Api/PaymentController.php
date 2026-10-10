@@ -68,9 +68,15 @@ class PaymentController extends Controller
         if ($range['is_settled']) {
             $message = 'This reservation is already fully paid. There is nothing left to pay.';
         } elseif ($paymentType === 'full') {
-            if (abs($amount - $range['remaining']) > 0.01) {
+            if ($range['discount_pending']) {
+                // A discount waiting for the ID check: deposits only, whatever the amount (see hasPendingDiscount()).
+                $message = $this->workflow->pendingDiscountFullPaymentMessage($range['can_partial'] ? $range : null);
+            } elseif (abs($amount - $range['remaining']) > 0.01) {
                 $message = 'Full payment must equal the remaining balance (' . $this->peso($range['remaining']) . ').';
             }
+        } elseif (! $range['can_partial'] && $range['discount_pending']) {
+            $message = 'Your discount is being verified. Payment is on hold until it is applied; the remaining balance ('
+                . $this->peso($range['remaining']) . ') is below the minimum deposit (' . $this->peso($range['min']) . ').';
         } elseif (! $range['can_partial']) {
             $message = 'Full payment is required: the remaining balance (' . $this->peso($range['remaining'])
                 . ') is below the minimum down payment (' . $this->peso($range['min']) . '). Pay the full '

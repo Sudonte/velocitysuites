@@ -273,7 +273,18 @@ class Reservation extends Model
 
         $amenityTotal = (float) $this->bookingAmenities->sum('subtotal');
 
-        return round($roomTotal + $amenityTotal, 2);
+        $total = round($roomTotal + $amenityTotal, 2);
+
+        // Once the receptionist has APPROVED the guest's Senior/PWD discount, and until a Billing exists to hold it,
+        // the amount due is the discounted one - taken from the same quote the guest's estimate and the Billing use
+        // (BookingService::quoteRoomCharge -> App\Support\BillDiscount), never a second discount calculation. A
+        // pending, rejected or not-requested discount leaves the total as it was. After conversion the Billing's
+        // own total is used (ReceiptService::grandTotal), so this only matters for an unconverted reservation.
+        if ($this->discount_verification_status === 'approved' && $this->roomType && ! $this->booking) {
+            $total = round(max(0, (float) app(\App\Services\BookingService::class)->quoteRoomCharge($this)['total']), 2);
+        }
+
+        return $total;
     }
 
     /**

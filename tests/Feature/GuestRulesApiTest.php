@@ -241,7 +241,8 @@ class GuestRulesApiTest extends ApiFlowTestCase
         $this->assertRejected($this->postBooking($user, $this->bookingPayload($rt, $total, ['discount_id' => $inactive->id]), UploadedFile::fake()->image('id.jpg')), 'no longer available');
         $this->assertRejected($this->postBooking($user, $this->bookingPayload($rt, $total, ['discount_id' => $active->id])), 'upload a valid ID');
 
-        $ok = $this->postBooking($user, $this->bookingPayload($rt, $total, ['discount_id' => $active->id]), UploadedFile::fake()->image('id.jpg'));
+        // a deposit, not the full total: a discount waiting for its ID check allows deposits only
+        $ok = $this->postBooking($user, $this->bookingPayload($rt, $total / 4, ['discount_id' => $active->id]), UploadedFile::fake()->image('id.jpg'));
         $this->assertEquals(201, $ok->getStatusCode(), $ok->getContent());
         $booking = Booking::latest('id')->first();
         $this->assertSame($active->id, (int) $booking->discount_id);

@@ -223,6 +223,10 @@ class ReservationController extends Controller
         $declaredAmount = $paymentMethod === 'gcash' ? ($validated['gcash_amount'] ?? null) : ($validated['cash_amount'] ?? null);
         if ($declaredAmount !== null) {
             if ($paymentMethod === 'gcash' && $paymentType === 'full') {
+                if ($discountRequested) {
+                    // A discount asked for in this same request is still waiting for the ID check: deposit only.
+                    return back()->withInput()->with('error', $this->workflow->pendingDiscountFullPaymentMessage($range));
+                }
                 if (abs((float) $declaredAmount - $range['total']) > 0.01) {
                     return back()->withInput()->with('error',
                         "Full payment must equal the total amount due (₱{$range['total']}).");
@@ -341,6 +345,9 @@ class ReservationController extends Controller
         }
 
         if ($validated['payment_type'] === 'full') {
+            if ($this->workflow->hasPendingDiscount($reservation)) {
+                return back()->withInput()->with('error', $this->workflow->pendingDiscountFullPaymentMessage($range));
+            }
             if (abs((float) $validated['gcash_amount'] - $range['total']) > 0.01) {
                 return back()->withInput()->with('error', "Full payment must equal the total amount due (₱{$range['total']}).");
             }

@@ -319,6 +319,14 @@ class BookingController extends Controller
                     'errors' => ['id_card_image' => ['Please upload a valid ID to claim this discount.']],
                 ], 422);
             }
+            // A Senior/PWD discount asked for in this same request is by definition still waiting for the ID check
+            // (discount_verification_status 'pending'): a deposit only, never the full (undiscounted) total.
+            if ($amountPaid >= $expectedTotal - 0.01) {
+                $workflow = app(\App\Services\ReservationWorkflowService::class);
+                $message = $workflow->pendingDiscountFullPaymentMessage($workflow->depositRangeForTotal($expectedTotal));
+
+                return response()->json(['message' => $message, 'errors' => ['amount_paid' => [$message]]], 422);
+            }
             $path = $request->file('id_card_image')->store('id-cards', 'local');
             $idCard = ['type' => $discount->name, 'discount_id' => $discount->id, 'path' => $path];
         }
