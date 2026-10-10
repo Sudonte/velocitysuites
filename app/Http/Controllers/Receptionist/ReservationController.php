@@ -398,9 +398,11 @@ class ReservationController extends Controller
         // line's type times the SUMMED quantity across every line) - same
         // fix already applied to BookingService::quoteRoomCharge() and
         // Booking::getTotalAmountDueAttribute().
-        $roomTotal = ! empty($reservation->room_lines)
-            ? (float) collect($reservation->room_lines)->sum('subtotal')
-            : (float) ($reservation->roomType->rate ?? 0) * max(1, $nights) * max(1, $reservation->rooms_requested);
+        //
+        // The total is the guest endpoint's own (Reservation::total_amount_due = those room lines PLUS the selected paid
+        // amenities), not the room lines alone: a deposit that is a valid 20-50% share of the amount the guest sees in the
+        // app must not be refused at the desk, and "full" must be the same amount in both places.
+        $roomTotal = (float) $reservation->total_amount_due;
         $range = $this->workflow->depositRangeForTotal($roomTotal);
 
         $isFull = abs($amount - $range['total']) <= 0.01;
