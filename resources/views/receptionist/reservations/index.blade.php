@@ -233,16 +233,32 @@ document.addEventListener('DOMContentLoaded', function () {
         if (message) alert(message);
     }
 
+    // ?open=<id> (e.g. from a dashboard activity link) opens that
+    // reservation's details right away, even if it isn't in this tab.
+    let openRequest = null;
+    const openId = new URLSearchParams(window.location.search).get('open');
+
     detailsModalEl.addEventListener('show.bs.modal', function (event) {
         const button = event.relatedTarget;
-        const url = button.getAttribute('data-details-url');
-        activeReservationId = button.closest('[data-reservation-row]').getAttribute('data-reservation-row');
+        const url = button ? button.getAttribute('data-details-url') : openRequest.url;
+        activeReservationId = button ? button.closest('[data-reservation-row]').getAttribute('data-reservation-row') : openRequest.id;
         body.innerHTML = '<div class="text-center py-5"><i class="fas fa-spinner fa-spin fa-2x"></i></div>';
         fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
             .then(r => r.text())
             .then(html => { body.innerHTML = html; })
             .catch(() => { body.innerHTML = '<div class="alert alert-danger">Failed to load details.</div>'; });
     });
+
+    if (openId && /^\d+$/.test(openId)) {
+        openRequest = {
+            id: openId,
+            url: @json(route('receptionist.reservations.details', ['reservation' => '__ID__'])).replace('__ID__', openId),
+        };
+        detailsModal.show();
+        const cleanUrl = new URL(window.location.href);
+        cleanUrl.searchParams.delete('open');
+        window.history.replaceState({}, '', cleanUrl);
+    }
 
     body.addEventListener('click', async function (e) {
         // Reveal the inline reject form in place of the main action row

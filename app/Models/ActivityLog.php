@@ -74,7 +74,7 @@ class ActivityLog extends Model
             return match (auth()->user()?->role) {
                 'admin' => route('admin.reservations.show', $this->subject_id),
                 'manager' => route('manager.reservations.show', $this->subject_id),
-                'receptionist' => route('receptionist.reservations.details', $this->subject_id),
+                'receptionist' => route('receptionist.reservations.index', ['open' => $this->subject_id]),
                 default => null,
             };
         }
