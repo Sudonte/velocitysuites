@@ -320,6 +320,13 @@ abstract class ApiFlowTestCase extends TestCase
             $table->integer('quantity')->default(1);
             $table->decimal('charge', 10, 2)->default(0);
             $table->string('status', 20)->default('pending');
+            $table->unsignedBigInteger('room_id')->nullable();
+            $table->string('origin', 20)->default('booking');
+            $table->text('note')->nullable();
+            $table->string('rejection_reason', 500)->nullable();
+            $table->unsignedBigInteger('decided_by')->nullable();
+            $table->timestamp('decided_at')->nullable();
+            $table->timestamp('archived_at')->nullable();
             $table->timestamps();
         });
 

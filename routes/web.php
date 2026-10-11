@@ -369,6 +369,9 @@ Route::middleware(['auth', 'account.status', 'log.activity', 'no.cache'])->group
         Route::get('/amenities/archived', [ReceptionistController::class, 'amenitiesArchived'])->name('amenities.archived');
         Route::get('/amenities/{booking}/create', [ReceptionistController::class, 'amenitiesCreate'])->name('amenities.create');
         Route::post('/amenities/{booking}', [ReceptionistController::class, 'amenitiesStore'])->name('amenities.store');
+        // Decide a guest's additional-amenity request (approve / reject with a reason) - enforced server-side, pending guest requests only.
+        Route::put('/amenity-requests/{amenityRequest}/approve', [ReceptionistController::class, 'amenityRequestApprove'])->name('amenity-requests.approve');
+        Route::put('/amenity-requests/{amenityRequest}/reject', [ReceptionistController::class, 'amenityRequestReject'])->name('amenity-requests.reject');
 
         // Billing (used from the Check-Out workflow's Billing Panel, plus a read-only receipt)
         Route::get('/billing/{billing}/receipt', [\App\Http\Controllers\BillingController::class, 'receipt'])->name('billing.receipt');

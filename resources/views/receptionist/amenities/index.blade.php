@@ -5,7 +5,7 @@
 @section('content')
 <div class="container-fluid py-4">
     <x-page-header icon="fas fa-spa" title="Amenity Requests"
-        subtitle="Requests submitted by guests through the mobile app, or logged here on their behalf." />
+        subtitle="Requests guests make through the mobile app (approve or reject them here), and amenities logged on their behalf." />
 
     <ul class="nav nav-pills mb-4">
         <li class="nav-item">
@@ -34,6 +34,13 @@
         </div>
     @endif
 
+    @if($pendingGuestRequestCount > 0)
+        <div class="alert alert-warning d-flex align-items-center justify-content-between gap-2 mb-4" role="alert">
+            <span><i class="fas fa-hourglass-half"></i> <strong>{{ $pendingGuestRequestCount }}</strong> guest request{{ $pendingGuestRequestCount === 1 ? ' is' : 's are' }} waiting for a decision. Pending requests are not billed.</span>
+            <a class="btn btn-sm btn-outline-dark" href="{{ route('receptionist.amenities.index', ['status' => 'pending']) }}">Show pending</a>
+        </div>
+    @endif
+
     <div class="alert alert-light border d-flex align-items-center gap-2 mb-4">
         <i class="fas fa-users text-brand"></i>
         <span><strong>{{ $paidAmenityGuestCount }}</strong> guest{{ $paidAmenityGuestCount === 1 ? '' : 's' }} {{ $paidAmenityGuestCount === 1 ? 'has' : 'have' }} requested Paid/Additional amenities.</span>
@@ -43,7 +50,7 @@
     <x-card bodyClass="card-body" class="mb-4">
         <form method="GET" action="{{ route('receptionist.amenities.index') }}" class="row g-3">
             <div class="col-md-4">
-                <input type="text" name="search" class="form-control" placeholder="Search guest name or reservation #"
+                <input type="text" name="search" class="form-control" placeholder="Search guest name or booking / reservation #"
                        value="{{ request('search') }}">
             </div>
             <div class="col-6 col-md-2">
@@ -153,6 +160,12 @@
                             <td>
                                 <x-status-badge :status="$req->status" domain="amenity_request" />
                                 <small class="d-block text-muted mt-1">
+                                    @if($req->origin === 'guest_request')
+                                        @if($req->status === 'pending') Waiting for your decision
+                                        @elseif($req->status === 'approved') Approved - on the bill
+                                        @elseif($req->status === 'rejected') Rejected: {{ $req->rejection_reason }}
+                                        @endif
+                                    @else
                                     @switch($req->status)
                                         @case('pending')
                                             Awaiting reservation verification
@@ -167,12 +180,26 @@
                                             {{-- in_progress/completed: set directly at creation for
                                                  receptionist-logged requests; no further status text needed. --}}
                                     @endswitch
+                                    @endif
                                 </small>
                             </td>
                             <td class="text-nowrap">
                                 <button type="button" class="btn btn-outline-primary btn-sm btn-icon" data-bs-toggle="modal"
                                         data-bs-target="#amenityRequestDetail{{ $req->id }}" title="View details" aria-label="View">
                                     <i class="fas fa-eye"></i></button>
+                                @if($req->origin === 'guest_request' && $req->status === 'pending')
+                                    <form action="{{ route('receptionist.amenity-requests.approve', $req) }}" method="POST" class="d-inline"
+                                          data-confirm="Approve {{ $req->quantity }} x {{ $req->amenity_name }} (₱{{ number_format($req->subtotal, 2) }})? It is added to the guest's bill."
+                                          data-confirm-title="Approve this request?" data-confirm-button="Approve" data-confirm-variant="success">
+                                        @csrf
+                                        @method('PUT')
+                                        <button type="submit" class="btn btn-sm btn-success"><i class="fas fa-check"></i> Approve</button>
+                                    </form>
+                                    <button type="button" class="btn btn-sm btn-outline-danger" data-bs-toggle="modal"
+                                            data-bs-target="#amenityRequestDetail{{ $req->id }}" data-open-reject="1">
+                                        <i class="fas fa-times"></i> Reject
+                                    </button>
+                                @endif
                             </td>
                         </tr>
                     @empty
@@ -273,9 +300,48 @@
                             <span class="room-type-detail-label">Status:</span>
                             <span class="room-type-detail-value"><x-status-badge :status="$req->status" domain="amenity_request" /></span>
                         </div>
+                        @if($req->origin === 'guest_request')
+                            <div class="room-type-detail-row">
+                                <span class="room-type-detail-label">Guest note:</span>
+                                <span class="room-type-detail-value">{{ $req->note ?: '—' }}</span>
+                            </div>
+                        @endif
+                        @if($req->decided_at)
+                            <div class="room-type-detail-row">
+                                <span class="room-type-detail-label">Decided:</span>
+                                <span class="room-type-detail-value">{{ $req->decided_at->format('M d, Y g:i A') }}@if($req->decider) by {{ $req->decider->full_name }}@endif</span>
+                            </div>
+                        @endif
+                        @if($req->status === 'rejected' && $req->rejection_reason)
+                            <div class="room-type-detail-row">
+                                <span class="room-type-detail-label">Rejection reason:</span>
+                                <span class="room-type-detail-value text-danger">{{ $req->rejection_reason }}</span>
+                            </div>
+                        @endif
                     </div>
+
+                    @if($req->origin === 'guest_request' && $req->status === 'pending')
+                        <form action="{{ route('receptionist.amenity-requests.reject', $req) }}" method="POST" class="mt-3 d-none" id="rejectAmenityForm{{ $req->id }}">
+                            @csrf
+                            @method('PUT')
+                            <label class="form-label" for="rejectAmenityReason{{ $req->id }}">Reason for rejecting <span class="text-danger">*</span></label>
+                            <textarea name="reason" id="rejectAmenityReason{{ $req->id }}" class="form-control" rows="2" required maxlength="500"
+                                      placeholder="The guest is told this reason."></textarea>
+                            <button type="submit" class="btn btn-danger btn-sm mt-2">Confirm Reject</button>
+                        </form>
+                    @endif
                 </div>
                 <div class="modal-footer">
+                    @if($req->origin === 'guest_request' && $req->status === 'pending')
+                        <form action="{{ route('receptionist.amenity-requests.approve', $req) }}" method="POST" class="me-auto">
+                            @csrf
+                            @method('PUT')
+                            <button type="submit" class="btn btn-success"><i class="fas fa-check"></i> Approve</button>
+                        </form>
+                        <button type="button" class="btn btn-outline-danger" onclick="document.getElementById('rejectAmenityForm{{ $req->id }}').classList.remove('d-none')">
+                            <i class="fas fa-times"></i> Reject
+                        </button>
+                    @endif
                     <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Close</button>
                 </div>
             </div>

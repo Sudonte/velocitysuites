@@ -140,6 +140,18 @@ final class StayBill
         $actualNights = max(1, self::daysBetween($checkIn, $actualOut));
 
         $amenityCharge = $billing ? round((float) $billing->amenity_charge, 2) : self::amenityCharge($booking);
+        // Itemized amenities: what is on the bill (approved only for a guest request), and the "Additional amenities" among
+        // them - those the guest requested after booking or the desk added - as their own lines.
+        $amenityRows = $billing ? $booking->billedAmenityRequests()->get() : $booking->billableAmenityRequests()->get();
+        $amenityLines = $amenityRows->map(fn ($r) => [
+            'amenity_name' => $r->amenity_name,
+            'quantity' => (int) $r->quantity,
+            'unit_price' => round((float) $r->charge, 2),
+            'subtotal' => round((float) $r->charge * (int) $r->quantity, 2),
+            'additional' => $r->origin !== AmenityRequest::ORIGIN_BOOKING,
+        ])->values()->all();
+        $additionalAmenities = array_values(array_filter($amenityLines, fn ($l) => $l['additional']));
+        $additionalAmenitiesTotal = round(array_sum(array_column($additionalAmenities, 'subtotal')), 2);
         $guestFee = $billing ? round((float) $billing->additional_guest_fee, 2) : 0.0;
         $extraCharges = $billing
             ? $billing->additionalCharges->map(fn ($c) => [
@@ -179,6 +191,9 @@ final class StayBill
             'room_charge' => $roomCharge,
             'extra_nights_charge' => round(array_sum(array_column($lines, 'extra_nights_charge')), 2),
             'amenity_charge' => $amenityCharge,
+            'amenity_lines' => $amenityLines,
+            'additional_amenities' => $additionalAmenities,
+            'additional_amenities_total' => $additionalAmenitiesTotal,
             'additional_guest_fee' => $guestFee,
             'additional_charges' => $extraCharges,
             'additional_charges_total' => $extraChargesTotal,

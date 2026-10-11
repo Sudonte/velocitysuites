@@ -95,10 +95,9 @@ class CheckOutController extends Controller
             $booking->update(['viewed_at' => now()]);
         }
 
-        $amenityRequests = AmenityRequest::with('amenity')
-            ->where($booking->reservation_id ? 'reservation_id' : 'booking_id', $booking->reservation_id ?? $booking->id)
-            ->where('status', 'approved')
-            ->get();
+        $amenityRequests = $booking->billedAmenityRequests()->with('amenity')->get();
+        // Guest requests still waiting for a decision are NOT on this bill - warn so they are resolved before billing.
+        $pendingAmenityCount = $booking->pendingAmenityRequestCount();
 
         $discounts = $this->billableDiscounts($booking->reservation ?? $booking);
 
@@ -111,7 +110,7 @@ class CheckOutController extends Controller
         $isLateCheckout = $stay['is_late_checkout'];
 
         return view('receptionist.check-out.partials.billing-panel', compact(
-            'booking', 'billing', 'amenityRequests', 'discounts', 'stay',
+            'booking', 'billing', 'amenityRequests', 'discounts', 'stay', 'pendingAmenityCount',
             'effectiveCheckOutDate', 'effectiveNights', 'isEarlyCheckout', 'isLateCheckout'
         ));
     }
@@ -135,8 +134,9 @@ class CheckOutController extends Controller
         // have different room types per physical room (see
         // Booking::getRoomLinesAttribute()'s own doc on that).
         $booking->load(['reservation.guest.user', 'guest.user', 'rooms.roomType']);
+        $pendingAmenityCount = $booking->pendingAmenityRequestCount();
 
-        return view('receptionist.check-out.partials.rooms-panel', compact('booking'));
+        return view('receptionist.check-out.partials.rooms-panel', compact('booking', 'pendingAmenityCount'));
     }
 
     /**
@@ -751,15 +751,9 @@ class CheckOutController extends Controller
      */
     private function refreshStayCharges(Booking $booking, Billing $billing): void
     {
-        $amenityCharge = (float) AmenityRequest::where(function ($q) use ($booking) {
-                if ($booking->reservation_id) {
-                    $q->where('reservation_id', $booking->reservation_id);
-                } else {
-                    $q->where('booking_id', $booking->id);
-                }
-            })
-            ->where('status', 'approved')
-            ->sum(DB::raw('charge * quantity'));
+        // The amenities on the bill: approved (or in progress / completed) requests - a guest's PENDING request is not
+        // billed until the front desk approves it (AmenityRequestService); the same rows StayBill itemizes.
+        $amenityCharge = $booking->billedAmenityTotal();
 
         $billing->update([
             // Over-capacity stays are blocked (App\Support\GuestCapacity), so

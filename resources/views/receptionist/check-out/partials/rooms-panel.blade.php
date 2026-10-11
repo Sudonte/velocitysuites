@@ -10,6 +10,13 @@
 </div>
 <div class="modal-body" data-booking-id="{{ $booking->id }}">
     <div class="alert alert-danger d-none" id="roomsErrorAlert"></div>
+    @if(($pendingAmenityCount ?? 0) > 0)
+        <div class="alert alert-warning" role="alert">
+            <i class="fas fa-triangle-exclamation"></i>
+            This booking still has {{ $pendingAmenityCount }} pending amenity request(s). They are not billed until approved - resolve them
+            in <a href="{{ route('receptionist.amenities.index', ['status' => 'pending', 'search' => $booking->reservation_id ?? $booking->id]) }}" target="_blank" rel="noopener">Amenity Requests</a> before billing.
+        </div>
+    @endif
 
     <div class="row mb-3">
         <div class="col-md-6">

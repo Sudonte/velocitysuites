@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\AdditionalAmenityController;
 use App\Http\Controllers\Api\AmenityRequestController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\BookingController;
@@ -88,6 +89,13 @@ Route::middleware(['auth.api', 'role:guest'])->group(function () {
     Route::get('/guest/reservations/{reservation}/amenities/requestable', [AmenityRequestController::class, 'requestable']);
     Route::get('/guest/reservations/{reservation}/amenities/requests', [AmenityRequestController::class, 'index']);
     Route::post('/guest/reservations/{reservation}/amenities/requests', [AmenityRequestController::class, 'store']);
+
+    // "Request Additional Amenities" from Payment Details: any paid catalog amenity, needs the front desk's approval,
+    // billed only once approved. Own, still-active stays only (enforced server-side).
+    Route::get('/guest/bookings/{booking}/additional-amenities', [AdditionalAmenityController::class, 'indexForBooking']);
+    Route::post('/guest/bookings/{booking}/additional-amenities', [AdditionalAmenityController::class, 'storeForBooking']);
+    Route::get('/guest/reservations/{reservation}/additional-amenities', [AdditionalAmenityController::class, 'indexForReservation']);
+    Route::post('/guest/reservations/{reservation}/additional-amenities', [AdditionalAmenityController::class, 'storeForReservation']);
 
     Route::get('/guest/payments', [ProfileController::class, 'payments']);
     Route::get('/guest/profile', [ProfileController::class, 'show']);

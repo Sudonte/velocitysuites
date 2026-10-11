@@ -9,7 +9,20 @@ class AmenityRequest extends Model
 {
     use HasFactory;
 
+    /** Where a request came from: picked while booking, asked for later by the guest (needs approval), or added by the desk. */
+    public const ORIGIN_BOOKING = 'booking';
+    public const ORIGIN_GUEST_REQUEST = 'guest_request';
+    public const ORIGIN_STAFF = 'staff';
+
+    /** Statuses that are billed (a guest request only ever becomes one of these by being approved). */
+    public const BILLED_STATUSES = ['approved', 'in_progress', 'completed'];
+
     protected $fillable = [
+        'origin',
+        'note',
+        'rejection_reason',
+        'decided_by',
+        'decided_at',
         'guest_id',
         'reservation_id',
         'booking_id',
@@ -27,7 +40,19 @@ class AmenityRequest extends Model
     protected $casts = [
         'charge' => 'decimal:2',
         'archived_at' => 'datetime',
+        'decided_at' => 'datetime',
     ];
+
+    /** Guest requests still waiting for the front desk's decision. */
+    public function scopePendingGuestRequests($query)
+    {
+        return $query->where('origin', self::ORIGIN_GUEST_REQUEST)->where('status', 'pending');
+    }
+
+    public function decider()
+    {
+        return $this->belongsTo(User::class, 'decided_by');
+    }
 
     /**
      * Get the guest associated with the amenity request.

@@ -99,7 +99,8 @@
                                         <button type="button" class="btn btn-sm btn-primary btn-start-checkout"
                                             data-booking-id="{{ $booking->id }}"
                                             data-guest-name="{{ $booking->guest_display_name }}"
-                                            data-room-number="{{ $booking->room->room_number ?? 'N/A' }}">
+                                            data-room-number="{{ $booking->room->room_number ?? 'N/A' }}"
+                                            data-pending-amenities="{{ $booking->pendingAmenityRequestCount() }}">
                                             <i class="fas fa-sign-out-alt"></i> Check Out
                                         </button>
                                     @endif
@@ -134,6 +135,11 @@
                 <p class="mb-1"><strong>Guest:</strong> <span id="confirmGuestName"></span></p>
                 <p class="mb-1"><strong>Room:</strong> <span id="confirmRoomNumber"></span></p>
                 <p class="mb-1"><strong>Booking:</strong> <span id="confirmReservationCode"></span></p>
+                <div class="alert alert-warning d-none mt-3 mb-0" id="confirmPendingAmenities" role="alert">
+                    <i class="fas fa-triangle-exclamation"></i>
+                    This booking still has <strong id="confirmPendingAmenitiesCount">0</strong> pending amenity request(s). They are not billed until
+                    approved - resolve them in Amenity Requests before billing.
+                </div>
                 <p class="text-muted mt-3 mb-0">Are you sure you want to begin the check-out process?</p>
             </div>
             <div class="modal-footer">
@@ -253,6 +259,9 @@ document.addEventListener('DOMContentLoaded', function () {
             document.getElementById('confirmGuestName').textContent = startBtn.dataset.guestName;
             document.getElementById('confirmRoomNumber').textContent = startBtn.dataset.roomNumber;
             document.getElementById('confirmReservationCode').textContent = 'BKG-' + String(activeBookingId).padStart(5, '0');
+            const pendingAmenities = parseInt(startBtn.dataset.pendingAmenities || '0', 10);
+            document.getElementById('confirmPendingAmenities').classList.toggle('d-none', pendingAmenities < 1);
+            document.getElementById('confirmPendingAmenitiesCount').textContent = pendingAmenities;
             confirmModal.show();
             return;
         }

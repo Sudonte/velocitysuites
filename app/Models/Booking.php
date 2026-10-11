@@ -421,7 +421,7 @@ class Booking extends Model
      * (the itemized breakdown) below, so the two can never disagree about
      * which rows count.
      */
-    private function billableAmenityRequests()
+    public function billableAmenityRequests()
     {
         return AmenityRequest::where(function ($q) {
                 if ($this->reservation_id) {
@@ -430,7 +430,40 @@ class Booking extends Model
                     $q->where('booking_id', $this->id);
                 }
             })
-            ->where('status', '!=', 'rejected');
+            ->where('status', '!=', 'rejected')
+            // A request the guest made AFTER booking is billed only once the front desk APPROVES it.
+            ->where(fn ($q) => $q->where('origin', '!=', AmenityRequest::ORIGIN_GUEST_REQUEST)->orWhere('status', 'approved'));
+    }
+
+    /** What the check-out bill charges for amenities: the approved / in-progress / completed requests (the same rows StayBill itemizes). */
+    public function billedAmenityRequests()
+    {
+        return AmenityRequest::where(function ($q) {
+                if ($this->reservation_id) {
+                    $q->where('reservation_id', $this->reservation_id);
+                } else {
+                    $q->where('booking_id', $this->id);
+                }
+            })
+            ->whereIn('status', AmenityRequest::BILLED_STATUSES);
+    }
+
+    public function billedAmenityTotal(): float
+    {
+        return round((float) $this->billedAmenityRequests()->selectRaw('COALESCE(SUM(charge * quantity), 0) as total')->value('total'), 2);
+    }
+
+    /** Guest requests still waiting for a decision - they are NOT on the bill (the check-out screen warns about them). */
+    public function pendingAmenityRequestCount(): int
+    {
+        return AmenityRequest::pendingGuestRequests()
+            ->where(function ($q) {
+                if ($this->reservation_id) {
+                    $q->where('reservation_id', $this->reservation_id);
+                } else {
+                    $q->where('booking_id', $this->id);
+                }
+            })->count();
     }
 
     /**

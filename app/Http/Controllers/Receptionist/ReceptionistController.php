@@ -12,6 +12,7 @@ use App\Models\Room;
 use App\Services\NotificationService;
 use App\Services\RoomAvailabilityService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
@@ -194,9 +195,12 @@ class ReceptionistController extends Controller
         if ($request->filled('search')) {
             $search = $request->search;
             $query->where(function ($q) use ($search) {
+                $id = is_numeric($search) ? (int) $search : -1;
                 $q->whereHas('guest.user', fn ($u) => $u->searchName($search))
-                    ->orWhere('reservation_id', is_numeric($search) ? (int) $search : -1)
-                    ->orWhere('booking_id', is_numeric($search) ? (int) $search : -1);
+                    ->orWhere('reservation_id', $id)
+                    ->orWhere('booking_id', $id)
+                    // the BOOKING id a converted reservation became (the number staff see on the Booking page)
+                    ->orWhereHas('reservation.booking', fn ($b) => $b->where('id', $id));
             });
         }
 
@@ -218,8 +222,35 @@ class ReceptionistController extends Controller
         // specifically (charge > 0) - a running engagement figure, not
         // scoped to the current search/filter/pagination above it.
         $paidAmenityGuestCount = AmenityRequest::where('charge', '>', 0)->distinct('guest_id')->count('guest_id');
+        $pendingGuestRequestCount = AmenityRequest::pendingGuestRequests()->count();
 
-        return view('receptionist.amenities.index', compact('amenityRequests', 'paidAmenityGuestCount'));
+        return view('receptionist.amenities.index', compact('amenityRequests', 'paidAmenityGuestCount', 'pendingGuestRequestCount'));
+    }
+
+    /** Approve a guest's additional-amenity request: from now on it is billed. */
+    public function amenityRequestApprove(AmenityRequest $amenityRequest, \App\Services\AmenityRequestService $service): RedirectResponse
+    {
+        try {
+            $service->approve($amenityRequest, auth()->user());
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return back()->with('error', collect($e->errors())->flatten()->first());
+        }
+
+        return back()->with('success', 'Request approved. It is now on the guest\'s bill.');
+    }
+
+    /** Reject a guest's additional-amenity request; the reason is required and goes to the guest. */
+    public function amenityRequestReject(Request $request, AmenityRequest $amenityRequest, \App\Services\AmenityRequestService $service): RedirectResponse
+    {
+        $validated = $request->validate(['reason' => 'required|string|max:500']);
+
+        try {
+            $service->reject($amenityRequest, $validated['reason'], auth()->user());
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return back()->with('error', collect($e->errors())->flatten()->first());
+        }
+
+        return back()->with('success', 'Request rejected. The guest was told why.');
     }
 
     /**
@@ -270,9 +301,12 @@ class ReceptionistController extends Controller
         if ($request->filled('search')) {
             $search = $request->search;
             $query->where(function ($q) use ($search) {
+                $id = is_numeric($search) ? (int) $search : -1;
                 $q->whereHas('guest.user', fn ($u) => $u->searchName($search))
-                    ->orWhere('reservation_id', is_numeric($search) ? (int) $search : -1)
-                    ->orWhere('booking_id', is_numeric($search) ? (int) $search : -1);
+                    ->orWhere('reservation_id', $id)
+                    ->orWhere('booking_id', $id)
+                    // the BOOKING id a converted reservation became (the number staff see on the Booking page)
+                    ->orWhereHas('reservation.booking', fn ($b) => $b->where('id', $id));
             });
         }
 
@@ -443,6 +477,7 @@ class ReceptionistController extends Controller
                     'quantity' => $item['quantity'],
                     'charge' => (float) $amenity->charge,
                     'status' => 'approved',
+                    'origin' => AmenityRequest::ORIGIN_STAFF,
                 ]);
             }
         });

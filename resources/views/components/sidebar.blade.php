@@ -480,6 +480,10 @@
                 </a></li>
                 <li><a href="{{ route('receptionist.amenities.index') }}" class="nav-link {{ request()->routeIs('receptionist.amenities.*') ? 'active' : '' }}" title="Amenity Requests">
                     <i class="fas fa-spa"></i> <span class="link-text">Amenity Requests</span>
+                    @php $sidebarPendingAmenityRequests = \App\Models\AmenityRequest::pendingGuestRequests()->count(); @endphp
+                    @if($sidebarPendingAmenityRequests > 0)
+                        <span class="badge rounded-pill bg-danger ms-auto" title="Pending guest requests" aria-label="{{ $sidebarPendingAmenityRequests }} pending amenity requests">{{ $sidebarPendingAmenityRequests }}</span>
+                    @endif
                 </a></li>
             </ul>
         @elseif(auth()->user()->role === 'guest')

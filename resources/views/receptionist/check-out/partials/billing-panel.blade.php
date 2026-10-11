@@ -60,6 +60,17 @@
     </table>
     </div>
 
+    @if($pendingAmenityCount > 0)
+        <div class="alert alert-warning d-flex align-items-start gap-2" role="alert">
+            <i class="fas fa-triangle-exclamation mt-1"></i>
+            <div>
+                <strong>{{ $pendingAmenityCount }} amenity request{{ $pendingAmenityCount === 1 ? '' : 's' }} still pending.</strong>
+                Pending requests are not on this bill. Approve or reject them first so the guest is billed correctly -
+                <a href="{{ route('receptionist.amenities.index', ['status' => 'pending', 'search' => $booking->reservation_id ?? $booking->id]) }}" target="_blank" rel="noopener">review them</a>.
+            </div>
+        </div>
+    @endif
+
     <h6><i class="fas fa-spa"></i> Amenities & Services</h6>
     <div class="table-responsive">
     <table class="table table-sm mb-3">
@@ -83,6 +94,26 @@
         </tbody>
     </table>
     </div>
+
+    @if(! empty($stay['additional_amenities']))
+        <h6><i class="fas fa-plus-circle"></i> Additional amenities</h6>
+        <div class="table-responsive">
+        <table class="table table-sm mb-3">
+            <tbody>
+                @foreach($stay['additional_amenities'] as $line)
+                    <tr>
+                        <td>{{ $line['amenity_name'] }} <span class="text-muted">x{{ $line['quantity'] }} @ ₱{{ number_format($line['unit_price'], 2) }}</span></td>
+                        <td class="text-end">₱{{ number_format($line['subtotal'], 2) }}</td>
+                    </tr>
+                @endforeach
+                <tr class="fw-semibold">
+                    <td>Additional amenities total</td>
+                    <td class="text-end">₱{{ number_format($stay['additional_amenities_total'], 2) }}</td>
+                </tr>
+            </tbody>
+        </table>
+        </div>
+    @endif
 
     <div id="chargesTableContainer">
         @include('receptionist.check-out.partials.charges-table', ['billing' => $billing])
