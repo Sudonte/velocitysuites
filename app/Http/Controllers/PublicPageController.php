@@ -15,7 +15,8 @@ class PublicPageController extends Controller
         // The real active room types (names, capacity ranges, room counts), not a hard-coded list.
         $roomTypes = \App\Models\RoomType::where('status', 'active')
             ->withCount(['rooms' => fn ($q) => $q->whereNull('archived_at')])
-            ->orderBy('rate')->get();
+            ->orderBy('rate')->get()
+            ->filter(fn ($type) => $type->rooms_count > 0)->values(); // types with no rooms aren't bookable
 
         return view('public.about', compact('roomTypes'));
     }
