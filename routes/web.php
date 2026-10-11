@@ -238,6 +238,12 @@ Route::middleware(['auth', 'account.status', 'log.activity', 'no.cache'])->group
         Route::get('/direct-bookings/{booking}', [ReservationViewController::class, 'showBooking'])->name('bookings.show');
     });
 
+    // Guest History - read-only, shared by Receptionist and Manager.
+    Route::middleware('role:receptionist,manager')->prefix('guest-history')->name('guest-history.')->group(function () {
+        Route::get('/', [\App\Http\Controllers\Staff\GuestHistoryController::class, 'index'])->name('index');
+        Route::get('/{guest}', [\App\Http\Controllers\Staff\GuestHistoryController::class, 'show'])->name('show');
+    });
+
     // Receptionist Routes
     Route::middleware('role:receptionist')->prefix('receptionist')->name('receptionist.')->group(function () {
         Route::get('/dashboard', [ReceptionistController::class, 'dashboard'])->name('dashboard');
