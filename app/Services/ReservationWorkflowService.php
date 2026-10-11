@@ -803,7 +803,7 @@ class ReservationWorkflowService
         abort_if(! $booking, 404, 'Booking not found.');
 
         abort_if(
-            in_array($booking->booking_status, [Booking::STATUS_CHECKED_IN, Booking::STATUS_COMPLETED, Booking::STATUS_CANCELLED]),
+            in_array($booking->booking_status, [Booking::STATUS_CHECKED_IN, ...Booking::CLOSED_STATUSES]),
             422,
             'This booking can no longer be cancelled.'
         );
@@ -930,7 +930,7 @@ class ReservationWorkflowService
         $booking = $reservation->booking;
 
         $isCancelled = in_array($reservation->status, [Reservation::STATUS_CANCELLED, Reservation::STATUS_REJECTED])
-            || ($booking && $booking->booking_status === Booking::STATUS_CANCELLED);
+            || ($booking && in_array($booking->booking_status, [Booking::STATUS_CANCELLED, Booking::STATUS_NO_SHOW], true));
         $isCompleted = $booking && $booking->booking_status === Booking::STATUS_COMPLETED;
 
         abort_unless($isCancelled || $isCompleted, 422, 'Only completed or cancelled bookings/reservations can be deleted.');

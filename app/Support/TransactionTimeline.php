@@ -114,6 +114,9 @@ class TransactionTimeline
             if ($booking->booking_status === Booking::STATUS_CANCELLED) {
                 $steps[] = self::step('cancelled', 'Booking cancelled', self::RECORDED, $booking->cancelled_at ?? $booking->updated_at);
             }
+            if ($booking->booking_status === Booking::STATUS_NO_SHOW) {
+                $steps[] = self::step('no_show', 'Marked as no-show', self::RECORDED, $booking->no_show_at ?? $booking->updated_at);
+            }
         } elseif ($reservation) {
             if ($reservation->status === Reservation::STATUS_CANCELLED) {
                 $steps[] = self::step('cancelled', 'Reservation cancelled', self::RECORDED, $reservation->cancelled_at ?? $reservation->updated_at);

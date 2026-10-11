@@ -5,8 +5,9 @@ namespace Tests\Feature;
 use App\Models\User;
 
 /**
- * Revenue reporting is Admin-only: the Manager dashboard, report page and
- * report PDF data never carry revenue figures.
+ * Managers see room revenue, ADR and RevPAR [REQ050, REQ061], but never the
+ * Admin-only cash figures: Payments Collected and Other Charges - on the
+ * dashboard, the report page or the report data.
  */
 class ManagerNoRevenueTest extends ApiFlowTestCase
 {
@@ -27,22 +28,25 @@ class ManagerNoRevenueTest extends ApiFlowTestCase
         ]);
     }
 
-    public function test_manager_report_page_has_no_revenue(): void
+    public function test_manager_report_has_room_revenue_but_no_cash_figures(): void
     {
         $response = $this->actingAs($this->manager())->get(route('manager.reports.index'));
 
-        $response->assertOk();
-        $response->assertDontSee('Revenue');
-        $response->assertViewMissing('totalRevenue');
-        $response->assertViewMissing('revenueByDay');
+        $response->assertOk()
+            ->assertSee('Room Revenue')->assertSee('RevPAR')
+            ->assertDontSee('Payments Collected')->assertDontSee('Other Charges')
+            ->assertViewHas('report', fn ($r) => array_key_exists('room_revenue', $r['summary'])
+                && ! array_key_exists('payments_collected', $r['summary'])
+                && ! array_key_exists('other_charges', $r['summary']));
     }
 
-    public function test_manager_dashboard_has_no_revenue(): void
+    public function test_manager_dashboard_has_room_revenue_but_no_cash_figures(): void
     {
         $response = $this->actingAs($this->manager())->get(route('manager.dashboard'));
 
-        $response->assertOk();
-        $response->assertDontSee('Revenue');
-        $response->assertViewMissing('periodRevenue');
+        $response->assertOk()
+            ->assertSee('Room Revenue')
+            ->assertDontSee('Payments Collected')
+            ->assertViewHas('hotel', fn ($h) => isset($h['adr'], $h['revpar']) && ! isset($h['payments_collected']));
     }
 }

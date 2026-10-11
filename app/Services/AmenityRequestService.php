@@ -32,6 +32,7 @@ class AmenityRequestService
         return match ($booking->booking_status) {
             Booking::STATUS_COMPLETED => 'You have already checked out, so extra amenities can no longer be requested.',
             Booking::STATUS_CANCELLED => 'This booking was cancelled or rejected, so extra amenities can\'t be requested.',
+            Booking::STATUS_NO_SHOW => 'This booking was marked as a no-show, so extra amenities can\'t be requested.',
             Booking::STATUS_ACTIVE, Booking::STATUS_CHECKED_IN => null,
             default => 'Extra amenities can be requested once your booking is confirmed.',
         };

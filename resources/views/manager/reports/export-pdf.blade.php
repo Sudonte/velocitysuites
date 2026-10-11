@@ -11,7 +11,7 @@
         'periodLabel' => $periodLabel,
     ])
 
-    @include('reports.partials.pdf-body', ['report' => $report, 'withRevenue' => false, 'periodLabel' => $periodLabel])
+    @include('reports.partials.pdf-body', ['report' => $report, 'withRevenue' => true, 'periodLabel' => $periodLabel])
 
     <p class="footer-note">Velocity Suites &middot; Confidential internal report &middot; Generated {{ $generatedAt->format('M d, Y h:i A') }}</p>
 </body>

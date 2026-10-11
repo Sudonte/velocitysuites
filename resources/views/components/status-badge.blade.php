@@ -8,7 +8,7 @@ $maps = [
     ],
     'booking' => [
         'ACTIVE_BOOKING' => 'success', 'CHECKED_IN' => 'primary', 'COMPLETED_BOOKING' => 'secondary', 'CANCELLED_BOOKING' => 'danger',
-        'AWAITING_VERIFICATION' => 'warning',
+        'AWAITING_VERIFICATION' => 'warning', 'NO_SHOW_BOOKING' => 'dark',
     ],
     'discount_verification' => [
         'not_requested' => 'secondary', 'pending' => 'warning', 'approved' => 'success', 'rejected' => 'danger',
@@ -77,7 +77,7 @@ $labels = [
     ],
     'booking' => [
         'ACTIVE_BOOKING' => 'Confirmed', 'CHECKED_IN' => 'Checked In', 'COMPLETED_BOOKING' => 'Checked Out',
-        'CANCELLED_BOOKING' => 'Cancelled', 'AWAITING_VERIFICATION' => 'For Verification',
+        'CANCELLED_BOOKING' => 'Cancelled', 'AWAITING_VERIFICATION' => 'For Verification', 'NO_SHOW_BOOKING' => 'No-Show',
     ],
     'announcement_status' => [
         'archived' => 'Unpublished',

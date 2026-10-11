@@ -36,7 +36,8 @@
     </x-card>
 
     {{-- Management view: occupancy now, then activity for the selected
-         period. No revenue (Admin only); front-desk queues live on the
+         period. Room revenue / ADR / RevPAR only - payments collected and
+         other charges stay Admin-only; front-desk queues live on the
          Receptionist dashboard. --}}
     <div class="detail-section-title"><i class="fas fa-bolt"></i> Right Now</div>
     <div class="row g-3 mb-4 dashboard-kpis">
@@ -55,15 +56,48 @@
     </div>
 
     <div class="detail-section-title"><i class="fas fa-chart-line"></i> Selected Period &middot; {{ $periodFrom->format('M d') }} &ndash; {{ $periodTo->format('M d, Y') }}</div>
+    @php
+        $range = ['from' => $periodFrom->toDateString(), 'to' => $periodTo->toDateString()];
+        $peso = fn ($v) => '₱' . number_format((float) $v, 2);
+    @endphp
+    {{-- Booking summary [REQ049] - each card opens the matching Monitoring tab/status for the period. --}}
+    <div class="row g-3 mb-3 dashboard-kpis">
+        <div class="col-6 col-md-4 col-xl">
+            <x-stat-card icon="fas fa-list" label="Total Stays" :value="$hotel['stays_total']" color="secondary" :href="route('manager.reservations.index', ['tab' => 'bookings'] + $range)" />
+        </div>
+        <div class="col-6 col-md-4 col-xl">
+            <x-stat-card icon="fas fa-circle-check" label="Confirmed" :value="$hotel['stays_confirmed']" color="success" :href="route('manager.reservations.index', ['tab' => 'bookings', 'status' => 'ACTIVE_BOOKING'] + $range)" />
+        </div>
+        <div class="col-6 col-md-4 col-xl">
+            <x-stat-card icon="fas fa-hourglass-half" label="Pending" :value="$hotel['stays_pending']" color="warning" :href="route('manager.reservations.index', ['tab' => 'reservations', 'status' => 'PENDING'] + $range)" />
+        </div>
+        <div class="col-6 col-md-6 col-xl">
+            <x-stat-card icon="fas fa-ban" label="Cancelled · {{ $hotel['cancellation_rate'] }}% rate" :value="$hotel['cancellations']" color="danger" :href="route('manager.reservations.index', ['tab' => 'bookings', 'status' => 'CANCELLED_BOOKING'] + $range)" />
+        </div>
+        <div class="col-12 col-md-6 col-xl">
+            <x-stat-card icon="fas fa-user-slash" label="No-Shows · {{ $hotel['no_show_rate'] }}% rate" :value="$hotel['no_shows']" color="dark" :href="route('manager.reservations.index', ['tab' => 'bookings', 'status' => 'NO_SHOW_BOOKING'] + $range)" />
+        </div>
+    </div>
+
+    {{-- Revenue [REQ050]: room revenue, ADR, RevPAR (payments collected stays Admin-only). --}}
+    <div class="row g-3 mb-3 dashboard-kpis">
+        <div class="col-md-4"><x-stat-card icon="fas fa-hotel" label="Room Revenue" :value="$peso($hotel['room_revenue'])" color="success" /></div>
+        <div class="col-md-4"><x-stat-card icon="fas fa-tag" label="ADR (avg. daily rate)" :value="$peso($hotel['adr'])" color="primary" /></div>
+        <div class="col-md-4"><x-stat-card icon="fas fa-chart-line" label="RevPAR" :value="$peso($hotel['revpar'])" color="info" /></div>
+    </div>
+
+    {{-- Guest stays [REQ052] --}}
     <div class="row g-3 mb-4 dashboard-kpis">
-        <div class="col-md-4">
-            {{-- Each card opens its monitoring tab with the same count. --}}
-            <x-stat-card icon="fas fa-calendar-alt" label="Reservations" :value="$totalReservations" color="info" :href="route('manager.reservations.index', ['tab' => 'reservations', 'from' => $periodFrom->toDateString(), 'to' => $periodTo->toDateString()])" />
+        <div class="col-6 col-xl-3">
+            <x-stat-card icon="fas fa-calendar-alt" label="Reservations" :value="$totalReservations" color="info" :href="route('manager.reservations.index', ['tab' => 'reservations'] + $range)" />
         </div>
-        <div class="col-md-4">
-            <x-stat-card icon="fas fa-credit-card" label="Bookings" :value="$totalBookings" color="primary" :href="route('manager.reservations.index', ['tab' => 'bookings', 'from' => $periodFrom->toDateString(), 'to' => $periodTo->toDateString()])" />
+        <div class="col-6 col-xl-3">
+            <x-stat-card icon="fas fa-credit-card" label="Bookings" :value="$totalBookings" color="primary" :href="route('manager.reservations.index', ['tab' => 'bookings'] + $range)" />
         </div>
-        <div class="col-md-4">
+        <div class="col-6 col-xl-3">
+            <x-stat-card icon="fas fa-people-group" label="Total Guests Stayed" :value="$hotel['guests_total']" color="success" />
+        </div>
+        <div class="col-6 col-xl-3">
             <x-stat-card icon="fas fa-moon" label="Avg. Length of Stay" value="{{ $averageLengthOfStay }} nights" color="secondary" />
         </div>
     </div>

@@ -43,6 +43,7 @@ class MonitoringListService
         Booking::STATUS_CHECKED_IN => 'Checked-In',
         Booking::STATUS_COMPLETED => 'Checked-Out',
         Booking::STATUS_CANCELLED => 'Cancelled',
+        Booking::STATUS_NO_SHOW => 'No-Show',
     ];
 
     /** Old status values from earlier links, mapped onto the current ones. */

@@ -26,6 +26,8 @@
     @include('partials.report-filters', ['route' => 'admin.reports.index', 'showPaymentMethod' => true])
     @include('reports.partials.screen-body', ['report' => $report, 'withRevenue' => true])
 
+    @include('reports.partials.arrivals-card', ['arrivals' => $arrivals, 'arrivalDate' => $arrivalDate, 'route' => 'admin.reports.index', 'pdfRoute' => 'admin.reports.arrivalsPdf'])
+
     <!-- Activity Logs -->
     <x-card title="Activity Logs" icon="fas fa-history" bodyClass="table-responsive" class="mb-4">
         <table class="table table-hover mb-0">

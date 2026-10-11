@@ -117,7 +117,7 @@ class DirectBookingService
     private function hasOverlappingBooking(Guest $guest, RoomType $roomType, Carbon $checkIn, Carbon $checkOut): bool
     {
         return Booking::where('guest_id', $guest->id)
-            ->where('booking_status', '!=', Booking::STATUS_CANCELLED)
+            ->whereNotIn('booking_status', [Booking::STATUS_CANCELLED, Booking::STATUS_NO_SHOW])
             ->whereHas('roomLines', fn ($q) => $q->where('room_type_id', $roomType->id))
             ->where('check_in', '<', $checkOut)
             ->where('check_out', '>', $checkIn)

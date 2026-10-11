@@ -3,7 +3,8 @@
     App\Services\HotelReportService for how each figure is computed.
 
     @param array $report       HotelReportService::build() output
-    @param bool  $withRevenue  Admin only: revenue figures, graph and per-day table
+    @param bool  $withRevenue  room revenue, ADR, RevPAR, graph and per-day table (Admin + Manager);
+                               Other Charges / Payments Collected only render when present (Admin)
 --}}
 @php
     $s = $report['summary'];
@@ -23,18 +24,23 @@
     <div class="col-6 col-lg-3">
         <x-stat-card icon="fas fa-door-closed" label="Rooms / Out of Order" value="{{ $s['inventory'] }} / {{ $s['out_of_order'] }}" color="secondary" />
     </div>
-    <div class="col-6 col-lg-3">
-        <x-stat-card icon="fas fa-calendar-alt" label="Reservations" :value="$s['reservations']" color="info" />
-    </div>
-    <div class="col-6 col-lg-3">
-        <x-stat-card icon="fas fa-credit-card" label="Direct Bookings" :value="$s['bookings']" color="primary" />
-    </div>
-    <div class="col-6 col-lg-3">
-        <x-stat-card icon="fas fa-ban" label="Cancellations" :value="$s['cancellations']" color="danger" />
-    </div>
-    <div class="col-6 col-lg-3">
-        <x-stat-card icon="fas fa-moon" label="Average Stay" value="{{ number_format($s['average_stay'], 1) }} nights" color="secondary" />
-    </div>
+</div>
+
+{{-- Booking summary [REQ049] + cancellation / no-show [REQ051, REQ062] --}}
+<div class="row g-3 mb-3">
+    <div class="col-6 col-md-4 col-xl"><x-stat-card icon="fas fa-list" label="Total Stays" :value="$s['stays_total']" color="secondary" /></div>
+    <div class="col-6 col-md-4 col-xl"><x-stat-card icon="fas fa-circle-check" label="Confirmed" :value="$s['stays_confirmed']" color="success" /></div>
+    <div class="col-6 col-md-4 col-xl"><x-stat-card icon="fas fa-hourglass-half" label="Pending" :value="$s['stays_pending']" color="warning" /></div>
+    <div class="col-6 col-md-6 col-xl"><x-stat-card icon="fas fa-ban" label="Cancelled ({{ $s['cancellation_rate'] }}%)" :value="$s['cancellations']" color="danger" /></div>
+    <div class="col-12 col-md-6 col-xl"><x-stat-card icon="fas fa-user-slash" label="No-Shows ({{ $s['no_show_rate'] }}%)" :value="$s['no_shows']" color="dark" /></div>
+</div>
+
+{{-- Guest stay statistics [REQ052] --}}
+<div class="row g-3 mb-3">
+    <div class="col-6 col-lg-3"><x-stat-card icon="fas fa-calendar-alt" label="Reservations" :value="$s['reservations']" color="info" /></div>
+    <div class="col-6 col-lg-3"><x-stat-card icon="fas fa-credit-card" label="Direct Bookings" :value="$s['bookings']" color="primary" /></div>
+    <div class="col-6 col-lg-3"><x-stat-card icon="fas fa-people-group" label="Total Guests Stayed" :value="$s['guests_total']" color="success" /></div>
+    <div class="col-6 col-lg-3"><x-stat-card icon="fas fa-moon" label="Average Stay" value="{{ number_format($s['average_stay'], 1) }} nights" color="secondary" /></div>
 </div>
 
 @if($withRevenue)
@@ -48,17 +54,21 @@
         <div class="col-6 col-lg">
             <x-stat-card icon="fas fa-chart-line" label="RevPAR" :value="$peso($s['revpar'])" color="info" />
         </div>
-        <div class="col-6 col-lg">
-            <x-stat-card icon="fas fa-concierge-bell" label="Other Charges" :value="$peso($s['other_charges'])" color="secondary" />
-        </div>
-        <div class="col-12 col-lg">
-            <x-stat-card icon="fas fa-money-bill-wave" label="Payments Collected" :value="$peso($s['payments_collected'])" color="warning" />
-        </div>
+        @isset($s['payments_collected'])
+            <div class="col-6 col-lg">
+                <x-stat-card icon="fas fa-concierge-bell" label="Other Charges" :value="$peso($s['other_charges'])" color="secondary" />
+            </div>
+            <div class="col-12 col-lg">
+                <x-stat-card icon="fas fa-money-bill-wave" label="Payments Collected" :value="$peso($s['payments_collected'])" color="warning" />
+            </div>
+        @endisset
     </div>
     <p class="text-muted small mt-n2 mb-4">
         <i class="fas fa-info-circle"></i>
         Room revenue = room rate &times; nights stayed in the period. ADR = room revenue &divide; room-nights sold; RevPAR = room revenue &divide; room-nights available.
-        Other charges = amenities, extra-guest fees and additional charges on stays that checked out in the period. Payments collected = money received in the period (GCash once verified).
+        @isset($s['payments_collected'])
+            Other charges = amenities, extra-guest fees and additional charges on stays that checked out in the period. Payments collected = money received in the period (GCash once verified).
+        @endisset
     </p>
 
     <x-card title="Occupancy and Room Revenue by {{ $report['bucketUnit'] }}" icon="fas fa-chart-column" bodyClass="card-body" class="mb-4">
@@ -187,6 +197,29 @@
                 </tr>
             @empty
                 <tr><td colspan="3"><x-empty-state icon="fas fa-users" message="No guest stays in this period." /></td></tr>
+            @endforelse
+        </tbody>
+    </table>
+</x-card>
+
+<x-card title="Cancellations and No-Shows" icon="fas fa-user-slash" bodyClass="table-responsive" class="mb-4">
+    <table class="table table-hover mb-0">
+        <thead>
+            <tr><th>Ref</th><th>Guest</th><th>Room Type</th><th>Check-in</th><th>Status</th><th>Reason</th><th>Marked By</th></tr>
+        </thead>
+        <tbody>
+            @forelse($report['cancellationRows'] as $row)
+                <tr>
+                    <td>{{ $row['ref'] }}</td>
+                    <td>{{ $row['guest'] }}</td>
+                    <td>{{ $row['room_type'] }}</td>
+                    <td>{{ $row['check_in']->format('M d, Y') }}</td>
+                    <td><span class="badge {{ $row['status'] === 'No-Show' ? 'bg-dark' : 'bg-danger' }}">{{ $row['status'] }}</span></td>
+                    <td>{{ $row['reason'] ?: '—' }}</td>
+                    <td>{{ $row['by'] ?: '—' }}</td>
+                </tr>
+            @empty
+                <tr><td colspan="7"><x-empty-state icon="fas fa-user-slash" message="No cancellations or no-shows in this period." /></td></tr>
             @endforelse
         </tbody>
     </table>

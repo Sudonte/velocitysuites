@@ -4,13 +4,14 @@ namespace App\Http\Controllers\Manager;
 
 use App\Http\Controllers\Controller;
 use App\Services\DashboardStatsService;
+use App\Services\HotelReportService;
 use App\Support\DateRange;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
 class ManagerDashboardController extends Controller
 {
-    public function __construct(private DashboardStatsService $stats)
+    public function __construct(private DashboardStatsService $stats, private HotelReportService $reports)
     {
     }
 
@@ -25,12 +26,22 @@ class ManagerDashboardController extends Controller
     {
         [$from, $to, $period] = DateRange::resolve($request);
 
+        // Booking summary, room revenue (ADR / RevPAR), cancellation and
+        // no-show rates and guest-stay figures [REQ049-REQ052] - the same
+        // service as the Reports page, so the two always agree.
+        $hotel = \Illuminate\Support\Facades\Cache::remember(
+            'manager_dashboard_hotel:' . $from->toDateString() . ':' . $to->toDateString(),
+            now()->addSeconds(60),
+            fn () => $this->reports->build($from, $to, null, null, HotelReportService::REVENUE_ROOMS)['summary']
+        );
+
         return view('manager.dashboard', array_merge(
             $this->stats->managerStats($from, $to),
             [
                 'periodFrom' => $from,
                 'periodTo' => $to,
                 'period' => $period,
+                'hotel' => $hotel,
             ]
         ));
     }

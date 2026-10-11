@@ -130,7 +130,7 @@ class BookingController extends Controller
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 
-        if (in_array($booking->booking_status, [Booking::STATUS_CHECKED_IN, Booking::STATUS_COMPLETED, Booking::STATUS_CANCELLED], true)) {
+        if (in_array($booking->booking_status, [Booking::STATUS_CHECKED_IN, ...Booking::CLOSED_STATUSES], true)) {
             return response()->json(['message' => 'This booking can no longer be cancelled.'], 422);
         }
 
@@ -466,7 +466,7 @@ class BookingController extends Controller
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 
-        if (! in_array($booking->booking_status, [Booking::STATUS_COMPLETED, Booking::STATUS_CANCELLED], true)) {
+        if (! in_array($booking->booking_status, Booking::CLOSED_STATUSES, true)) {
             return response()->json(['message' => 'This booking cannot be removed while it is still active.'], 409);
         }
 

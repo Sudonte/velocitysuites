@@ -972,7 +972,7 @@ class ReservationController extends Controller
         $booking = $reservation->booking;
 
         if ($booking) {
-            if (! in_array($booking->booking_status, [Booking::STATUS_COMPLETED, Booking::STATUS_CANCELLED], true)) {
+            if (! in_array($booking->booking_status, Booking::CLOSED_STATUSES, true)) {
                 return response()->json(['message' => 'This booking cannot be removed while it is still active.'], 409);
             }
         } elseif (! in_array($reservation->status, [Reservation::STATUS_CANCELLED, Reservation::STATUS_REJECTED], true)) {

@@ -25,6 +25,11 @@ class Booking extends Model
     public const STATUS_CHECKED_IN = 'CHECKED_IN';
     public const STATUS_COMPLETED = 'COMPLETED_BOOKING';
     public const STATUS_CANCELLED = 'CANCELLED_BOOKING';
+    /** Guest never arrived - set by hand by a receptionist, never automatically. */
+    public const STATUS_NO_SHOW = 'NO_SHOW_BOOKING';
+
+    /** Finished stays that hold no room: nothing more can happen to them. */
+    public const CLOSED_STATUSES = [self::STATUS_COMPLETED, self::STATUS_CANCELLED, self::STATUS_NO_SHOW];
 
     protected $fillable = [
         'reservation_id',
@@ -55,6 +60,8 @@ class Booking extends Model
         'rejection_reason',
         'verified_at',
         'verified_by',
+        'no_show_at',
+        'status_changed_by',
         'hidden_at',
         'hidden_by_guest_at',
         'viewed_at',
@@ -77,6 +84,7 @@ class Booking extends Model
         'discount_verified_at' => 'datetime',
         'verified_at' => 'datetime',
         'hidden_at' => 'datetime',
+        'no_show_at' => 'datetime',
         'is_test_booking' => 'boolean',
         'hidden_by_guest_at' => 'datetime',
         'viewed_at' => 'datetime',
@@ -151,6 +159,12 @@ class Booking extends Model
     /**
      * The staff member who verified this booking's payment.
      */
+    /** The receptionist who marked this booking No-Show or Cancelled. */
+    public function statusChangedBy()
+    {
+        return $this->belongsTo(User::class, 'status_changed_by');
+    }
+
     public function verifier()
     {
         return $this->belongsTo(User::class, 'verified_by');

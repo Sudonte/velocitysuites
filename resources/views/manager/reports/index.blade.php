@@ -18,6 +18,8 @@
 
     @include('partials.report-filters', ['route' => 'manager.reports.index'])
 
-    @include('reports.partials.screen-body', ['report' => $report, 'withRevenue' => false])
+    @include('reports.partials.screen-body', ['report' => $report, 'withRevenue' => true])
+
+    @include('reports.partials.arrivals-card', ['arrivals' => $arrivals, 'arrivalDate' => $arrivalDate, 'route' => 'manager.reports.index', 'pdfRoute' => 'manager.reports.arrivalsPdf'])
 </div>
 @endsection
