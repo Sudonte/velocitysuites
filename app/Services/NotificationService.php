@@ -410,10 +410,8 @@ class NotificationService
      * Notify about an upcoming check-in on an already-confirmed booking.
      * Distinct from notifyCheckIn(), which fires at actual check-in time -
      * this fires in advance (see Console\Commands\SendCheckinReminders).
-     * Reference id/number matches the guest-facing convention used
-     * elsewhere ("Reservation #{id}", see guest/reservations/show.blade.php)
-     * even though the booking itself has its own row, since that's how
-     * guests already know this stay by the time it's converted.
+     * The text references the stay by its Booking # - the same number the receptionist
+     * web shows.
      */
     public function notifyCheckinReminder(Booking $booking): void
     {
@@ -423,13 +421,9 @@ class NotificationService
         }
         $checkIn = $booking->check_in;
 
-        // A reservation-derived booking is still known to the guest by its
-        // Reservation #; a direct "New Booking" transaction (reservation_id
-        // null) has no reservation at all, so it's referenced by its own
-        // Booking # instead.
-        $referenceLabel = $booking->reservation_id
-            ? "Reservation #{$booking->reservation_id}"
-            : "Booking #{$booking->id}";
+        // Once a reservation is converted the receptionist web knows the stay only as
+        // Booking #<bookings.id>, so that is the number the guest is told too.
+        $referenceLabel = "Booking #{$booking->id}";
 
         $this->toUser(
             $guest,
