@@ -8,6 +8,7 @@
     @param array  $tabCounts        ['reservations' => int, 'bookings' => int]
     @param array  $filters          the applied (validated) filter values
     @param array  $statusOptions    value => label for the open tab
+    @param \Illuminate\Support\Collection $roomTypeOptions  id/name for the Room Type filter
     @param \Illuminate\Support\Collection|null $receptionists  Bookings tab only; null hides the filter
 --}}
 @php
@@ -47,6 +48,15 @@
                     <option value="">All</option>
                     @foreach($statusOptions as $value => $label)
                         <option value="{{ $value }}" {{ $filters['status'] === $value ? 'selected' : '' }}>{{ $label }}</option>
+                    @endforeach
+                </select>
+            </div>
+            <div class="col-sm-6 col-lg-2">
+                <label class="form-label small text-muted mb-1">Room Type</label>
+                <select name="room_type" class="form-control">
+                    <option value="">All</option>
+                    @foreach($roomTypeOptions as $type)
+                        <option value="{{ $type->id }}" {{ $filters['room_type'] === $type->id ? 'selected' : '' }}>{{ $type->name }}</option>
                     @endforeach
                 </select>
             </div>

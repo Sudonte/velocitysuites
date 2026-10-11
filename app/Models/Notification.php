@@ -20,10 +20,12 @@ class Notification extends Model
         'receipt_number',
         'receipt_type',
         'is_read',
+        'archived_at',
     ];
 
     protected $casts = [
         'is_read' => 'boolean',
+        'archived_at' => 'datetime',
         'target_audience' => 'array',
     ];
 
@@ -33,6 +35,29 @@ class Notification extends Model
     public function user()
     {
         return $this->belongsTo(User::class);
+    }
+
+    /** Inbox: everything not archived. */
+    public function scopeNotArchived($query)
+    {
+        return $query->whereNull('notifications.archived_at');
+    }
+
+    public function scopeArchived($query)
+    {
+        return $query->whereNotNull('notifications.archived_at');
+    }
+
+    /** Archive (never delete) - also marks it read so it leaves the unread count. */
+    public function archive(): void
+    {
+        $this->update(['archived_at' => now(), 'is_read' => true]);
+        self::forgetUnreadCountFor($this->user_id);
+    }
+
+    public function restore(): void
+    {
+        $this->update(['archived_at' => null]);
     }
 
     /**
@@ -72,7 +97,7 @@ class Notification extends Model
         return Cache::remember(
             "notifications:unread_count:{$userId}",
             now()->addSeconds(20),
-            fn () => self::where('user_id', $userId)->where('is_read', false)->count()
+            fn () => self::where('user_id', $userId)->whereNull('archived_at')->where('is_read', false)->count()
         );
     }
 

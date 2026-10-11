@@ -19,7 +19,7 @@ class AdminDashboardController extends Controller
     {
         // No cap - per-admin-user notifications are naturally small, so
         // "Expand" can show every one of this admin's own notifications.
-        $systemNotifications = auth()->user()->notifications()->latest()->get();
+        $systemNotifications = auth()->user()->notifications()->notArchived()->latest()->get();
 
         return view('admin.dashboard', array_merge(
             $this->stats->adminStats(),

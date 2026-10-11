@@ -74,33 +74,12 @@ class RoomManagementController extends Controller
             'room_name' => 'required|string|max:255',
             'room_type_id' => 'required|exists:room_types,id',
             'rate_override' => 'nullable|numeric|min:0',
-            // No "reserved" option - RoomAvailabilityService only ever treats
-            // "maintenance" as a hard block on booking/check-in assignment,
-            // so a room manually set to "reserved" here would look blocked
-            // but remain fully bookable - a trap for whoever picks it.
-            'status' => 'required|in:available,occupied,maintenance',
         ]);
 
-        // Same guard as deactivate() - a guest physically in this room
-        // can't be hidden from every occupancy count/list by setting
-        // maintenance out from under them.
-        if ($validated['status'] === 'maintenance' && $room->isCurrentlyOccupied()) {
-            return back()->withInput()
-                ->with('error', "Room {$room->room_number} is currently occupied - it can't be set to maintenance until the guest checks out.");
-        }
-
-        $wasMaintenance = $room->status === 'maintenance';
+        // Status isn't edited here: Occupied follows check-in/out, and
+        // Maintenance is set/cleared by deactivate()/reactivate() (the
+        // Quick Actions) - one control per status, not two.
         $room->update($validated);
-
-        // reference_id on notifications is a foreign key to reservations,
-        // not rooms - the room number/name goes in the message text instead.
-        if (! $wasMaintenance && $room->status === 'maintenance') {
-            app(NotificationService::class)->notifyAdmin(
-                'Room Under Maintenance',
-                "Room {$room->room_number} ({$room->room_name}) was marked under maintenance.",
-                'room'
-            );
-        }
 
         Activity::log('Updated room', "Room {$room->room_number} ({$room->room_name}, {$room->status})", $room);
 
@@ -210,6 +189,12 @@ class RoomManagementController extends Controller
         $room->update(['status' => 'maintenance']);
 
         Activity::log('Set room to maintenance', "Room {$room->room_number}", $room);
+        // notifications.reference_id points at stays, not rooms - the room goes in the text.
+        app(NotificationService::class)->notifyAdmin(
+            'Room Under Maintenance',
+            "Room {$room->room_number} ({$room->room_name}) was marked under maintenance.",
+            'room'
+        );
 
         return redirect()->route('admin.rooms.index')->with('success', 'Room deactivated (set to maintenance).');
     }

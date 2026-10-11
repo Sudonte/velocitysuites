@@ -223,7 +223,10 @@ Route::middleware(['auth', 'account.status', 'log.activity', 'no.cache'])->group
         Route::put('/notifications/{notification}/read', [ManagerNotificationController::class, 'markAsRead'])->name('notifications.markAsRead');
         Route::put('/notifications/{notification}/unread', [ManagerNotificationController::class, 'markAsUnread'])->name('notifications.markAsUnread');
         Route::put('/notifications/read-all', [ManagerNotificationController::class, 'markAllAsRead'])->name('notifications.markAllAsRead');
-        Route::delete('/notifications/{notification}', [ManagerNotificationController::class, 'destroy'])->name('notifications.destroy');
+        // Archive, never delete.
+        Route::put('/notifications/archive-read', [ManagerNotificationController::class, 'archiveAllRead'])->name('notifications.archiveAllRead');
+        Route::put('/notifications/{notification}/archive', [ManagerNotificationController::class, 'archive'])->name('notifications.archive');
+        Route::put('/notifications/{notification}/restore', [ManagerNotificationController::class, 'restore'])->name('notifications.restore');
     });
 
     // Reservation viewing (read-only index + show) - shared between Manager
@@ -444,7 +447,10 @@ Route::middleware(['auth', 'account.status', 'log.activity', 'no.cache'])->group
         Route::put('/notifications/{notification}/read', [NotificationController::class, 'markAsRead'])->name('notifications.markAsRead');
         Route::put('/notifications/{notification}/unread', [NotificationController::class, 'markAsUnread'])->name('notifications.markAsUnread');
         Route::put('/notifications/read-all', [NotificationController::class, 'markAllAsRead'])->name('notifications.markAllAsRead');
-        Route::delete('/notifications/{notification}', [NotificationController::class, 'destroy'])->name('notifications.destroy');
+        // Archive, never delete.
+        Route::put('/notifications/archive-read', [NotificationController::class, 'archiveAllRead'])->name('notifications.archiveAllRead');
+        Route::put('/notifications/{notification}/archive', [NotificationController::class, 'archive'])->name('notifications.archive');
+        Route::put('/notifications/{notification}/restore', [NotificationController::class, 'restore'])->name('notifications.restore');
 
         Route::get('/profile', [ProfileController::class, 'show'])->name('profile.show');
         // Light/dark toggle in the navbar account dropdown - role-agnostic,

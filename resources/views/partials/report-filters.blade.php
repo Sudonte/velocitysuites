@@ -19,18 +19,19 @@
         <div class="col-12">
             <div class="btn-group flex-wrap" role="group" aria-label="Reporting period">
                 @foreach($presets as $value => $label)
-                    <input type="radio" class="btn-check" name="period" id="period{{ $value }}" value="{{ $value }}" {{ $filters['period'] === $value ? 'checked' : '' }} onchange="this.form.submit()">
+                    <input type="radio" class="btn-check" name="period" id="period{{ $value }}" value="{{ $value }}" {{ $filters['period'] === $value ? 'checked' : '' }}>
                     <label class="btn btn-sm btn-outline-primary" for="period{{ $value }}">{{ $label }}</label>
                 @endforeach
                 <input type="radio" class="btn-check" name="period" id="periodcustom" value="custom" {{ $filters['period'] === 'custom' ? 'checked' : '' }}>
                 <label class="btn btn-sm btn-outline-primary" for="periodcustom">Custom range</label>
             </div>
         </div>
-        <div class="col-6 col-md-2">
+        {{-- From/To only for a custom range. --}}
+        <div class="col-6 col-md-2 {{ $filters['period'] === 'custom' ? '' : 'd-none' }}" data-custom-only>
             <label for="reportFrom" class="form-label small text-muted mb-1">From</label>
             <input type="date" id="reportFrom" name="from" class="form-control form-control-sm" value="{{ $filters['from']->toDateString() }}" max="{{ now()->toDateString() }}">
         </div>
-        <div class="col-6 col-md-2">
+        <div class="col-6 col-md-2 {{ $filters['period'] === 'custom' ? '' : 'd-none' }}" data-custom-only>
             <label for="reportTo" class="form-label small text-muted mb-1">To</label>
             <input type="date" id="reportTo" name="to" class="form-control form-control-sm" value="{{ $filters['to']->toDateString() }}" max="{{ now()->toDateString() }}">
         </div>
@@ -67,16 +68,12 @@
 </x-card>
 
 @push('scripts')
+@include('partials.custom-range-toggle')
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     const form = document.getElementById('reportFilterForm');
     if (!form) return;
-    // Editing a date switches the period to Custom.
-    ['reportFrom', 'reportTo'].forEach(function (id) {
-        document.getElementById(id).addEventListener('change', function () {
-            document.getElementById('periodcustom').checked = true;
-        });
-    });
+    window.bindCustomRangeToggle(form);
 });
 </script>
 @endpush

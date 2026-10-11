@@ -13,6 +13,14 @@
                     <i class="fas fa-check-double"></i> Mark All as Read
                 </button>
             </form>
+            <form action="{{ route('notifications.archiveAllRead') }}" method="POST" class="d-inline"
+                  data-confirm="Read notifications move to Archived, where they can be restored." data-confirm-title="Archive all read notifications?" data-confirm-button="Archive" data-confirm-variant="primary">
+                @csrf
+                @method('PUT')
+                <button type="submit" class="btn btn-sm btn-outline-secondary">
+                    <i class="fas fa-box-archive"></i> Archive All Read
+                </button>
+            </form>
         </x-slot:actions>
     </x-page-header>
 
@@ -38,6 +46,7 @@
     <!-- Search and Filter -->
     <x-card bodyClass="card-body" class="mb-4">
         <form method="GET" action="{{ route('notifications.index') }}" class="row g-3">
+            <input type="hidden" name="view" value="{{ $view }}">
             <div class="col-md-4">
                 <input type="text" name="search" class="form-control"
                        placeholder="Search by title or message" value="{{ request('search') }}">
@@ -64,7 +73,15 @@
         </form>
     </x-card>
 
-    <x-card title="All Notifications" icon="fas fa-list" bodyClass="card-body">
+    <ul class="nav nav-tabs mb-0">
+        <li class="nav-item">
+            <a class="nav-link {{ $view === 'inbox' ? 'active' : '' }}" href="{{ route('notifications.index') }}"><i class="fas fa-inbox"></i> Inbox</a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link {{ $view === 'archived' ? 'active' : '' }}" href="{{ route('notifications.index', ['view' => 'archived']) }}"><i class="fas fa-box-archive"></i> Archived</a>
+        </li>
+    </ul>
+    <x-card :title="$view === 'archived' ? 'Archived Notifications' : 'Inbox'" :icon="$view === 'archived' ? 'fas fa-box-archive' : 'fas fa-inbox'" bodyClass="card-body">
         @forelse($notifications as $notification)
             @php
                 $category = $notification->category ?? 'general';
@@ -123,20 +140,28 @@
                         </form>
                     @endif
 
-                    <form action="{{ route('notifications.destroy', $notification) }}" method="POST"
-                          data-confirm="This cannot be undone." data-confirm-title="Delete this notification?" data-confirm-button="Delete" data-confirm-variant="danger">
-                        @csrf
-                        @method('DELETE')
-                        <button type="submit" class="btn btn-outline-danger btn-sm btn-icon" title="Delete" aria-label="Delete">
-                            <i class="fas fa-trash"></i></button>
-                    </form>
+                    @if($notification->archived_at)
+                        <form action="{{ route('notifications.restore', $notification) }}" method="POST">
+                            @csrf
+                            @method('PUT')
+                            <button type="submit" class="btn btn-outline-success btn-sm btn-icon" title="Restore to inbox" aria-label="Restore to inbox">
+                                <i class="fas fa-box-open"></i></button>
+                        </form>
+                    @else
+                        <form action="{{ route('notifications.archive', $notification) }}" method="POST">
+                            @csrf
+                            @method('PUT')
+                            <button type="submit" class="btn btn-outline-secondary btn-sm btn-icon" title="Archive" aria-label="Archive">
+                                <i class="fas fa-box-archive"></i></button>
+                        </form>
+                    @endif
                 </div>
             </div>
 
         @empty
             <x-empty-state icon="fas fa-bell" :message="request()->hasAny(['search', 'category', 'date_from', 'date_to'])
                 ? 'No notifications match your search or filters.'
-                : 'No notifications yet.'" />
+                : ($view === 'archived' ? 'No archived notifications.' : 'No notifications yet.')" />
         @endforelse
         <x-slot:footer>
             {{ $notifications->links() }}

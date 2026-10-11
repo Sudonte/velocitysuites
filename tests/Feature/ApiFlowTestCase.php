@@ -353,6 +353,7 @@ abstract class ApiFlowTestCase extends TestCase
             $table->string('receipt_number')->nullable();
             $table->string('receipt_type')->nullable();
             $table->boolean('is_read')->default(false);
+            $table->timestamp('archived_at')->nullable();
             $table->timestamps();
         });
     }

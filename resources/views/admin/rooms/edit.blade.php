@@ -114,17 +114,12 @@
                                 </div>
                             </div>
                             <div class="col-md-6">
+                                {{-- One status control: Occupied comes from check-ins, and
+                                     Maintenance is set/cleared with the Quick Actions on the right. --}}
                                 <div class="form-group mb-3">
-                                    <label for="status">Status *</label>
-                                    <select class="form-control @error('status') is-invalid @enderror"
-                                            id="status" name="status" required>
-                                        <option value="available" {{ old('status', $room->status) === 'available' ? 'selected' : '' }}>Available</option>
-                                        <option value="occupied" {{ old('status', $room->status) === 'occupied' ? 'selected' : '' }}>Occupied</option>
-                                        <option value="maintenance" {{ old('status', $room->status) === 'maintenance' ? 'selected' : '' }}>Maintenance</option>
-                                    </select>
-                                    @error('status')
-                                        <div class="invalid-feedback">{{ $message }}</div>
-                                    @enderror
+                                    <label>Status</label>
+                                    <div class="form-control bg-light"><x-status-badge :status="$room->effective_status" domain="room" /></div>
+                                    <small class="text-muted">Occupied is set by check-in and check-out. Use <strong>Set to Maintenance</strong> / <strong>Reactivate</strong> to take the room out of service.</small>
                                 </div>
                             </div>
                         </div>

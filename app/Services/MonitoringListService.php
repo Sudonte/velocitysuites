@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Booking;
 use App\Models\Reservation;
+use App\Models\RoomType;
 use App\Support\MonitoringFilters;
 use App\Support\PerPage;
 use App\Support\TestAccountScope;
@@ -19,12 +20,13 @@ use Illuminate\Support\Collection;
  *
  * Two tabs, each with its own filters:
  *  - Reservations: not yet converted. Filters: search, status (awaiting
- *    payment / rejected / cancelled), chosen payment method, check-in dates.
+ *    payment / rejected / cancelled), room type, chosen payment method,
+ *    check-in dates.
  *    Payments and staff handling only begin once a reservation converts, so
  *    those filters don't apply here.
  *  - Bookings: converted reservations + direct (pay-first) bookings. Filters:
- *    search, booking status, payment status, payment method, receptionist,
- *    check-in dates.
+ *    search, booking status, room type, payment status, payment method,
+ *    receptionist, check-in dates.
  * Only the open tab's filters are applied.
  */
 class MonitoringListService
@@ -80,6 +82,7 @@ class MonitoringListService
             'tabCounts' => $this->tabCounts(),
             'filters' => $filters,
             'statusOptions' => $tab === 'reservations' ? self::RESERVATION_STATUSES : self::BOOKING_STATUSES,
+            'roomTypeOptions' => RoomType::orderBy('name')->get(['id', 'name']),
         ], $this->summary());
     }
 
@@ -114,6 +117,7 @@ class MonitoringListService
         return [
             'search' => trim((string) $request->get('search', '')),
             'status' => array_key_exists($status, $allowedStatuses) ? $status : null,
+            'room_type' => $request->filled('room_type') && ctype_digit((string) $request->get('room_type')) ? (int) $request->get('room_type') : null,
             'payment_method' => in_array($paymentMethod, ['cash', 'gcash'], true) ? $paymentMethod : null,
             'payment_status' => $tab === 'bookings' && MonitoringFilters::isPaymentStatus($paymentStatus) ? $paymentStatus : null,
             'receptionist' => $tab === 'bookings' && $request->filled('receptionist') ? (int) $request->get('receptionist') : null,
@@ -127,6 +131,9 @@ class MonitoringListService
         $query = Reservation::with(['guest.user', 'roomType', 'booking.room', 'booking.billing', 'payments',
             'verifier', 'payments.verifier', 'booking.verifier', 'booking.payments.verifier', 'booking.billing.payments.verifier']);
         $converted ? $query->has('booking') : $query->doesntHave('booking');
+        if ($f['room_type']) {
+            $query->where('room_type_id', $f['room_type']);
+        }
 
         if ($f['status']) {
             if (! $converted) {
@@ -187,6 +194,9 @@ class MonitoringListService
 
         if ($f['status']) {
             $this->bookingStatus($query, $f['status']);
+        }
+        if ($f['room_type']) {
+            $query->where('room_type_id', $f['room_type']);
         }
         if ($f['payment_method']) {
             MonitoringFilters::paymentMethod($query, MonitoringFilters::BOOKING_PAYMENTS, $f['payment_method']);

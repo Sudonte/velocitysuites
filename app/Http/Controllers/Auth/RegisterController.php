@@ -232,15 +232,29 @@ class RegisterController extends Controller
             'account'
         );
 
-        // Restore booking intent if it existed
-        if (isset($registrationData['booking_intent'])) {
-            $request->session()->put('booking_intent', $registrationData['booking_intent']);
-        }
-
         // Clear session data
         $request->session()->forget('registration_data');
 
-        return redirect()->route('login')->with('success', 'Registration successful! Please login to continue your booking.');
+        // Verified - sign the new guest straight in (no second login).
+        \Illuminate\Support\Facades\Auth::login($user);
+        $request->session()->regenerate();
+        $user->forceFill(['last_login_at' => now()])->save();
+
+        // Started registering mid-booking: back to that room with the same dates
+        // (the same hand-off LoginController does after a normal login).
+        $intent = $registrationData['booking_intent'] ?? null;
+        if ($intent && isset($intent['room_type_id'])) {
+            $query = array_filter([
+                'check_in' => $intent['check_in'] ?? null,
+                'check_out' => $intent['check_out'] ?? null,
+                'guests' => $intent['guests'] ?? null,
+            ]);
+            $url = route('public.rooms.show', ['roomType' => $intent['room_type_id']]) . ($query ? '?' . http_build_query($query) : '');
+
+            return redirect($url)->with('success', 'Welcome to Velocity Suites! Continue with your booking.');
+        }
+
+        return redirect()->route('guest.dashboard')->with('success', 'Welcome to Velocity Suites! Your account is ready.');
     }
 
     /**

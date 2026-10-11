@@ -44,7 +44,9 @@ class NotificationController extends Controller
             'category' => 'nullable|string|in:' . implode(',', self::CATEGORIES),
             'date_from' => 'nullable|date',
             'date_to' => 'nullable|date',
+            'view' => 'nullable|in:inbox,archived',
         ]);
+        $view = $validated['view'] ?? 'inbox';
 
         $dateFrom = $validated['date_from'] ?? null;
         $dateTo = $validated['date_to'] ?? null;
@@ -57,6 +59,7 @@ class NotificationController extends Controller
         // don't trace back to anything in this app's own CSS, same fix
         // already applied everywhere else in the app.
         $notifications = auth()->user()->notifications()
+            ->when($view === 'archived', fn ($q) => $q->archived(), fn ($q) => $q->notArchived())
             ->when($validated['search'] ?? null, function ($query, $search) {
                 $query->where(function ($q) use ($search) {
                     $q->where('title', 'like', "%{$search}%")
@@ -72,7 +75,7 @@ class NotificationController extends Controller
 
         $categories = self::CATEGORIES;
 
-        return view('notifications.index', compact('notifications', 'categories'));
+        return view('notifications.index', compact('notifications', 'categories', 'view'));
     }
 
     /**
@@ -114,30 +117,43 @@ class NotificationController extends Controller
      */
     public function markAllAsRead(): RedirectResponse
     {
-        auth()->user()->notifications()->where('is_read', false)->update(['is_read' => true]);
+        auth()->user()->notifications()->notArchived()->where('is_read', false)->update(['is_read' => true]);
         Notification::forgetUnreadCountFor(auth()->id());
         return back()->with('success', 'All notifications marked as read.');
     }
 
     /**
-     * Permanently delete a single notification. If it was unread, the
-     * cached unread count must be busted here explicitly - markAsRead()/
-     * markAsUnread() already do this via their own model methods, but a
-     * delete has no such hook, so this is the one call site that must
-     * remember to do it itself.
+     * Archive a notification (notifications are never deleted). It leaves
+     * the inbox and can be restored from the Archived view.
      */
-    public function destroy(Notification $notification): RedirectResponse
+    public function archive(Notification $notification): RedirectResponse
     {
         if ($notification->user_id !== auth()->id()) {
             abort(403);
         }
 
-        if (! $notification->is_read) {
-            Notification::forgetUnreadCountFor($notification->user_id);
+        $notification->archive();
+
+        return back()->with('success', 'Notification archived.');
+    }
+
+    /** Bring an archived notification back to the inbox. */
+    public function restore(Notification $notification): RedirectResponse
+    {
+        if ($notification->user_id !== auth()->id()) {
+            abort(403);
         }
 
-        $notification->delete();
+        $notification->restore();
 
-        return back()->with('success', 'Notification deleted.');
+        return back()->with('success', 'Notification restored to your inbox.');
+    }
+
+    /** Archive every read notification in the inbox (replaces "clear"). */
+    public function archiveAllRead(): RedirectResponse
+    {
+        $count = auth()->user()->notifications()->notArchived()->where('is_read', true)->update(['archived_at' => now()]);
+
+        return back()->with('success', $count ? "{$count} read notification(s) archived." : 'No read notifications to archive.');
     }
 }

@@ -8,24 +8,28 @@
 
     <!-- Date-Range Filter -->
     <x-card title="Reporting Period" icon="fas fa-calendar-alt" bodyClass="card-body" class="mb-4">
+        {{-- Pick a period, then Apply. From/To only appear for Custom. --}}
         <form method="GET" action="{{ route('manager.dashboard') }}" class="row gy-2 gx-2 align-items-end" id="periodFilterForm">
-            <div class="col-auto">
-                <div class="d-flex flex-wrap gap-1" role="group" aria-label="Reporting period">
-                    <a href="{{ route('manager.dashboard', ['period' => 'daily']) }}" class="btn btn-sm {{ $period === 'daily' ? 'btn-primary' : 'btn-outline-primary' }}">Today</a>
-                    <a href="{{ route('manager.dashboard', ['period' => 'weekly']) }}" class="btn btn-sm {{ $period === 'weekly' ? 'btn-primary' : 'btn-outline-primary' }}">This Week</a>
-                    <a href="{{ route('manager.dashboard', ['period' => 'monthly']) }}" class="btn btn-sm {{ $period === 'monthly' ? 'btn-primary' : 'btn-outline-primary' }}">This Month</a>
-                    <button type="submit" name="period" value="custom" class="btn btn-sm {{ $period === 'custom' ? 'btn-primary' : 'btn-outline-primary' }}">Custom</button>
+            <div class="col-12 col-lg-auto">
+                <div class="btn-group flex-wrap" role="group" aria-label="Reporting period">
+                    @foreach(['daily' => 'Today', 'weekly' => 'This Week', 'monthly' => 'This Month', 'custom' => 'Custom'] as $value => $label)
+                        <input type="radio" class="btn-check" name="period" id="dashPeriod{{ $value }}" value="{{ $value }}" {{ $period === $value ? 'checked' : '' }}>
+                        <label class="btn btn-sm btn-outline-primary" for="dashPeriod{{ $value }}">{{ $label }}</label>
+                    @endforeach
                 </div>
             </div>
-            <div class="col-auto">
-                <label class="form-label mb-0 small text-muted">From</label>
-                <input type="date" name="from" class="form-control form-control-sm" value="{{ $periodFrom->toDateString() }}">
+            <div class="col-6 col-lg-auto {{ $period === 'custom' ? '' : 'd-none' }}" data-custom-only>
+                <label class="form-label mb-0 small text-muted" for="dashFrom">From</label>
+                <input type="date" id="dashFrom" name="from" class="form-control form-control-sm" value="{{ $periodFrom->toDateString() }}">
+            </div>
+            <div class="col-6 col-lg-auto {{ $period === 'custom' ? '' : 'd-none' }}" data-custom-only>
+                <label class="form-label mb-0 small text-muted" for="dashTo">To</label>
+                <input type="date" id="dashTo" name="to" class="form-control form-control-sm" value="{{ $periodTo->toDateString() }}">
             </div>
             <div class="col-auto">
-                <label class="form-label mb-0 small text-muted">To</label>
-                <input type="date" name="to" class="form-control form-control-sm" value="{{ $periodTo->toDateString() }}">
+                <button type="submit" class="btn btn-sm btn-primary"><i class="fas fa-check"></i> Apply</button>
             </div>
-            <div class="col-auto">
+            <div class="col-12 col-lg-auto">
                 <small class="text-muted">Showing {{ $periodFrom->format('M d, Y') }} &ndash; {{ $periodTo->format('M d, Y') }}</small>
             </div>
         </form>
@@ -176,6 +180,13 @@
 </div>
 
 @push('scripts')
+@include('partials.custom-range-toggle')
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const f = document.getElementById('periodFilterForm');
+    if (f) window.bindCustomRangeToggle(f);
+});
+</script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script>
 (function () {

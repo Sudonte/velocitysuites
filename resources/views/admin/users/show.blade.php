@@ -121,7 +121,7 @@
                 <tr>
                     <th>When</th>
                     <th>Action</th>
-                    <th>IP Address</th>
+                    <th>Details</th>
                 </tr>
             </thead>
             <tbody>
@@ -129,7 +129,7 @@
                     <tr>
                         <td>{{ $log->created_at->format('M d, Y h:i A') }}</td>
                         <td>{{ $log->action }}</td>
-                        <td>{{ $log->ip_address }}</td>
+                        <td>{{ $log->description ?: '—' }}</td>
                     </tr>
                 @empty
                     <tr>

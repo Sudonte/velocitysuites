@@ -31,7 +31,7 @@
     </div>
 
     @include('monitoring.partials.tabs-and-filters', ['routeName' => 'admin.reservations.index', 'tab' => $tab, 'tabCounts' => $tabCounts,
-        'filters' => $filters, 'statusOptions' => $statusOptions, 'receptionists' => null])
+        'filters' => $filters, 'statusOptions' => $statusOptions, 'roomTypeOptions' => $roomTypeOptions, 'receptionists' => null])
 
     <x-card :title="$tab === 'bookings' ? 'Bookings' : 'Reservations'" :icon="$tab === 'bookings' ? 'fas fa-credit-card' : 'fas fa-calendar-alt'" bodyClass="monitoring-table-wrap">
         <div class="d-md-none monitoring-card-list">

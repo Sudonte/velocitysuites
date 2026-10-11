@@ -26,7 +26,7 @@ class NotificationController extends Controller
     public function index(Request $request): JsonResponse
     {
         $perPage = min($request->integer('per_page', 20), 200);
-        $paginated = auth()->user()->notifications()->latest()->paginate($perPage);
+        $paginated = auth()->user()->notifications()->notArchived()->latest()->paginate($perPage);
 
         return response()->json(array_merge(
             $paginated->toArray(),

@@ -94,14 +94,14 @@ class GuestDashboardController extends Controller
         ->get();
 
         // Unread notifications count
-        $unreadNotifications = $user->notifications()
+        $unreadNotifications = $user->notifications()->notArchived()
             ->where('is_read', false)
             ->count();
 
         // Recent notifications preview - mirrors the mobile app dashboard's Notifications
         // section (top few, most recent first), which this page previously omitted entirely
         // (only the unread count above was shown, no actual list).
-        $recentNotifications = $user->notifications()->latest()->limit(5)->get();
+        $recentNotifications = $user->notifications()->notArchived()->latest()->limit(5)->get();
 
         // Recent Bookings - reservations already converted into a paid Booking, most recent
         // first - mirrors the mobile app's Recent Bookings section (isHasBooking() == true).
