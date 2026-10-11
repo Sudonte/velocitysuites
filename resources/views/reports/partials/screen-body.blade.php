@@ -18,7 +18,7 @@
         <x-stat-card icon="fas fa-right-left" label="Arrivals / Departures" value="{{ $s['arrivals'] }} / {{ $s['departures'] }}" color="success" />
     </div>
     <div class="col-6 col-lg-3">
-        <x-stat-card icon="fas fa-users" label="In-House Now" value="{{ $s['in_house_rooms'] }} rooms · {{ $s['in_house_guests'] }} guests" color="info" />
+        <x-stat-card icon="fas fa-users" label="In-House Now (rooms / guests)" value="{{ $s['in_house_rooms'] }} / {{ $s['in_house_guests'] }}" color="info" />
     </div>
     <div class="col-6 col-lg-3">
         <x-stat-card icon="fas fa-door-closed" label="Rooms / Out of Order" value="{{ $s['inventory'] }} / {{ $s['out_of_order'] }}" color="secondary" />
@@ -61,7 +61,7 @@
         Other charges = amenities, extra-guest fees and additional charges on stays that checked out in the period. Payments collected = money received in the period (GCash once verified).
     </p>
 
-    <x-card title="Occupancy &amp; Room Revenue by {{ $report['bucketUnit'] }}" icon="fas fa-chart-column" bodyClass="card-body" class="mb-4">
+    <x-card title="Occupancy and Room Revenue by {{ $report['bucketUnit'] }}" icon="fas fa-chart-column" bodyClass="card-body" class="mb-4">
         <div style="height: 280px;"><canvas id="reportOccupancyChart"></canvas></div>
     </x-card>
 
