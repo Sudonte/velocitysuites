@@ -69,7 +69,6 @@ class AdminReportController extends Controller
         $pdf = Pdf::loadView('admin.reports.export-pdf', $data + [
             'periodLabel' => $periodLabel,
             'generatedAt' => now(),
-            'monthlyBreakdown' => $this->stats->monthlyReservationBreakdown(),
         ])->setPaper('a4', 'portrait');
 
         return $pdf->download('Velocity-Suites-Admin-Report_' . now()->format('Y-m-d_His') . '.pdf');

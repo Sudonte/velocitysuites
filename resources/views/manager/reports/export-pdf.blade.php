@@ -25,40 +25,13 @@
             <tr>
                 <td>Total Bookings</td>
                 <td>{{ number_format($totalBookings) }}</td>
-                <td>Reservations converted into a booking</td>
+                <td>Direct (pay-first) bookings with check-in within {{ $periodLabel }}</td>
             </tr>
             <tr>
                 <td>Average Length of Stay</td>
                 <td>{{ number_format($averageStay, 1) }} nights</td>
                 <td>Average across reservations in {{ $periodLabel }}</td>
             </tr>
-            <tr>
-                <td>Occupancy Rate</td>
-                <td>{{ number_format($managerStats['occupancyRate'], 1) }}%</td>
-                <td>Rooms currently occupied vs. total inventory (live snapshot)</td>
-            </tr>
-        </tbody>
-    </table>
-
-    <h2 class="section-title">Reservations &mdash; Last 6 Months</h2>
-    <table class="report-table">
-        <thead>
-            <tr>
-                <th>Month</th>
-                <th class="text-end">Gross Reservations</th>
-                <th class="text-end">Cancellations</th>
-                <th class="text-end">Net Reservations</th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach($monthlyBreakdown as $row)
-                <tr>
-                    <td>{{ $row['label'] }}</td>
-                    <td class="text-end">{{ number_format($row['gross']) }}</td>
-                    <td class="text-end">{{ number_format($row['cancelled']) }}</td>
-                    <td class="text-end">{{ number_format($row['net']) }}</td>
-                </tr>
-            @endforeach
         </tbody>
     </table>
 
