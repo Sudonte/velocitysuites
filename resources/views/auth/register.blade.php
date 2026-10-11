@@ -360,8 +360,8 @@
                 <div class="form-group mb-0">
                     <label for="mobile_number">Mobile Number *</label>
                     <input type="text" class="form-control @error('mobile_number') is-invalid @enderror"
-                           id="mobile_number" name="mobile_number" value="{{ old('mobile_number') }}" placeholder="09XXXXXXXXX" required>
-                    <small class="field-caption" id="mobileFormatHint">09XXXXXXXXX or +639XXXXXXXXX.</small>
+                           id="mobile_number" name="mobile_number" value="{{ old('mobile_number') }}" placeholder="09XXXXXXXXX" required data-phone="ph" data-phone-country="#addrCountry">
+                    <small class="field-caption" id="mobileFormatHint">11 digits, starting with 09.</small>
                     @error('mobile_number')<div class="invalid-feedback d-block">{{ $message }}</div>@enderror
                 </div>
             </div>

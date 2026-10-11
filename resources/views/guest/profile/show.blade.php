@@ -139,8 +139,8 @@
                     </div>
                     <div class="mb-0">
                         <label class="form-label">Mobile Number</label>
-                        <input type="text" name="mobile_number" id="guestMobile" class="form-control @error('mobile_number') is-invalid @enderror" value="{{ old('mobile_number', $guest->mobile_number ?? '') }}" placeholder="09XXXXXXXXX">
-                        <small class="text-muted" id="guestMobileHint">09XXXXXXXXX or +639XXXXXXXXX.</small>
+                        <input type="text" name="mobile_number" id="guestMobile" class="form-control @error('mobile_number') is-invalid @enderror" value="{{ old('mobile_number', $guest->mobile_number ?? '') }}" placeholder="09XXXXXXXXX" data-phone="ph" data-phone-country="#addrCountry">
+                        <small class="text-muted" id="guestMobileHint">11 digits, starting with 09.</small>
                         @error('mobile_number')<div class="invalid-feedback">{{ $message }}</div>@enderror
                     </div>
                 </x-card>

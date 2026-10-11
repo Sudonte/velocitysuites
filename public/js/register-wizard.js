@@ -204,7 +204,7 @@
     var PH_SHAPE = /^(09|\+639|639)\d{9}$/;
 
     var PHONE_FORMAT_HINTS = {
-        'Philippines': '09XXXXXXXXX or +639XXXXXXXXX.',
+        'Philippines': '11 digits, starting with 09.',
         'United States': 'e.g. +12025550123',
         'Canada': 'e.g. +12025550123',
         'United Kingdom': 'e.g. +447911123456',

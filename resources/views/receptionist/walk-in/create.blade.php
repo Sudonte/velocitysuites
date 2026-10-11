@@ -66,7 +66,7 @@
                         </div>
                         <div class="form-group mb-3">
                             <label for="mobile_number"><strong>Mobile Number *</strong></label>
-                            <input type="text" class="form-control" id="mobile_number" name="mobile_number">
+                            <input type="text" class="form-control" id="mobile_number" name="mobile_number" placeholder="09XXXXXXXXX" data-phone="ph">
                         </div>
                         <div class="form-group mb-3">
                             <label for="address"><strong>Address *</strong></label>

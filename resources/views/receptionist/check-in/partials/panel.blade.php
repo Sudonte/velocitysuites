@@ -85,7 +85,9 @@
                 <div class="row g-2 mb-3">
                     <div class="col-md-6">
                         <label class="form-label small mb-1">Contact Number *</label>
-                        <input type="text" name="checkin_contact_number" class="form-control form-control-sm" required
+                        {{-- Same rule as the server: the guest's country decides the format (Philippines = 11 digits, 09...). --}}
+                        <input type="text" name="checkin_contact_number" class="form-control form-control-sm" required placeholder="09XXXXXXXXX"
+                               data-phone="{{ strcasecmp($accountGuest?->country ?? 'Philippines', 'Philippines') === 0 ? 'ph' : 'intl' }}"
                                value="{{ old('checkin_contact_number', $booking->checkin_contact_number ?? $accountGuest?->mobile_number) }}">
                     </div>
                 </div>

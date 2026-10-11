@@ -490,3 +490,97 @@ document.addEventListener('submit', function (event) {
     if (!form.matches || !form.matches('form[data-submit-once]') || event.defaultPrevented) return;
     form.querySelectorAll('button[type="submit"]').forEach(function (btn) { btn.disabled = true; });
 });
+
+
+// Phone number boxes - checked in the box itself while typing, and the form
+// can't be submitted until the number is complete. Mark an input with:
+//   data-phone="ph"     Philippine mobile: digits only, exactly 11, starts with 09
+//   data-phone="gcash"  GCash number after the +63 prefix: exactly 10 digits, starts with 9
+//   data-phone="ph" data-phone-country="#countrySelect"
+//                       follows a country picker: Philippines -> as "ph";
+//                       any other country -> international, "+" and 7-15 digits
+// Matches the server rules (PhoneValidationService / gcash regex). Works for
+// inputs loaded later too (e.g. the Check In panel).
+(function () {
+    const RULES = {
+        ph: { max: 11, re: /^09\d{9}$/, plus: false, hint: 'Enter all 11 digits, starting with 09 (e.g. 09171234567).' },
+        gcash: { max: 10, re: /^9\d{9}$/, plus: false, hint: 'Enter all 10 digits after +63, starting with 9.' },
+        intl: { max: 16, re: /^\+?\d{7,15}$/, plus: true, hint: 'Enter the number with country code (7-15 digits).' },
+    };
+
+    function ruleFor(input) {
+        const sel = input.dataset.phoneCountry;
+        if (sel) {
+            const country = document.querySelector(sel);
+            if (country && country.value && country.value.toLowerCase() !== 'philippines') return RULES.intl;
+        }
+        return RULES[input.dataset.phone] || RULES.ph;
+    }
+
+    function feedback(input) {
+        let fb = input.parentElement.querySelector('.phone-feedback');
+        if (!fb) {
+            fb = document.createElement('div');
+            fb.className = 'phone-feedback small mt-1';
+            input.insertAdjacentElement('afterend', fb);
+        }
+        return fb;
+    }
+
+    function check(input, show) {
+        const rule = ruleFor(input);
+        const value = input.value;
+        const digits = value.replace(/\D/g, '');
+        let message = '';
+        if (value === '') {
+            message = input.required ? 'This field is required.' : '';
+        } else if (!rule.re.test(value)) {
+            message = rule.hint + (rule === RULES.intl ? '' : ' (' + digits.length + '/' + rule.max + ' digits)');
+        }
+        input.setCustomValidity(message);
+        if (!show) return;
+        const fb = feedback(input);
+        const ok = message === '' && value !== '';
+        input.classList.toggle('is-invalid', message !== '');
+        input.classList.toggle('is-valid', ok);
+        fb.className = 'phone-feedback small mt-1 ' + (ok ? 'text-success' : 'text-danger');
+        fb.textContent = ok ? 'Looks good.' : message;
+    }
+
+    function clean(input) {
+        const rule = ruleFor(input);
+        let v = input.value;
+        // A saved +639XXXXXXXXX becomes 09XXXXXXXXX in a Philippine box.
+        if (rule === RULES.ph && /^\+?639\d{9}$/.test(v.replace(/\s/g, ''))) v = '0' + v.replace(/\D/g, '').slice(2);
+        v = rule.plus ? v.replace(/(?!^\+)[^\d]/g, '') : v.replace(/\D/g, '');
+        if (v.length > rule.max) v = v.slice(0, rule.max);
+        if (v !== input.value) input.value = v;
+    }
+
+    function init(input) {
+        if (input.dataset.phoneReady) return;
+        input.dataset.phoneReady = '1';
+        input.setAttribute('inputmode', 'numeric');
+        input.setAttribute('autocomplete', 'tel');
+        input.maxLength = ruleFor(input).max;
+        clean(input);
+        check(input, input.value !== '');
+        input.addEventListener('input', function () { clean(input); check(input, true); });
+        input.addEventListener('blur', function () { check(input, true); });
+        input.addEventListener('invalid', function () { check(input, true); });
+        const sel = input.dataset.phoneCountry && document.querySelector(input.dataset.phoneCountry);
+        if (sel) sel.addEventListener('change', function () { input.maxLength = ruleFor(input).max; clean(input); check(input, input.value !== ''); });
+    }
+
+    function scan(root) {
+        (root.querySelectorAll ? root.querySelectorAll('input[data-phone]') : []).forEach(init);
+        if (root.matches && root.matches('input[data-phone]')) init(root);
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+        scan(document);
+        new MutationObserver(function (records) {
+            records.forEach(function (r) { r.addedNodes.forEach(function (n) { if (n.nodeType === 1) scan(n); }); });
+        }).observe(document.body, { childList: true, subtree: true });
+    });
+})();

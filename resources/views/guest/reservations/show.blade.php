@@ -238,7 +238,7 @@
                         <div class="form-group mb-3">
                             <label>GCash Mobile Number</label>
                             <input type="text" class="form-control @error('gcash_number') is-invalid @enderror"
-                                   name="gcash_number" placeholder="9XXXXXXXXX" maxlength="10"
+                                   name="gcash_number" placeholder="9XXXXXXXXX" maxlength="10" data-phone="gcash"
                                    value="{{ old('gcash_number') }}" required>
                             <small class="text-muted">The GCash number the payment was sent from (10 digits, starting with 9).</small>
                             @error('gcash_number')
