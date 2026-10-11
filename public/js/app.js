@@ -352,9 +352,10 @@ document.addEventListener('DOMContentLoaded', function () {
 // data-confirm="<message>" is held on submit until the user confirms; the
 // confirm button is then disabled so the action can't be sent twice.
 // window.confirmAction({title, message, button, variant}, sourceEl) returns a
-// Promise<boolean> for script-driven actions; when sourceEl sits inside an
-// open modal it shows an inline confirmation bar there instead of stacking a
-// second modal.
+// Promise<boolean> for script-driven actions. When another modal is already
+// open (e.g. the Check In panel), the confirmation opens stacked ON TOP of it -
+// a real floating modal with its own backdrop - and closing it returns to the
+// panel underneath.
 (function () {
     let pendingForm = null;
     let pendingSubmitter = null;
@@ -369,6 +370,9 @@ document.addEventListener('DOMContentLoaded', function () {
         };
     }
 
+    // The modal that was open underneath while the confirmation is stacked on top of it.
+    let hostModalEl = null;
+
     function showModal(opts) {
         const m = modalParts();
         m.title.textContent = opts.title || 'Please confirm';
@@ -376,46 +380,25 @@ document.addEventListener('DOMContentLoaded', function () {
         m.button.textContent = opts.button || 'Confirm';
         m.button.className = 'btn btn-' + (opts.variant || 'primary');
         m.button.disabled = false;
+
+        hostModalEl = document.querySelector('.modal.show:not(#globalConfirmModal)');
+        m.el.classList.toggle('confirm-stacked', !!hostModalEl);
+        if (hostModalEl) {
+            // The host modal's focus trap would pull focus back out of the confirmation.
+            const host = bootstrap.Modal.getInstance(hostModalEl);
+            if (host && host._focustrap) host._focustrap.deactivate();
+        }
         bootstrap.Modal.getOrCreateInstance(m.el).show();
     }
 
-    function inlineConfirm(container, opts) {
-        return new Promise(function (resolve) {
-            container.querySelectorAll('.inline-confirm').forEach(function (old) { old.remove(); });
-            const bar = document.createElement('div');
-            bar.className = 'alert alert-warning d-flex flex-wrap align-items-center gap-2 inline-confirm';
-            bar.setAttribute('role', 'alertdialog');
-            const text = document.createElement('div');
-            text.className = 'flex-grow-1';
-            const strong = document.createElement('strong');
-            strong.className = 'd-block';
-            strong.textContent = opts.title || 'Please confirm';
-            const msg = document.createElement('span');
-            msg.className = 'small';
-            msg.textContent = opts.message || '';
-            text.append(strong, msg);
-            const cancel = document.createElement('button');
-            cancel.type = 'button';
-            cancel.className = 'btn btn-sm btn-outline-secondary';
-            cancel.textContent = 'Cancel';
-            const ok = document.createElement('button');
-            ok.type = 'button';
-            ok.className = 'btn btn-sm btn-' + (opts.variant || 'primary');
-            ok.textContent = opts.button || 'Confirm';
-            bar.append(text, cancel, ok);
-            container.prepend(bar);
-            bar.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-            ok.focus();
-            cancel.addEventListener('click', function () { bar.remove(); resolve(false); });
-            ok.addEventListener('click', function () { bar.remove(); resolve(true); });
-        });
-    }
+    document.addEventListener('shown.bs.modal', function (event) {
+        if (event.target.id !== 'globalConfirmModal' || !hostModalEl) return;
+        // Bootstrap appends one backdrop per modal - lift the newest above the host modal.
+        const backdrops = document.querySelectorAll('.modal-backdrop');
+        if (backdrops.length) backdrops[backdrops.length - 1].classList.add('confirm-stacked-backdrop');
+    });
 
     window.confirmAction = function (opts, sourceEl) {
-        const inModal = sourceEl && sourceEl.closest ? sourceEl.closest('.modal.show .modal-content') : null;
-        if (inModal) {
-            return inlineConfirm(inModal.querySelector('.modal-body') || inModal, opts);
-        }
         const m = modalParts();
         if (!m.el || !window.bootstrap) {
             return Promise.resolve(window.confirm(opts.message || opts.title || 'Are you sure?'));
@@ -444,21 +427,6 @@ document.addEventListener('DOMContentLoaded', function () {
             button: form.dataset.confirmButton,
             variant: form.dataset.confirmVariant,
         };
-        const hostModal = form.closest('.modal.show .modal-content');
-        if (hostModal) {
-            const submitter = event.submitter || null;
-            // While the confirm bar is up, the button that opened it is disabled - pressing it again
-            // used to just redraw the bar, which read as the modal glitching.
-            if (submitter) submitter.disabled = true;
-            inlineConfirm(hostModal.querySelector('.modal-body') || hostModal, opts).then(function (ok) {
-                if (submitter) submitter.disabled = false;
-                if (!ok) return;
-                form.dataset.confirmGranted = '1';
-                submitter ? form.requestSubmit(submitter) : form.requestSubmit();
-            });
-            return;
-        }
-
         pendingResolve = null;
         pendingForm = form;
         pendingSubmitter = event.submitter || null;
@@ -472,6 +440,14 @@ document.addEventListener('DOMContentLoaded', function () {
 
     document.addEventListener('hidden.bs.modal', function (event) {
         if (event.target.id !== 'globalConfirmModal') return;
+        event.target.classList.remove('confirm-stacked');
+        if (hostModalEl && hostModalEl.classList.contains('show')) {
+            // Closing the stacked confirmation must leave the host modal fully working.
+            document.body.classList.add('modal-open');
+            const host = bootstrap.Modal.getInstance(hostModalEl);
+            if (host && host._focustrap) host._focustrap.activate();
+        }
+        hostModalEl = null;
         if (pendingResolve) {
             pendingResolve(false);
             pendingResolve = null;

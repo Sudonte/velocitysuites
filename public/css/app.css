@@ -1810,3 +1810,7 @@ td.table-actions > * + * { margin-left: 0.25rem; }
 .btn-icon.btn-sm { width: 2rem; height: 2rem; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
 .btn-icon i { margin: 0; }
 td.table-actions .btn-icon, .d-flex > .btn-icon { flex-shrink: 0; }
+
+/* Global confirm modal stacked on top of another open modal (e.g. the Check In panel). */
+#globalConfirmModal.confirm-stacked { z-index: 1080; }
+.modal-backdrop.confirm-stacked-backdrop { z-index: 1075; }
