@@ -761,7 +761,73 @@ class ReservationWorkflowService
             ->where('status', 'pending')
             ->update(['status' => 'approved']);
 
+        $this->cancelReservationsThatNoLongerFit($reservation, $booking);
+
         return $booking;
+    }
+
+    /**
+     * A conversion can take the last room of a type for some dates: every
+     * other reservation still awaiting payment for that type and those dates
+     * that no longer fits is cancelled automatically (reservations only -
+     * bookings, no-shows and other cancellations stay manual). Reservations
+     * that still fit are left alone. Uses RoomAvailabilityService::
+     * availableCount(), the same check conversion itself uses.
+     *
+     * @return int number of reservations cancelled
+     */
+    public function cancelReservationsThatNoLongerFit(Reservation $converted, Booking $booking): int
+    {
+        $lines = $converted->roomLines()->get();
+        $typeIds = $lines->isNotEmpty() ? $lines->pluck('room_type_id')->unique()->all() : [$converted->room_type_id];
+
+        $candidates = Reservation::with(['roomType', 'guest.user'])
+            ->whereKeyNot($converted->id)
+            ->whereIn('status', Reservation::AWAITING_STATUSES)
+            ->doesntHave('booking')
+            ->where('check_in', '<', $booking->check_out)
+            ->where('check_out', '>', $booking->check_in)
+            ->where(fn ($q) => $q->whereIn('room_type_id', $typeIds)
+                ->orWhereHas('roomLines', fn ($l) => $l->whereIn('room_type_id', $typeIds)))
+            ->get();
+
+        $cancelled = 0;
+        foreach ($candidates as $candidate) {
+            // roomLines() relation, not ->roomLines (that's the JSON array accessor).
+            $candidateLines = $candidate->roomLines()->get();
+            $needs = $candidateLines->isNotEmpty()
+                ? $candidateLines->map(fn ($l) => [$l->room_type_id, (int) $l->quantity])->all()
+                : [[$candidate->room_type_id, max(1, (int) $candidate->rooms_requested)]];
+
+            $fits = true;
+            foreach ($needs as [$typeId, $quantity]) {
+                $type = \App\Models\RoomType::find($typeId);
+                if ($type && $this->availability->availableCount($type, $candidate->check_in, $candidate->check_out) < $quantity) {
+                    $fits = false;
+                    break;
+                }
+            }
+            if ($fits) {
+                continue;
+            }
+
+            $roomName = $candidate->roomType->name ?? 'the room type';
+            $candidate->update([
+                'status' => Reservation::STATUS_CANCELLED,
+                'rejection_reason' => "{$roomName} is fully booked for these dates.",
+            ]);
+            $candidate->payments()->where('payment_status', 'pending')->update(['payment_status' => 'failed']);
+
+            \App\Support\Activity::log(
+                'Auto-cancelled reservation (room type full)',
+                "Reservation #{$candidate->id} - {$candidate->guest_display_name} - {$roomName} fully booked {$candidate->check_in->format('M d')}-{$candidate->check_out->format('M d, Y')} after Booking #{$booking->id}",
+                $candidate
+            );
+            $this->notifications->notifyReservationUnavailable($candidate->guest?->user, $candidate->guest_display_name, $roomName, $candidate->id);
+            $cancelled++;
+        }
+
+        return $cancelled;
     }
 
     /**

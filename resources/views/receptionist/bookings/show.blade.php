@@ -428,33 +428,32 @@
                 <x-card title="Booking Rejected / Failed" icon="fas fa-ban" bodyClass="card-body">
                     <p class="mb-3">
                         @if($booking->rejection_reason)
-                            This booking was rejected: {{ $booking->rejection_reason }}
+                            This booking was cancelled: {{ $booking->rejection_reason }}
                         @elseif($gcashPayment && $gcashPayment->isRejected())
                             This booking was cancelled because its GCash payment was rejected{{ $gcashPayment->rejection_reason ? ' - ' . $gcashPayment->rejection_reason : '' }}.
                         @else
                             This booking has been cancelled.
                         @endif
                     </p>
-                    @if($booking->hidden_at)
-                        <p class="text-muted small mb-3"><i class="fas fa-box-archive"></i> Archived {{ $booking->hidden_at->format('M d, Y h:i A') }}</p>
+                    @if($booking->statusChangedBy)
+                        <p class="text-muted small mb-2"><i class="fas fa-user"></i> Cancelled by {{ $booking->statusChangedBy->full_name }}{{ $booking->cancelled_at ? ' on ' . $booking->cancelled_at->format('M d, Y h:i A') : '' }}</p>
                     @endif
-                    <div class="d-flex gap-2">
-                        @unless($booking->hidden_at)
-                            <form action="{{ route('receptionist.bookings.archive', $booking) }}" method="POST">
-                                @csrf
-                                @method('PUT')
-                                <button type="submit" class="btn btn-outline-secondary">
-                                    <i class="fas fa-box-archive"></i> Archive
-                                </button>
-                            </form>
-                        @endunless
-                        <form action="{{ route('receptionist.bookings.destroy', $booking) }}" method="POST" data-confirm="It will no longer appear anywhere in the Bookings module." data-confirm-title="Delete this booking?" data-confirm-button="Delete" data-confirm-variant="danger">
+                    @include('receptionist.bookings.partials.archive-toggle', ['booking' => $booking])
+                </x-card>
+            @elseif($booking->booking_status === \App\Models\Booking::STATUS_NO_SHOW)
+                <x-card title="No-Show" icon="fas fa-user-slash" bodyClass="card-body">
+                    <p class="mb-2">The guest didn't check in, so this booking was marked as a no-show{{ $booking->rejection_reason ? ': ' . $booking->rejection_reason : '.' }}</p>
+                    <p class="text-muted small mb-3">
+                        <i class="fas fa-user"></i> Marked by {{ $booking->statusChangedBy?->full_name ?? 'staff' }}{{ $booking->no_show_at ? ' on ' . $booking->no_show_at->format('M d, Y h:i A') : '' }}
+                    </p>
+                    <div class="d-flex flex-wrap gap-2">
+                        <form action="{{ route('receptionist.bookings.undo-no-show', $booking) }}" method="POST"
+                              data-confirm="The booking goes back to Confirmed (only if the room type still has space for these dates)." data-confirm-title="Undo no-show?" data-confirm-button="Undo No-Show" data-confirm-variant="warning">
                             @csrf
-                            @method('DELETE')
-                            <button type="submit" class="btn btn-outline-danger">
-                                <i class="fas fa-trash"></i> Delete
-                            </button>
+                            @method('PUT')
+                            <button type="submit" class="btn btn-outline-warning"><i class="fas fa-rotate-left"></i> Undo No-Show</button>
                         </form>
+                        @include('receptionist.bookings.partials.archive-toggle', ['booking' => $booking])
                     </div>
                 </x-card>
             @elseif(!$booking->verified_at)
@@ -501,17 +500,46 @@
                         verification, assignment, or other changes can be made.
                     </p>
                     <p class="text-muted small mb-3"><i class="fas fa-box-archive"></i> Archived {{ $booking->hidden_at->format('M d, Y h:i A') }}</p>
-                    <form action="{{ route('receptionist.bookings.destroy', $booking) }}" method="POST" data-confirm="It will no longer appear anywhere in the Bookings module." data-confirm-title="Delete this booking?" data-confirm-button="Delete" data-confirm-variant="danger">
-                        @csrf
-                        @method('DELETE')
-                        <button type="submit" class="btn btn-outline-danger">
-                            <i class="fas fa-trash"></i> Delete
-                        </button>
-                    </form>
+                    @include('receptionist.bookings.partials.archive-toggle', ['booking' => $booking])
                 </x-card>
             @else
-                <x-card title="Completed Booking" icon="fas fa-check-circle" bodyClass="card-body">
-                    <p class="mb-3">This booking has been verified and completed.</p>
+                <x-card title="Confirmed Booking" icon="fas fa-check-circle" bodyClass="card-body">
+                    <p class="mb-3">This booking has been verified.</p>
+                    @if($booking->booking_status === \App\Models\Booking::STATUS_ACTIVE)
+                        {{-- Set by hand only - nothing marks a no-show or cancels automatically. --}}
+                        <div class="d-flex flex-wrap gap-2 mb-3">
+                            @if($booking->check_in->startOfDay()->lte(today()))
+                                <button type="button" class="btn btn-outline-dark" data-bs-toggle="collapse" data-bs-target="#noShowForm" aria-expanded="false">
+                                    <i class="fas fa-user-slash"></i> Mark as No-Show
+                                </button>
+                            @endif
+                            <button type="button" class="btn btn-outline-danger" data-bs-toggle="collapse" data-bs-target="#cancelBookingForm" aria-expanded="false">
+                                <i class="fas fa-ban"></i> Cancel Booking
+                            </button>
+                        </div>
+                        @if($booking->check_in->startOfDay()->lte(today()))
+                            <div class="collapse mb-3" id="noShowForm">
+                                <form action="{{ route('receptionist.bookings.no-show', $booking) }}" method="POST"
+                                      data-confirm="The room is released. You can undo this if it was a mistake." data-confirm-title="Mark booking #{{ $booking->id }} as a no-show?" data-confirm-button="Mark as No-Show" data-confirm-variant="dark">
+                                    @csrf
+                                    @method('PUT')
+                                    <label for="noShowReason" class="form-label">Reason (optional)</label>
+                                    <textarea name="reason" id="noShowReason" class="form-control mb-2" rows="2" maxlength="500" placeholder="e.g. Guest didn't arrive and couldn't be reached"></textarea>
+                                    <button type="submit" class="btn btn-dark"><i class="fas fa-user-slash"></i> Confirm No-Show</button>
+                                </form>
+                            </div>
+                        @endif
+                        <div class="collapse mb-3" id="cancelBookingForm">
+                            <form action="{{ route('receptionist.bookings.cancel', $booking) }}" method="POST"
+                                  data-confirm="The guest is notified and the room is released." data-confirm-title="Cancel booking #{{ $booking->id }}?" data-confirm-button="Cancel Booking" data-confirm-variant="danger">
+                                @csrf
+                                @method('PUT')
+                                <label for="cancelReason" class="form-label">Reason (optional)</label>
+                                <textarea name="reason" id="cancelReason" class="form-control mb-2" rows="2" maxlength="500" placeholder="e.g. Guest called to cancel"></textarea>
+                                <button type="submit" class="btn btn-danger"><i class="fas fa-ban"></i> Confirm Cancellation</button>
+                            </form>
+                        </div>
+                    @endif
                     <form action="{{ route('receptionist.bookings.archive', $booking) }}" method="POST" data-confirm="It will move to the Archived list." data-confirm-title="Archive this completed booking?" data-confirm-button="Archive Booking" data-confirm-variant="secondary">
                         @csrf
                         @method('PUT')

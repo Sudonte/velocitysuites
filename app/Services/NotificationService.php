@@ -249,6 +249,25 @@ class NotificationService
      * receptionist never see a Booking mislabeled as a Reservation, per
      * the spec's Booking-vs-Reservation notification distinction.
      */
+    /** A reservation was auto-cancelled because its room type filled up for its dates. */
+    public function notifyReservationUnavailable(?User $guest, string $guestName, string $roomName, ?int $referenceId = null): void
+    {
+        if ($guest) {
+            $this->toUser($guest, 'Reservation Cancelled - Fully Booked', "Sorry - {$roomName} is now fully booked for your dates, so your reservation was cancelled. Please choose other dates or another room type.", 'reservation', $referenceId);
+        }
+        $this->toRole('receptionist', 'Reservation Auto-Cancelled', "{$guestName}'s reservation for {$roomName} was cancelled because the room type is now fully booked for those dates.", 'reservation', null, $referenceId);
+    }
+
+    /** A receptionist marked the stay as a no-show: tell the guest (if they have an account) and the staff. */
+    public function notifyBookingNoShow(?User $guest, string $guestName, string $roomName, ?int $referenceId = null): void
+    {
+        if ($guest) {
+            $this->toUser($guest, 'Marked as No-Show', "Your booking for {$roomName} was marked as a no-show because you didn't check in. Please contact the front desk if this is a mistake.", 'booking', $referenceId);
+        }
+        $this->toRole('receptionist', 'Booking No-Show', "{$guestName}'s booking for {$roomName} was marked as a no-show.", 'booking', null, $referenceId);
+        $this->toRole('manager', 'Booking No-Show', "{$guestName}'s booking for {$roomName} was marked as a no-show.", 'booking', null, $referenceId);
+    }
+
     public function notifyBookingCancelled(User $guest, string $roomName, ?int $referenceId = null): void
     {
         $this->toUser(

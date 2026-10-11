@@ -306,11 +306,13 @@ Route::middleware(['auth', 'account.status', 'log.activity', 'no.cache'])->group
         // this exists separately from /billing/{billing}/payment (that one
         // needs a Billing row, which doesn't exist until checkout).
         Route::post('/bookings/{booking}/record-payment', [ReceptionistBookingController::class, 'recordPayment'])->name('bookings.record-payment');
-        // Archive/Delete: only ever offered for a rejected/failed (cancelled)
-        // booking - see BookingController::archive()/destroy(). Delete is a
-        // soft delete (bookings.deleted_at), never a hard DELETE.
+        // Archive / Restore - nothing is deleted.
         Route::put('/bookings/{booking}/archive', [ReceptionistBookingController::class, 'archive'])->name('bookings.archive');
-        Route::delete('/bookings/{booking}', [ReceptionistBookingController::class, 'destroy'])->name('bookings.destroy');
+        Route::put('/bookings/{booking}/restore', [ReceptionistBookingController::class, 'restore'])->name('bookings.restore');
+        // No-show / cancel are set by hand by a receptionist (never automatically).
+        Route::put('/bookings/{booking}/no-show', [ReceptionistBookingController::class, 'markNoShow'])->name('bookings.no-show');
+        Route::put('/bookings/{booking}/undo-no-show', [ReceptionistBookingController::class, 'undoNoShow'])->name('bookings.undo-no-show');
+        Route::put('/bookings/{booking}/cancel', [ReceptionistBookingController::class, 'cancel'])->name('bookings.cancel');
 
         // Payment Module: payment-level verify/reject (separate from the
         // reservation-level/booking-level verified_at gates above) - acts

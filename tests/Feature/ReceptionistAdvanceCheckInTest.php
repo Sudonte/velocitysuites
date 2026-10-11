@@ -9,8 +9,9 @@ use App\Support\CheckInWindow;
 
 /**
  * Policy: the 48-hour advance check-in rule (App\Support\CheckInWindow) applies to everyone who creates a booking /
- * reservation or changes its dates - receptionist front-desk and walk-in forms included. It never limits the
- * receptionist's Check In action for a guest arriving on an existing booking's date.
+ * reservation ahead of time or changes its dates - the receptionist's Create Booking / Create Reservation forms
+ * included. Walk-in Check-in (a guest at the desk, checked in today) and the Check In action for an existing
+ * booking are not limited by it.
  */
 class ReceptionistAdvanceCheckInTest extends ApiFlowTestCase
 {
@@ -69,7 +70,7 @@ class ReceptionistAdvanceCheckInTest extends ApiFlowTestCase
         $this->assertSame(1, Reservation::count());
     }
 
-    public function test_walk_in_checkin_form_that_always_starts_today_is_rejected(): void
+    public function test_walk_in_checkin_creates_a_booking_for_today(): void
     {
         $rt = $this->makeRoomTypeWithRooms('Deluxe', 1000, 2, 2);
 
@@ -78,9 +79,10 @@ class ReceptionistAdvanceCheckInTest extends ApiFlowTestCase
             'room_type_id' => $rt->id, 'rooms_requested' => 1,
             'check_out' => $this->today()->addDays(3)->toDateString(),
             'adults' => 1, 'children' => 0,
-        ])->assertSessionHasErrors(['check_in' => CheckInWindow::notice()]);
+        ])->assertSessionHasNoErrors()->assertRedirect();
 
-        $this->assertSame(0, Booking::count());
+        $this->assertSame(1, Booking::count());
+        $this->assertSame(\Carbon\Carbon::today()->toDateString(), Booking::first()->check_in->toDateString());
     }
 
     public function test_the_receptionist_forms_show_the_note_and_disable_dates_before_the_earliest(): void

@@ -76,7 +76,7 @@ class BookingController extends Controller
         match ($tab) {
             'pending' => $query->where('booking_status', Booking::STATUS_ACTIVE)->whereNull('verified_at'),
             'verified' => $query->where('booking_status', Booking::STATUS_ACTIVE)->whereNotNull('verified_at')->whereNull('hidden_at'),
-            'rejected' => $query->where('booking_status', Booking::STATUS_CANCELLED)->whereNull('hidden_at'),
+            'rejected' => $query->whereIn('booking_status', [Booking::STATUS_CANCELLED, Booking::STATUS_NO_SHOW])->whereNull('hidden_at'),
             'archived' => $query->whereNotNull('hidden_at'),
         };
 
@@ -102,7 +102,7 @@ class BookingController extends Controller
 
         $pendingCount = Booking::where('booking_status', Booking::STATUS_ACTIVE)->whereNull('verified_at')->count();
         $verifiedCount = Booking::where('booking_status', Booking::STATUS_ACTIVE)->whereNotNull('verified_at')->whereNull('hidden_at')->count();
-        $rejectedCount = Booking::where('booking_status', Booking::STATUS_CANCELLED)->whereNull('hidden_at')->count();
+        $rejectedCount = Booking::whereIn('booking_status', [Booking::STATUS_CANCELLED, Booking::STATUS_NO_SHOW])->whereNull('hidden_at')->count();
 
         return view('receptionist.bookings.index', compact(
             'bookings', 'tab', 'pendingCount', 'verifiedCount', 'rejectedCount'
@@ -555,7 +555,10 @@ class BookingController extends Controller
         $previousStatus = $booking->booking_status;
 
         $idRejected = DB::transaction(function () use ($booking, $validated) {
-            $booking->update(['booking_status' => Booking::STATUS_CANCELLED, 'rejection_reason' => $validated['reason']]);
+            $booking->update([
+                'booking_status' => Booking::STATUS_CANCELLED, 'rejection_reason' => $validated['reason'],
+                'cancelled_at' => now(), 'status_changed_by' => auth()->id(),
+            ]);
 
             $booking->allPayments()
                 ->where('payment_status', 'pending')
@@ -625,7 +628,7 @@ class BookingController extends Controller
     private function isArchivable(Booking $booking): bool
     {
         $isCompleted = $booking->booking_status === Booking::STATUS_ACTIVE && $booking->verified_at !== null;
-        $isCancelled = $booking->booking_status === Booking::STATUS_CANCELLED;
+        $isCancelled = in_array($booking->booking_status, [Booking::STATUS_CANCELLED, Booking::STATUS_NO_SHOW], true);
 
         return $isCompleted || $isCancelled;
     }
@@ -653,30 +656,84 @@ class BookingController extends Controller
         return back()->with('success', 'Booking archived.');
     }
 
-    /**
-     * Soft-deletes a completed or rejected/failed booking - never a hard
-     * DELETE (see the deleted_at migration and every other "No hard
-     * delete" comment in routes/web.php); the row and its reservation/
-     * payment history stay intact for accounting/audit, just excluded
-     * from every default query (including this controller's own tabs)
-     * from here on. Works whether or not the booking was archived first -
-     * in practice this is only ever offered from the Archived List, per
-     * isArchivable()'s same end-state gate.
-     */
-    public function destroy(Booking $booking): RedirectResponse
+    /** Bring an archived booking back to its tab - archiving is reversible, nothing is deleted. */
+    public function restore(Booking $booking): RedirectResponse
     {
-        abort_unless($this->isArchivable($booking), 422, 'Only a completed, rejected, or failed booking can be deleted.');
+        abort_if($booking->hidden_at === null, 422, 'This booking is not archived.');
 
-        $booking->loadMissing(['reservation.guest.user', 'guest.user']);
-        Activity::log(
-            'Deleted booking',
-            "Booking #{$booking->id} - {$booking->guest_display_name}",
-            $booking
-        );
+        $booking->update(['hidden_at' => null]);
+        Activity::log('Restored booking', "Booking #{$booking->id} - {$booking->guest_display_name}", $booking);
 
-        $booking->delete();
+        return back()->with('success', 'Booking restored from the archive.');
+    }
 
-        return back()->with('success', 'Booking deleted.');
+    /**
+     * Mark a confirmed booking whose guest never arrived as a No-Show. Set by
+     * hand only (never automatically), on or after the check-in day. The room
+     * hold is released (availability only counts confirmed / in-house stays).
+     */
+    public function markNoShow(Request $request, Booking $booking): RedirectResponse
+    {
+        abort_unless($booking->booking_status === Booking::STATUS_ACTIVE, 422, 'Only a confirmed booking that has not checked in can be marked as a no-show.');
+        abort_if($booking->check_in->startOfDay()->gt(today()), 422, 'A booking can only be marked as a no-show on or after its check-in date.');
+        $validated = $request->validate(['reason' => 'nullable|string|max:500']);
+
+        $booking->update([
+            'booking_status' => Booking::STATUS_NO_SHOW,
+            'no_show_at' => now(),
+            'status_changed_by' => auth()->id(),
+            'rejection_reason' => $validated['reason'] ?? null,
+        ]);
+
+        $booking->loadMissing(['reservation.guest.user', 'guest.user', 'roomType']);
+        Activity::log('Marked booking as no-show', "Booking #{$booking->id} - {$booking->guest_display_name}" . (! empty($validated['reason']) ? " - {$validated['reason']}" : ''), $booking);
+        $this->notifications->notifyBookingNoShow($booking->account_guest?->user, $booking->guest_display_name, $booking->roomType->name ?? 'their stay', $booking->reservation_id ?? $booking->id);
+
+        return back()->with('success', 'Booking marked as a no-show.');
+    }
+
+    /** Correct a no-show marked by mistake - back to confirmed, if the room type still has space. */
+    public function undoNoShow(Booking $booking): RedirectResponse
+    {
+        abort_unless($booking->booking_status === Booking::STATUS_NO_SHOW, 422, 'This booking is not marked as a no-show.');
+
+        if ($booking->roomType && $this->availability->availableCount($booking->roomType, $booking->check_in, $booking->check_out, $booking->id) < max(1, (int) $booking->rooms_requested)) {
+            return back()->with('error', 'The room type is fully booked for these dates now, so this booking can\'t be restored.');
+        }
+
+        $booking->update(['booking_status' => Booking::STATUS_ACTIVE, 'no_show_at' => null, 'rejection_reason' => null, 'status_changed_by' => auth()->id(), 'hidden_at' => null]);
+        Activity::log('Undid no-show', "Booking #{$booking->id} - {$booking->guest_display_name} - back to confirmed", $booking);
+
+        return back()->with('success', 'No-show undone - the booking is confirmed again.');
+    }
+
+    /**
+     * Cancel a confirmed booking (e.g. the guest called to cancel) - the
+     * receptionist counterpart of reject() for an already-verified booking.
+     * Optional reason; pending payments fail; the reservation it came from is
+     * cancelled with it.
+     */
+    public function cancel(Request $request, Booking $booking): RedirectResponse
+    {
+        abort_unless($booking->booking_status === Booking::STATUS_ACTIVE, 422, 'Only a confirmed booking that has not checked in can be cancelled.');
+        $validated = $request->validate(['reason' => 'nullable|string|max:500']);
+
+        DB::transaction(function () use ($booking, $validated) {
+            $booking->update([
+                'booking_status' => Booking::STATUS_CANCELLED, 'rejection_reason' => $validated['reason'] ?? null,
+                'cancelled_at' => now(), 'status_changed_by' => auth()->id(),
+            ]);
+            $booking->allPayments()->where('payment_status', 'pending')->each(fn ($payment) => $payment->update(['payment_status' => 'failed']));
+            $booking->reservation?->update(['status' => \App\Models\Reservation::STATUS_CANCELLED]);
+        });
+
+        $booking->loadMissing(['reservation.guest.user', 'guest.user', 'roomType']);
+        Activity::log('Cancelled booking', "Booking #{$booking->id} - {$booking->guest_display_name}" . (! empty($validated['reason']) ? " - {$validated['reason']}" : ''), $booking);
+        if ($guest = $booking->account_guest?->user) {
+            $this->notifications->notifyBookingCancelled($guest, $booking->roomType->name ?? 'your stay', $booking->reservation_id ?? $booking->id);
+        }
+
+        return back()->with('success', 'Booking cancelled.');
     }
 
     /**

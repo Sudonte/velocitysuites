@@ -28,10 +28,8 @@
                     </div>
                 @endif
 
-                <div class="alert alert-warning small">
-                    <i class="fas fa-exclamation-triangle"></i> Same-day walk-ins can't be created from this form: every booking must start at least
-                    {{ \App\Support\CheckInWindow::MIN_DAYS_AHEAD }} days ({{ \App\Support\CheckInWindow::MIN_DAYS_AHEAD * 24 }} hours) from today.
-                    Use Create Booking or Create Reservation with a check-in of {{ \App\Support\CheckInWindow::earliestLabel() }} or later.
+                <div class="alert alert-info small">
+                    <i class="fas fa-info-circle"></i> For a guest checking in <strong>today</strong> without a booking. Next you assign rooms and complete the check-in.
                     To check in a guest who already has a booking, use the Expected Check-ins list.
                 </div>
                 <form action="{{ route('receptionist.check-in.walk-in.store') }}" method="POST" data-confirm="Next you will assign rooms and complete the check-in." data-confirm-title="Create this walk-in booking?" data-confirm-button="Create Walk-in" data-confirm-variant="success" data-guest-capacity>

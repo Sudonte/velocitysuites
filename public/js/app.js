@@ -447,10 +447,13 @@ document.addEventListener('DOMContentLoaded', function () {
         const hostModal = form.closest('.modal.show .modal-content');
         if (hostModal) {
             const submitter = event.submitter || null;
+            // While the confirm bar is up, the button that opened it is disabled - pressing it again
+            // used to just redraw the bar, which read as the modal glitching.
+            if (submitter) submitter.disabled = true;
             inlineConfirm(hostModal.querySelector('.modal-body') || hostModal, opts).then(function (ok) {
+                if (submitter) submitter.disabled = false;
                 if (!ok) return;
                 form.dataset.confirmGranted = '1';
-                if (submitter) submitter.disabled = false;
                 submitter ? form.requestSubmit(submitter) : form.requestSubmit();
             });
             return;

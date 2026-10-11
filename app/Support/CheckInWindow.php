@@ -13,9 +13,10 @@ use Carbon\Carbon;
  *   - there is no upper limit on check-in;
  *   - check-out must be at least 1 day after check-in.
  *
- * The rule applies to everyone who creates a booking or reservation or changes its dates - guests (web and mobile
- * API) and receptionist front-desk / walk-in forms alike; there is no staff exemption. It does NOT limit the
- * receptionist's Check In action for a guest arriving on an existing booking's date.
+ * The rule applies to everyone who creates a booking or reservation ahead of time or changes its dates - guests
+ * (web and mobile API) and the receptionist's Create Booking / Create Reservation forms alike. It does NOT apply to
+ * Walk-in Check-in (a guest at the desk is checked in today) or to the receptionist's Check In action for a guest
+ * arriving on an existing booking's date.
  */
 class CheckInWindow
 {

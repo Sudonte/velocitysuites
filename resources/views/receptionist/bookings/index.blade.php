@@ -40,7 +40,7 @@
         </li>
         <li class="nav-item">
             <a class="nav-link text-nowrap {{ $tab === 'rejected' ? 'active' : '' }}" href="{{ route('receptionist.bookings.index', ['tab' => 'rejected']) }}">
-                Rejected / Failed <span class="badge bg-danger">{{ $rejectedCount }}</span>
+                Cancelled / No-Show <span class="badge bg-danger">{{ $rejectedCount }}</span>
             </a>
         </li>
         {{-- No "Archived" tab here anymore - reach it from the account
@@ -87,7 +87,7 @@
         $cardTitles = [
             'pending' => 'Bookings Pending Verification',
             'verified' => 'Confirmed Bookings',
-            'rejected' => 'Rejected / Failed Bookings',
+            'rejected' => 'Cancelled / No-Show Bookings',
             'archived' => 'Archived Bookings',
         ];
     @endphp
@@ -174,12 +174,12 @@
                                     <i class="fas fa-box-archive"></i></button>
                             </form>
                         @endif
-                        @if($tab === 'rejected' || $tab === 'archived')
-                            <form action="{{ route('receptionist.bookings.destroy', $booking) }}" method="POST" class="flex-fill" data-confirm="It will no longer appear anywhere in the Bookings module." data-confirm-title="Delete this booking?" data-confirm-button="Delete" data-confirm-variant="danger">
+                        @if($tab === 'archived')
+                            <form action="{{ route('receptionist.bookings.restore', $booking) }}" method="POST" class="flex-fill">
                                 @csrf
-                                @method('DELETE')
-                                <button type="submit" class="btn btn-outline-danger btn-sm w-100 btn-icon" title="Delete" aria-label="Delete">
-                                    <i class="fas fa-trash"></i></button>
+                                @method('PUT')
+                                <button type="submit" class="btn btn-outline-success btn-sm w-100 btn-icon" title="Restore" aria-label="Restore">
+                                    <i class="fas fa-box-open"></i></button>
                             </form>
                         @endif
                     </div>
@@ -187,7 +187,7 @@
             @empty
                 <x-empty-state icon="fas fa-calendar-check" :message="match($tab) {
                     'verified' => 'No confirmed bookings yet.',
-                    'rejected' => 'No rejected or failed bookings right now.',
+                    'rejected' => 'No cancelled or no-show bookings right now.',
                     'archived' => 'No archived bookings.',
                     default => 'No bookings pending verification.',
                 }" />
@@ -306,18 +306,12 @@
                                     <button type="submit" class="btn btn-outline-secondary btn-sm btn-icon" title="Archive" aria-label="Archive">
                                         <i class="fas fa-box-archive"></i></button>
                                 </form>
-                                <form action="{{ route('receptionist.bookings.destroy', $booking) }}" method="POST" class="d-inline" data-confirm="It will no longer appear anywhere in the Bookings module." data-confirm-title="Delete this booking?" data-confirm-button="Delete" data-confirm-variant="danger">
-                                    @csrf
-                                    @method('DELETE')
-                                    <button type="submit" class="btn btn-outline-danger btn-sm btn-icon" title="Delete" aria-label="Delete">
-                                        <i class="fas fa-trash"></i></button>
-                                </form>
                             @elseif($tab === 'archived')
-                                <form action="{{ route('receptionist.bookings.destroy', $booking) }}" method="POST" class="d-inline" data-confirm="It will no longer appear anywhere in the Bookings module." data-confirm-title="Delete this booking?" data-confirm-button="Delete" data-confirm-variant="danger">
+                                <form action="{{ route('receptionist.bookings.restore', $booking) }}" method="POST" class="d-inline">
                                     @csrf
-                                    @method('DELETE')
-                                    <button type="submit" class="btn btn-outline-danger btn-sm btn-icon" title="Delete" aria-label="Delete">
-                                        <i class="fas fa-trash"></i></button>
+                                    @method('PUT')
+                                    <button type="submit" class="btn btn-outline-success btn-sm btn-icon" title="Restore" aria-label="Restore">
+                                        <i class="fas fa-box-open"></i></button>
                                 </form>
                             @endif
                         </td>
@@ -334,7 +328,7 @@
                         <td colspan="{{ $colspan }}">
                             <x-empty-state icon="fas fa-calendar-check" :message="match($tab) {
                                 'verified' => 'No confirmed bookings yet.',
-                                'rejected' => 'No rejected or failed bookings right now.',
+                                'rejected' => 'No cancelled or no-show bookings right now.',
                                 'archived' => 'No archived bookings.',
                                 default => 'No bookings pending verification.',
                             }" />

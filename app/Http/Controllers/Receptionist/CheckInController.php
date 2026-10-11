@@ -141,13 +141,9 @@ class CheckInController extends Controller
      */
     public function storeWalkIn(Request $request): RedirectResponse
     {
-        // This form always checks the guest in TODAY, and no booking may start less than 2 days (48 hours) from
-        // today - the same CheckInWindow rule as every other booking/reservation entry point. Validating the
-        // implicit date here is what rejects it, with the same message as the other forms.
-        $request->merge(['check_in' => \App\Support\CheckInWindow::today()->toDateString()]);
-
+        // A walk-in is a guest standing at the desk: this form always checks them in TODAY. The 48-hour
+        // advance rule (CheckInWindow) is for bookings/reservations made ahead of time, not walk-ins.
         $validated = $request->validate([
-            'check_in' => \App\Support\CheckInWindow::rules(),
             'guest_first_name' => 'required|string|max:100',
             'guest_middle_name' => 'nullable|string|max:100',
             'guest_last_name' => 'required|string|max:100',
