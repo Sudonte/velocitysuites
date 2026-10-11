@@ -46,7 +46,17 @@ class ReservationController extends Controller
         // the shape the view always read; the new keys drive what it offers.
         $depositRange = $this->workflow->payableRange($reservation);
 
-        return view('guest.reservations.show', compact('reservation', 'depositRange'));
+        // The same itemized bill the mobile app shows, once the reservation is a booking.
+        $booking = $reservation->booking;
+        $stay = $booking
+            ? \App\Support\StayBill::forBooking($booking, $booking->billing ? \App\Support\StayBill::FINAL : \App\Support\StayBill::PROJECTED, null, $booking->billing)
+            : null;
+        $amenityRequests = \App\Models\AmenityRequest::where(fn ($q) => $q->where('reservation_id', $reservation->id)
+                ->when($booking, fn ($w) => $w->orWhere('booking_id', $booking->id)))
+            ->where('origin', \App\Models\AmenityRequest::ORIGIN_GUEST_REQUEST)
+            ->latest()->get();
+
+        return view('guest.reservations.show', compact('reservation', 'depositRange', 'stay', 'amenityRequests'));
     }
 
     /**

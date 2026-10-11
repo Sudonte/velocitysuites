@@ -101,7 +101,7 @@
                         <a href="{{ route('guest.reservations.show', $booking) }}"
                            class="d-flex align-items-center justify-content-between text-decoration-none text-reset py-2 {{ !$loop->last ? 'border-bottom' : '' }}">
                             <div>
-                                <div class="fw-bold">Booking ID: VS-{{ str_pad($booking->id, 4, '0', STR_PAD_LEFT) }}</div>
+                                <div class="fw-bold">{{ $booking->display_ref }}</div>
                                 <small class="text-muted">{{ $booking->roomType->name ?? 'N/A' }} &bull; {{ $booking->check_in->format('M d, Y') }}</small>
                             </div>
                             <i class="fas fa-chevron-right text-muted"></i>

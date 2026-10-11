@@ -33,7 +33,7 @@ class GuestController extends Controller
         // - the server is the single source of truth for what the guest sees, not
         // client-side filtering. Was previously missing here, so the web guest's
         // Delete/Hide action had no visible effect at all.
-        $query = $guest->reservations()->with(['roomType', 'booking.room', 'booking.billing', 'payments'])
+        $query = $guest->reservations()->with(['roomType', 'booking.room', 'booking.billing', 'payments', 'bookingAmenities', 'roomLines'])
             ->whereNull('hidden_at');
 
         if ($request->filled('status')) {

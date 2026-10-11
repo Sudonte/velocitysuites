@@ -6,7 +6,8 @@
 <div class="container-fluid py-4">
     <div class="page-header">
         <h1 class="mb-0">
-            <i class="fas fa-receipt"></i> Reservation #{{ $reservation->id }}
+            <i class="fas fa-receipt"></i> {{ $reservation->display_ref }}
+            @if($reservation->booking)<small class="d-block text-muted fs-6 fw-normal mt-1">from Reservation #{{ $reservation->id }}</small>@endif
         </h1>
         @if($reservation->status === \App\Models\Reservation::STATUS_CONVERTED && $reservation->booking)
             <x-status-badge :status="$reservation->booking->display_status" domain="booking" class="fs-6" />
@@ -127,23 +128,20 @@
         <div class="col-lg-4">
             <!-- Price Summary -->
             <x-card title="Payment Information" icon="fas fa-receipt" bodyClass="card-body" class="mb-4">
-                <?php
-                    $nights = abs($reservation->check_out->diffInDays($reservation->check_in));
-                    $baseAmount = $reservation->roomType->rate * $nights;
-                ?>
+                {{-- Rooms x nights for every room type, plus selected amenities (the full itemized bill shows once it's a booking). --}}
+                @php $nights = (int) abs($reservation->check_out->diffInDays($reservation->check_in)); @endphp
                 <div class="d-flex justify-content-between mb-2">
-                    <span>Room Rate:</span>
-                    <strong>₱{{ number_format($reservation->roomType->rate, 2) }}/night</strong>
-                </div>
-                <div class="d-flex justify-content-between mb-2">
-                    <span>Number of Nights:</span>
-                    <strong>{{ $nights }}</strong>
+                    <span>Stay:</span>
+                    <strong>{{ $nights }} night{{ $nights === 1 ? '' : 's' }} &middot; {{ max(1, (int) $reservation->rooms_requested) }} room{{ max(1, (int) $reservation->rooms_requested) === 1 ? '' : 's' }}</strong>
                 </div>
                 <hr>
                 <div class="d-flex justify-content-between">
-                    <strong>Estimated Total:</strong>
-                    <strong class="text-brand" style="font-size: 1.25rem;">₱{{ number_format($baseAmount, 2) }}</strong>
+                    <strong>{{ $stay ? 'Total:' : 'Estimated Total:' }}</strong>
+                    <strong class="text-brand" style="font-size: 1.25rem;">₱{{ number_format($stay ? $stay['total'] : $reservation->total_amount_due, 2) }}</strong>
                 </div>
+                @if($stay)
+                    <div class="d-flex justify-content-between small text-muted"><span>Balance</span><span>₱{{ number_format($stay['balance'], 2) }}</span></div>
+                @endif
 
                 @if($reservation->payments->isNotEmpty())
                     <hr>
@@ -168,6 +166,27 @@
                     </p>
                 @endif
             </x-card>
+
+            @if($stay)
+                @include('guest.reservations.partials.stay-bill', ['stay' => $stay])
+            @endif
+
+            @if($amenityRequests->isNotEmpty())
+                <x-card title="Amenity Requests" icon="fas fa-concierge-bell" bodyClass="card-body" class="mb-4">
+                    @foreach($amenityRequests as $req)
+                        <div class="d-flex justify-content-between align-items-start {{ ! $loop->last ? 'mb-2 pb-2 border-bottom' : '' }}">
+                            <div>
+                                {{ $req->quantity }} &times; {{ $req->amenity_name }}
+                                <small class="text-muted d-block">{{ $req->created_at->format('M d, Y g:i A') }}</small>
+                                @if($req->status === 'rejected' && $req->rejection_reason)
+                                    <small class="text-danger d-block">{{ $req->rejection_reason }}</small>
+                                @endif
+                            </div>
+                            <x-status-badge :status="$req->status" domain="amenity_request" />
+                        </div>
+                    @endforeach
+                </x-card>
+            @endif
 
             <!-- Pay Deposit Now (Pay Later + GCash, still awaiting review) -->
             @if($reservation->status === \App\Models\Reservation::STATUS_AWAITING_GCASH && $reservation->payment_method === 'gcash' && ! $depositRange['is_settled'] && ($depositRange['can_partial'] || ! $depositRange['discount_pending']))

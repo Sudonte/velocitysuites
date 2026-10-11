@@ -12,7 +12,12 @@ class PublicPageController extends Controller
      */
     public function about(): View
     {
-        return view('public.about');
+        // The real active room types (names, capacity ranges, room counts), not a hard-coded list.
+        $roomTypes = \App\Models\RoomType::where('status', 'active')
+            ->withCount(['rooms' => fn ($q) => $q->whereNull('archived_at')])
+            ->orderBy('rate')->get();
+
+        return view('public.about', compact('roomTypes'));
     }
 
     /**

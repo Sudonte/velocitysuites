@@ -230,47 +230,24 @@
                 <span class="section-badge mb-3"><i class="fas fa-bed"></i> Our Rooms</span>
                 <h2 class="mt-3">Room Types <span class="text-brand">for Every Guest</span></h2>
                 <p class="text-muted mx-auto" style="max-width: 620px;">
-                    Twenty-eight rooms across five types, each designed to meet different guest needs -
+                    {{ $roomTypes->sum('rooms_count') }} rooms across {{ $roomTypes->count() }} {{ \Illuminate\Support\Str::plural('type', $roomTypes->count()) }}, each designed to meet different guest needs -
                     regardless of room type, every accommodation aims to provide a comfortable and satisfying
                     experience.
                 </p>
             </div>
             <div class="row g-4">
-                <div class="col-sm-6 col-lg-4">
-                    <div class="room-info-card">
-                        <span class="room-info-icon"><i class="fas fa-bed"></i></span>
-                        <h5 class="fw-bold mb-2">Standard Room <span class="room-info-capacity"><i class="fas fa-user"></i> 1 Guest</span></h5>
-                        <p class="text-muted mb-0 small">A quiet and comfortable space suited for the solo traveler.</p>
+                @forelse($roomTypes as $type)
+                    <div class="col-sm-6 col-lg-4">
+                        <a href="{{ route('public.rooms.show', $type) }}" class="room-info-card d-block text-decoration-none text-reset h-100">
+                            <span class="room-info-icon"><i class="fas fa-bed"></i></span>
+                            <h5 class="fw-bold mb-2">{{ $type->name }} <span class="room-info-capacity"><i class="fas fa-user-friends"></i> {{ $type->capacity_label }}</span></h5>
+                            <p class="text-muted mb-1 small">{{ \Illuminate\Support\Str::limit($type->description ?: 'A comfortable room for your stay.', 110) }}</p>
+                            <p class="mb-0 small fw-semibold text-brand">From ₱{{ number_format($type->rate, 2) }} / night</p>
+                        </a>
                     </div>
-                </div>
-                <div class="col-sm-6 col-lg-4">
-                    <div class="room-info-card">
-                        <span class="room-info-icon"><i class="fas fa-gem"></i></span>
-                        <h5 class="fw-bold mb-2">Deluxe Room <span class="room-info-capacity"><i class="fas fa-user-friends"></i> 2 Guests</span></h5>
-                        <p class="text-muted mb-0 small">A more relaxing environment, well-suited for couples.</p>
-                    </div>
-                </div>
-                <div class="col-sm-6 col-lg-4">
-                    <div class="room-info-card">
-                        <span class="room-info-icon"><i class="fas fa-couch"></i></span>
-                        <h5 class="fw-bold mb-2">Superior Room <span class="room-info-capacity"><i class="fas fa-user-friends"></i> 2 Guests</span></h5>
-                        <p class="text-muted mb-0 small">Two separate beds, ideal for two friends or companions traveling together.</p>
-                    </div>
-                </div>
-                <div class="col-sm-6 col-lg-4">
-                    <div class="room-info-card">
-                        <span class="room-info-icon"><i class="fas fa-people-roof"></i></span>
-                        <h5 class="fw-bold mb-2">Family Suite Room <span class="room-info-capacity"><i class="fas fa-users"></i> 4 Guests</span></h5>
-                        <p class="text-muted mb-0 small">A spacious setting designed for group stays and family trips.</p>
-                    </div>
-                </div>
-                <div class="col-sm-6 col-lg-4">
-                    <div class="room-info-card">
-                        <span class="room-info-icon"><i class="fas fa-briefcase"></i></span>
-                        <h5 class="fw-bold mb-2">Executive Suite Room <span class="room-info-capacity"><i class="fas fa-user-friends"></i> 3 Guests</span></h5>
-                        <p class="text-muted mb-0 small">Extra space and comfort for guests who want room to relax or work.</p>
-                    </div>
-                </div>
+                @empty
+                    <p class="text-center text-muted">Room details coming soon.</p>
+                @endforelse
             </div>
         </div>
     </section>

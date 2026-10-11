@@ -54,23 +54,24 @@
         <table class="table table-hover mb-0">
             <thead>
                 <tr>
-                    <th>Reservation #</th>
+                    <th>Reference</th>
                     <th>Room</th>
                     <th>Check-In</th>
                     <th>Check-Out</th>
-                    <th class="text-end">Est. Total</th>
+                    <th class="text-end">Total</th>
                     <th>Status</th>
                     <th>Action</th>
                 </tr>
             </thead>
             <tbody>
                 @forelse($reservations as $reservation)
-                    <?php
-                        $nights = abs($reservation->check_out->diffInDays($reservation->check_in));
-                        $estimatedTotal = $reservation->roomType->rate * $nights;
-                    ?>
+                    @php
+                        // Billed total once there's a bill, otherwise the reservation's own total
+                        // (every room type x rooms x nights + amenities) - not just rate x nights.
+                        $rowTotal = $reservation->booking?->billing ? (float) $reservation->booking->billing->total_amount : $reservation->total_amount_due;
+                    @endphp
                     <tr>
-                        <td>#{{ $reservation->id }}</td>
+                        <td>{{ $reservation->display_ref }}@if($reservation->booking)<small class="d-block text-muted">from Reservation #{{ $reservation->id }}</small>@endif</td>
                         <td>
                             {{ $reservation->roomType->name }}
                             @if($reservation->booking?->room)
@@ -79,7 +80,7 @@
                         </td>
                         <td>{{ $reservation->check_in->format('M d, Y') }}</td>
                         <td>{{ $reservation->check_out->format('M d, Y') }}</td>
-                        <td class="text-end">₱{{ number_format($estimatedTotal, 2) }}</td>
+                        <td class="text-end">₱{{ number_format($rowTotal, 2) }}</td>
                         <td>
                             @if($reservation->status === \App\Models\Reservation::STATUS_CONVERTED && $reservation->booking)
                                 <x-status-badge :status="$reservation->booking->display_status" domain="booking" />
@@ -92,7 +93,7 @@
                                 // Same terminal-state guard as ReservationWorkflowService::hide() -
                                 // only offer Delete once this row can no longer change.
                                 $isCancelled = in_array($reservation->status, [\App\Models\Reservation::STATUS_CANCELLED, \App\Models\Reservation::STATUS_REJECTED])
-                                    || ($reservation->booking && $reservation->booking->booking_status === \App\Models\Booking::STATUS_CANCELLED);
+                                    || ($reservation->booking && in_array($reservation->booking->booking_status, [\App\Models\Booking::STATUS_CANCELLED, \App\Models\Booking::STATUS_NO_SHOW], true));
                                 $isCompleted = $reservation->booking && $reservation->booking->booking_status === \App\Models\Booking::STATUS_COMPLETED;
                             ?>
                             <a href="{{ route('guest.reservations.show', $reservation) }}" class="btn btn-outline-primary btn-sm btn-icon" title="View" aria-label="View">
@@ -105,8 +106,8 @@
                                 <form action="{{ route('guest.reservations.hide', $reservation) }}" method="POST" class="d-inline"
                                       data-confirm="This only hides it from your view - staff records are kept." data-confirm-title="Remove this from your list?" data-confirm-button="Remove from List" data-confirm-variant="secondary">
                                     @csrf @method('PUT')
-                                    <button type="submit" class="btn btn-outline-danger btn-sm btn-icon" title="Remove from my list" aria-label="Delete">
-                                        <i class="fas fa-trash"></i></button>
+                                    <button type="submit" class="btn btn-outline-secondary btn-sm btn-icon" title="Hide from my list" aria-label="Hide from my list">
+                                        <i class="fas fa-eye-slash"></i></button>
                                 </form>
                             @endif
                         </td>

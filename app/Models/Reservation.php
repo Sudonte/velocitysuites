@@ -304,6 +304,12 @@ class Reservation extends Model
         return app(\App\Services\ReservationWorkflowService::class)->pendingDepositCap($this, (float) $this->total_amount_due);
     }
 
+    /** "Booking #n" once converted (the stay is identified by its booking), otherwise "Reservation #n". */
+    public function getDisplayRefAttribute(): string
+    {
+        return $this->booking ? "Booking #{$this->booking->id}" : "Reservation #{$this->id}";
+    }
+
     /**
      * The true grand total for this still-unconverted reservation (room
      * charge across every room-type line, plus every selected paid
