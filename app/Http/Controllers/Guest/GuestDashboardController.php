@@ -115,8 +115,7 @@ class GuestDashboardController extends Controller
 
         // Active promotions
         $activePromotions = Promotion::with('amenities')->where('status', 'active')
-            ->whereDate('start_date', '<=', now())
-            ->whereDate('end_date', '>=', now())
+            ->runningOn(today())
             ->limit(3)
             ->get();
 

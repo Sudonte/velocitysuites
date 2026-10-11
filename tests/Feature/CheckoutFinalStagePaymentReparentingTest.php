@@ -220,6 +220,7 @@ class CheckoutFinalStagePaymentReparentingTest extends TestCase
 
         Schema::create('discounts', function (Blueprint $table) {
             $table->id();
+            $table->timestamp('archived_at')->nullable();
             $table->string('name')->nullable();
             $table->string('status', 20)->default('active');
             $table->timestamps();

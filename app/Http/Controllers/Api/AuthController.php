@@ -53,6 +53,8 @@ class AuthController extends Controller
         }
 
         if ($user->isLoginLocked()) {
+            \App\Support\Activity::logFor($user, 'Sign-in locked', 'Sign-in attempt while locked (app)');
+
             return response()->json(['message' => 'Account locked due to multiple failed login attempts. Try again in 15 minutes or reset your password.'], 423);
         }
 
@@ -62,6 +64,7 @@ class AuthController extends Controller
             // a PRIOR request, so without this the account doesn't
             // actually lock until a 4th attempt instead of the intended 3rd.
             $failures = $user->recordFailedLogin();
+            \App\Support\Activity::logFor($user, 'Failed login attempt', "Wrong password (app) - {$failures} of " . User::LOGIN_LOCK_THRESHOLD);
 
             if ($failures >= User::LOGIN_LOCK_THRESHOLD) {
                 return response()->json(['message' => 'Account locked due to multiple failed login attempts. Check your email to verify and reset your password.'], 423);
@@ -106,6 +109,7 @@ class AuthController extends Controller
             'failed_login_attempts' => 0,
             'last_login_at' => now(),
         ]);
+        \App\Support\Activity::logFor($user, 'Logged in', 'Signed in on the app');
 
         $plainToken = Str::random(60);
 
@@ -126,6 +130,9 @@ class AuthController extends Controller
      */
     public function logout(Request $request): JsonResponse
     {
+        if ($request->user()) {
+            \App\Support\Activity::logFor($request->user(), 'Logged out', 'Signed out of the app');
+        }
         $apiToken = $request->attributes->get('api_token');
         $apiToken?->delete();
 

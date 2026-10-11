@@ -62,6 +62,8 @@ class StaffPasswordHardeningTest extends TestCase
             $table->unsignedBigInteger('user_id')->nullable();
             $table->string('action');
             $table->text('description')->nullable();
+            $table->string('subject_type')->nullable();
+            $table->unsignedBigInteger('subject_id')->nullable();
             $table->string('ip_address')->nullable();
             $table->timestamps();
         });

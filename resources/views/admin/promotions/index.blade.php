@@ -22,7 +22,8 @@
 
     <!-- Search and Filter -->
     <x-card bodyClass="card-body" class="mb-4">
-        <form method="GET" action="{{ route('admin.promotions.index') }}" class="row g-3">
+        <form method="GET" action="{{ route('admin.promotions.index') }}"  class="row g-3">
+            <input type="hidden" name="view" value="{{ $view }}">
             <div class="col-md-6">
                 <input type="text" name="search" class="form-control"
                        placeholder="Search by promo name" value="{{ request('search') }}">
@@ -41,6 +42,11 @@
             </div>
         </form>
     </x-card>
+
+    <ul class="nav nav-tabs mb-0">
+        <li class="nav-item"><a class="nav-link {{ $view === 'active' ? 'active' : '' }}" href="{{ route('admin.promotions.index') }}">Active</a></li>
+        <li class="nav-item"><a class="nav-link {{ $view === 'archived' ? 'active' : '' }}" href="{{ route('admin.promotions.index', ['view' => 'archived']) }}"><i class="fas fa-box-archive"></i> Archived</a></li>
+    </ul>
 
     <!-- Promotions Table -->
     <x-card bodyClass="table-responsive">
@@ -112,12 +118,21 @@
                                 <button type="submit" class="btn btn-sm btn-outline-{{ $promotion->status === 'active' ? 'warning' : 'success' }} btn-icon" title="{{ $promotion->status === 'active' ? 'Deactivate' : 'Activate' }}" aria-label="{{ $promotion->status === 'active' ? 'Deactivate' : 'Activate' }}">
                                     <i class="fas fa-{{ $promotion->status === 'active' ? 'ban' : 'check' }}"></i></button>
                             </form>
-                            <form action="{{ route('admin.promotions.destroy', $promotion) }}" method="POST" class="d-inline" data-confirm="This can't be undone." data-confirm-title="Delete this promotion?" data-confirm-button="Delete" data-confirm-variant="danger">
-                                @csrf
-                                @method('DELETE')
-                                <button type="submit" class="btn btn-outline-danger btn-sm btn-icon" title="Delete" aria-label="Delete">
-                                    <i class="fas fa-trash"></i></button>
-                            </form>
+                            @if($promotion->isArchived())
+                                <form action="{{ route('admin.promotions.unarchive', $promotion) }}" method="POST" class="d-inline">
+                                    @csrf
+                                    @method('PUT')
+                                    <button type="submit" class="btn btn-outline-success btn-sm btn-icon" title="Restore" aria-label="Restore">
+                                        <i class="fas fa-box-open"></i></button>
+                                </form>
+                            @else
+                                <form action="{{ route('admin.promotions.archive', $promotion) }}" method="POST" class="d-inline" data-confirm="It is switched off and moves to the Archived tab, where it can be restored." data-confirm-title="Archive this promotion?" data-confirm-button="Archive" data-confirm-variant="secondary">
+                                    @csrf
+                                    @method('PUT')
+                                    <button type="submit" class="btn btn-outline-secondary btn-sm btn-icon" title="Archive" aria-label="Archive">
+                                        <i class="fas fa-box-archive"></i></button>
+                                </form>
+                            @endif
                         </td>
                     </tr>
                 @empty

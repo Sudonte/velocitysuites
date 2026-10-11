@@ -165,11 +165,15 @@ Route::middleware(['auth', 'account.status', 'log.activity', 'no.cache'])->group
         Route::delete('/room-images/{roomImage}', [\App\Http\Controllers\Admin\RoomManagementController::class, 'deleteImage'])->name('rooms.gallery.destroy');
 
         // Promotion Management
-        Route::resource('promotions', PromotionManagementController::class);
+        Route::resource('promotions', PromotionManagementController::class)->except(['destroy']);
+        Route::put('/promotions/{promotion}/archive', [PromotionManagementController::class, 'archive'])->name('promotions.archive');
+        Route::put('/promotions/{promotion}/unarchive', [PromotionManagementController::class, 'unarchive'])->name('promotions.unarchive');
         Route::put('promotions/{promotion}/toggle', [PromotionManagementController::class, 'toggle'])->name('promotions.toggle');
 
         // Discount Management - separate from Promotions, no shared logic/records
-        Route::resource('discounts', DiscountManagementController::class);
+        Route::resource('discounts', DiscountManagementController::class)->except(['destroy']);
+        Route::put('/discounts/{discount}/archive', [DiscountManagementController::class, 'archive'])->name('discounts.archive');
+        Route::put('/discounts/{discount}/unarchive', [DiscountManagementController::class, 'unarchive'])->name('discounts.unarchive');
         Route::put('discounts/{discount}/toggle', [DiscountManagementController::class, 'toggle'])->name('discounts.toggle');
 
         // Amenity Management
@@ -180,7 +184,9 @@ Route::middleware(['auth', 'account.status', 'log.activity', 'no.cache'])->group
         // "show" is excluded on purpose - View Details is an in-page modal
         // on the index list, not a separate full-page route, and the
         // controller has no show() method to serve one.
-        Route::resource('amenities', AmenityManagementController::class)->except(['show']);
+        Route::resource('amenities', AmenityManagementController::class)->except(['show', 'destroy']);
+        Route::put('/amenities/{amenity}/archive', [AmenityManagementController::class, 'archive'])->name('amenities.archive');
+        Route::put('/amenities/{amenity}/unarchive', [AmenityManagementController::class, 'unarchive'])->name('amenities.unarchive');
         Route::put('amenities/{amenity}/toggle', [AmenityManagementController::class, 'toggle'])->name('amenities.toggle');
 
         // Announcement Management - role-targeted announcements shown via
@@ -189,7 +195,9 @@ Route::middleware(['auth', 'account.status', 'log.activity', 'no.cache'])->group
         // section (for the guest audience). Publish/unpublish (via status)
         // is the normal removal-from-public-view path; destroy() is a real
         // hard delete for cleaning up mistakes, kept separate from that.
-        Route::resource('announcements', \App\Http\Controllers\Admin\AnnouncementManagementController::class)->except(['show']);
+        Route::resource('announcements', \App\Http\Controllers\Admin\AnnouncementManagementController::class)->except(['show', 'destroy']);
+        Route::put('/announcements/{announcement}/archive', [\App\Http\Controllers\Admin\AnnouncementManagementController::class, 'archive'])->name('announcements.archive');
+        Route::put('/announcements/{announcement}/unarchive', [\App\Http\Controllers\Admin\AnnouncementManagementController::class, 'unarchive'])->name('announcements.unarchive');
         Route::put('announcements/{announcement}/publish', [\App\Http\Controllers\Admin\AnnouncementManagementController::class, 'publish'])->name('announcements.publish');
         Route::put('announcements/{announcement}/unpublish', [\App\Http\Controllers\Admin\AnnouncementManagementController::class, 'unpublish'])->name('announcements.unpublish');
 

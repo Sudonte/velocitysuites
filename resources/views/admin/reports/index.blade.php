@@ -30,6 +30,45 @@
 
     <!-- Activity Logs -->
     <x-card title="Activity Logs" icon="fas fa-history" bodyClass="table-responsive" class="mb-4">
+        {{-- Audit trail filters (the date range is the period filter at the top). --}}
+        <form method="GET" action="{{ route('admin.reports.index') }}" class="row g-2 align-items-end p-3 pb-0">
+            @foreach(request()->only(\App\Support\ReportFilters::QUERY_KEYS) as $key => $value)
+                <input type="hidden" name="{{ $key }}" value="{{ $value }}">
+            @endforeach
+            <div class="col-sm-4 col-lg-3">
+                <label class="form-label small text-muted mb-1" for="logType">Type</label>
+                <select id="logType" name="log_type" class="form-select form-select-sm">
+                    <option value="">All activity</option>
+                    @foreach(['auth' => 'Log in / Log out', 'reservation' => 'Reservations', 'booking' => 'Bookings & stays', 'payment' => 'Payments & charges', 'amenity' => 'Amenities', 'admin' => 'Admin changes'] as $value => $label)
+                        <option value="{{ $value }}" {{ request('log_type') === $value ? 'selected' : '' }}>{{ $label }}</option>
+                    @endforeach
+                </select>
+            </div>
+            <div class="col-sm-4 col-lg-2">
+                <label class="form-label small text-muted mb-1" for="logRole">Role</label>
+                <select id="logRole" name="log_role" class="form-select form-select-sm">
+                    <option value="">All roles</option>
+                    @foreach(['admin' => 'Admin', 'manager' => 'Manager', 'receptionist' => 'Receptionist', 'guest' => 'Guest'] as $value => $label)
+                        <option value="{{ $value }}" {{ request('log_role') === $value ? 'selected' : '' }}>{{ $label }}</option>
+                    @endforeach
+                </select>
+            </div>
+            <div class="col-sm-4 col-lg-3">
+                <label class="form-label small text-muted mb-1" for="logUser">Staff member</label>
+                <select id="logUser" name="log_user" class="form-select form-select-sm">
+                    <option value="">Everyone</option>
+                    @foreach($logUsers as $u)
+                        <option value="{{ $u->id }}" {{ (string) request('log_user') === (string) $u->id ? 'selected' : '' }}>{{ $u->full_name }} ({{ ucfirst($u->role) }})</option>
+                    @endforeach
+                </select>
+            </div>
+            <div class="col-auto d-flex gap-2">
+                <button type="submit" class="btn btn-sm btn-primary"><i class="fas fa-filter"></i> Filter</button>
+                @if(request('log_type') || request('log_role') || request('log_user'))
+                    <a href="{{ route('admin.reports.index', request()->only(\App\Support\ReportFilters::QUERY_KEYS)) }}" class="btn btn-sm btn-outline-secondary">Clear</a>
+                @endif
+            </div>
+        </form>
         <table class="table table-hover mb-0">
             <thead>
                 <tr>

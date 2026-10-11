@@ -36,6 +36,27 @@ class Activity
         request()->attributes->set('activity_logged', true);
     }
 
+    /** Sign-in/out actions - the "Log in / Log out" filter on the admin activity log. */
+    public const AUTH_ACTIONS = ['Logged in', 'Logged out', 'Failed login attempt', 'Sign-in locked'];
+
+    /**
+     * Log an action for a specific user without needing them to be signed
+     * in (failed sign-ins, logging out right after Auth::logout(), console).
+     */
+    public static function logFor(\App\Models\User $user, string $action, ?string $description = null): void
+    {
+        ActivityLog::create([
+            'user_id' => $user->id,
+            'action' => $action,
+            'description' => $description,
+            'subject_type' => 'user',
+            'subject_id' => $user->id,
+            'ip_address' => request()->ip(),
+        ]);
+
+        request()->attributes->set('activity_logged', true);
+    }
+
     /**
      * Short, stable subject-type strings (not full class names) so
      * ActivityLog::subjectUrl() can match on them without depending on

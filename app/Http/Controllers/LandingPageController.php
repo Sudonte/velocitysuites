@@ -46,8 +46,7 @@ class LandingPageController extends Controller
         // whose date range already lapsed.
         $promotions = Promotion::with(['roomType', 'amenities'])
             ->where('status', 'active')
-            ->whereDate('start_date', '<=', now())
-            ->whereDate('end_date', '>=', now())
+            ->runningOn(today())
             ->orderBy('start_date')
             ->get();
 

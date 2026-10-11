@@ -115,6 +115,7 @@ abstract class ApiFlowTestCase extends TestCase
 
         Schema::create('discounts', function (Blueprint $table) {
             $table->id();
+            $table->timestamp('archived_at')->nullable();
             $table->string('name');
             $table->string('discount_type')->default('percentage');
             $table->decimal('value', 10, 2)->default(0);
@@ -258,10 +259,12 @@ abstract class ApiFlowTestCase extends TestCase
 
         Schema::create('amenities', function (Blueprint $table) {
             $table->id();
+            $table->timestamp('archived_at')->nullable();
             $table->string('amenity_name');
             $table->text('description')->nullable();
             $table->string('category')->nullable();
             $table->integer('quantity');
+            $table->unsignedInteger('low_stock_threshold')->nullable();
             $table->boolean('is_unlimited')->default(false);
             $table->decimal('charge', 10, 2)->default(0);
             $table->string('status', 20)->default('active');
@@ -279,6 +282,10 @@ abstract class ApiFlowTestCase extends TestCase
 
         Schema::create('promotions', function (Blueprint $table) {
             $table->id();
+            $table->boolean('is_recurring')->default(false);
+            $table->unsignedSmallInteger('recur_start_md')->nullable();
+            $table->unsignedSmallInteger('recur_end_md')->nullable();
+            $table->timestamp('archived_at')->nullable();
             $table->string('promo_name');
             $table->enum('promo_type', ['discount', 'amenity']);
             $table->enum('discount_type', ['percentage', 'fixed'])->nullable();

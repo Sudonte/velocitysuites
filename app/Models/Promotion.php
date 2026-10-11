@@ -8,6 +8,12 @@ use Illuminate\Support\Facades\Storage;
 
 class Promotion extends Model
 {
+    use \App\Models\Concerns\Archivable;
+
+    /** Archive switches it off; restore brings it back off for the admin to re-enable. */
+    public const ARCHIVED_STATUS = 'inactive';
+    public const RESTORED_STATUS = 'inactive';
+
     use HasFactory;
 
     protected $fillable = [
@@ -20,10 +26,14 @@ class Promotion extends Model
         'room_type_id',
         'start_date',
         'end_date',
+        'is_recurring',
+        'recur_start_md',
+        'recur_end_md',
         'status',
     ];
 
     protected $casts = [
+        'is_recurring' => 'boolean',
         'start_date' => 'date',
         'end_date' => 'date',
         'discount_value' => 'decimal:2',
@@ -77,5 +87,49 @@ class Promotion extends Model
         return $this->status === 'active'
             && $this->start_date <= $today
             && $this->end_date >= $today;
+    }
+
+    /**
+     * Promotions running on $day: one-time ones by their dates, yearly ones
+     * by their month/day window (which may cross New Year, e.g. 1220..105).
+     */
+    public function scopeRunningOn($query, \Carbon\Carbon $day)
+    {
+        $md = (int) $day->format('n') * 100 + (int) $day->format('j');
+
+        return $query->where(function ($q) use ($day, $md) {
+            $q->where(fn ($once) => $once->where('is_recurring', false)
+                ->whereDate('start_date', '<=', $day)->whereDate('end_date', '>=', $day))
+              ->orWhere(fn ($yearly) => $yearly->where('is_recurring', true)->where(fn ($w) => $w
+                  ->where(fn ($inYear) => $inYear->whereColumn('recur_start_md', '<=', 'recur_end_md')
+                      ->where('recur_start_md', '<=', $md)->where('recur_end_md', '>=', $md))
+                  ->orWhere(fn ($wraps) => $wraps->whereColumn('recur_start_md', '>', 'recur_end_md')
+                      ->where(fn ($e) => $e->where('recur_start_md', '<=', $md)->orWhere('recur_end_md', '>=', $md)))));
+        });
+    }
+
+    /** Set start_date / end_date to the current (or next) occurrence of a yearly window. */
+    public function syncRecurringDates(?\Carbon\Carbon $from = null): void
+    {
+        if (! $this->is_recurring || ! $this->recur_start_md || ! $this->recur_end_md) {
+            return;
+        }
+        $from = ($from ?? today())->copy()->startOfDay();
+        $make = function (int $year, int $md): \Carbon\Carbon {
+            $month = intdiv($md, 100);
+            $day = min($md % 100, \Carbon\Carbon::create($year, $month, 1)->daysInMonth);
+
+            return \Carbon\Carbon::create($year, $month, $day)->startOfDay();
+        };
+        foreach ([$from->year - 1, $from->year, $from->year + 1] as $year) {
+            $start = $make($year, $this->recur_start_md);
+            $end = $make($this->recur_start_md <= $this->recur_end_md ? $year : $year + 1, $this->recur_end_md);
+            if ($end->gte($from)) {
+                $this->start_date = $start;
+                $this->end_date = $end;
+
+                return;
+            }
+        }
     }
 }

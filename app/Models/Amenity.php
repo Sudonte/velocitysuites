@@ -8,6 +8,12 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Amenity extends Model
 {
+    use \App\Models\Concerns\Archivable;
+
+    /** Archive switches it off; restore brings it back off for the admin to re-enable. */
+    public const ARCHIVED_STATUS = 'inactive';
+    public const RESTORED_STATUS = 'inactive';
+
     use HasFactory;
     use SoftDeletes;
 
@@ -16,6 +22,7 @@ class Amenity extends Model
         'description',
         'category',
         'quantity',
+        'low_stock_threshold',
         'is_unlimited',
         'charge',
         'status',
@@ -150,5 +157,48 @@ class Amenity extends Model
                     ? self::UNLIMITED_STOCK
                     : max(0, (int) $amenity->quantity - (int) ($requested[$amenity->id] ?? 0)),
             ]);
+    }
+
+    /** The remaining-stock level at which the admin is alerted. */
+    public function lowStockLevel(): int
+    {
+        return $this->low_stock_threshold ?? (int) config('hotel.amenity_low_stock_default', 10);
+    }
+
+    /** 'unlimited' | 'out' | 'low' | 'ok' for a given remaining count. */
+    public function stockState(int $remaining): string
+    {
+        if ($this->is_unlimited) {
+            return 'unlimited';
+        }
+
+        return $remaining <= 0 ? 'out' : ($remaining <= $this->lowStockLevel() ? 'low' : 'ok');
+    }
+
+    /**
+     * Alert the admin when an amenity's remaining stock is at/below its
+     * low-stock level - at most once per amenity per day so a busy day
+     * doesn't flood the bell.
+     */
+    public static function alertIfLowStock(int $amenityId): void
+    {
+        $amenity = static::find($amenityId);
+        if (! $amenity || $amenity->is_unlimited) {
+            return;
+        }
+        $remaining = (int) (static::remainingStockFor([$amenityId])[$amenityId] ?? 0);
+        if ($amenity->stockState($remaining) === 'ok') {
+            return;
+        }
+        if (! \Illuminate\Support\Facades\Cache::add("amenity_low_stock:{$amenityId}:" . today()->toDateString(), 1, now()->endOfDay())) {
+            return;
+        }
+        app(\App\Services\NotificationService::class)->notifyAdmin(
+            $remaining <= 0 ? "Out of Stock: {$amenity->amenity_name}" : "Low Stock: {$amenity->amenity_name}",
+            $remaining <= 0
+                ? "{$amenity->amenity_name} has no units left - guests can't request it until stock is added."
+                : "Only {$remaining} of {$amenity->quantity} {$amenity->amenity_name} left (alert level {$amenity->lowStockLevel()}).",
+            'amenity'
+        );
     }
 }

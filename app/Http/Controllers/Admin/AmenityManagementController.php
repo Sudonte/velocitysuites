@@ -36,6 +36,8 @@ class AmenityManagementController extends Controller
     public function index(Request $request): View
     {
         $query = Amenity::query();
+        $view = $request->get('view') === 'archived' ? 'archived' : 'active';
+        $view === 'archived' ? $query->archived() : $query->notArchived();
 
         // Search - grouped so a later ->where('status', ...) ANDs against the
         // whole name-or-description match, not just the last OR branch (an
@@ -74,7 +76,9 @@ class AmenityManagementController extends Controller
         $amenities = $query->withCount('amenityRequests')->latest()->paginate(\App\Support\PerPage::resolve($request))->withQueryString();
         $categories = self::CATEGORIES;
 
-        return view('admin.amenities.index', compact('amenities', 'categories'));
+        $remaining = Amenity::remainingStockFor($amenities->pluck('id'));
+
+        return view('admin.amenities.index', compact('amenities', 'categories', 'view', 'remaining'));
     }
 
     /**
@@ -113,6 +117,7 @@ class AmenityManagementController extends Controller
             'quantity' => 'required_if:quantity_mode,limited|nullable|integer|min:0',
             'charge' => 'required|numeric|min:0',
             'status' => 'required|in:active,inactive',
+            'low_stock_threshold' => 'nullable|integer|min:0',
         ], [
             'amenity_name.unique' => 'An amenity with this name already exists.',
         ]);
@@ -154,6 +159,7 @@ class AmenityManagementController extends Controller
             'quantity' => 'required_if:quantity_mode,limited|nullable|integer|min:0',
             'charge' => 'required|numeric|min:0',
             'status' => 'required|in:active,inactive',
+            'low_stock_threshold' => 'nullable|integer|min:0',
         ], [
             'amenity_name.unique' => 'An amenity with this name already exists.',
         ]);
@@ -197,23 +203,25 @@ class AmenityManagementController extends Controller
             ->with('success', "Amenity {$newStatus}d successfully!");
     }
 
-    /**
-     * Remove an amenity from the catalog - soft-delete only (Amenity uses
-     * SoftDeletes), never a hard delete. Any Room Type assignment
-     * (room_type_amenity) is safely cascade-removed like any other
-     * unassignment - a room type just loses that one amenity, nothing
-     * breaks. Historical reservation_amenities/amenity_requests rows are
-     * untouched and keep displaying correctly from their own independently
-     * snapshotted name/category/charge, regardless of this amenity's
-     * live/deleted state.
-     */
-    public function destroy(Amenity $amenity): RedirectResponse
+    /** Archive instead of delete - it leaves the list and is switched off; restore from the Archived tab. */
+    public function archive(Amenity $amenity): \Illuminate\Http\RedirectResponse
     {
-        $name = $amenity->amenity_name;
-        $amenity->delete();
+        $amenity->archiveRecord();
+        \App\Support\Activity::log('Archived amenity', $this->archiveLabel($amenity), $amenity);
 
-        Activity::log('Deleted amenity', $name);
+        return redirect()->route('admin.amenities.index')->with('success', ucfirst('amenity') . ' archived. You can restore it from the Archived tab.');
+    }
 
-        return redirect()->route('admin.amenities.index')->with('success', "\"{$name}\" was deleted successfully.");
+    public function unarchive(Amenity $amenity): \Illuminate\Http\RedirectResponse
+    {
+        $amenity->unarchive();
+        \App\Support\Activity::log('Restored amenity', $this->archiveLabel($amenity), $amenity);
+
+        return redirect()->route('admin.amenities.index', ['view' => 'archived'])->with('success', ucfirst('amenity') . ' restored - it is inactive until you switch it on.');
+    }
+
+    private function archiveLabel(Amenity $amenity): string
+    {
+        return (string) ($amenity->name ?? $amenity->title ?? $amenity->amenity_name ?? "#{$amenity->id}");
     }
 }

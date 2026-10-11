@@ -239,6 +239,7 @@ class RegisterController extends Controller
         \Illuminate\Support\Facades\Auth::login($user);
         $request->session()->regenerate();
         $user->forceFill(['last_login_at' => now()])->save();
+        \App\Support\Activity::logFor($user, 'Logged in', 'Signed in after registering');
 
         // Started registering mid-booking: back to that room with the same dates
         // (the same hand-off LoginController does after a normal login).

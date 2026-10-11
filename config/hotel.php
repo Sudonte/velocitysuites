@@ -53,4 +53,17 @@ return [
     */
 
     'staff_password_reset_expiry_hours' => 48,
+
+    /*
+    |--------------------------------------------------------------------------
+    | Amenity Low-Stock Alert
+    |--------------------------------------------------------------------------
+    |
+    | The admin is alerted when an amenity's remaining stock falls to this
+    | level or below (each amenity can override it on its edit page). An
+    | amenity at 0 remaining can't be requested.
+    |
+    */
+
+    'amenity_low_stock_default' => (int) env('HOTEL_AMENITY_LOW_STOCK', 10),
 ];

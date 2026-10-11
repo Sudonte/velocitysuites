@@ -197,6 +197,16 @@ class AmenityRequestService
             $request->booking ?? $request->reservation
         );
 
+        if ($approved && $request->amenity_id) {
+            $remaining = \App\Models\Amenity::remainingStockFor([$request->amenity_id])[$request->amenity_id] ?? null;
+            $this->notifications->notifyAdmin(
+                'Amenity Request Approved',
+                "{$staff->full_name} approved {$label} for " . ($request->booking_id ? "Booking #{$request->booking_id}" : "Reservation #{$request->reservation_id}")
+                    . ($remaining !== null && $remaining !== \App\Models\Amenity::UNLIMITED_STOCK ? " - {$remaining} left in stock." : '.'),
+                'amenity'
+            );
+        }
+
         $user = $request->reservation?->guest?->user ?? $request->booking?->guest?->user ?? $request->guest?->user;
         if ($user) {
             $this->notifications->toUser(

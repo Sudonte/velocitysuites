@@ -9,6 +9,12 @@ use Illuminate\Support\Facades\Storage;
 
 class Announcement extends Model
 {
+    use \App\Models\Concerns\Archivable;
+
+    /** Archive switches it off; restore brings it back off for the admin to re-enable. */
+    public const ARCHIVED_STATUS = 'archived';
+    public const RESTORED_STATUS = 'draft';
+
     use HasFactory;
 
     protected $fillable = [

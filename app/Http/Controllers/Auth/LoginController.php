@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Support\Activity;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
@@ -47,6 +48,8 @@ class LoginController extends Controller
         // StaffPasswordResetRequest routed to the System Administrator for
         // approval (see Admin\PasswordResetRequestController).
         if ($user->isLoginLocked()) {
+            Activity::logFor($user, 'Sign-in locked', 'Sign-in attempt while locked (web)');
+
             return redirect()->route('password.request')
                 ->with('error', self::LOCKED_MESSAGE)
                 ->withInput(['email' => $credentials['email']]);
@@ -59,6 +62,7 @@ class LoginController extends Controller
                 'failed_login_attempts' => 0,
                 'last_login_at' => now(),
             ]);
+            Activity::logFor($user, 'Logged in', 'Signed in on the website');
 
             $request->session()->regenerate();
 
@@ -122,6 +126,7 @@ class LoginController extends Controller
         // account doesn't actually lock until a 4th attempt instead of the
         // intended 3rd.
         $failures = $user->recordFailedLogin();
+        Activity::logFor($user, 'Failed login attempt', "Wrong password (web) - {$failures} of " . User::LOGIN_LOCK_THRESHOLD);
 
         if ($failures >= User::LOGIN_LOCK_THRESHOLD) {
             return redirect()->route('password.request')
@@ -155,6 +160,9 @@ class LoginController extends Controller
      */
     public function logout(Request $request)
     {
+        if ($user = $request->user()) {
+            Activity::logFor($user, 'Logged out', 'Signed out of the website');
+        }
         Auth::logout();
         $request->session()->invalidate();
         $request->session()->regenerateToken();

@@ -24,6 +24,8 @@ class PromotionManagementController extends Controller
     public function index(Request $request): View
     {
         $query = Promotion::query();
+        $view = $request->get('view') === 'archived' ? 'archived' : 'active';
+        $view === 'archived' ? $query->archived() : $query->notArchived();
 
         // Search - grouped so a later ->where('status', ...) ANDs against the
         // whole name-or-description match, not just the last OR branch (an
@@ -45,7 +47,7 @@ class PromotionManagementController extends Controller
         $promotions = $query->with('amenities')->latest()->paginate(\App\Support\PerPage::resolve($request))->withQueryString();
         $roomTypes = RoomType::orderBy('name')->get();
 
-        return view('admin.promotions.index', compact('promotions', 'roomTypes'));
+        return view('admin.promotions.index', compact('promotions', 'roomTypes', 'view'));
     }
 
     /**
@@ -66,14 +68,21 @@ class PromotionManagementController extends Controller
      * at billing. Requires at least one included amenity (submitted as
      * amenities[<id>] = quantity, 0/blank meaning excluded).
      */
-    private function validatePromotion(Request $request): array
+    private function validatePromotion(Request $request, ?Promotion $promotion = null): array
     {
         $validated = $request->validate([
             'promo_name' => 'required|string|max:255',
             'description' => 'nullable|string',
             'room_type_id' => 'nullable|exists:room_types,id',
-            'start_date' => 'required|date',
-            'end_date' => 'required|date|after_or_equal:start_date',
+            // One-time: real dates, not in the past (an unchanged start date on an
+            // already-running promotion is allowed). Yearly: month + day only.
+            'is_recurring' => 'nullable|boolean',
+            'start_date' => ['exclude_if:is_recurring,1', 'required', 'date', $this->notBeforeToday($promotion?->start_date?->toDateString())],
+            'end_date' => ['exclude_if:is_recurring,1', 'required', 'date', 'after_or_equal:start_date', 'after_or_equal:today'],
+            'recur_start_month' => 'exclude_unless:is_recurring,1|required|integer|between:1,12',
+            'recur_start_day' => 'exclude_unless:is_recurring,1|required|integer|between:1,31',
+            'recur_end_month' => 'exclude_unless:is_recurring,1|required|integer|between:1,12',
+            'recur_end_day' => 'exclude_unless:is_recurring,1|required|integer|between:1,31',
             'status' => 'required|in:active,inactive',
             'amenities' => 'array',
             'amenities.*' => 'nullable|integer|min:0|max:99',
@@ -95,6 +104,26 @@ class PromotionManagementController extends Controller
         }
 
         $validated['promo_type'] = 'amenity';
+
+        $validated['is_recurring'] = (bool) ($validated['is_recurring'] ?? false);
+        if ($validated['is_recurring']) {
+            foreach (['start', 'end'] as $key) {
+                $month = (int) $validated["recur_{$key}_month"];
+                $day = (int) $validated["recur_{$key}_day"];
+                if (! checkdate($month, $day, 2000)) { // 2000 is a leap year, so Feb 29 is allowed
+                    throw \Illuminate\Validation\ValidationException::withMessages(["recur_{$key}_day" => 'That day does not exist in the chosen month.']);
+                }
+                $validated["recur_{$key}_md"] = $month * 100 + $day;
+                unset($validated["recur_{$key}_month"], $validated["recur_{$key}_day"]);
+            }
+            $probe = new Promotion(['is_recurring' => true, 'recur_start_md' => $validated['recur_start_md'], 'recur_end_md' => $validated['recur_end_md']]);
+            $probe->syncRecurringDates();
+            $validated['start_date'] = $probe->start_date;
+            $validated['end_date'] = $probe->end_date;
+        } else {
+            $validated['recur_start_md'] = null;
+            $validated['recur_end_md'] = null;
+        }
 
         return $validated;
     }
@@ -166,7 +195,7 @@ class PromotionManagementController extends Controller
      */
     public function update(Request $request, Promotion $promotion): RedirectResponse
     {
-        $validated = $this->validatePromotion($request);
+        $validated = $this->validatePromotion($request, $promotion);
 
         $newImage = $this->storeImage($request);
         if ($newImage !== null) {
@@ -221,13 +250,35 @@ class PromotionManagementController extends Controller
         $promotion->forceFill(['notified_at' => now()])->save();
     }
 
-    /**
-     * Delete promotion.
-     */
-    public function destroy(Promotion $promotion): RedirectResponse
+    /** Archive instead of delete - it leaves the list and is switched off; restore from the Archived tab. */
+    public function archive(Promotion $promotion): \Illuminate\Http\RedirectResponse
     {
-        $promotion->delete();
+        $promotion->archiveRecord();
+        \App\Support\Activity::log('Archived promotion', $this->archiveLabel($promotion), $promotion);
 
-        return redirect()->route('admin.promotions.index')->with('success', 'Promotion deleted successfully!');
+        return redirect()->route('admin.promotions.index')->with('success', ucfirst('promotion') . ' archived. You can restore it from the Archived tab.');
+    }
+
+    public function unarchive(Promotion $promotion): \Illuminate\Http\RedirectResponse
+    {
+        $promotion->unarchive();
+        \App\Support\Activity::log('Restored promotion', $this->archiveLabel($promotion), $promotion);
+
+        return redirect()->route('admin.promotions.index', ['view' => 'archived'])->with('success', ucfirst('promotion') . ' restored - it is inactive until you switch it on.');
+    }
+
+    private function archiveLabel(Promotion $promotion): string
+    {
+        return (string) ($promotion->name ?? $promotion->title ?? $promotion->amenity_name ?? "#{$promotion->id}");
+    }
+
+    /** A date that can't be before today - unless it's the value already stored (editing a running promotion/discount). */
+    private function notBeforeToday(?string $current): \Closure
+    {
+        return function (string $attribute, $value, \Closure $fail) use ($current) {
+            if ($value && $value !== $current && \Carbon\Carbon::parse($value)->lt(today())) {
+                $fail('The ' . str_replace('_', ' ', $attribute) . ' can\'t be before today.');
+            }
+        };
     }
 }

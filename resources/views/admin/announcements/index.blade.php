@@ -20,7 +20,8 @@
     @endif
 
     <x-card bodyClass="card-body" class="mb-4">
-        <form method="GET" action="{{ route('admin.announcements.index') }}" class="row g-3 align-items-end">
+        <form method="GET" action="{{ route('admin.announcements.index') }}"  class="row g-3 align-items-end">
+            <input type="hidden" name="view" value="{{ $view }}">
             <div class="col-md-5">
                 <label class="form-label small text-muted mb-1">Search</label>
                 <input type="text" name="search" class="form-control"
@@ -53,6 +54,11 @@
             </div>
         </form>
     </x-card>
+
+    <ul class="nav nav-tabs mb-0">
+        <li class="nav-item"><a class="nav-link {{ $view === 'active' ? 'active' : '' }}" href="{{ route('admin.announcements.index') }}">Active</a></li>
+        <li class="nav-item"><a class="nav-link {{ $view === 'archived' ? 'active' : '' }}" href="{{ route('admin.announcements.index', ['view' => 'archived']) }}"><i class="fas fa-box-archive"></i> Archived</a></li>
+    </ul>
 
     <x-card bodyClass="table-responsive">
         <table class="table table-hover align-middle mb-0">
@@ -107,13 +113,21 @@
                                             <i class="fas fa-eye"></i></button>
                                     </form>
                                 @endif
-                                <form action="{{ route('admin.announcements.destroy', $announcement) }}" method="POST" class="d-inline"
-                                      data-confirm="This cannot be undone. Already-sent notifications will not be affected." data-confirm-title="Permanently delete &quot;{{ $announcement->title }}&quot;?" data-confirm-button="Delete Permanently" data-confirm-variant="danger">
-                                    @csrf
-                                    @method('DELETE')
-                                    <button type="submit" class="btn btn-outline-danger btn-sm btn-icon" title="Delete" aria-label="Delete">
-                                        <i class="fas fa-trash"></i></button>
-                                </form>
+                                @if($announcement->isArchived())
+                                    <form action="{{ route('admin.announcements.unarchive', $announcement) }}" method="POST" class="d-inline">
+                                        @csrf
+                                        @method('PUT')
+                                        <button type="submit" class="btn btn-outline-success btn-sm btn-icon" title="Restore" aria-label="Restore">
+                                            <i class="fas fa-box-open"></i></button>
+                                    </form>
+                                @else
+                                    <form action="{{ route('admin.announcements.archive', $announcement) }}" method="POST" class="d-inline" data-confirm="It is switched off and moves to the Archived tab, where it can be restored." data-confirm-title="Archive this announcement?" data-confirm-button="Archive" data-confirm-variant="secondary">
+                                        @csrf
+                                        @method('PUT')
+                                        <button type="submit" class="btn btn-outline-secondary btn-sm btn-icon" title="Archive" aria-label="Archive">
+                                            <i class="fas fa-box-archive"></i></button>
+                                    </form>
+                                @endif
                             </div>
                         </td>
                     </tr>

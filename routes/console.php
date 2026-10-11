@@ -32,6 +32,9 @@ Schedule::command('amenity-requests:archive-completed')->daily();
 // reservation still gets expired even before hPanel cron is configured.
 Schedule::command('reservations:expire-unpaid')->hourly();
 
+// Switch off expired one-time promotions/discounts; roll yearly promotions to their next dates.
+Schedule::command('catalog:refresh-dates')->dailyAt('00:10');
+
 // Same cron-setup caveat as above. No inline safety net needed (unlike the
 // expiry command above) - a missed reminder just means the guest sees one
 // later or not at all before their deadline, not an incorrect state.

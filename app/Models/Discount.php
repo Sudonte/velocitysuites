@@ -13,6 +13,12 @@ use Illuminate\Database\Eloquent\Model;
  */
 class Discount extends Model
 {
+    use \App\Models\Concerns\Archivable;
+
+    /** Archive switches it off; restore brings it back off for the admin to re-enable. */
+    public const ARCHIVED_STATUS = 'inactive';
+    public const RESTORED_STATUS = 'inactive';
+
     use HasFactory;
 
     protected $fillable = [

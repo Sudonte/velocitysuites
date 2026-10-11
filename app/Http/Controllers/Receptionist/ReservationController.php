@@ -522,8 +522,7 @@ class ReservationController extends Controller
         $promos = Promotion::with('amenities')
             ->where('status', 'active')
             ->where('promo_type', 'amenity')
-            ->whereDate('start_date', '<=', today())
-            ->whereDate('end_date', '>=', today())
+            ->runningOn(today())
             ->where(function ($q) use ($roomTypeIds) {
                 $q->whereNull('room_type_id')
                   ->orWhereIn('room_type_id', $roomTypeIds);

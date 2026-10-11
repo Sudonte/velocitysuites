@@ -143,4 +143,14 @@ class AmenityRequest extends Model
 
         return $this->guest?->user?->full_name ?? 'Guest';
     }
+
+    /** A request holds stock from the moment it exists - alert the admin if that leaves an amenity low. */
+    protected static function booted(): void
+    {
+        static::created(function (self $request) {
+            if ($request->amenity_id) {
+                Amenity::alertIfLowStock((int) $request->amenity_id);
+            }
+        });
+    }
 }

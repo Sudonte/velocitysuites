@@ -60,28 +60,7 @@
                         @enderror
                     </div>
 
-                    <div class="row">
-                        <div class="col-md-6">
-                            <div class="form-group mb-3">
-                                <label for="start_date">Start Date *</label>
-                                <input type="date" class="form-control @error('start_date') is-invalid @enderror"
-                                       id="start_date" name="start_date" value="{{ old('start_date') }}" required>
-                                @error('start_date')
-                                    <div class="invalid-feedback">{{ $message }}</div>
-                                @enderror
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="form-group mb-3">
-                                <label for="end_date">End Date *</label>
-                                <input type="date" class="form-control @error('end_date') is-invalid @enderror"
-                                       id="end_date" name="end_date" value="{{ old('end_date') }}" required>
-                                @error('end_date')
-                                    <div class="invalid-feedback">{{ $message }}</div>
-                                @enderror
-                            </div>
-                        </div>
-                    </div>
+                    @include('admin.promotions.partials.dates', ['promotion' => null])
 
                     <div class="form-group mb-3">
                         <label for="status">Status *</label>

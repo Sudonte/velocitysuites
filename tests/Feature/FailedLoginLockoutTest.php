@@ -33,6 +33,18 @@ class FailedLoginLockoutTest extends TestCase
     {
         parent::setUp();
 
+        // Sign-in/out actions are written to the audit trail.
+        Schema::create('activity_logs', function (Blueprint $table) {
+            $table->id();
+            $table->unsignedBigInteger('user_id')->nullable();
+            $table->string('action');
+            $table->text('description')->nullable();
+            $table->string('subject_type')->nullable();
+            $table->unsignedBigInteger('subject_id')->nullable();
+            $table->string('ip_address')->nullable();
+            $table->timestamps();
+        });
+
         Schema::create('users', function (Blueprint $table) {
             $table->id();
             $table->string('first_name', 100);
@@ -199,5 +211,17 @@ class FailedLoginLockoutTest extends TestCase
         $this->assertFalse($user->refresh()->isLoginLocked());
         $this->post('/login', ['email' => $user->email, 'password' => 'correct-password']);
         $this->assertAuthenticatedAs($user);
+    }
+
+    public function test_sign_in_attempts_are_written_to_the_audit_trail(): void
+    {
+        $user = $this->makeUser('receptionist');
+
+        $this->post('/login', ['email' => $user->email, 'password' => 'wrong']);
+        $this->post('/login', ['email' => $user->email, 'password' => 'correct-password']);
+        $this->post('/logout');
+
+        $actions = \App\Models\ActivityLog::where('user_id', $user->id)->orderBy('id')->pluck('action')->all();
+        $this->assertSame(['Failed login attempt', 'Logged in', 'Logged out'], $actions);
     }
 }

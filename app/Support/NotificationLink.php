@@ -40,6 +40,9 @@ final class NotificationLink
         if ($category === 'room' && $role === 'admin') {
             return ['url' => route('admin.room-types.index'), 'label' => 'Open Rooms'];
         }
+        if ($category === 'amenity' && $role === 'admin') {
+            return ['url' => route('admin.amenities.index'), 'label' => 'Open Amenities'];
+        }
         if ($category === 'amenity' && $role === 'receptionist') {
             return ['url' => route('receptionist.amenities.index'), 'label' => 'Open Amenity Requests'];
         }

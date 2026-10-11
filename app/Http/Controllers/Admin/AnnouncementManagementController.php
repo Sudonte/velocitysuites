@@ -23,6 +23,8 @@ class AnnouncementManagementController extends Controller
     public function index(Request $request): View
     {
         $query = Announcement::query();
+        $view = $request->get('view') === 'archived' ? 'archived' : 'active';
+        $view === 'archived' ? $query->archived() : $query->notArchived();
 
         if ($request->filled('search')) {
             $search = $request->search;
@@ -47,7 +49,7 @@ class AnnouncementManagementController extends Controller
 
         $announcements = $query->paginate(\App\Support\PerPage::resolve($request))->withQueryString();
 
-        return view('admin.announcements.index', compact('announcements'));
+        return view('admin.announcements.index', compact('announcements', 'view'));
     }
 
     public function create(): View
@@ -120,25 +122,26 @@ class AnnouncementManagementController extends Controller
         return redirect()->route('admin.announcements.index')->with('success', 'Announcement unpublished.');
     }
 
-    /**
-     * Deletes the announcement and its stored images. Notifications already
-     * sent for it are deliberately left untouched - each one is a
-     * self-contained snapshot (title/content/audience captured at send
-     * time, see NotificationService::notifyAnnouncement()), not a live
-     * reference to this row, so recipients keep their notification history
-     * even after the source announcement is gone.
-     */
-    public function destroy(Announcement $announcement): RedirectResponse
+    /** Archive instead of delete - it leaves the list and is switched off; restore from the Archived tab. */
+    public function archive(Announcement $announcement): \Illuminate\Http\RedirectResponse
     {
-        foreach ($announcement->images ?? [] as $path) {
-            Storage::disk('public')->delete($path);
-        }
+        $announcement->archiveRecord();
+        \App\Support\Activity::log('Archived announcement', $this->archiveLabel($announcement), $announcement);
 
-        $announcement->delete();
+        return redirect()->route('admin.announcements.index')->with('success', ucfirst('announcement') . ' archived. You can restore it from the Archived tab.');
+    }
 
-        Activity::log('Deleted announcement', $announcement->title);
+    public function unarchive(Announcement $announcement): \Illuminate\Http\RedirectResponse
+    {
+        $announcement->unarchive();
+        \App\Support\Activity::log('Restored announcement', $this->archiveLabel($announcement), $announcement);
 
-        return redirect()->route('admin.announcements.index')->with('success', 'Announcement deleted.');
+        return redirect()->route('admin.announcements.index', ['view' => 'archived'])->with('success', ucfirst('announcement') . ' restored - it is draft until you switch it on.');
+    }
+
+    private function archiveLabel(Announcement $announcement): string
+    {
+        return (string) ($announcement->name ?? $announcement->title ?? $announcement->amenity_name ?? "#{$announcement->id}");
     }
 
     /**

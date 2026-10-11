@@ -214,6 +214,16 @@ deny-all rule is active).
   date for short-notice reservations). No cron entry needs changing; the
   single `schedule:run` entry simply stops running the removed commands.
 
+- `amenity_low_stock_default` (env `HOTEL_AMENITY_LOW_STOCK`, default 10,
+  added 2026-10-11): the remaining-stock level at which the admin is alerted;
+  each amenity can override it on its edit page.
+- `catalog:refresh-dates` runs daily at 00:10 (added 2026-10-11): switches off
+  one-time promotions and discounts whose end date has passed and moves yearly
+  promotions to their next dates. Covered by the existing `schedule:run` cron
+  entry - nothing to add.
+- No-shows are marked by hand by receptionists (Bookings > booking > Mark as
+  No-Show); nothing marks them automatically.
+
 ### Front-end libraries (CDN)
 - Loaded from CDNs by the layouts (no npm/Vite build step): Bootstrap 5.3,
   Font Awesome 6.4, Chart.js 4.4 (dashboards) and Flatpickr 4.6.13

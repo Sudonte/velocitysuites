@@ -30,8 +30,15 @@ class AdminReportController extends Controller
     {
         $filters = ReportFilters::resolve($request);
 
+        // Audit trail filters: type of action, role and user (date range = the period above).
+        $logType = $request->get('log_type');
+        $logRole = $request->get('log_role');
+        $logUser = $request->filled('log_user') ? (int) $request->get('log_user') : null;
         $activityLogs = ActivityLog::with('user')
-            ->whereBetween('created_at', [$filters['from'], $filters['to']])
+            ->whereBetween('created_at', [$filters['from'], $filters['to']->copy()->endOfDay()])
+            ->when($logType, fn ($q) => $this->filterLogType($q, $logType))
+            ->when(in_array($logRole, ['admin', 'manager', 'receptionist', 'guest'], true), fn ($q) => $q->whereHas('user', fn ($u) => $u->where('role', $logRole)))
+            ->when($logUser, fn ($q) => $q->where('user_id', $logUser))
             ->latest()
             ->paginate(PerPage::resolve($request))
             ->withQueryString();
@@ -41,6 +48,7 @@ class AdminReportController extends Controller
             'filters' => $filters,
             'roomTypes' => RoomType::orderBy('name')->get(['id', 'name']),
             'report' => $this->reportData($filters),
+            'logUsers' => \App\Models\User::whereIn('role', ['admin', 'manager', 'receptionist'])->orderBy('first_name')->get(['id', 'first_name', 'last_name', 'role']),
             'arrivalDate' => $arrivalDate = $this->arrivalDate($request),
             'arrivals' => $this->reports->dailyArrivals($arrivalDate),
         ]);
@@ -85,6 +93,22 @@ class AdminReportController extends Controller
         $raw = (string) $request->get('arrival_date', '');
 
         return preg_match('/^\d{4}-\d{2}-\d{2}$/', $raw) && strtotime($raw) ? \Carbon\Carbon::parse($raw)->startOfDay() : today();
+    }
+
+    /** Activity log "Type" filter - by action wording and what the action was about. */
+    private function filterLogType($query, string $type): void
+    {
+        match ($type) {
+            'auth' => $query->whereIn('action', \App\Support\Activity::AUTH_ACTIONS),
+            'reservation' => $query->where(fn ($q) => $q->where('subject_type', 'reservation')->orWhere('action', 'like', '%reservation%')),
+            'booking' => $query->where(fn ($q) => $q->where('subject_type', 'booking')->orWhere('action', 'like', '%booking%')
+                ->orWhere('action', 'like', '%check%')->orWhere('action', 'like', '%no-show%')),
+            'payment' => $query->where(fn ($q) => $q->where('action', 'like', '%payment%')->orWhere('action', 'like', '%charge%')->orWhere('action', 'like', '%bill%')),
+            'amenity' => $query->where(fn ($q) => $q->where('subject_type', 'amenity')->orWhere('action', 'like', '%amenit%')),
+            'admin' => $query->whereIn('subject_type', ['user', 'promotion', 'discount', 'room', 'room_type', 'announcement', 'staff_password_reset_request'])
+                ->whereNotIn('action', \App\Support\Activity::AUTH_ACTIONS),
+            default => null,
+        };
     }
 
     /** Cached briefly (keyed by every filter) and shared by the screen and the PDF. */

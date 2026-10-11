@@ -28,7 +28,8 @@
 
     <!-- Search and Filter -->
     <x-card bodyClass="card-body" class="mb-4">
-        <form method="GET" action="{{ route('admin.amenities.index') }}" class="row g-3">
+        <form method="GET" action="{{ route('admin.amenities.index') }}"  class="row g-3">
+            <input type="hidden" name="view" value="{{ $view }}">
             <div class="col-md-4">
                 <input type="text" name="search" class="form-control"
                        placeholder="Search by name, description, or category" value="{{ request('search') }}">
@@ -62,6 +63,11 @@
             </div>
         </form>
     </x-card>
+
+    <ul class="nav nav-tabs mb-0">
+        <li class="nav-item"><a class="nav-link {{ $view === 'active' ? 'active' : '' }}" href="{{ route('admin.amenities.index') }}">Active</a></li>
+        <li class="nav-item"><a class="nav-link {{ $view === 'archived' ? 'active' : '' }}" href="{{ route('admin.amenities.index', ['view' => 'archived']) }}"><i class="fas fa-box-archive"></i> Archived</a></li>
+    </ul>
 
     <!-- Amenities Table - a simplified summary list (full description
          still lives in each row's View Details modal below), but Charge
@@ -99,12 +105,17 @@
                             @endif
                         </td>
                         <td>
-                            @if($amenity->is_unlimited)
+                            {{-- Remaining = total minus units held by requests on stays that haven't checked out. --}}
+                            @php $left = (int) ($remaining[$amenity->id] ?? 0); $state = $amenity->stockState($left); @endphp
+                            @if($state === 'unlimited')
                                 <span class="badge bg-info text-dark">Unlimited</span>
-                            @elseif($amenity->quantity <= 0)
-                                <span class="badge bg-danger">Out of Stock</span>
                             @else
-                                {{ $amenity->quantity }}
+                                <strong>{{ $left }}</strong> <span class="text-muted">/ {{ (int) $amenity->quantity }} left</span>
+                                @if($state === 'out')
+                                    <span class="badge bg-danger d-block mt-1">Out of Stock</span>
+                                @elseif($state === 'low')
+                                    <span class="badge bg-warning text-dark d-block mt-1">Low Stock</span>
+                                @endif
                             @endif
                         </td>
                         <td>{{ $amenity->category ?: 'Uncategorized' }}</td>
@@ -128,12 +139,21 @@
                                         title="{{ $amenity->status === 'active' ? 'Deactivate' : 'Activate' }}" aria-label="{{ $amenity->status === 'active' ? 'Deactivate' : 'Activate' }}">
                                     <i class="fas fa-{{ $amenity->status === 'active' ? 'ban' : 'check' }}"></i></button>
                             </form>
-                            <form action="{{ route('admin.amenities.destroy', $amenity) }}" method="POST" class="d-inline" data-confirm="This cannot be undone from this screen, though historical requests referencing it are preserved." data-confirm-title="Delete &quot;{{ $amenity->amenity_name }}&quot;?" data-confirm-button="Delete" data-confirm-variant="danger">
-                                @csrf
-                                @method('DELETE')
-                                <button type="submit" class="btn btn-outline-danger btn-sm btn-icon" title="Delete" aria-label="Delete">
-                                    <i class="fas fa-trash"></i></button>
-                            </form>
+                            @if($amenity->isArchived())
+                                <form action="{{ route('admin.amenities.unarchive', $amenity) }}" method="POST" class="d-inline">
+                                    @csrf
+                                    @method('PUT')
+                                    <button type="submit" class="btn btn-outline-success btn-sm btn-icon" title="Restore" aria-label="Restore">
+                                        <i class="fas fa-box-open"></i></button>
+                                </form>
+                            @else
+                                <form action="{{ route('admin.amenities.archive', $amenity) }}" method="POST" class="d-inline" data-confirm="It is switched off and moves to the Archived tab, where it can be restored." data-confirm-title="Archive this amenity?" data-confirm-button="Archive" data-confirm-variant="secondary">
+                                    @csrf
+                                    @method('PUT')
+                                    <button type="submit" class="btn btn-outline-secondary btn-sm btn-icon" title="Archive" aria-label="Archive">
+                                        <i class="fas fa-box-archive"></i></button>
+                                </form>
+                            @endif
                         </td>
                     </tr>
                 @empty

@@ -74,6 +74,13 @@
                                            id="quantity" name="quantity" value="{{ old('quantity', $amenity->quantity) }}" {{ $qtyMode === 'unlimited' ? 'disabled' : 'required' }}>
                                     <small class="text-muted">Units in stock. Each request holds units until the stay checks out.</small>
                                 </div>
+                                <div class="mt-2" id="lowStockField">
+                                    <label for="low_stock_threshold" class="form-label small mb-1">Low-stock alert at</label>
+                                    <input type="number" min="0" class="form-control @error('low_stock_threshold') is-invalid @enderror" id="low_stock_threshold" name="low_stock_threshold"
+                                           value="{{ old('low_stock_threshold', $amenity->low_stock_threshold) }}" placeholder="{{ config('hotel.amenity_low_stock_default') }} (default)">
+                                    <small class="text-muted">The admin is notified when the remaining stock reaches this number.</small>
+                                    @error('low_stock_threshold')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                                </div>
                                 <small id="quantityUnlimitedNote" class="text-muted {{ $qtyMode === 'unlimited' ? '' : 'd-none' }}">Never runs out - requests are never refused for stock.</small>
                                 @error('quantity')
                                     <div class="invalid-feedback d-block">{{ $message }}</div>

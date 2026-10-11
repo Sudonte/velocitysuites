@@ -65,7 +65,7 @@
                             <div class="form-group mb-3">
                                 <label for="start_date">Start date <small class="text-muted">(optional)</small></label>
                                 <input type="date" class="form-control @error('start_date') is-invalid @enderror"
-                                       id="start_date" name="start_date" value="{{ old('start_date', $discount->start_date?->toDateString()) }}">
+                                       id="start_date" name="start_date" min="{{ now()->toDateString() }}" value="{{ old('start_date', $discount->start_date?->toDateString()) }}">
                                 @error('start_date')
                                     <div class="invalid-feedback">{{ $message }}</div>
                                 @enderror
@@ -75,7 +75,7 @@
                             <div class="form-group mb-3">
                                 <label for="end_date">End date <small class="text-muted">(optional, on or after the start date)</small></label>
                                 <input type="date" class="form-control @error('end_date') is-invalid @enderror"
-                                       id="end_date" name="end_date" value="{{ old('end_date', $discount->end_date?->toDateString()) }}">
+                                       id="end_date" name="end_date" min="{{ now()->toDateString() }}" value="{{ old('end_date', $discount->end_date?->toDateString()) }}">
                                 @error('end_date')
                                     <div class="invalid-feedback">{{ $message }}</div>
                                 @enderror
