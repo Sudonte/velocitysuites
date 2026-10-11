@@ -112,7 +112,7 @@
                         <td>{{ ucfirst($payment->payment_method) }}</td>
                         <td>{{ $payment->reference_number ?? '—' }}</td>
                         <td class="text-end">₱{{ number_format($payment->amount_paid, 2) }}</td>
-                        <td><x-status-badge :status="$payment->payment_status" domain="payment" /></td>
+                        <td><x-status-badge :status="$payment->verification_status ?? $payment->payment_status" :domain="$payment->verification_status ? 'verification_status' : 'payment'" /></td>
                         <td>
                             @if($payment->isPendingVerification())
                                 <div class="d-flex gap-1">

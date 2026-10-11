@@ -154,7 +154,7 @@
                             @if($payment->isPendingVerification())
                                 <span class="badge bg-warning text-dark">Awaiting verification</span>
                             @else
-                                <x-status-badge :status="$payment->payment_status" domain="payment" />
+                                <x-status-badge :status="$payment->verification_status ?? $payment->payment_status" :domain="$payment->verification_status ? 'verification_status' : 'payment'" />
                             @endif
                         </div>
                     @endforeach

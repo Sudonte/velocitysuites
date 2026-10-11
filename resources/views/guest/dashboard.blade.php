@@ -270,7 +270,7 @@
                                 <td>₱{{ number_format($payment->amount_paid, 2) }}</td>
                                 <td>{{ ucfirst($payment->payment_method) }}</td>
                                 <td><small>{{ $payment->reference_number }}</small></td>
-                                <td><x-status-badge :status="$payment->payment_status" domain="payment" /></td>
+                                <td><x-status-badge :status="$payment->verification_status ?? $payment->payment_status" :domain="$payment->verification_status ? 'verification_status' : 'payment'" /></td>
                             </tr>
                         @endforeach
                     </tbody>
