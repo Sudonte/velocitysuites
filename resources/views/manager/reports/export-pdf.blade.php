@@ -32,6 +32,11 @@
                 <td>{{ number_format($averageStay, 1) }} nights</td>
                 <td>Average across reservations in {{ $periodLabel }}</td>
             </tr>
+            <tr>
+                <td>Occupancy Rate</td>
+                <td>{{ number_format($managerStats['occupancyRate'], 1) }}%</td>
+                <td>Rooms currently occupied vs. total inventory (live snapshot)</td>
+            </tr>
         </tbody>
     </table>
 

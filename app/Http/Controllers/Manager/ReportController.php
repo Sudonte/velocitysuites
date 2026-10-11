@@ -42,13 +42,14 @@ class ReportController extends Controller
     }
 
     /**
-     * The on-screen report's figures as a branded dompdf document - only
-     * what the selected filters (period, room type) cover, nothing extra.
+     * The same figures as the on-screen report (same filters) as a branded
+     * dompdf document, plus the current occupancy rate.
      */
     public function exportPdf(Request $request)
     {
         $filters = ReportFilters::resolve($request);
         $data = $this->reportData($filters);
+        $managerStats = $this->stats->managerStats($filters['from'], $filters['to']);
         $periodLabel = $filters['from']->format('M d, Y') . ' - ' . $filters['to']->format('M d, Y');
         if ($filters['room_type_id']) {
             $periodLabel .= ' | ' . RoomType::whereKey($filters['room_type_id'])->value('name');
@@ -57,6 +58,7 @@ class ReportController extends Controller
         $pdf = Pdf::loadView('manager.reports.export-pdf', $data + [
             'periodLabel' => $periodLabel,
             'generatedAt' => now(),
+            'managerStats' => $managerStats,
         ])->setPaper('a4', 'portrait');
 
         return $pdf->download('Velocity-Suites-Manager-Report_' . now()->format('Y-m-d_His') . '.pdf');
