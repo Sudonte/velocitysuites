@@ -60,10 +60,13 @@ class DashboardStatsService
      */
     public function pendingPaymentVerificationCount(): int
     {
+        // Same definition as the monitoring page's "Pending Verification"
+        // filter the card links to (GCash awaiting a receptionist's check,
+        // wherever on the stay the payment is attached).
         return TestAccountScope::excludeFromReservations(
-            Reservation::whereHas('payments', fn ($q) => $q->where('payment_status', 'pending'))
+            \App\Support\MonitoringFilters::paymentStatus(Reservation::query(), \App\Support\MonitoringFilters::RESERVATION_PAYMENTS, 'pending')
         )->count() + TestAccountScope::excludeFromBookings(
-            Booking::whereNull('reservation_id')->whereHas('payments', fn ($q) => $q->where('payment_status', 'pending'))
+            \App\Support\MonitoringFilters::paymentStatus(Booking::whereNull('reservation_id'), \App\Support\MonitoringFilters::BOOKING_PAYMENTS, 'pending')
         )->count();
     }
 

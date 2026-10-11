@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Booking;
 use App\Models\Reservation;
+use App\Support\MonitoringFilters;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\View\View;
@@ -34,6 +35,7 @@ class ReservationMonitoringController extends Controller
         $type = $request->get('type');
         $status = $request->get('status');
         $paymentStatus = $request->get('payment_status');
+        $paymentMethod = $request->get('payment_method');
         $search = trim((string) $request->get('search', ''));
 
         $items = collect();
@@ -62,8 +64,11 @@ class ReservationMonitoringController extends Controller
                     $reservationQuery->where('status', $status);
                 }
             }
-            if ($paymentStatus) {
-                $reservationQuery->whereHas('payments', fn ($q) => $q->where('payment_status', $paymentStatus));
+            if (MonitoringFilters::isPaymentStatus($paymentStatus)) {
+                MonitoringFilters::paymentStatus($reservationQuery, MonitoringFilters::RESERVATION_PAYMENTS, $paymentStatus);
+            }
+            if (in_array($paymentMethod, ['cash', 'gcash'], true)) {
+                MonitoringFilters::paymentMethod($reservationQuery, MonitoringFilters::RESERVATION_PAYMENTS, $paymentMethod);
             }
             if ($request->filled('from')) {
                 $reservationQuery->whereDate('check_in', '>=', $request->from);
@@ -118,8 +123,11 @@ class ReservationMonitoringController extends Controller
                     $bookingQuery->whereRaw('1 = 0');
                 }
             }
-            if ($paymentStatus) {
-                $bookingQuery->whereHas('payments', fn ($q) => $q->where('payment_status', $paymentStatus));
+            if (MonitoringFilters::isPaymentStatus($paymentStatus)) {
+                MonitoringFilters::paymentStatus($bookingQuery, MonitoringFilters::BOOKING_PAYMENTS, $paymentStatus);
+            }
+            if (in_array($paymentMethod, ['cash', 'gcash'], true)) {
+                MonitoringFilters::paymentMethod($bookingQuery, MonitoringFilters::BOOKING_PAYMENTS, $paymentMethod);
             }
             if ($request->filled('from')) {
                 $bookingQuery->whereDate('check_in', '>=', $request->from);

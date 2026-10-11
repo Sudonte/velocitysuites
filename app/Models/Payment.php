@@ -173,6 +173,38 @@ class Payment extends Model
         return $this->verified_at !== null;
     }
 
+    /** Payment states as staff see them (badges, Payment Status filter). */
+    public const DISPLAY_STATUSES = ['pending', 'completed', 'rejected', 'failed'];
+
+    /**
+     * GCash payments still awaiting a receptionist's check - query twin of
+     * isPendingVerification(). Stored as 'pending' OR 'completed' (an
+     * auto-converted deposit is 'completed' before anyone verifies it).
+     */
+    public function scopePendingVerification($query)
+    {
+        return $query->where('payments.payment_method', 'gcash')
+            ->whereIn('payments.payment_status', ['pending', 'completed'])
+            ->whereNull('payments.verified_at')
+            ->whereNull('payments.rejected_at');
+    }
+
+    /**
+     * Filter by the state staff actually see, not the raw payment_status:
+     * pending = awaiting verification, completed = counted (verified GCash
+     * or any other completed payment), rejected, failed.
+     */
+    public function scopeWithDisplayStatus($query, string $status)
+    {
+        return match ($status) {
+            'pending' => $query->pendingVerification(),
+            'completed' => $query->countedAsRevenue(),
+            'rejected' => $query->where(fn ($q) => $q->whereNotNull('payments.rejected_at')->orWhere('payments.payment_status', 'rejected')),
+            'failed' => $query->where('payments.payment_status', 'failed'),
+            default => $query,
+        };
+    }
+
     /**
      * Payments that count as revenue: completed, and - for GCash - verified
      * by staff. An auto-converted GCash deposit is already 'completed' but

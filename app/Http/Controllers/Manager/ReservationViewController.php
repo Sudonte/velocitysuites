@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Manager;
 use App\Http\Controllers\Controller;
 use App\Models\Booking;
 use App\Models\Reservation;
+use App\Support\MonitoringFilters;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
@@ -51,11 +52,11 @@ class ReservationViewController extends Controller
                     $reservationQuery->where('status', $status);
                 }
             }
-            if ($paymentStatus) {
-                $reservationQuery->whereHas('payments', fn ($q) => $q->where('payment_status', $paymentStatus));
+            if (MonitoringFilters::isPaymentStatus($paymentStatus)) {
+                MonitoringFilters::paymentStatus($reservationQuery, MonitoringFilters::RESERVATION_PAYMENTS, $paymentStatus);
             }
-            if ($paymentMethod) {
-                $reservationQuery->whereHas('payments', fn ($q) => $q->where('payment_method', $paymentMethod));
+            if (in_array($paymentMethod, ['cash', 'gcash'], true)) {
+                MonitoringFilters::paymentMethod($reservationQuery, MonitoringFilters::RESERVATION_PAYMENTS, $paymentMethod);
             }
             if ($receptionistId) {
                 $reservationQuery->where(function ($q) use ($receptionistId) {
@@ -120,11 +121,11 @@ class ReservationViewController extends Controller
                     $bookingQuery->whereRaw('1 = 0');
                 }
             }
-            if ($paymentStatus) {
-                $bookingQuery->whereHas('payments', fn ($q) => $q->where('payment_status', $paymentStatus));
+            if (MonitoringFilters::isPaymentStatus($paymentStatus)) {
+                MonitoringFilters::paymentStatus($bookingQuery, MonitoringFilters::BOOKING_PAYMENTS, $paymentStatus);
             }
-            if ($paymentMethod) {
-                $bookingQuery->whereHas('payments', fn ($q) => $q->where('payment_method', $paymentMethod));
+            if (in_array($paymentMethod, ['cash', 'gcash'], true)) {
+                MonitoringFilters::paymentMethod($bookingQuery, MonitoringFilters::BOOKING_PAYMENTS, $paymentMethod);
             }
             if ($receptionistId) {
                 $bookingQuery->where(function ($q) use ($receptionistId) {

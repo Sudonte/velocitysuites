@@ -43,9 +43,8 @@
                 <select name="status" class="form-control">
                     <option value="">All Status</option>
                     @if($tab === 'reservations')
-                    <option value="PENDING" {{ request('status') === 'PENDING' ? 'selected' : '' }}>Pending (Any Payment Method)</option>
-                    <option value="AWAITING_CASH_CONFIRMATION" {{ request('status') === 'AWAITING_CASH_CONFIRMATION' ? 'selected' : '' }}>Awaiting Cash Payment</option>
-                    <option value="AWAITING_GCASH_PAYMENT" {{ request('status') === 'AWAITING_GCASH_PAYMENT' ? 'selected' : '' }}>Awaiting GCash Payment</option>
+                    {{-- How the guest pays is the Payment Method filter's job, so a single "Awaiting Payment" here. --}}
+                    <option value="PENDING" {{ in_array(request('status'), ['PENDING', 'AWAITING_CASH_CONFIRMATION', 'AWAITING_GCASH_PAYMENT'], true) ? 'selected' : '' }}>Awaiting Payment</option>
                     <option value="REJECTED_RESERVATION" {{ request('status') === 'REJECTED_RESERVATION' ? 'selected' : '' }}>Rejected</option>
                     <option value="CANCELLED_RESERVATION" {{ request('status') === 'CANCELLED_RESERVATION' ? 'selected' : '' }}>Cancelled</option>
                     @else
@@ -57,7 +56,7 @@
                 </select>
             </div>
             <div class="col-sm-6 col-md-4 col-lg-2">
-                <label class="form-label small text-muted mb-1">Payment</label>
+                <label class="form-label small text-muted mb-1">Payment Status</label>
                 <select name="payment_status" class="form-control">
                     <option value="">All Payments</option>
                     <option value="pending" {{ request('payment_status') === 'pending' ? 'selected' : '' }}>Pending Verification</option>
