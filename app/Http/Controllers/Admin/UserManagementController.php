@@ -54,7 +54,7 @@ class UserManagementController extends Controller
             $query->where('status', $request->status);
         }
 
-        $users = $query->paginate(\App\Support\PerPage::resolve($request))->withQueryString();
+        $users = $query->latest()->paginate(\App\Support\PerPage::resolve($request))->withQueryString();
 
         $pendingResetRequestsCount = StaffPasswordResetRequest::where('status', 'pending')->count();
 

@@ -41,7 +41,7 @@ class RoomTypeManagementController extends Controller
             $query->where('status', $request->status);
         }
 
-        $roomTypes = $query->orderBy('name')->paginate(\App\Support\PerPage::resolve($request))->withQueryString();
+        $roomTypes = $query->latest()->paginate(\App\Support\PerPage::resolve($request))->withQueryString();
 
         return view('admin.room-types.index', compact('roomTypes'));
     }
@@ -73,7 +73,7 @@ class RoomTypeManagementController extends Controller
             }
         }
 
-        $rooms = $query->orderBy('room_number')->paginate(\App\Support\PerPage::resolve($request))->withQueryString();
+        $rooms = $query->latest()->paginate(\App\Support\PerPage::resolve($request))->withQueryString();
         $archivedCount = $roomType->rooms()->whereNotNull('archived_at')->count();
 
         // Preview of the next numbers the bulk-add would generate.

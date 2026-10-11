@@ -167,7 +167,8 @@ class ReservationViewController extends Controller
             }
         }
 
-        $items = $items->sortBy('check_in')->values();
+        // Newest first: the most recently created reservation/booking on top.
+        $items = $items->sortByDesc(fn ($item) => [$item->created_at?->timestamp ?? 0, $item->id])->values();
 
         // Quick-glance counts for the summary cards atop the list - scoped
         // to whatever filters are currently applied (the same $items set
