@@ -52,7 +52,7 @@
                             <td class="text-center">{{ $guest->reservations_count }}</td>
                             <td class="text-center">{{ $guest->direct_bookings_count }}</td>
                             <td>{{ $guest->last_reservation_check_in ? \Illuminate\Support\Carbon::parse($guest->last_reservation_check_in)->format('M d, Y') : '-' }}</td>
-                            <td class="text-end"><a href="{{ route('guest-history.show', $guest) }}" class="btn btn-outline-primary btn-sm"><i class="fas fa-eye"></i> View history</a></td>
+                            <td class="text-end"><a href="{{ route('guest-history.show', $guest) }}" class="btn btn-outline-primary btn-sm btn-icon" title="View history" aria-label="View history"><i class="fas fa-eye"></i></a></td>
                         </tr>
                     @empty
                         <tr><td colspan="6"><x-empty-state icon="fas fa-address-book" message="No guests match your search." /></td></tr>
@@ -78,7 +78,7 @@
                                 @endif
                             </td>
                             <td class="text-end">
-                                <a href="{{ $row['kind'] === 'booking' ? $bookingUrl($m) : $reservationUrl($m->id) }}" class="btn btn-outline-primary btn-sm"><i class="fas fa-eye"></i> View</a>
+                                <a href="{{ $row['kind'] === 'booking' ? $bookingUrl($m) : $reservationUrl($m->id) }}" class="btn btn-outline-primary btn-sm btn-icon" title="View" aria-label="View"><i class="fas fa-eye"></i></a>
                             </td>
                         </tr>
                     @empty

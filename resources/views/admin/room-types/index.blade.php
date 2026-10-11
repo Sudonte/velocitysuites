@@ -71,24 +71,21 @@
                         </a>
                         <span class="d-flex flex-wrap gap-2">
                             {{-- position-relative + own z-index keeps these clickable above the stretched-link --}}
-                            <a href="{{ route('admin.room-types.edit', $roomType) }}" class="btn btn-outline-secondary btn-sm position-relative" style="z-index: 2;">
-                                <i class="fas fa-pen"></i> Edit
-                            </a>
+                            <a href="{{ route('admin.room-types.edit', $roomType) }}" class="btn btn-outline-secondary btn-sm position-relative btn-icon" style="z-index: 2;" title="Edit" aria-label="Edit">
+                                <i class="fas fa-pen"></i></a>
                             @if($roomType->status === 'inactive')
                                 <form action="{{ route('admin.room-types.reactivate', $roomType) }}" method="POST" class="d-inline position-relative" style="z-index: 2;" data-confirm="Guests will be able to browse and book it again." data-confirm-title="Reactivate this room type?" data-confirm-button="Reactivate Room Type" data-confirm-variant="success">
                                     @csrf
                                     @method('PUT')
-                                    <button type="submit" class="btn btn-sm btn-outline-success">
-                                        <i class="fas fa-undo"></i> Reactivate
-                                    </button>
+                                    <button type="submit" class="btn btn-sm btn-outline-success btn-icon" title="Reactivate" aria-label="Reactivate">
+                                        <i class="fas fa-undo"></i></button>
                                 </form>
                             @else
                                 <form action="{{ route('admin.room-types.deactivate', $roomType) }}" method="POST" class="d-inline position-relative" style="z-index: 2;" data-confirm="Guests will no longer be able to browse or book it." data-confirm-title="Deactivate this room type?" data-confirm-button="Deactivate Room Type" data-confirm-variant="warning">
                                     @csrf
                                     @method('PUT')
-                                    <button type="submit" class="btn btn-sm btn-outline-warning">
-                                        <i class="fas fa-ban"></i> Deactivate
-                                    </button>
+                                    <button type="submit" class="btn btn-sm btn-outline-warning btn-icon" title="Deactivate" aria-label="Deactivate">
+                                        <i class="fas fa-ban"></i></button>
                                 </form>
                             @endif
                         </span>

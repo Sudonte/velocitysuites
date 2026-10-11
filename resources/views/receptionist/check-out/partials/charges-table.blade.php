@@ -60,15 +60,13 @@
                 </td>
                 @if($editable)
                     <td class="text-end text-nowrap">
-                        <button type="button" class="btn btn-outline-secondary btn-sm charge-edit-btn" title="Edit">
-                            <i class="fas fa-pen"></i> Edit
-                        </button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm charge-edit-btn btn-icon" title="Edit" aria-label="Edit">
+                            <i class="fas fa-pen"></i></button>
                         <button type="button" class="btn btn-sm btn-outline-success charge-save-btn d-none" title="Save">
                             <i class="fas fa-check"></i>
                         </button>
-                        <button type="button" class="btn btn-outline-danger btn-sm charge-delete-btn" title="Remove">
-                            <i class="fas fa-trash"></i> Delete
-                        </button>
+                        <button type="button" class="btn btn-outline-danger btn-sm charge-delete-btn btn-icon" title="Remove" aria-label="Delete">
+                            <i class="fas fa-trash"></i></button>
                     </td>
                 @endif
             </tr>

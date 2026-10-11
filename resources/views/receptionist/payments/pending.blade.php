@@ -46,9 +46,8 @@
                         <td>
                             <div class="d-flex gap-1">
                                 @if($reservation)
-                                    <button type="button" class="btn btn-outline-primary btn-sm btn-open-detail" data-reservation-id="{{ $reservation->id }}">
-                                        <i class="fas fa-eye"></i> View
-                                    </button>
+                                    <button type="button" class="btn btn-outline-primary btn-sm btn-open-detail btn-icon" data-reservation-id="{{ $reservation->id }}" title="View" aria-label="View">
+                                        <i class="fas fa-eye"></i></button>
                                 @endif
                                 <form action="{{ route('receptionist.payments.verify', $payment) }}" method="POST"
                                       data-confirm="It will be marked as verified." data-confirm-title="Verify this payment as received?" data-confirm-button="Verify Payment" data-confirm-variant="success">

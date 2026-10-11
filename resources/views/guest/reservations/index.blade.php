@@ -95,21 +95,18 @@
                                     || ($reservation->booking && $reservation->booking->booking_status === \App\Models\Booking::STATUS_CANCELLED);
                                 $isCompleted = $reservation->booking && $reservation->booking->booking_status === \App\Models\Booking::STATUS_COMPLETED;
                             ?>
-                            <a href="{{ route('guest.reservations.show', $reservation) }}" class="btn btn-outline-primary btn-sm">
-                                <i class="fas fa-eye"></i> View
-                            </a>
+                            <a href="{{ route('guest.reservations.show', $reservation) }}" class="btn btn-outline-primary btn-sm btn-icon" title="View" aria-label="View">
+                                <i class="fas fa-eye"></i></a>
                             @if($reservation->payments->isNotEmpty() || $reservation->booking)
-                                <a href="{{ route('guest.reservations.receipt', $reservation) }}" class="btn btn-sm btn-outline-secondary">
-                                    <i class="fas fa-receipt"></i> Receipt
-                                </a>
+                                <a href="{{ route('guest.reservations.receipt', $reservation) }}" class="btn btn-sm btn-outline-secondary btn-icon" title="Receipt" aria-label="Receipt">
+                                    <i class="fas fa-receipt"></i></a>
                             @endif
                             @if($isCancelled || $isCompleted)
                                 <form action="{{ route('guest.reservations.hide', $reservation) }}" method="POST" class="d-inline"
                                       data-confirm="This only hides it from your view - staff records are kept." data-confirm-title="Remove this from your list?" data-confirm-button="Remove from List" data-confirm-variant="secondary">
                                     @csrf @method('PUT')
-                                    <button type="submit" class="btn btn-outline-danger btn-sm" title="Remove from my list">
-                                        <i class="fas fa-trash"></i> Delete
-                                    </button>
+                                    <button type="submit" class="btn btn-outline-danger btn-sm btn-icon" title="Remove from my list" aria-label="Delete">
+                                        <i class="fas fa-trash"></i></button>
                                 </form>
                             @endif
                         </td>

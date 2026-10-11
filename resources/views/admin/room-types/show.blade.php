@@ -203,9 +203,8 @@
                             </div>
                         </div>
                         <div class="card-footer d-flex justify-content-between align-items-center">
-                            <a href="{{ route('admin.rooms.edit', $room) }}" class="btn btn-outline-secondary btn-sm">
-                                <i class="fas fa-pen"></i> Edit
-                            </a>
+                            <a href="{{ route('admin.rooms.edit', $room) }}" class="btn btn-outline-secondary btn-sm btn-icon" title="Edit" aria-label="Edit">
+                                <i class="fas fa-pen"></i></a>
                             <div class="d-flex gap-2">
                                 @if($room->isArchived())
                                     <form action="{{ route('admin.rooms.restore', $room) }}" method="POST"
@@ -213,9 +212,8 @@
                                           data-confirm-title="Restore Room {{ $room->room_number }}?" data-confirm-button="Restore Room" data-confirm-variant="success">
                                         @csrf
                                         @method('PUT')
-                                        <button type="submit" class="btn btn-sm btn-outline-success">
-                                            <i class="fas fa-box-open"></i> Restore
-                                        </button>
+                                        <button type="submit" class="btn btn-sm btn-outline-success btn-icon" title="Restore" aria-label="Restore">
+                                            <i class="fas fa-box-open"></i></button>
                                     </form>
                                 @else
                                     @if($room->status === 'maintenance')
@@ -224,9 +222,8 @@
                                               data-confirm-title="Reactivate Room {{ $room->room_number }}?" data-confirm-button="Reactivate" data-confirm-variant="success">
                                             @csrf
                                             @method('PUT')
-                                            <button type="submit" class="btn btn-sm btn-outline-success">
-                                                <i class="fas fa-undo"></i> Reactivate
-                                            </button>
+                                            <button type="submit" class="btn btn-sm btn-outline-success btn-icon" title="Reactivate" aria-label="Reactivate">
+                                                <i class="fas fa-undo"></i></button>
                                         </form>
                                     @else
                                         <form action="{{ route('admin.rooms.deactivate', $room) }}" method="POST"
@@ -234,9 +231,8 @@
                                               data-confirm-title="Deactivate Room {{ $room->room_number }}?" data-confirm-button="Set to Maintenance" data-confirm-variant="warning">
                                             @csrf
                                             @method('PUT')
-                                            <button type="submit" class="btn btn-sm btn-outline-warning">
-                                                <i class="fas fa-tools"></i> Maintenance
-                                            </button>
+                                            <button type="submit" class="btn btn-sm btn-outline-warning btn-icon" title="Maintenance" aria-label="Maintenance">
+                                                <i class="fas fa-tools"></i></button>
                                         </form>
                                     @endif
                                     <form action="{{ route('admin.rooms.archive', $room) }}" method="POST"
@@ -244,9 +240,8 @@
                                           data-confirm-title="Archive Room {{ $room->room_number }}?" data-confirm-button="Archive Room" data-confirm-variant="danger">
                                         @csrf
                                         @method('PUT')
-                                        <button type="submit" class="btn btn-outline-secondary btn-sm">
-                                            <i class="fas fa-box-archive"></i> Archive
-                                        </button>
+                                        <button type="submit" class="btn btn-outline-secondary btn-sm btn-icon" title="Archive" aria-label="Archive">
+                                            <i class="fas fa-box-archive"></i></button>
                                     </form>
                                 @endif
                             </div>

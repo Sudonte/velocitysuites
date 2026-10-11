@@ -116,10 +116,9 @@
                         <span class="text-muted">Archived</span>
                         <span>{{ $req->archived_at?->format('M d, Y') }}</span>
                     </div>
-                    <button type="button" class="btn btn-outline-primary btn-sm w-100 mt-2" data-bs-toggle="modal"
-                            data-bs-target="#amenityRequestDetail{{ $req->id }}">
-                        <i class="fas fa-eye"></i> View Details
-                    </button>
+                    <button type="button" class="btn btn-outline-primary btn-sm w-100 mt-2 btn-icon" data-bs-toggle="modal"
+                            data-bs-target="#amenityRequestDetail{{ $req->id }}" title="View Details" aria-label="View Details">
+                        <i class="fas fa-eye"></i></button>
                 </div>
             @empty
                 <x-empty-state icon="fas fa-box-archive" :message="request()->hasAny(['search', 'status', 'date_from', 'date_to'])
@@ -167,10 +166,9 @@
                             <td class="d-none d-lg-table-cell">{{ $req->archived_at?->format('M d, Y h:i A') }}</td>
                             <td><x-status-badge :status="$req->status" domain="amenity_request" /></td>
                             <td class="text-nowrap">
-                                <button type="button" class="btn btn-outline-primary btn-sm" data-bs-toggle="modal"
-                                        data-bs-target="#amenityRequestDetail{{ $req->id }}" title="View details">
-                                    <i class="fas fa-eye"></i> View
-                                </button>
+                                <button type="button" class="btn btn-outline-primary btn-sm btn-icon" data-bs-toggle="modal"
+                                        data-bs-target="#amenityRequestDetail{{ $req->id }}" title="View details" aria-label="View">
+                                    <i class="fas fa-eye"></i></button>
                             </td>
                         </tr>
                     @empty

@@ -150,9 +150,8 @@
                         <span class="text-muted">Status</span>
                         <x-status-badge :status="$item->monitor_status_value" :domain="$item->monitor_status_domain" />
                     </div>
-                    <a href="{{ $item->monitor_show_route }}" class="btn btn-outline-primary btn-sm w-100 mt-2">
-                        <i class="fas fa-eye"></i> View Details
-                    </a>
+                    <a href="{{ $item->monitor_show_route }}" class="btn btn-outline-primary btn-sm w-100 mt-2 btn-icon" title="View Details" aria-label="View Details">
+                        <i class="fas fa-eye"></i></a>
                 </div>
             @empty
                 <x-empty-state icon="fas fa-calendar-alt" message="No bookings or reservations found." />
@@ -214,9 +213,8 @@
                                 <x-status-badge :status="$item->monitor_status_value" :domain="$item->monitor_status_domain" />
                             </td>
                             <td>
-                                <a href="{{ $item->monitor_show_route }}" class="btn btn-outline-primary btn-sm">
-                                    <i class="fas fa-eye"></i> View
-                                </a>
+                                <a href="{{ $item->monitor_show_route }}" class="btn btn-outline-primary btn-sm btn-icon" title="View" aria-label="View">
+                                    <i class="fas fa-eye"></i></a>
                             </td>
                         </tr>
                     @empty

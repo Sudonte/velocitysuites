@@ -125,9 +125,8 @@
                             </div>
                         </div>
                         <div class="card-footer">
-                            <a href="{{ route('receptionist.rooms.room-details', [$roomType, $room]) }}" class="btn btn-outline-primary btn-sm w-100">
-                                <i class="fas fa-eye"></i> View Details
-                            </a>
+                            <a href="{{ route('receptionist.rooms.room-details', [$roomType, $room]) }}" class="btn btn-outline-primary btn-sm w-100 btn-icon" title="View Details" aria-label="View Details">
+                                <i class="fas fa-eye"></i></a>
                         </div>
                     </div>
                 </div>

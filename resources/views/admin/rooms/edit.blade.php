@@ -211,10 +211,9 @@
                                         <form action="{{ route('admin.rooms.gallery.destroy', $image) }}" method="POST" data-confirm="This can't be undone." data-confirm-title="Delete this gallery image?" data-confirm-button="Delete" data-confirm-variant="danger">
                                             @csrf
                                             @method('DELETE')
-                                            <button type="submit" class="btn btn-outline-danger btn-sm"
-                                                    {{ $galleryCount <= 4 ? 'disabled title="Room must keep at least 4 photos - replace instead"' : '' }}>
-                                                <i class="fas fa-trash"></i> Delete
-                                            </button>
+                                            <button type="submit" class="btn btn-outline-danger btn-sm btn-icon"
+                                                    {{ $galleryCount <= 4 ? 'disabled title="Room must keep at least 4 photos - replace instead"' : '' }} aria-label="Delete">
+                                                <i class="fas fa-trash"></i></button>
                                         </form>
                                     </div>
                                 </div>

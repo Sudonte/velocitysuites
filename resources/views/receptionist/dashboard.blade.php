@@ -170,9 +170,8 @@
                                     </td>
                                     <td>
                                         @if($item->booking)
-                                            <a href="{{ route('receptionist.bookings.show', $item->booking) }}" class="btn btn-outline-primary btn-sm">
-                                                <i class="fas fa-eye"></i> View
-                                            </a>
+                                            <a href="{{ route('receptionist.bookings.show', $item->booking) }}" class="btn btn-outline-primary btn-sm btn-icon" title="View" aria-label="View">
+                                                <i class="fas fa-eye"></i></a>
                                         @endif
                                     </td>
                                 </tr>

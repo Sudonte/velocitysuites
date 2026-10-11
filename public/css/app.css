@@ -1805,3 +1805,8 @@ tbody tr:hover {
 td.table-actions { white-space: nowrap; }
 td.table-actions form { display: inline-block; }
 td.table-actions > * + * { margin-left: 0.25rem; }
+
+/* Compact square icon buttons for row actions (label in title/aria-label). */
+.btn-icon.btn-sm { width: 2rem; height: 2rem; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
+.btn-icon i { margin: 0; }
+td.table-actions .btn-icon, .d-flex > .btn-icon { flex-shrink: 0; }

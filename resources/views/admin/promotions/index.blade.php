@@ -104,22 +104,19 @@
                             <x-status-badge :status="$promotion->status" domain="active_flag" />
                         </td>
                         <td class="table-actions">
-                            <a href="{{ route('admin.promotions.edit', $promotion) }}" class="btn btn-outline-secondary btn-sm">
-                                <i class="fas fa-pen"></i> Edit
-                            </a>
+                            <a href="{{ route('admin.promotions.edit', $promotion) }}" class="btn btn-outline-secondary btn-sm btn-icon" title="Edit" aria-label="Edit">
+                                <i class="fas fa-pen"></i></a>
                             <form action="{{ route('admin.promotions.toggle', $promotion) }}" method="POST" class="d-inline" data-confirm="It will switch between active and inactive." data-confirm-title="Toggle this promotion status?" data-confirm-button="Change Status" data-confirm-variant="warning">
                                 @csrf
                                 @method('PUT')
-                                <button type="submit" class="btn btn-sm btn-outline-{{ $promotion->status === 'active' ? 'warning' : 'success' }}">
-                                    <i class="fas fa-{{ $promotion->status === 'active' ? 'ban' : 'check' }}"></i> {{ $promotion->status === 'active' ? 'Deactivate' : 'Activate' }}
-                                </button>
+                                <button type="submit" class="btn btn-sm btn-outline-{{ $promotion->status === 'active' ? 'warning' : 'success' }} btn-icon" title="{{ $promotion->status === 'active' ? 'Deactivate' : 'Activate' }}" aria-label="{{ $promotion->status === 'active' ? 'Deactivate' : 'Activate' }}">
+                                    <i class="fas fa-{{ $promotion->status === 'active' ? 'ban' : 'check' }}"></i></button>
                             </form>
                             <form action="{{ route('admin.promotions.destroy', $promotion) }}" method="POST" class="d-inline" data-confirm="This can't be undone." data-confirm-title="Delete this promotion?" data-confirm-button="Delete" data-confirm-variant="danger">
                                 @csrf
                                 @method('DELETE')
-                                <button type="submit" class="btn btn-outline-danger btn-sm">
-                                    <i class="fas fa-trash"></i> Delete
-                                </button>
+                                <button type="submit" class="btn btn-outline-danger btn-sm btn-icon" title="Delete" aria-label="Delete">
+                                    <i class="fas fa-trash"></i></button>
                             </form>
                         </td>
                     </tr>

@@ -119,15 +119,13 @@
                           data-confirm="This cannot be undone." data-confirm-title="Delete this notification?" data-confirm-button="Delete" data-confirm-variant="danger">
                         @csrf
                         @method('DELETE')
-                        <button type="submit" class="btn btn-outline-danger btn-sm">
-                            <i class="fas fa-trash"></i> Delete
-                        </button>
+                        <button type="submit" class="btn btn-outline-danger btn-sm btn-icon" title="Delete" aria-label="Delete">
+                            <i class="fas fa-trash"></i></button>
                     </form>
 
                     @if($isAnnouncement)
-                        <button type="button" class="btn btn-sm btn-outline-danger" data-bs-toggle="modal" data-bs-target="#notifDetailModal{{ $notification->id }}">
-                            <i class="fas fa-expand"></i> View Details
-                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-danger btn-icon" data-bs-toggle="modal" data-bs-target="#notifDetailModal{{ $notification->id }}" title="View Details" aria-label="View Details">
+                            <i class="fas fa-expand"></i></button>
                     @endif
                 </div>
             </div>

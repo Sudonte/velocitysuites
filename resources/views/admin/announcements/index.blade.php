@@ -85,39 +85,34 @@
                         </td>
                         <td class="text-end">
                             <div class="d-inline-flex flex-wrap justify-content-end gap-1">
-                                <button type="button" class="btn btn-outline-primary btn-sm" title="View full details"
-                                        data-bs-toggle="modal" data-bs-target="#announcementViewModal{{ $announcement->id }}">
-                                    <i class="fas fa-eye"></i> View
-                                </button>
-                                <a href="{{ route('admin.announcements.edit', $announcement) }}" class="btn btn-outline-secondary btn-sm" title="Edit">
-                                    <i class="fas fa-pen"></i> Edit
-                                </a>
+                                <button type="button" class="btn btn-outline-primary btn-sm btn-icon" title="View full details"
+                                        data-bs-toggle="modal" data-bs-target="#announcementViewModal{{ $announcement->id }}" aria-label="View">
+                                    <i class="fas fa-eye"></i></button>
+                                <a href="{{ route('admin.announcements.edit', $announcement) }}" class="btn btn-outline-secondary btn-sm btn-icon" title="Edit" aria-label="Edit">
+                                    <i class="fas fa-pen"></i></a>
                                 @if($announcement->status === 'published')
                                     <form action="{{ route('admin.announcements.unpublish', $announcement) }}" method="POST" class="d-inline"
                                           data-confirm="It will stop appearing on the public Home page and dashboards." data-confirm-title="Unpublish &quot;{{ $announcement->title }}&quot;?" data-confirm-button="Unpublish" data-confirm-variant="warning">
                                         @csrf
                                         @method('PUT')
-                                        <button type="submit" class="btn btn-sm btn-outline-warning" title="Unpublish">
-                                            <i class="fas fa-eye-slash"></i> Unpublish
-                                        </button>
+                                        <button type="submit" class="btn btn-sm btn-outline-warning btn-icon" title="Unpublish" aria-label="Unpublish">
+                                            <i class="fas fa-eye-slash"></i></button>
                                     </form>
                                 @else
                                     <form action="{{ route('admin.announcements.publish', $announcement) }}" method="POST" class="d-inline"
                                           data-confirm="This will notify the selected target audience." data-confirm-title="Publish &quot;{{ $announcement->title }}&quot; now?" data-confirm-button="Publish Now" data-confirm-variant="primary">
                                         @csrf
                                         @method('PUT')
-                                        <button type="submit" class="btn btn-outline-primary btn-sm" title="Publish">
-                                            <i class="fas fa-eye"></i> View
-                                        </button>
+                                        <button type="submit" class="btn btn-outline-primary btn-sm btn-icon" title="Publish" aria-label="Publish">
+                                            <i class="fas fa-eye"></i></button>
                                     </form>
                                 @endif
                                 <form action="{{ route('admin.announcements.destroy', $announcement) }}" method="POST" class="d-inline"
                                       data-confirm="This cannot be undone. Already-sent notifications will not be affected." data-confirm-title="Permanently delete &quot;{{ $announcement->title }}&quot;?" data-confirm-button="Delete Permanently" data-confirm-variant="danger">
                                     @csrf
                                     @method('DELETE')
-                                    <button type="submit" class="btn btn-outline-danger btn-sm" title="Delete">
-                                        <i class="fas fa-trash"></i> Delete
-                                    </button>
+                                    <button type="submit" class="btn btn-outline-danger btn-sm btn-icon" title="Delete" aria-label="Delete">
+                                        <i class="fas fa-trash"></i></button>
                                 </form>
                             </div>
                         </td>

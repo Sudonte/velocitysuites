@@ -66,10 +66,9 @@
                         </span>
                     </div>
                     <div class="d-flex flex-wrap gap-2 mt-2">
-                        <button type="button" class="btn btn-sm btn-primary flex-fill" data-bs-toggle="modal"
-                                data-bs-target="#detailsModal" data-details-url="{{ route('receptionist.reservations.details', $reservation) }}">
-                            <i class="fas fa-eye"></i> View / Manage
-                        </button>
+                        <button type="button" class="btn btn-sm btn-primary flex-fill btn-icon" data-bs-toggle="modal"
+                                data-bs-target="#detailsModal" data-details-url="{{ route('receptionist.reservations.details', $reservation) }}" title="View / Manage" aria-label="View / Manage">
+                            <i class="fas fa-eye"></i></button>
                     </div>
                 </div>
             @empty
@@ -130,10 +129,9 @@
                             @endif
                         </td>
                         <td class="text-nowrap">
-                            <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal"
-                                    data-bs-target="#detailsModal" data-details-url="{{ route('receptionist.reservations.details', $reservation) }}">
-                                <i class="fas fa-eye"></i> View / Manage
-                            </button>
+                            <button type="button" class="btn btn-sm btn-primary btn-icon" data-bs-toggle="modal"
+                                    data-bs-target="#detailsModal" data-details-url="{{ route('receptionist.reservations.details', $reservation) }}" title="View / Manage" aria-label="View / Manage">
+                                <i class="fas fa-eye"></i></button>
                         </td>
                     </tr>
                 @empty

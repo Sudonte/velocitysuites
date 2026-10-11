@@ -68,9 +68,8 @@
                     </div>
                 </div>
                 <div class="mt-3">
-                    <a href="{{ route('guest.reservations.show', $currentReservation) }}" class="btn btn-outline-primary btn-sm">
-                        <i class="fas fa-eye"></i> View Reservation Details
-                    </a>
+                    <a href="{{ route('guest.reservations.show', $currentReservation) }}" class="btn btn-outline-primary btn-sm btn-icon" title="View Reservation Details" aria-label="View Reservation Details">
+                        <i class="fas fa-eye"></i></a>
                     @if($currentReservation->booking && $currentReservation->booking->billing)
                         @php
                             $billing = $currentReservation->booking->billing;
@@ -225,9 +224,8 @@
                                     @endif
                                 </td>
                                 <td>
-                                    <a href="{{ route('guest.reservations.show', $reservation) }}" class="btn btn-outline-primary btn-sm">
-                                        <i class="fas fa-eye"></i> View
-                                    </a>
+                                    <a href="{{ route('guest.reservations.show', $reservation) }}" class="btn btn-outline-primary btn-sm btn-icon" title="View" aria-label="View">
+                                        <i class="fas fa-eye"></i></a>
                                 </td>
                             </tr>
                         @endforeach
@@ -355,9 +353,8 @@
                                     @endif
                                 </td>
                                 <td>
-                                    <a href="{{ route('guest.reservations.show', $reservation) }}" class="btn btn-outline-primary btn-sm">
-                                        <i class="fas fa-eye"></i> View
-                                    </a>
+                                    <a href="{{ route('guest.reservations.show', $reservation) }}" class="btn btn-outline-primary btn-sm btn-icon" title="View" aria-label="View">
+                                        <i class="fas fa-eye"></i></a>
                                 </td>
                             </tr>
                         @endforeach
