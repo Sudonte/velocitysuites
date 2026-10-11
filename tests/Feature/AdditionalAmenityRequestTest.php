@@ -252,4 +252,38 @@ class AdditionalAmenityRequestTest extends ApiFlowTestCase
         $this->assertFalse($info['can_request']);
         $this->asGuest($user)->postJson("/api/guest/reservations/{$reservation->id}/additional-amenities", ['items' => [['amenity_id' => 1, 'quantity' => 1]]])->assertStatus(422);
     }
+
+    public function test_a_checked_in_stay_converted_from_a_reservation_lists_and_accepts_requests_through_the_reservation_route(): void
+    {
+        [$user, $guest] = $this->makeGuestUser('RC'.uniqid());
+        $rt = $this->makeRoomTypeWithRooms('Std'.uniqid(), 1000, 2, 0);
+        $reservation = Reservation::create([
+            'guest_id' => $guest->id, 'room_type_id' => $rt->id, 'rooms_requested' => 1, 'guest_first_name' => 'A', 'guest_last_name' => 'B',
+            'check_in' => '2026-10-05', 'check_out' => '2026-10-06', 'adults' => 1, 'children' => 0, 'number_of_guests' => 1,
+            'status' => Reservation::STATUS_CONVERTED,
+        ]);
+        $booking = Booking::create([
+            'reservation_id' => $reservation->id, 'room_type_id' => $rt->id, 'rooms_requested' => 1,
+            'check_in' => '2026-10-05', 'check_out' => '2026-10-06', 'adults' => 1, 'children' => 0, 'number_of_guests' => 1,
+            'booking_status' => Booking::STATUS_CHECKED_IN, 'payment_method' => 'cash', 'checked_in_at' => '2026-10-05 14:00:00',
+        ]);
+        Carbon::setTestNow(Carbon::parse('2026-10-06 10:00', 'Asia/Manila'));
+        $a = $this->amenity(200);
+
+        // the app holds the RESERVATION id for a converted stay, so the reservation route must work for a checked-in booking ...
+        $info = $this->asGuest($user)->getJson("/api/guest/reservations/{$reservation->id}/additional-amenities")->assertOk()->json();
+        $this->assertTrue($info['can_request']);
+        $this->assertSame([], $info['requests']);
+
+        $this->asGuest($user)->postJson("/api/guest/reservations/{$reservation->id}/additional-amenities", ['items' => [['amenity_id' => $a->id, 'quantity' => 1]]])->assertCreated();
+
+        // ... and the exact JSON shape the Android app parses (AdditionalAmenityInfoDto / AdditionalAmenityRequestDto)
+        $info = $this->asGuest($user)->getJson("/api/guest/reservations/{$reservation->id}/additional-amenities")->assertOk()->json();
+        $this->assertEqualsCanonicalizing(['booking_id', 'can_request', 'reason', 'requests', 'total_approved'], array_keys($info));
+        $this->assertEqualsCanonicalizing(
+            ['id', 'amenity_id', 'name', 'quantity', 'unit_price', 'subtotal', 'status', 'rejection_reason', 'note', 'requested_at', 'decided_at'],
+            array_keys($info['requests'][0])
+        );
+        $this->assertSame($booking->id, $info['booking_id']);
+    }
 }
