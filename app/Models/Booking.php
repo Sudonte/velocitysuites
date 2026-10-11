@@ -148,6 +148,28 @@ class Booking extends Model
     }
 
     /**
+     * The staff member who verified this booking's payment.
+     */
+    public function verifier()
+    {
+        return $this->belongsTo(User::class, 'verified_by');
+    }
+
+    /**
+     * Names of the staff who handled this booking (see
+     * Reservation::handledByNames()): whoever verified the booking or any
+     * of its own / bill payments.
+     */
+    public function handledByNames(): array
+    {
+        $payments = $this->payments->concat($this->billing?->payments ?? collect());
+
+        return collect([$this->verified_by ? $this->verifier : null])
+            ->concat($payments->map(fn ($payment) => $payment->verified_by ? $payment->verifier : null))
+            ->filter()->unique('id')->map(fn ($user) => $user->full_name)->values()->all();
+    }
+
+    /**
      * The authenticated guest account this booking belongs to - only set
      * directly for a "New Booking" (reservation_id null) transaction; a
      * reservation-derived booking reaches the guest via

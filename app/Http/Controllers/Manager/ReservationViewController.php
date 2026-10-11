@@ -34,7 +34,8 @@ class ReservationViewController extends Controller
         $items = collect();
 
         {
-            $reservationQuery = Reservation::with(['guest.user', 'roomType', 'booking.room', 'booking.billing', 'payments']);
+            $reservationQuery = Reservation::with(['guest.user', 'roomType', 'booking.room', 'booking.billing', 'payments',
+                'verifier', 'payments.verifier', 'booking.verifier', 'booking.payments.verifier', 'booking.billing.payments.verifier']);
 
             if ($status) {
                 if ($status === 'PENDING') {
@@ -101,12 +102,14 @@ class ReservationViewController extends Controller
                 $reservation->monitor_status_domain = $reservation->booking ? 'booking' : 'reservation';
                 $reservation->monitor_latest_payment = $reservation->payments->sortByDesc('created_at')->first();
                 $reservation->monitor_show_route = route('manager.reservations.show', $reservation);
+                $reservation->monitor_handled_by = $reservation->handledByNames();
                 $items->push($reservation);
             }
         }
 
         {
-            $bookingQuery = Booking::whereNull('reservation_id')->with(['guest.user', 'roomType', 'room', 'payments']);
+            $bookingQuery = Booking::whereNull('reservation_id')->with(['guest.user', 'roomType', 'room', 'payments',
+                'verifier', 'payments.verifier', 'billing.payments.verifier']);
 
             if ($status) {
                 if (in_array($status, [Booking::STATUS_ACTIVE, Booking::STATUS_CHECKED_IN, Booking::STATUS_COMPLETED, Booking::STATUS_CANCELLED], true)) {
@@ -163,6 +166,7 @@ class ReservationViewController extends Controller
                 $booking->monitor_status_domain = 'booking';
                 $booking->monitor_latest_payment = $booking->allPayments()->sortByDesc('created_at')->first();
                 $booking->monitor_show_route = route('manager.bookings.show', $booking);
+                $booking->monitor_handled_by = $booking->handledByNames();
                 $items->push($booking);
             }
         }

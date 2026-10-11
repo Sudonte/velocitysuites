@@ -121,6 +121,34 @@ class Reservation extends Model
     protected $appends = ['discount_preview', 'payment_deadline', 'room_lines', 'deposit_cap', 'hidden_by_guest'];
 
     /**
+     * The staff member who verified/converted this reservation.
+     */
+    public function verifier()
+    {
+        return $this->belongsTo(User::class, 'verified_by');
+    }
+
+    /**
+     * Names of the staff who handled this stay - the same records the
+     * monitoring page's Receptionist filter matches: whoever verified the
+     * reservation, its booking, or any of its payments. Reads already
+     * loaded relations (reservation, booking and bill payments) so a list
+     * can eager-load them instead of querying per row.
+     */
+    public function handledByNames(): array
+    {
+        $payments = $this->payments
+            ->concat($this->booking?->payments ?? collect())
+            ->concat($this->booking?->billing?->payments ?? collect());
+
+        return collect([
+            $this->verified_by ? $this->verifier : null,
+            $this->booking?->verified_by ? $this->booking->verifier : null,
+        ])->concat($payments->map(fn ($payment) => $payment->verified_by ? $payment->verifier : null))
+            ->filter()->unique('id')->map(fn ($user) => $user->full_name)->values()->all();
+    }
+
+    /**
      * Get the guest associated with the reservation.
      */
     public function guest()

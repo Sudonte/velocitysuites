@@ -164,6 +164,10 @@
                         <span>{{ $item->check_in->format('M d') }}&ndash;{{ $item->check_out->format('M d, Y') }} ({{ $item->number_of_nights }}n)</span>
                     </div>
                     <div class="monitoring-item-row">
+                        <span class="text-muted">Handled By</span>
+                        <span class="text-end">{{ $item->monitor_handled_by ? implode(', ', $item->monitor_handled_by) : '—' }}</span>
+                    </div>
+                    <div class="monitoring-item-row">
                         <span class="text-muted">Status</span>
                         <x-status-badge :status="$item->monitor_status_value" :domain="$item->monitor_status_domain" />
                     </div>
@@ -185,6 +189,8 @@
                         <th class="d-none d-md-table-cell">Room</th>
                         <th>Dates</th>
                         <th class="d-none d-lg-table-cell">Guests</th>
+                        {{-- Same staff the Receptionist filter matches (who verified the stay or its payments). --}}
+                        <th>Handled By</th>
                         <th>Status</th>
                         <th>Action</th>
                     </tr>
@@ -232,6 +238,13 @@
                             </td>
                             <td class="d-none d-lg-table-cell">{{ $item->monitor_type === 'booking' ? $item->adults + $item->children : $item->number_of_guests }}</td>
                             <td>
+                                @forelse($item->monitor_handled_by as $name)
+                                    <span class="d-block small">{{ $name }}</span>
+                                @empty
+                                    <span class="text-muted">&mdash;</span>
+                                @endforelse
+                            </td>
+                            <td>
                                 <x-status-badge :status="$item->monitor_status_value" :domain="$item->monitor_status_domain" />
                             </td>
                             <td>
@@ -241,7 +254,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="8">
+                            <td colspan="9">
                                 <x-empty-state icon="fas fa-calendar-alt" :message="$tab === 'bookings' ? 'No bookings found.' : 'No reservations found.'" />
                             </td>
                         </tr>

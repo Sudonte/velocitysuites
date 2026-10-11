@@ -173,6 +173,10 @@
                         <span>{{ $booking->roomType->name ?? 'N/A' }}</span>
                     </li>
                     <li>
+                        <span class="text-muted">Handled By</span>
+                        <span class="text-end">{{ implode(', ', $booking->handledByNames()) ?: '—' }}</span>
+                    </li>
+                    <li>
                         <span class="text-muted">Stay</span>
                         <span>{{ $booking->check_in->format('M d') }} &ndash; {{ $booking->check_out->format('M d, Y') }}</span>
                     </li>

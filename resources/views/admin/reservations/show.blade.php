@@ -258,6 +258,10 @@
                         <span>{{ $reservation->roomType->name ?? 'N/A' }}</span>
                     </li>
                     <li>
+                        <span class="text-muted">Handled By</span>
+                        <span class="text-end">{{ implode(', ', $reservation->handledByNames()) ?: '—' }}</span>
+                    </li>
+                    <li>
                         <span class="text-muted">Stay</span>
                         <span>{{ $reservation->check_in->format('M d') }} &ndash; {{ $reservation->check_out->format('M d, Y') }}</span>
                     </li>
