@@ -10,7 +10,12 @@
                 <i class="fas fa-arrow-left"></i> Back to Monitoring
             </a>
             <h1 class="mb-0">
-                <i class="fas fa-calendar-alt"></i> Reservation #{{ $reservation->id }}
+                @if($reservation->booking)
+                    <i class="fas fa-credit-card"></i> Booking #{{ $reservation->booking->id }}
+                    <small class="d-block text-muted fs-6 fw-normal mt-1">from Reservation #{{ $reservation->id }}</small>
+                @else
+                    <i class="fas fa-calendar-alt"></i> Reservation #{{ $reservation->id }}
+                @endif
             </h1>
         </div>
         <div>
