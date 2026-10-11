@@ -61,7 +61,7 @@
                     @endif
                     @foreach($billing->additionalCharges as $charge)
                         <tr>
-                            <td>{{ $charge->category_label }} — {{ $charge->description }}</td>
+                            <td>{{ $charge->category_label }}@if($charge->description) — {{ $charge->description }}@endif</td>
                             <td class="text-end">₱{{ number_format($charge->amount, 2) }}</td>
                         </tr>
                     @endforeach

@@ -48,11 +48,11 @@
                     </div>
 
                     <div class="form-group mb-3">
-                        <label for="description">Description *</label>
+                        <label for="description">Description</label>
                         <textarea class="form-control @error('description') is-invalid @enderror"
                                   id="description" name="description" rows="4"
                                   placeholder="Explain what this amenity provides, what the guest can expect, and any conditions or limitations.">{{ old('description', $amenity->description) }}</textarea>
-                        <small class="text-muted">Required - at least 2-3 complete sentences. Placeholder or single-word text won't be accepted.</small>
+                        <small class="text-muted">Optional.</small>
                         @error('description')
                             <div class="invalid-feedback d-block">{{ $message }}</div>
                         @enderror

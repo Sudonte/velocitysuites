@@ -18,7 +18,7 @@
             </select>
         </div>
         <div class="col-md-4">
-            <input type="text" name="description" class="form-control form-control-sm" placeholder="Description (e.g. Broken remote)" required>
+            <input type="text" name="description" class="form-control form-control-sm" placeholder="Description (optional, e.g. Broken remote)">
         </div>
         <div class="col-md-2">
             <input type="number" step="0.01" min="0.01" name="amount" class="form-control form-control-sm" placeholder="Amount" required>

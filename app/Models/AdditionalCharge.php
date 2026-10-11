@@ -32,6 +32,17 @@ class AdditionalCharge extends Model
     /**
      * Get the category label.
      */
+    /**
+     * The description is optional - fall back to the category name so
+     * logs and guest notifications always say what the charge was.
+     */
+    public function getLabelAttribute(): string
+    {
+        $description = trim((string) $this->description);
+
+        return $description !== '' ? $description : $this->category_label;
+    }
+
     public function getCategoryLabelAttribute(): string
     {
         return match ($this->category) {

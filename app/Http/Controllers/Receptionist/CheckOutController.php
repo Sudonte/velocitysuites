@@ -616,7 +616,7 @@ class CheckOutController extends Controller
     public function storeAdditionalCharge(Request $request, Billing $billing)
     {
         $validated = $request->validate([
-            'description' => 'required|string|max:255',
+            'description' => 'nullable|string',
             'amount' => 'required|numeric|min:0.01',
             'category' => 'required|in:damage,lost_item,broken_equipment,mini_bar,laundry,other',
             'notes' => 'nullable|string|max:1000',
@@ -626,8 +626,8 @@ class CheckOutController extends Controller
             return response()->json(['message' => 'Cannot add charges to a paid bill.'], 422);
         }
 
-        DB::transaction(function () use ($billing, $validated) {
-            AdditionalCharge::create([
+        $charge = DB::transaction(function () use ($billing, $validated) {
+            $charge = AdditionalCharge::create([
                 'billing_id' => $billing->id,
                 'description' => $validated['description'],
                 'amount' => $validated['amount'],
@@ -636,6 +636,8 @@ class CheckOutController extends Controller
             ]);
 
             $billing->recalculateTotal();
+
+            return $charge;
         });
 
         // account_guest is an accessor (Booking::getAccountGuestAttribute()),
@@ -644,13 +646,13 @@ class CheckOutController extends Controller
         $billing->refresh()->loadMissing(['booking.reservation.guest.user', 'booking.guest.user']);
         Activity::log(
             'Recorded additional charge',
-            "Billing #{$billing->id} - {$validated['description']} (₱" . number_format((float) $validated['amount'], 2) . ')',
+            "Billing #{$billing->id} - {$charge->label} (₱" . number_format((float) $validated['amount'], 2) . ')',
             $billing->booking ?? $billing
         );
         if ($guest = $billing->booking?->account_guest?->user) {
             $this->notificationService->notifyAdditionalCharge(
                 $guest,
-                $validated['description'],
+                $charge->label,
                 (float) $validated['amount'],
                 $billing->balance,
                 $billing->booking->id
@@ -666,7 +668,7 @@ class CheckOutController extends Controller
     public function updateAdditionalCharge(Request $request, AdditionalCharge $additionalCharge)
     {
         $validated = $request->validate([
-            'description' => 'required|string|max:255',
+            'description' => 'nullable|string',
             'amount' => 'required|numeric|min:0.01',
             'category' => 'required|in:damage,lost_item,broken_equipment,mini_bar,laundry,other',
             'notes' => 'nullable|string|max:1000',
@@ -691,7 +693,7 @@ class CheckOutController extends Controller
 
         Activity::log(
             'Updated additional charge',
-            "Billing #{$billing->id} - {$validated['description']} (₱" . number_format((float) $validated['amount'], 2) . ')',
+            "Billing #{$billing->id} - {$additionalCharge->label} (₱" . number_format((float) $validated['amount'], 2) . ')',
             $billing->booking ?? $billing
         );
 
@@ -709,7 +711,7 @@ class CheckOutController extends Controller
             return response()->json(['message' => 'Cannot remove charges from a paid bill.'], 422);
         }
 
-        $description = $additionalCharge->description;
+        $description = $additionalCharge->label;
         $amount = (float) $additionalCharge->amount;
 
         DB::transaction(function () use ($additionalCharge, $billing) {

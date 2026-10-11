@@ -5,7 +5,6 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Support\Activity;
 use App\Models\Amenity;
-use App\Rules\MeaningfulDescription;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -89,8 +88,7 @@ class AmenityManagementController extends Controller
     }
 
     /**
-     * Store a new amenity. Description must be a real 2-3 sentence
-     * explanation (see MeaningfulDescription) - an amenity can never be
+     * Store a new amenity. The description is optional free text - an amenity can never be
      * saved with empty, one-word, or placeholder text describing it.
      * amenity_name is trimmed then checked for uniqueness among non-deleted
      * amenities (whereNull('deleted_at') - Amenity uses SoftDeletes, and the
@@ -109,7 +107,7 @@ class AmenityManagementController extends Controller
                 'required', 'string', 'max:255',
                 Rule::unique('amenities', 'amenity_name')->whereNull('deleted_at'),
             ],
-            'description' => ['required', 'string', new MeaningfulDescription()],
+            'description' => 'nullable|string',
             'category' => 'required|string|in:' . implode(',', self::CATEGORIES),
             'quantity_mode' => 'required|in:limited,unlimited',
             'quantity' => 'required_if:quantity_mode,limited|nullable|integer|min:0',
@@ -150,7 +148,7 @@ class AmenityManagementController extends Controller
                 'required', 'string', 'max:255',
                 Rule::unique('amenities', 'amenity_name')->ignore($amenity->id)->whereNull('deleted_at'),
             ],
-            'description' => ['required', 'string', new MeaningfulDescription()],
+            'description' => 'nullable|string',
             'category' => 'required|string|in:' . implode(',', self::CATEGORIES),
             'quantity_mode' => 'required|in:limited,unlimited',
             'quantity' => 'required_if:quantity_mode,limited|nullable|integer|min:0',

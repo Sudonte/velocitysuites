@@ -144,7 +144,7 @@ final class StayBill
         $extraCharges = $billing
             ? $billing->additionalCharges->map(fn ($c) => [
                 'id' => $c->id,
-                'description' => $c->description,
+                'description' => $c->label,
                 'amount' => round((float) $c->amount, 2),
             ])->all()
             : [];
