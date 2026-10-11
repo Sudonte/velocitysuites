@@ -11,58 +11,7 @@
         'periodLabel' => $periodLabel,
     ])
 
-    <h2 class="section-title">Executive Summary</h2>
-    <table class="report-table">
-        <thead>
-            <tr><th>Metric</th><th>Value</th><th>Context / Benchmarks</th></tr>
-        </thead>
-        <tbody>
-            <tr>
-                <td>Total Reservations</td>
-                <td>{{ number_format($totalReservations) }}</td>
-                <td>Check-ins scheduled within {{ $periodLabel }}</td>
-            </tr>
-            <tr>
-                <td>Total Bookings</td>
-                <td>{{ number_format($totalBookings) }}</td>
-                <td>Direct (pay-first) bookings with check-in within {{ $periodLabel }}</td>
-            </tr>
-            <tr>
-                <td>Average Length of Stay</td>
-                <td>{{ number_format($averageStay, 1) }} nights</td>
-                <td>Average across reservations in {{ $periodLabel }}</td>
-            </tr>
-            <tr>
-                <td>Occupancy Rate</td>
-                <td>{{ number_format($managerStats['occupancyRate'], 1) }}%</td>
-                <td>Rooms currently occupied vs. total inventory (live snapshot)</td>
-            </tr>
-        </tbody>
-    </table>
-
-    <h2 class="section-title">Top Room Types</h2>
-    <table class="report-table">
-        <thead><tr><th>Room Type</th><th class="text-end">Reservations</th></tr></thead>
-        <tbody>
-            @forelse($topRoomTypes as $roomType)
-                <tr><td>{{ $roomType->name }}</td><td class="text-end">{{ number_format($roomType->reservations_count) }}</td></tr>
-            @empty
-                <tr><td colspan="2">No data for this period.</td></tr>
-            @endforelse
-        </tbody>
-    </table>
-
-    <h2 class="section-title">Top Guests</h2>
-    <table class="report-table">
-        <thead><tr><th>Guest</th><th class="text-end">Reservations</th></tr></thead>
-        <tbody>
-            @forelse($topGuests as $row)
-                <tr><td>{{ $row->guest->user->full_name ?? 'N/A' }}</td><td class="text-end">{{ number_format($row->reservation_count) }}</td></tr>
-            @empty
-                <tr><td colspan="2">No data for this period.</td></tr>
-            @endforelse
-        </tbody>
-    </table>
+    @include('reports.partials.pdf-body', ['report' => $report, 'withRevenue' => false, 'periodLabel' => $periodLabel])
 
     <p class="footer-note">Velocity Suites &middot; Confidential internal report &middot; Generated {{ $generatedAt->format('M d, Y h:i A') }}</p>
 </body>

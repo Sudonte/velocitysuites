@@ -18,61 +18,6 @@
 
     @include('partials.report-filters', ['route' => 'manager.reports.index'])
 
-    <!-- Summary Cards -->
-    <div class="row mb-4">
-        <div class="col-md-6 col-lg-4 mb-3">
-            <x-stat-card icon="fas fa-calendar-alt" label="Total Reservations" :value="$totalReservations" color="primary" />
-        </div>
-        <div class="col-md-6 col-lg-4 mb-3">
-            <x-stat-card icon="fas fa-credit-card" label="Total Bookings" :value="$totalBookings" color="secondary" />
-        </div>
-        <div class="col-md-6 col-lg-4 mb-3">
-            <x-stat-card icon="fas fa-moon" label="Average Stay" value="{{ number_format($averageStay, 1) }} nights" color="info" />
-        </div>
-    </div>
-
-    <!-- Top Room Types -->
-    <x-card title="Top Room Types" icon="fas fa-star" bodyClass="table-responsive" class="mb-4">
-        <table class="table table-hover mb-0">
-            <thead>
-                <tr>
-                    <th>Room Type</th>
-                    <th class="text-end">Reservations</th>
-                </tr>
-            </thead>
-            <tbody>
-                @forelse($topRoomTypes as $roomType)
-                    <tr>
-                        <td>{{ $roomType->name }}</td>
-                        <td class="text-end">{{ $roomType->reservations_count }}</td>
-                    </tr>
-                @empty
-                    <tr><td colspan="2"><x-empty-state icon="fas fa-star" message="No data." /></td></tr>
-                @endforelse
-            </tbody>
-        </table>
-    </x-card>
-
-    <!-- Top Guests -->
-    <x-card title="Top Guests" icon="fas fa-users" bodyClass="table-responsive" class="mb-4">
-        <table class="table table-hover mb-0">
-            <thead>
-                <tr>
-                    <th>Guest</th>
-                    <th class="text-end">Reservations</th>
-                </tr>
-            </thead>
-            <tbody>
-                @forelse($topGuests as $row)
-                    <tr>
-                        <td>{{ $row->guest->user->full_name ?? 'N/A' }}</td>
-                        <td class="text-end">{{ $row->reservation_count }}</td>
-                    </tr>
-                @empty
-                    <tr><td colspan="2"><x-empty-state icon="fas fa-users" message="No data." /></td></tr>
-                @endforelse
-            </tbody>
-        </table>
-    </x-card>
+    @include('reports.partials.screen-body', ['report' => $report, 'withRevenue' => false])
 </div>
 @endsection

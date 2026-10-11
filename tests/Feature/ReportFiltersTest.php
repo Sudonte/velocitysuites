@@ -47,10 +47,14 @@ class ReportFiltersTest extends ApiFlowTestCase
         $manager = $this->user('manager');
 
         $this->actingAs($manager)->get(route('manager.reports.index'))
-            ->assertOk()->assertViewHas('totalReservations', 3);
+            ->assertOk()
+            ->assertViewHas('report', fn ($r) => $r['summary']['reservations'] === 3
+                // Every room type is listed (not a top-5), and no revenue for managers.
+                && collect($r['roomTypeRows'])->pluck('name')->sort()->values()->all() === ['Deluxe', 'Suite']
+                && ! array_key_exists('room_revenue', $r['summary']));
 
         $this->get(route('manager.reports.index', ['room_type_id' => $deluxe->id]))
-            ->assertOk()->assertViewHas('totalReservations', 2)
+            ->assertOk()->assertViewHas('report', fn ($r) => $r['summary']['reservations'] === 2)
             ->assertSee(route('manager.reports.exportPdf', ['room_type_id' => $deluxe->id]), false);
     }
 
