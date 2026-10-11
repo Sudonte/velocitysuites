@@ -172,7 +172,13 @@ class Amenity extends Model
             return 'unlimited';
         }
 
-        return $remaining <= 0 ? 'out' : ($remaining <= $this->lowStockLevel() ? 'low' : 'ok');
+        if ($remaining <= 0) {
+            return 'out';
+        }
+
+        // A fully stocked amenity is never "low", even when its total is below the
+        // alert level (e.g. 8 of 8 with the default level of 10).
+        return $remaining < (int) $this->quantity && $remaining <= $this->lowStockLevel() ? 'low' : 'ok';
     }
 
     /**

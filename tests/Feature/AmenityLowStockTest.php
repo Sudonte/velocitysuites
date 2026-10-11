@@ -57,4 +57,12 @@ class AmenityLowStockTest extends ApiFlowTestCase
         $this->assertSame(0, Notification::where('title', 'like', '%Towel%')->count());
         $this->assertSame('ok', $amenity->stockState(10));
     }
+
+    public function test_fully_stocked_small_amenity_is_not_low(): void
+    {
+        $amenity = Amenity::create(['amenity_name' => 'Crib', 'category' => 'General', 'quantity' => 8, 'is_unlimited' => false, 'charge' => 0, 'status' => 'active']);
+
+        $this->assertSame('ok', $amenity->stockState(8));
+        $this->assertSame('low', $amenity->stockState(7));
+    }
 }
