@@ -77,6 +77,7 @@ class Booking extends Model
         'discount_verified_at' => 'datetime',
         'verified_at' => 'datetime',
         'hidden_at' => 'datetime',
+        'is_test_booking' => 'boolean',
         'hidden_by_guest_at' => 'datetime',
         'viewed_at' => 'datetime',
         'checkin_reminder_sent_at' => 'datetime',

@@ -221,6 +221,13 @@ deny-all rule is active).
   `<input type="date">`). The server needs no extra setup; browsers need
   internet access to those CDNs.
 
+### Test data in reports
+
+Reports and dashboards exclude test data. Mark it from the server console (exact id only, asks for confirmation; records stay visible in detail and audit views):
+
+- `php artisan users:mark-test {userId}` / `users:unmark-test {userId}` - a guest account and everything it booked.
+- `php artisan bookings:mark-test {bookingId}` / `bookings:unmark-test {bookingId}` - a single booking (e.g. a walk-in test stay with no account), including the reservation it came from.
+
 ### Permissions
 ```bash
 chmod -R 755 storage bootstrap/cache

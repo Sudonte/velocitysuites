@@ -29,7 +29,20 @@ class TestAccountScope
 
     public static function testReservationIdsQuery()
     {
-        return Reservation::whereIn('guest_id', self::testGuestIdsQuery())->select('id');
+        return Reservation::where(function ($q) {
+            $q->whereIn('guest_id', self::testGuestIdsQuery())
+                ->orWhereIn('id', self::flaggedBookingReservationIdsQuery());
+        })->select('id');
+    }
+
+    /**
+     * Reservations whose booking was individually marked as test data
+     * (bookings.is_test_booking - `php artisan bookings:mark-test`), for
+     * walk-in test stays that have no account to flag.
+     */
+    public static function flaggedBookingReservationIdsQuery()
+    {
+        return Booking::withTrashed()->where('is_test_booking', true)->whereNotNull('reservation_id')->select('reservation_id');
     }
 
     /**
@@ -41,8 +54,9 @@ class TestAccountScope
      */
     public static function testBookingIdsQuery()
     {
-        return Booking::where(function ($q) {
-            $q->whereIn('guest_id', self::testGuestIdsQuery())
+        return Booking::withTrashed()->where(function ($q) {
+            $q->where('is_test_booking', true)
+                ->orWhereIn('guest_id', self::testGuestIdsQuery())
                 ->orWhereIn('reservation_id', self::testReservationIdsQuery());
         })->select('id');
     }
@@ -66,7 +80,7 @@ class TestAccountScope
     {
         return $query->where(function ($q) {
             $q->whereNull('reservations.guest_id')->orWhereNotIn('reservations.guest_id', self::testGuestIdsQuery());
-        });
+        })->whereNotIn('reservations.id', self::flaggedBookingReservationIdsQuery());
     }
 
     /** Scopes a Booking query to exclude test-account-owned rows (direct or reservation-derived). */

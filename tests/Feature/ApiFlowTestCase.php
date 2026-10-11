@@ -168,6 +168,7 @@ abstract class ApiFlowTestCase extends TestCase
             $table->integer('number_of_guests')->nullable();
             $table->timestamp('confirmed_at')->nullable();
             $table->string('booking_status', 40);
+            $table->boolean('is_test_booking')->default(false);
             $table->string('payment_method', 20)->nullable();
             $table->decimal('selected_payment_percentage', 5, 2)->nullable();
             $table->decimal('required_payment_amount', 10, 2)->nullable();

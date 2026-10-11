@@ -61,6 +61,15 @@ class TestAccountSecurityTest extends TestCase
             $table->timestamps();
         });
 
+        // Only what TestAccountScope's booking-level test flag subquery reads.
+        Schema::create('bookings', function (Blueprint $table) {
+            $table->id();
+            $table->unsignedBigInteger('reservation_id')->nullable();
+            $table->unsignedBigInteger('guest_id')->nullable();
+            $table->boolean('is_test_booking')->default(false);
+            $table->softDeletes();
+        });
+
         Schema::create('reservations', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('guest_id')->nullable();

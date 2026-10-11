@@ -96,6 +96,7 @@ class TestAccountAnalyticsExclusionTest extends TestCase
             $table->integer('number_of_guests')->nullable();
             $table->timestamp('confirmed_at')->nullable();
             $table->string('booking_status', 40);
+            $table->boolean('is_test_booking')->default(false);
             $table->timestamp('deleted_at')->nullable();
             $table->timestamps();
         });

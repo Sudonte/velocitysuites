@@ -71,6 +71,7 @@ class TestAccountClassificationIntegrityTest extends TestCase
 
         Schema::create('bookings', function (Blueprint $table) {
             $table->id();
+            $table->boolean('is_test_booking')->default(false);
             $table->unsignedBigInteger('reservation_id')->nullable();
             $table->unsignedBigInteger('guest_id')->nullable();
             $table->timestamp('deleted_at')->nullable();
