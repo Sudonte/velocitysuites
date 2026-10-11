@@ -43,7 +43,7 @@ class ReportController extends Controller
 
     /**
      * The same figures as the on-screen report (same filters) as a branded
-     * dompdf document, plus the dashboard's occupancy/cancellation rates
+     * dompdf document, plus the dashboard's occupancy rate
      * for the period.
      */
     public function exportPdf(Request $request)

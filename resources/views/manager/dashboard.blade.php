@@ -52,18 +52,15 @@
 
     <div class="detail-section-title"><i class="fas fa-chart-line"></i> Selected Period &middot; {{ $periodFrom->format('M d') }} &ndash; {{ $periodTo->format('M d, Y') }}</div>
     <div class="row g-3 mb-4 dashboard-kpis">
-        <div class="col-6 col-xl-3">
-            {{-- type filters keep each card's number equal to the list it opens. --}}
-            <x-stat-card icon="fas fa-calendar-alt" label="Reservations" :value="$totalReservations" color="info" :href="route('manager.reservations.index', ['type' => 'reservation', 'from' => $periodFrom->toDateString(), 'to' => $periodTo->toDateString()])" />
+        <div class="col-md-4">
+            {{-- Each card opens its monitoring tab with the same count. --}}
+            <x-stat-card icon="fas fa-calendar-alt" label="Reservations" :value="$totalReservations" color="info" :href="route('manager.reservations.index', ['tab' => 'reservations', 'from' => $periodFrom->toDateString(), 'to' => $periodTo->toDateString()])" />
         </div>
-        <div class="col-6 col-xl-3">
-            <x-stat-card icon="fas fa-credit-card" label="Bookings" :value="$totalBookings" color="primary" :href="route('manager.reservations.index', ['type' => 'booking', 'from' => $periodFrom->toDateString(), 'to' => $periodTo->toDateString()])" />
+        <div class="col-md-4">
+            <x-stat-card icon="fas fa-credit-card" label="Bookings" :value="$totalBookings" color="primary" :href="route('manager.reservations.index', ['tab' => 'bookings', 'from' => $periodFrom->toDateString(), 'to' => $periodTo->toDateString()])" />
         </div>
-        <div class="col-6 col-xl-3">
+        <div class="col-md-4">
             <x-stat-card icon="fas fa-moon" label="Avg. Length of Stay" value="{{ $averageLengthOfStay }} nights" color="secondary" />
-        </div>
-        <div class="col-6 col-xl-3">
-            <x-stat-card icon="fas fa-ban" label="Cancellation Rate" value="{{ $cancellationRate }}%" color="{{ $cancellationRate > 15 ? 'danger' : 'warning' }}" />
         </div>
     </div>
 
@@ -75,6 +72,7 @@
         </div>
         <div class="col-lg-4">
             <x-card title="Room Utilization by Type" icon="fas fa-percentage" bodyClass="card-body" class="h-100">
+                <p class="small text-muted mb-3">Share of each type's room-nights that were booked in the selected period (booked nights &divide; rooms &times; days).</p>
                 @forelse($roomUtilization as $row)
                     <div class="d-flex justify-content-between align-items-center mb-2">
                         <span class="small text-truncate" style="max-width: 40%;">{{ $row['room_type'] }}</span>

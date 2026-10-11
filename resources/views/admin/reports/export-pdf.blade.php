@@ -58,7 +58,6 @@
                 <th class="text-end">Gross Reservations</th>
                 <th class="text-end">Cancellations</th>
                 <th class="text-end">Net Reservations</th>
-                <th class="text-end">Cancel Rate</th>
             </tr>
         </thead>
         <tbody>
@@ -68,7 +67,6 @@
                     <td class="text-end">{{ number_format($row['gross']) }}</td>
                     <td class="text-end">{{ number_format($row['cancelled']) }}</td>
                     <td class="text-end">{{ number_format($row['net']) }}</td>
-                    <td class="text-end {{ $row['cancelRate'] > 15 ? 'rate-high' : '' }}">{{ number_format($row['cancelRate'], 1) }}%</td>
                 </tr>
             @endforeach
         </tbody>

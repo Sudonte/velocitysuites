@@ -299,7 +299,7 @@ class DashboardStatsService
 
     /**
      * $from/$to scope every period-dependent figure (reservations,
-     * bookings, revenue, cancellation rate, average stay, room
+     * bookings, revenue, average stay, room
      * utilization, the booking-trend chart) - see App\Support\DateRange.
      * Room-status counts and today's check-in/check-out/in-house figures
      * deliberately stay "right now" regardless of the filter, since
@@ -364,18 +364,16 @@ class DashboardStatsService
                 ->whereHas('rooms', fn ($q) => $q->whereNull('booking_rooms.checked_out_at'))
         )->count();
 
+        // Each matches the monitoring tab its card opens: Reservations =
+        // not yet converted; Bookings = converted reservations + direct
+        // (pay-first) bookings.
         $periodReservations = TestAccountScope::excludeFromReservations(
-            Reservation::whereBetween('check_in', [$from, $to])
+            Reservation::doesntHave('booking')->whereBetween('check_in', [$from, $to])
         )->count();
-        // See adminStats()'s identical fix - matches exactly what the
-        // "Bookings" card's own link shows (Manager\ReservationViewController::
-        // index()'s type=booking filter: standalone/direct "New Booking"
-        // pay-first transactions), not converted Reservations.
-        $periodBookings = TestAccountScope::excludeFromBookings(
+        $periodBookings = TestAccountScope::excludeFromReservations(
+            Reservation::has('booking')->whereBetween('check_in', [$from, $to])
+        )->count() + TestAccountScope::excludeFromBookings(
             Booking::whereNull('reservation_id')->whereBetween('check_in', [$from, $to])
-        )->count();
-        $periodCancelled = TestAccountScope::excludeFromReservations(
-            Reservation::whereBetween('check_in', [$from, $to])->where('status', Reservation::STATUS_CANCELLED)
         )->count();
 
         $averageStay = (float) (TestAccountScope::excludeFromReservations(
@@ -396,10 +394,6 @@ class DashboardStatsService
             'totalBookings' => $periodBookings,
             'pendingPaymentVerifications' => $this->pendingPaymentVerificationCount(),
 
-            // New KPIs - percentages guard against a zero-reservation
-            // period (a brand-new hotel, or a custom range with no
-            // activity) rather than dividing by zero.
-            'cancellationRate' => $periodReservations > 0 ? round($periodCancelled / $periodReservations * 100, 1) : 0.0,
             'averageLengthOfStay' => round($averageStay, 1),
             'roomUtilization' => $this->availability->utilizationByRoomType($from, $to),
 
@@ -517,7 +511,6 @@ class DashboardStatsService
                 'gross' => $gross,
                 'cancelled' => $cancelled,
                 'net' => $gross - $cancelled,
-                'cancelRate' => $gross > 0 ? round($cancelled / $gross * 100, 1) : 0.0,
             ];
         }
 

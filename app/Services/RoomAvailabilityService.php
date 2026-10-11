@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Booking;
 use App\Models\Room;
 use App\Models\RoomType;
+use App\Support\TestAccountScope;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 
@@ -304,13 +305,12 @@ class RoomAvailabilityService
 
     /**
      * Per-room-type utilization over an arbitrary date range: booked
-     * room-nights (each overlapping confirmed/checked_in booking's stay,
-     * clipped to the [from,to] window and multiplied by rooms_requested)
-     * divided by total possible room-nights in the window (every physical
-     * room of that type x the number of days). Reuses the exact overlap
-     * query availableCount() already relies on - not a separate metric,
-     * just aggregated over a period instead of checked at a single
-     * moment/booking.
+     * room-nights (each overlapping confirmed, in-house or checked-out
+     * booking's stay, clipped to the [from,to] window and multiplied by
+     * rooms_requested) divided by total possible room-nights in the window
+     * (every physical room of that type x the number of days). Checked-out
+     * stays count - they occupied the rooms; counting only live bookings
+     * made every past period read 0%.
      */
     public function utilizationByRoomType(Carbon $from, Carbon $to): Collection
     {
@@ -319,7 +319,12 @@ class RoomAvailabilityService
         return RoomType::orderBy('name')->get()->map(function (RoomType $roomType) use ($from, $to, $periodDays) {
             $totalRoomNights = $this->totalInventory($roomType) * $periodDays;
 
-            $bookedRoomNights = $this->overlappingBookings($roomType->id, $from, $to)
+            $bookedRoomNights = TestAccountScope::excludeFromBookings(
+                Booking::where('room_type_id', $roomType->id)
+                    ->whereIn('booking_status', [Booking::STATUS_ACTIVE, Booking::STATUS_CHECKED_IN, Booking::STATUS_COMPLETED])
+                    ->where('check_in', '<', $to)
+                    ->where('check_out', '>', $from)
+            )
                 ->get()
                 ->sum(function (Booking $booking) use ($from, $to) {
                     $overlapStart = $booking->check_in->gt($from) ? $booking->check_in : $from;

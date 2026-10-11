@@ -37,11 +37,6 @@
                 <td>{{ number_format($managerStats['occupancyRate'], 1) }}%</td>
                 <td>Rooms currently occupied vs. total inventory (live snapshot)</td>
             </tr>
-            <tr>
-                <td>Cancellation Rate</td>
-                <td class="{{ $managerStats['cancellationRate'] > 15 ? 'rate-high' : '' }}">{{ number_format($managerStats['cancellationRate'], 1) }}%</td>
-                <td>Cancelled reservations in {{ $periodLabel }}</td>
-            </tr>
         </tbody>
     </table>
 
@@ -53,7 +48,6 @@
                 <th class="text-end">Gross Reservations</th>
                 <th class="text-end">Cancellations</th>
                 <th class="text-end">Net Reservations</th>
-                <th class="text-end">Cancel Rate</th>
             </tr>
         </thead>
         <tbody>
@@ -63,7 +57,6 @@
                     <td class="text-end">{{ number_format($row['gross']) }}</td>
                     <td class="text-end">{{ number_format($row['cancelled']) }}</td>
                     <td class="text-end">{{ number_format($row['net']) }}</td>
-                    <td class="text-end {{ $row['cancelRate'] > 15 ? 'rate-high' : '' }}">{{ number_format($row['cancelRate'], 1) }}%</td>
                 </tr>
             @endforeach
         </tbody>
