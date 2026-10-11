@@ -101,10 +101,12 @@
                             {{-- Single uniform-width dropdown per row (instead of a variable number of
                                  separate buttons) so the Actions column stays aligned regardless of how
                                  many actions a role has - guest/admin rows get just View, staff rows get
-                                 the full set, but the toggle button itself is always the same size. --}}
+                                 the full set, but the toggle button itself is always the same size.
+                                 Fixed positioning lets the menu escape the table-responsive overflow,
+                                 which otherwise clips it when the table has only a row or two. --}}
                             <div class="dropdown">
                                 <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button"
-                                        data-bs-toggle="dropdown" aria-expanded="false">
+                                        data-bs-toggle="dropdown" data-bs-popper-config='{"strategy":"fixed"}' aria-expanded="false">
                                     <i class="fas fa-ellipsis-v"></i> Actions
                                 </button>
                                 <ul class="dropdown-menu dropdown-menu-end">
