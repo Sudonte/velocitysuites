@@ -259,7 +259,9 @@
         margin-bottom: 0.2rem;
         font-size: 0.9rem;
         font-weight: 600;
-        white-space: nowrap;
+        /* Long labels (e.g. "Reservation and Booking Monitoring") wrap onto a
+           second line instead of being cut off. */
+        line-height: 1.3;
         overflow: hidden;
         transition: background-color 0.2s ease, color 0.2s ease, transform 0.15s ease;
     }
@@ -269,6 +271,7 @@
     }
 
     .sidebar-inner .nav-link i {
+        flex-shrink: 0;
         width: 1.5rem;
         text-align: center;
         margin-right: 0.5rem;
