@@ -40,7 +40,7 @@
                        title="Notifications" aria-label="Notifications ({{ $navUnreadCount }} unread)">
                         <i class="fas fa-bell fs-5"></i>
                         @if($navUnreadCount > 0)
-                            <span class="navbar-notif-badge">{{ $navUnreadCount > 9 ? '9+' : $navUnreadCount }}</span>
+                            <span class="navbar-notif-badge" data-notif-unread-count>{{ $navUnreadCount > 9 ? '9+' : $navUnreadCount }}</span>
                         @endif
                     </a>
                 </li>

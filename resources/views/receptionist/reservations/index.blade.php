@@ -340,5 +340,16 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 });
 </script>
+<script>
+// ?open=<id> (e.g. from a notification) opens that reservation's details right away.
+document.addEventListener('DOMContentLoaded', function () {
+    const id = new URLSearchParams(window.location.search).get('open');
+    if (!id) return;
+    // The row exists twice (table + phone card); use whichever is visible.
+    const trigger = Array.from(document.querySelectorAll('[data-reservation-row="' + CSS.escape(id) + '"] [data-details-url]'))
+        .find((el) => el.offsetParent !== null);
+    if (trigger) trigger.click();
+});
+</script>
 @endpush
 @endsection

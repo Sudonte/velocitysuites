@@ -70,11 +70,27 @@
                 $category = $notification->category ?? 'general';
                 $isAnnouncement = $category === 'announcement';
             @endphp
-            <div class="notification-item {{ !$notification->is_read ? 'is-unread' : '' }}">
+            @php
+                $link = \App\Support\NotificationLink::for($notification, auth()->user());
+                $audienceLabels = $isAnnouncement
+                    ? (collect($notification->target_audience ?? [])->map(fn ($a) => \App\Models\Announcement::audienceLabel($a))->implode('|') ?: 'All Audiences')
+                    : '';
+            @endphp
+            <div class="notification-item {{ !$notification->is_read ? 'is-unread' : '' }}"
+                 data-unread="{{ $notification->is_read ? '0' : '1' }}"
+                 data-read-url="{{ route('notifications.markAsRead', $notification) }}"
+                 data-title="{{ $notification->title }}"
+                 data-message="{{ $notification->message }}"
+                 data-time="{{ $notification->created_at->format('M d, Y g:i A') }} · {{ $notification->created_at->diffForHumans() }}"
+                 data-category="{{ ucfirst(str_replace('_', ' ', $category)) }}"
+                 data-audience="{{ $audienceLabels }}"
+                 data-link-url="{{ $link['url'] ?? '' }}"
+                 data-link-label="{{ $link['label'] ?? '' }}">
                 <div class="notification-icon notification-icon-{{ $category }}">
                     <i class="fas {{ $categoryIcons[$category] ?? 'fa-bell' }}"></i>
                 </div>
-                <div class="notification-body">
+                {{-- Click/Enter opens the detail modal (marks read, offers to go to the related page). --}}
+                <div class="notification-body" data-notif-open role="button" tabindex="0" aria-label="Open notification: {{ $notification->title }}">
                     <div class="notification-head">
                         <h6 class="notification-title">
                             @if(!$notification->is_read)
@@ -97,15 +113,7 @@
                     </div>
                 </div>
                 <div class="notification-actions">
-                    @if(!$notification->is_read)
-                        <form action="{{ route('notifications.markAsRead', $notification) }}" method="POST">
-                            @csrf
-                            @method('PUT')
-                            <button type="submit" class="btn btn-sm btn-outline-primary">
-                                <i class="fas fa-check"></i> Mark Read
-                            </button>
-                        </form>
-                    @else
+                    @if($notification->is_read)
                         <form action="{{ route('notifications.markAsUnread', $notification) }}" method="POST">
                             @csrf
                             @method('PUT')
@@ -122,51 +130,9 @@
                         <button type="submit" class="btn btn-outline-danger btn-sm btn-icon" title="Delete" aria-label="Delete">
                             <i class="fas fa-trash"></i></button>
                     </form>
-
-                    @if($isAnnouncement)
-                        <button type="button" class="btn btn-sm btn-outline-danger btn-icon" data-bs-toggle="modal" data-bs-target="#notifDetailModal{{ $notification->id }}" title="View Details" aria-label="View Details">
-                            <i class="fas fa-expand"></i></button>
-                    @endif
-
-                    {{-- Mirrors the mobile app's notification detail "View Transaction Details" -
-                         only meaningful for a guest, and only when this notification actually
-                         references a reservation/booking. --}}
-                    @if($notification->reference_id && auth()->user()->role === 'guest')
-                        <a href="{{ route('guest.reservations.show', $notification->reference_id) }}" class="btn btn-sm btn-outline-secondary">
-                            <i class="fas fa-receipt"></i> View Transaction
-                        </a>
-                    @endif
                 </div>
             </div>
 
-            @if($isAnnouncement)
-                <div class="modal fade" id="notifDetailModal{{ $notification->id }}" tabindex="-1" aria-hidden="true">
-                    <div class="modal-dialog modal-dialog-centered modal-lg">
-                        <div class="modal-content">
-                            <div class="modal-header">
-                                <h5 class="modal-title"><i class="fas fa-bullhorn text-brand"></i> {{ $notification->title }}</h5>
-                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                            </div>
-                            <div class="modal-body">
-                                <div class="d-flex flex-wrap gap-2 mb-3">
-                                    @forelse($notification->target_audience ?? [] as $audience)
-                                        <span class="badge announcement-audience-badge">{{ \App\Models\Announcement::audienceLabel($audience) }}</span>
-                                    @empty
-                                        <span class="badge announcement-audience-badge announcement-audience-badge-all">All Audiences</span>
-                                    @endforelse
-                                </div>
-                                <p class="text-muted small mb-3">
-                                    <i class="fas fa-clock"></i> Published {{ $notification->created_at->format('F d, Y \a\t g:i A') }}
-                                </p>
-                                <p class="mb-0" style="white-space: pre-line;">{{ $notification->message }}</p>
-                            </div>
-                            <div class="modal-footer">
-                                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Close</button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            @endif
         @empty
             <x-empty-state icon="fas fa-bell" :message="request()->hasAny(['search', 'category', 'date_from', 'date_to'])
                 ? 'No notifications match your search or filters.'
@@ -178,5 +144,6 @@
     </x-card>
 </div>
 
+@include('notifications.partials.open-modal')
 @include('components.auto-refresh')
 @endsection

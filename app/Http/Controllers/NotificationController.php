@@ -78,12 +78,19 @@ class NotificationController extends Controller
     /**
      * Mark a single notification as read.
      */
-    public function markAsRead(Notification $notification): RedirectResponse
+    public function markAsRead(Request $request, Notification $notification): RedirectResponse|\Illuminate\Http\JsonResponse
     {
         if ($notification->user_id !== auth()->id()) {
             abort(403);
         }
+
         $notification->markAsRead();
+
+        // Opening a notification marks it read in the background (fetch).
+        if ($request->expectsJson()) {
+            return response()->json(['read' => true, 'unread_count' => Notification::unreadCountFor(auth()->id())]);
+        }
+
         return back()->with('success', 'Notification marked as read.');
     }
 
