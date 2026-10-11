@@ -10,7 +10,12 @@
                 <i class="fas fa-arrow-left"></i> Back to Monitoring
             </a>
             <h1 class="mb-0">
-                <i class="fas fa-calendar-alt"></i> Reservation #{{ $reservation->id }}
+                @if($reservation->booking)
+                    <i class="fas fa-credit-card"></i> Booking #{{ $reservation->booking->id }}
+                    <small class="d-block text-muted fs-6 fw-normal mt-1">from Reservation #{{ $reservation->id }}</small>
+                @else
+                    <i class="fas fa-calendar-alt"></i> Reservation #{{ $reservation->id }}
+                @endif
             </h1>
         </div>
         <div>
@@ -152,6 +157,9 @@
                             @if($payment->isRejected() && $payment->rejection_reason)
                                 <small class="text-muted d-block mt-2">Rejection reason: {{ $payment->rejection_reason }}</small>
                             @endif
+                            @if($payment->isPendingVerification() && $reservation->booking?->billing?->billing_status === 'paid')
+                                <small class="text-muted d-block mt-2"><i class="fas fa-circle-info"></i> Never verified, so not counted toward the bill - the bill was settled by another payment.</small>
+                            @endif
                         </div>
                     @endforeach
                 </x-card>
@@ -219,7 +227,7 @@
                                             <td>{{ $payment->reference_number ?? 'N/A' }}</td>
                                             <td class="text-end">₱{{ number_format($payment->amount_paid, 2) }}</td>
                                             <td>
-                                                <x-status-badge :status="$payment->payment_status" domain="payment" />
+                                                <x-status-badge :status="$payment->verification_status ?? $payment->payment_status" :domain="$payment->verification_status ? 'verification_status' : 'payment'" />
                                             </td>
                                         </tr>
                                     @endforeach

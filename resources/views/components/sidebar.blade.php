@@ -420,8 +420,8 @@
                 <li><a href="{{ route('manager.dashboard') }}" class="nav-link {{ request()->routeIs('manager.dashboard') ? 'active' : '' }}" title="Dashboard">
                     <i class="fas fa-chart-pie"></i> <span class="link-text">Dashboard</span>
                 </a></li>
-                <li><a href="{{ route('manager.reservations.index') }}" class="nav-link {{ request()->routeIs('manager.reservations.*') ? 'active' : '' }}" title="Booking and Monitoring">
-                    <i class="fas fa-calendar-alt"></i> <span class="link-text">Booking and Monitoring</span>
+                <li><a href="{{ route('manager.reservations.index') }}" class="nav-link {{ request()->routeIs('manager.reservations.*') ? 'active' : '' }}" title="Reservation and Booking Monitoring">
+                    <i class="fas fa-calendar-alt"></i> <span class="link-text">Reservation and Booking Monitoring</span>
                 </a></li>
                 <li><a href="{{ route('guest-history.index') }}" class="nav-link {{ request()->routeIs('guest-history.*') ? 'active' : '' }}" title="Guest History">
                     <i class="fas fa-address-book"></i> <span class="link-text">Guest History</span>

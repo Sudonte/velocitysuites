@@ -1,10 +1,10 @@
 @extends('layouts.app')
 
-@section('title', 'Booking and Monitoring - Manager')
+@section('title', 'Reservation and Booking Monitoring - Manager')
 
 @section('content')
 <div class="container-fluid py-4">
-    <x-page-header icon="fas fa-calendar-alt" title="Booking and Monitoring"
+    <x-page-header icon="fas fa-calendar-alt" title="Reservation and Booking Monitoring"
         subtitle="Monitor guest bookings and reservations - status, dates, and rooms." />
 
     @if (session('success'))
@@ -37,27 +37,23 @@
                 <label class="form-label small text-muted mb-1">Guest, Booking #, or Reservation #</label>
                 <input type="text" name="search" class="form-control" placeholder="Search..." value="{{ request('search') }}">
             </div>
-            <div class="col-sm-6 col-md-4 col-lg-2">
-                <label class="form-label small text-muted mb-1">Type</label>
-                <select name="type" class="form-control">
-                    <option value="">All Types</option>
-                    <option value="booking" {{ request('type') === 'booking' ? 'selected' : '' }}>Booking</option>
-                    <option value="reservation" {{ request('type') === 'reservation' ? 'selected' : '' }}>Reservation</option>
-                </select>
-            </div>
+            <input type="hidden" name="tab" value="{{ $tab }}">
             <div class="col-sm-6 col-md-4 col-lg-2">
                 <label class="form-label small text-muted mb-1">Status</label>
                 <select name="status" class="form-control">
                     <option value="">All Status</option>
+                    @if($tab === 'reservations')
                     <option value="PENDING" {{ request('status') === 'PENDING' ? 'selected' : '' }}>Pending (Any Payment Method)</option>
                     <option value="AWAITING_CASH_CONFIRMATION" {{ request('status') === 'AWAITING_CASH_CONFIRMATION' ? 'selected' : '' }}>Awaiting Cash Payment</option>
                     <option value="AWAITING_GCASH_PAYMENT" {{ request('status') === 'AWAITING_GCASH_PAYMENT' ? 'selected' : '' }}>Awaiting GCash Payment</option>
+                    <option value="REJECTED_RESERVATION" {{ request('status') === 'REJECTED_RESERVATION' ? 'selected' : '' }}>Rejected</option>
+                    <option value="CANCELLED_RESERVATION" {{ request('status') === 'CANCELLED_RESERVATION' ? 'selected' : '' }}>Cancelled</option>
+                    @else
                     <option value="ACTIVE_BOOKING" {{ request('status') === 'ACTIVE_BOOKING' ? 'selected' : '' }}>Confirmed (Booked)</option>
                     <option value="CHECKED_IN" {{ request('status') === 'CHECKED_IN' ? 'selected' : '' }}>Checked-In</option>
                     <option value="COMPLETED_BOOKING" {{ request('status') === 'COMPLETED_BOOKING' ? 'selected' : '' }}>Checked-Out</option>
-                    <option value="REJECTED_RESERVATION" {{ request('status') === 'REJECTED_RESERVATION' ? 'selected' : '' }}>Rejected</option>
-                    <option value="CANCELLED_RESERVATION" {{ request('status') === 'CANCELLED_RESERVATION' ? 'selected' : '' }}>Cancelled (Reservation)</option>
-                    <option value="CANCELLED_BOOKING" {{ request('status') === 'CANCELLED_BOOKING' ? 'selected' : '' }}>Cancelled (Booking)</option>
+                    <option value="CANCELLED_BOOKING" {{ request('status') === 'CANCELLED_BOOKING' ? 'selected' : '' }}>Cancelled</option>
+                    @endif
                 </select>
             </div>
             <div class="col-sm-6 col-md-4 col-lg-2">
@@ -103,7 +99,7 @@
         </form>
         @if(request('search') || request('type') || request('status') || request('payment_status') || request('payment_method') || request('receptionist') || request('from') || request('to'))
             <div class="mt-3">
-                <a href="{{ route('manager.reservations.index') }}" class="btn btn-sm btn-outline-secondary">
+                <a href="{{ route('manager.reservations.index', ['tab' => $tab]) }}" class="btn btn-sm btn-outline-secondary">
                     <i class="fas fa-times"></i> Clear Filters
                 </a>
             </div>
@@ -114,7 +110,28 @@
          full table at md and up. Both render from the same $reservations
          collection, so nothing about the underlying data/pagination
          differs between the two. -->
-    <x-card title="All Bookings and Reservations" icon="fas fa-list" bodyClass="monitoring-table-wrap">
+    @php
+        // Switching tabs keeps search/date/payment filters; status values differ per tab, so drop it.
+        $tabQuery = fn ($t) => array_merge(request()->except(['page', 'tab', 'type', 'status']), ['tab' => $t]);
+    @endphp
+    <ul class="nav nav-tabs mb-3" role="tablist">
+        <li class="nav-item">
+            <a class="nav-link {{ $tab === 'reservations' ? 'active' : '' }}" href="{{ route('manager.reservations.index', $tabQuery('reservations')) }}"
+               @if($tab === 'reservations') aria-current="page" @endif>
+                <i class="fas fa-calendar-alt"></i> Reservations
+                <span class="badge rounded-pill bg-secondary ms-1">{{ $tabCounts['reservations'] }}</span>
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link {{ $tab === 'bookings' ? 'active' : '' }}" href="{{ route('manager.reservations.index', $tabQuery('bookings')) }}"
+               @if($tab === 'bookings') aria-current="page" @endif>
+                <i class="fas fa-credit-card"></i> Bookings
+                <span class="badge rounded-pill bg-primary ms-1">{{ $tabCounts['bookings'] }}</span>
+            </a>
+        </li>
+    </ul>
+
+    <x-card :title="$tab === 'bookings' ? 'Bookings' : 'Reservations'" :icon="$tab === 'bookings' ? 'fas fa-credit-card' : 'fas fa-calendar-alt'" bodyClass="monitoring-table-wrap">
         <div class="d-md-none monitoring-card-list">
             @forelse($reservations as $item)
                 <div class="monitoring-item-card">
@@ -136,7 +153,7 @@
                     </div>
                     <div class="monitoring-item-row">
                         <span class="text-muted">Ref</span>
-                        <span class="fw-bold">{{ $item->monitor_number_label }}</span>
+                        <span class="fw-bold text-end">{{ $item->monitor_number_label }}@if($item->monitor_origin_label)<small class="d-block text-muted fw-normal">{{ $item->monitor_origin_label }}</small>@endif</span>
                     </div>
                     <div class="monitoring-item-row">
                         <span class="text-muted">Room</span>
@@ -154,7 +171,7 @@
                         <i class="fas fa-eye"></i></a>
                 </div>
             @empty
-                <x-empty-state icon="fas fa-calendar-alt" message="No bookings or reservations found." />
+                <x-empty-state icon="fas fa-calendar-alt" :message="$tab === 'bookings' ? 'No bookings found.' : 'No reservations found.'" />
             @endforelse
         </div>
 
@@ -175,7 +192,12 @@
                 <tbody>
                     @forelse($reservations as $item)
                         <tr>
-                            <td class="fw-bold">{{ $item->monitor_number_label }}</td>
+                            <td class="fw-bold">
+                                {{ $item->monitor_number_label }}
+                                @if($item->monitor_origin_label)
+                                    <small class="d-block text-muted fw-normal">{{ $item->monitor_origin_label }}</small>
+                                @endif
+                            </td>
                             <td>
                                 <div class="d-flex align-items-center gap-2">
                                     <div class="monitoring-avatar monitoring-avatar-sm">
@@ -220,7 +242,7 @@
                     @empty
                         <tr>
                             <td colspan="8">
-                                <x-empty-state icon="fas fa-calendar-alt" message="No bookings or reservations found." />
+                                <x-empty-state icon="fas fa-calendar-alt" :message="$tab === 'bookings' ? 'No bookings found.' : 'No reservations found.'" />
                             </td>
                         </tr>
                     @endforelse

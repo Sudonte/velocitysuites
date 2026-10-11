@@ -23,6 +23,7 @@ class ReservationViewController extends Controller
      */
     public function index(Request $request): View
     {
+        // Legacy ?type= links map onto the tabs (see $tab below).
         $type = $request->get('type');
         $status = $request->get('status');
         $paymentStatus = $request->get('payment_status');
@@ -32,7 +33,7 @@ class ReservationViewController extends Controller
 
         $items = collect();
 
-        if ($type !== 'booking') {
+        {
             $reservationQuery = Reservation::with(['guest.user', 'roomType', 'booking.room', 'booking.billing', 'payments']);
 
             if ($status) {
@@ -70,7 +71,8 @@ class ReservationViewController extends Controller
             if ($search !== '') {
                 $reservationQuery->where(function ($q) use ($search) {
                     if (is_numeric($search)) {
-                        $q->orWhere('id', (int) $search);
+                        $q->orWhere('id', (int) $search)
+                            ->orWhereHas('booking', fn ($qq) => $qq->where('id', (int) $search));
                     }
                     $q->orWhereHas('guest.user', function ($qq) use ($search) {
                         // full_name is a computed accessor (User::getFullNameAttribute()),
@@ -84,7 +86,12 @@ class ReservationViewController extends Controller
 
             foreach ($reservationQuery->get() as $reservation) {
                 $reservation->monitor_type = 'reservation';
-                $reservation->monitor_number_label = "Reservation #{$reservation->id}";
+                // Once converted, the stay is identified by its Booking ID;
+                // the original Reservation ID stays visible as a sub-label.
+                $reservation->monitor_number_label = $reservation->booking
+                    ? "Booking #{$reservation->booking->id}"
+                    : "Reservation #{$reservation->id}";
+                $reservation->monitor_origin_label = $reservation->booking ? "from Reservation #{$reservation->id}" : null;
                 $reservation->monitor_badge = $reservation->booking ? 'Booking' : 'Reservation';
                 $reservation->monitor_guest_name = $reservation->stay_guest_full_name ?? $reservation->guest->user->full_name ?? 'N/A';
                 $reservation->monitor_guest_email = $reservation->guest->user->email ?? '';
@@ -98,7 +105,7 @@ class ReservationViewController extends Controller
             }
         }
 
-        if ($type !== 'reservation') {
+        {
             $bookingQuery = Booking::whereNull('reservation_id')->with(['guest.user', 'roomType', 'room', 'payments']);
 
             if ($status) {
@@ -146,6 +153,7 @@ class ReservationViewController extends Controller
             foreach ($bookingQuery->get() as $booking) {
                 $booking->monitor_type = 'booking';
                 $booking->monitor_number_label = "Booking #{$booking->id}";
+                $booking->monitor_origin_label = null;
                 $booking->monitor_badge = 'Booking';
                 $booking->monitor_guest_name = $booking->stay_guest_full_name ?? $booking->account_guest_full_name ?? 'N/A';
                 $booking->monitor_guest_email = $booking->account_guest?->user?->email ?? '';
@@ -175,8 +183,9 @@ class ReservationViewController extends Controller
             : (bool) ($item->account_guest?->user?->is_test_account ?? false));
 
         $summaryTotal = $businessItems->count();
-        $summaryBookingCount = $businessItems->where('monitor_type', 'booking')->count();
-        $summaryReservationCount = $businessItems->where('monitor_type', 'reservation')->count();
+        // Converted reservations count as bookings (matches the tabs below).
+        $summaryBookingCount = $businessItems->where('monitor_badge', 'Booking')->count();
+        $summaryReservationCount = $businessItems->where('monitor_badge', 'Reservation')->count();
         // 'AWAITING_VERIFICATION' (Booking::display_status - see that
         // accessor) replaces Booking::STATUS_ACTIVE here: an ACTIVE
         // booking that's already been verified isn't "pending" anything,
@@ -184,8 +193,21 @@ class ReservationViewController extends Controller
         // booking_status, for every booking row above.
         $summaryPendingCount = $businessItems->whereIn('monitor_status_value', [Reservation::STATUS_AWAITING_CASH, Reservation::STATUS_AWAITING_GCASH, 'AWAITING_VERIFICATION'])->count();
 
-        // Length-aware over the merged in-memory list (reservations and
-        // bookings combined), so the page shows totals and numbered links.
+        // Tabs: Reservations = not yet converted; Bookings = converted
+        // reservations plus direct bookings. Without an explicit tab, a
+        // filtered link (e.g. a dashboard card) opens whichever tab has results.
+        $tabCounts = [
+            'reservations' => $items->where('monitor_badge', 'Reservation')->count(),
+            'bookings' => $items->where('monitor_badge', 'Booking')->count(),
+        ];
+        $tab = $request->get('tab', $type === 'booking' ? 'bookings' : ($type === 'reservation' ? 'reservations' : null));
+        if (! in_array($tab, ['reservations', 'bookings'], true)) {
+            $tab = $tabCounts['reservations'] === 0 && $tabCounts['bookings'] > 0 ? 'bookings' : 'reservations';
+        }
+        $items = $items->where('monitor_badge', $tab === 'bookings' ? 'Booking' : 'Reservation')->values();
+
+        // Length-aware over the merged in-memory list, so the page shows
+        // totals and numbered links.
         $perPage = \App\Support\PerPage::resolve($request);
         $page = max(1, (int) $request->get('page', 1));
         $reservations = new LengthAwarePaginator(
@@ -201,7 +223,8 @@ class ReservationViewController extends Controller
         $receptionists = User::where('role', 'receptionist')->orderBy('first_name')->get();
 
         return view('manager.reservations.index', compact(
-            'reservations', 'receptionists', 'summaryTotal', 'summaryBookingCount', 'summaryReservationCount', 'summaryPendingCount'
+            'reservations', 'receptionists', 'summaryTotal', 'summaryBookingCount', 'summaryReservationCount', 'summaryPendingCount',
+            'tab', 'tabCounts'
         ));
     }
 
@@ -213,8 +236,9 @@ class ReservationViewController extends Controller
     {
         $reservation->load(['guest.user', 'roomType', 'payments', 'booking.room', 'booking.billing.payments']);
 
-        $gcashPayments = $reservation->payments
-            ->concat($reservation->booking?->billing?->payments ?? collect())
+        // allPayments() de-duplicates: a GCash payment linked to both the
+        // reservation and the bill is still one payment.
+        $gcashPayments = ($reservation->booking ? $reservation->booking->allPayments() : $reservation->payments)
             ->where('payment_method', 'gcash')
             ->sortByDesc('created_at')
             ->values();

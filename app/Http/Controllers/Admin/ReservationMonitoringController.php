@@ -226,8 +226,9 @@ class ReservationMonitoringController extends Controller
     {
         $reservation->load(['guest.user', 'roomType', 'payments', 'booking.room', 'booking.billing.payments']);
 
-        $gcashPayments = $reservation->payments
-            ->concat($reservation->booking?->billing?->payments ?? collect())
+        // allPayments() de-duplicates: a GCash payment linked to both the
+        // reservation and the bill is still one payment.
+        $gcashPayments = ($reservation->booking ? $reservation->booking->allPayments() : $reservation->payments)
             ->where('payment_method', 'gcash')
             ->sortByDesc('created_at')
             ->values();
