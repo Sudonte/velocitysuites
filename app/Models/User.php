@@ -29,6 +29,7 @@ class User extends Authenticatable
         'role',
         'status',
         'failed_login_attempts',
+        'last_failed_login_at',
         'must_change_password',
         'last_login_at',
         'email_verified_at',
@@ -87,6 +88,42 @@ class User extends Authenticatable
      *
      * @return array<string, string>
      */
+    /** Failed sign-ins (web + API share one counter) that lock the account. */
+    public const LOGIN_LOCK_THRESHOLD = 3;
+
+    /**
+     * Failures only count while they are recent: a failure older than this
+     * is forgotten, and a lockout lifts on its own this long after the
+     * attempt that triggered it (a password reset still clears it at once).
+     * Without the window a counter left at 2 for days locked the account on
+     * the very next typo - or stayed locked indefinitely.
+     */
+    public const LOGIN_FAILURE_WINDOW_MINUTES = 15;
+
+    public function recentFailedLoginAttempts(): int
+    {
+        if (! $this->last_failed_login_at
+            || $this->last_failed_login_at->lt(now()->subMinutes(self::LOGIN_FAILURE_WINDOW_MINUTES))) {
+            return 0;
+        }
+
+        return (int) $this->failed_login_attempts;
+    }
+
+    public function isLoginLocked(): bool
+    {
+        return $this->recentFailedLoginAttempts() >= self::LOGIN_LOCK_THRESHOLD;
+    }
+
+    /** Record one failed sign-in and return the recent-failure count including it. */
+    public function recordFailedLogin(): int
+    {
+        $count = $this->recentFailedLoginAttempts() + 1;
+        $this->forceFill(['failed_login_attempts' => $count, 'last_failed_login_at' => now()])->save();
+
+        return $count;
+    }
+
     protected function casts(): array
     {
         return [
@@ -95,6 +132,7 @@ class User extends Authenticatable
             'must_change_password' => 'boolean',
             'is_test_account' => 'boolean',
             'last_login_at' => 'datetime',
+            'last_failed_login_at' => 'datetime',
             'deleted_at' => 'datetime',
             'restore_deadline' => 'datetime',
             'deactivated_at' => 'datetime',

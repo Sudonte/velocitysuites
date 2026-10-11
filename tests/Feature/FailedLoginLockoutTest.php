@@ -44,6 +44,7 @@ class FailedLoginLockoutTest extends TestCase
             $table->timestamp('email_verified_at')->nullable();
             $table->string('password');
             $table->integer('failed_login_attempts')->default(0);
+            $table->timestamp('last_failed_login_at')->nullable();
             $table->timestamp('last_login_at')->nullable();
             $table->timestamp('deleted_at')->nullable();
             $table->timestamp('restore_deadline')->nullable();
@@ -158,5 +159,45 @@ class FailedLoginLockoutTest extends TestCase
         $response->assertRedirect(route('password.otp.form', ['email' => $user->email]));
         $this->assertDatabaseHas('password_reset_tokens', ['email' => $user->email]);
         $this->assertDatabaseMissing('staff_password_reset_requests', ['user_id' => $user->id]);
+    }
+
+    public function test_old_failures_are_forgotten_so_one_typo_never_locks(): void
+    {
+        // Two failures left over from days ago (the reported case: a counter
+        // that never expired locked the account on the next single typo).
+        $user = $this->makeUser('manager');
+        $user->forceFill(['failed_login_attempts' => 2, 'last_failed_login_at' => now()->subDays(6)])->save();
+
+        $response = $this->post('/login', ['email' => $user->email, 'password' => 'wrong']);
+
+        $response->assertRedirect();
+        $this->assertNotSame(route('password.request'), $response->headers->get('Location'));
+        $this->assertSame(1, $user->refresh()->failed_login_attempts);
+    }
+
+    public function test_stale_lock_no_longer_blocks_the_correct_password(): void
+    {
+        $user = $this->makeUser('manager');
+        $user->forceFill(['failed_login_attempts' => 3, 'last_failed_login_at' => now()->subDays(6)])->save();
+
+        $this->post('/login', ['email' => $user->email, 'password' => 'correct-password']);
+
+        $this->assertAuthenticatedAs($user);
+        $this->assertSame(0, $user->refresh()->failed_login_attempts);
+    }
+
+    public function test_lockout_lifts_after_the_window(): void
+    {
+        $user = $this->makeUser('guest');
+        foreach (range(1, 3) as $i) {
+            $this->postJson('/api/login', ['email' => $user->email, 'password' => 'wrong']);
+        }
+        $this->postJson('/api/login', ['email' => $user->email, 'password' => 'correct-password'])->assertStatus(423);
+
+        $this->travel(User::LOGIN_FAILURE_WINDOW_MINUTES + 1)->minutes();
+
+        $this->assertFalse($user->refresh()->isLoginLocked());
+        $this->post('/login', ['email' => $user->email, 'password' => 'correct-password']);
+        $this->assertAuthenticatedAs($user);
     }
 }

@@ -52,8 +52,8 @@ class AuthController extends Controller
             return response()->json(['message' => 'Account suspended or credentials invalid.'], 401);
         }
 
-        if ($user->failed_login_attempts >= 3) {
-            return response()->json(['message' => 'Account locked due to multiple failed login attempts.'], 423);
+        if ($user->isLoginLocked()) {
+            return response()->json(['message' => 'Account locked due to multiple failed login attempts. Try again in 15 minutes or reset your password.'], 423);
         }
 
         if (! Hash::check($credentials['password'], $user->password)) {
@@ -61,14 +61,13 @@ class AuthController extends Controller
             // request - the pre-check above only ever sees the count from
             // a PRIOR request, so without this the account doesn't
             // actually lock until a 4th attempt instead of the intended 3rd.
-            $user->increment('failed_login_attempts');
-            $user->refresh();
+            $failures = $user->recordFailedLogin();
 
-            if ($user->failed_login_attempts >= 3) {
+            if ($failures >= User::LOGIN_LOCK_THRESHOLD) {
                 return response()->json(['message' => 'Account locked due to multiple failed login attempts. Check your email to verify and reset your password.'], 423);
             }
 
-            $message = $user->failed_login_attempts === 2
+            $message = $failures === User::LOGIN_LOCK_THRESHOLD - 1
                 ? 'Invalid credentials. One more failed attempt will require you to verify your account by email.'
                 : 'Invalid credentials.';
 

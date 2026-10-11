@@ -17,6 +17,9 @@ class WebLoginMessageTest extends ApiFlowTestCase
         if (! Schema::hasColumn('users', 'failed_login_attempts')) {
             Schema::table('users', fn ($table) => $table->unsignedInteger('failed_login_attempts')->default(0));
         }
+        if (! Schema::hasColumn('users', 'last_failed_login_at')) {
+            Schema::table('users', fn ($table) => $table->timestamp('last_failed_login_at')->nullable());
+        }
     }
 
     public function test_failed_logins_share_one_message(): void

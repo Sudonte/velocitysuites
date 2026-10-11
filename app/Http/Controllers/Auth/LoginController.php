@@ -20,7 +20,7 @@ class LoginController extends Controller
 
     private const FAILED_MESSAGE = 'The email or password you entered is incorrect. Check them and try again, or use "Forgot password?" to reset it.';
 
-    private const LOCKED_MESSAGE = 'For your security, sign-in is paused after 3 failed attempts. Reset your password below to continue.';
+    private const LOCKED_MESSAGE = 'For your security, sign-in is paused for 15 minutes after 3 failed attempts in a row. Reset your password below to continue now.';
 
     /**
      * Handle login request.
@@ -46,7 +46,7 @@ class LoginController extends Controller
         // existing OTP-email flow, Manager/Receptionist get a
         // StaffPasswordResetRequest routed to the System Administrator for
         // approval (see Admin\PasswordResetRequestController).
-        if ($user->failed_login_attempts >= 3) {
+        if ($user->isLoginLocked()) {
             return redirect()->route('password.request')
                 ->with('error', self::LOCKED_MESSAGE)
                 ->withInput(['email' => $credentials['email']]);
@@ -121,16 +121,15 @@ class LoginController extends Controller
         // ever sees the count from a PRIOR request, so without this the
         // account doesn't actually lock until a 4th attempt instead of the
         // intended 3rd.
-        $user->increment('failed_login_attempts');
-        $user->refresh();
+        $failures = $user->recordFailedLogin();
 
-        if ($user->failed_login_attempts >= 3) {
+        if ($failures >= User::LOGIN_LOCK_THRESHOLD) {
             return redirect()->route('password.request')
                 ->with('error', self::LOCKED_MESSAGE)
                 ->withInput(['email' => $credentials['email']]);
         }
 
-        $message = $user->failed_login_attempts === 2
+        $message = $failures === User::LOGIN_LOCK_THRESHOLD - 1
             ? self::FAILED_MESSAGE . ' One more failed attempt will lock sign-in until you reset your password.'
             : self::FAILED_MESSAGE;
 

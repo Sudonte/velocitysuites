@@ -80,7 +80,7 @@
                             @endif
                         </td>
                         <td>
-                            @if($req->user->failed_login_attempts >= 3)
+                            @if($req->user->isLoginLocked())
                                 <span class="badge bg-danger">{{ $req->user->failed_login_attempts }} attempts</span>
                             @else
                                 <span class="text-muted small">{{ $req->user->failed_login_attempts }}</span>
