@@ -160,25 +160,100 @@ class CheckInSettlementTest extends ApiFlowTestCase
         \Carbon\Carbon::setTestNow();
     }
 
-    public function test_walk_in_amenities_are_billed_at_check_in(): void
+    private function walkInPayload($rt, array $extra = []): array
+    {
+        return array_merge([
+            'guest_first_name' => 'Walk', 'guest_last_name' => 'In',
+            'checkin_permanent_address' => '1 Test St', 'current_address_same_as_permanent' => 1, 'checkin_contact_number' => '09171234567',
+            'room_ids' => [$rt->rooms()->first()->id], 'check_out' => today()->addDay()->toDateString(), 'adults' => 1, 'children' => 0,
+        ], $extra);
+    }
+
+    public function test_walk_in_checks_in_on_one_page_with_amenities_paid_in_full(): void
     {
         $rt = $this->makeRoomTypeWithRooms('Deluxe', 1000, 2, 1);
         $amenity = Amenity::create(['amenity_name' => 'Extra Bed', 'category' => 'Room', 'quantity' => 5, 'is_unlimited' => false, 'charge' => 300, 'status' => 'active']);
         $desk = $this->desk();
 
         $this->actingAs($desk)->get(route('receptionist.check-in.walk-in.create'))->assertOk()->assertSee('Extra Bed');
-        $this->actingAs($desk)->post(route('receptionist.check-in.walk-in.store'), [
-            'guest_first_name' => 'Walk', 'guest_last_name' => 'In', 'room_type_id' => $rt->id, 'rooms_requested' => 1,
-            'check_out' => today()->addDay()->toDateString(), 'adults' => 1, 'children' => 0,
-            'amenities' => [['amenity_id' => $amenity->id, 'quantity' => 2]],
-        ])->assertSessionHasNoErrors()->assertRedirect();
+        $this->actingAs($desk)->getJson(route('receptionist.check-in.walk-in.rooms', ['room_type_id' => $rt->id, 'check_out' => today()->addDay()->toDateString()]))
+            ->assertOk()->assertJsonPath('sellable', 1)->assertJsonPath('rooms.0.room_number', 'Deluxe-1');
+
+        // 1 night x 1000 + 2 x 300 = 1600 - less is refused and nothing is created
+        $payload = $this->walkInPayload($rt, ['amenities' => [['amenity_id' => $amenity->id, 'quantity' => 2]], 'payment_method' => 'cash', 'amount_received' => 1000]);
+        $this->actingAs($desk)->post(route('receptionist.check-in.walk-in.store'), $payload)->assertSessionHasErrors('amount_received');
+        $this->assertSame(0, Booking::count());
+
+        $payload['amount_received'] = 2000;
+        $this->actingAs($desk)->post(route('receptionist.check-in.walk-in.store'), $payload)
+            ->assertSessionHasNoErrors()->assertRedirect(route('receptionist.check-in.index', ['tab' => 'checked_in']))
+            ->assertSessionHas('success', fn ($m) => str_contains($m, '400.00'));
 
         $booking = Booking::first();
-        $request = AmenityRequest::where('booking_id', $booking->id)->first();
-        $this->assertSame('approved', $request->status);
-        $this->assertSame(2, (int) $request->quantity);
+        $this->assertSame(Booking::STATUS_CHECKED_IN, $booking->booking_status);
+        $this->assertEqualsWithDelta(1600, $booking->paidTotal(), 0.01);
+        $this->assertSame('occupied', $rt->rooms()->first()->status);
+        $this->assertSame(2, (int) AmenityRequest::where('booking_id', $booking->id)->value('quantity'));
+        $this->assertNotNull($booking->billing()->first()->checkin_settled_at);
+    }
 
-        // 1 night x 1000 + 2 x 300
-        $this->actingAs($desk)->get(route('receptionist.check-in.panel', $booking))->assertOk()->assertSee('₱1,600.00', false);
+    public function test_walk_in_gcash_needs_the_exact_amount_reference_and_receipt(): void
+    {
+        Storage::fake('public');
+        $rt = $this->makeRoomTypeWithRooms('Deluxe', 1000, 2, 1);
+        $desk = $this->desk();
+
+        $this->actingAs($desk)->post(route('receptionist.check-in.walk-in.store'), $this->walkInPayload($rt, ['payment_method' => 'gcash', 'gcash_amount' => 1000]))
+            ->assertSessionHasErrors(['gcash_reference', 'gcash_receipt']);
+        $this->actingAs($desk)->post(route('receptionist.check-in.walk-in.store'), $this->walkInPayload($rt, [
+            'payment_method' => 'gcash', 'gcash_amount' => 900, 'gcash_reference' => 'REF123', 'gcash_receipt' => UploadedFile::fake()->image('r.jpg'),
+        ]))->assertSessionHasErrors('gcash_amount');
+        $this->assertSame(0, Booking::count());
+
+        $this->actingAs($desk)->post(route('receptionist.check-in.walk-in.store'), $this->walkInPayload($rt, [
+            'payment_method' => 'gcash', 'gcash_amount' => 1000, 'gcash_reference' => 'REF123', 'gcash_receipt' => UploadedFile::fake()->image('r.jpg'),
+        ]))->assertSessionHasNoErrors();
+
+        $payment = Payment::first();
+        $this->assertSame('gcash', $payment->payment_method);
+        $this->assertSame('REF123', $payment->reference_number);
+        Storage::disk('public')->assertExists($payment->receipt_path);
+    }
+
+    public function test_an_occupied_room_is_never_offered_even_for_an_early_check_in(): void
+    {
+        // Room 1 is occupied today by a stay ending tomorrow.
+        $rt = $this->makeRoomTypeWithRooms('Deluxe', 1000, 2, 2);
+        [$room1, $room2] = $rt->rooms()->orderBy('id')->get()->all();
+        $current = Booking::create(['room_type_id' => $rt->id, 'rooms_requested' => 1, 'guest_first_name' => 'In', 'guest_last_name' => 'House',
+            'check_in' => today()->toDateString(), 'check_out' => today()->addDay()->toDateString(), 'adults' => 1, 'children' => 0,
+            'booking_status' => Booking::STATUS_CHECKED_IN, 'verified_at' => now()]);
+        $current->rooms()->sync([$room1->id]);
+
+        // A booking that starts tomorrow, checked in today (early): room 1 must not be offered or accepted.
+        $early = Booking::create(['room_type_id' => $rt->id, 'rooms_requested' => 1, 'guest_first_name' => 'Early', 'guest_last_name' => 'Bird',
+            'check_in' => today()->addDay()->toDateString(), 'check_out' => today()->addDays(2)->toDateString(), 'adults' => 1, 'children' => 0, 'number_of_guests' => 1,
+            'booking_status' => Booking::STATUS_ACTIVE, 'confirmed_at' => now(), 'verified_at' => now()]);
+        $offered = app(\App\Services\RoomAvailabilityService::class)->assignableRoomsOfType($rt->id, $early)->pluck('id')->all();
+        $this->assertSame([$room2->id], $offered);
+
+        $this->actingAs($this->desk())->postJson(route('receptionist.check-in.store', $early), $this->checkInPayload($rt, $room1, ['payment_method' => 'cash', 'amount_received' => 1000]))
+            ->assertStatus(422);
+        $this->assertSame(Booking::STATUS_ACTIVE, $early->fresh()->booking_status);
+    }
+
+    public function test_create_booking_records_a_partial_payment(): void
+    {
+        $rt = $this->makeRoomTypeWithRooms('Deluxe', 1000, 2, 2);
+        $in = \App\Support\CheckInWindow::earliest();
+        $this->actingAs($this->desk())->post(route('receptionist.bookings.store'), [
+            'guest_first_name' => 'Pay', 'guest_last_name' => 'Part', 'room_type_id' => $rt->id, 'rooms_requested' => 1,
+            'check_in' => $in, 'check_out' => \Carbon\Carbon::parse($in)->addDays(2)->toDateString(), 'adults' => 1, 'children' => 0,
+            'payment_method' => 'cash', 'amount_received' => 500,
+        ])->assertSessionHasNoErrors()->assertSessionHas('success', fn ($m) => str_contains($m, 'Partial payment of ₱500.00'));
+
+        $booking = Booking::first();
+        $this->assertEqualsWithDelta(500, $booking->paidTotal(), 0.01);
+        $this->assertSame(Booking::STATUS_ACTIVE, $booking->booking_status);
     }
 }

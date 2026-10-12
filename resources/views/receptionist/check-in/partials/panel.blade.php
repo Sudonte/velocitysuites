@@ -167,24 +167,7 @@
                 <h6 class="mt-3 mb-2"><i class="fas fa-money-bill-wave"></i> Payment</h6>
                 @if($balanceDue > 0)
                     {{-- Full payment only - the server refuses anything less. Disabled until this step shows. --}}
-                    <div class="border rounded p-2" id="checkInPayment" data-balance="{{ $balanceDue }}">
-                        <p class="mb-2">Amount due now: <strong>₱{{ number_format($balanceDue, 2) }}</strong></p>
-                        <div class="btn-group btn-group-sm mb-2" role="group">
-                            <input type="radio" class="btn-check" name="payment_method" id="ciPayCash" value="cash" checked disabled>
-                            <label class="btn btn-outline-primary" for="ciPayCash">Cash</label>
-                            <input type="radio" class="btn-check" name="payment_method" id="ciPayGcash" value="gcash" disabled>
-                            <label class="btn btn-outline-primary" for="ciPayGcash">GCash</label>
-                        </div>
-                        <div data-pay="cash">
-                            <label class="form-label small mb-1">Cash received *</label>
-                            <input type="number" step="0.01" min="{{ $balanceDue }}" name="amount_received" class="form-control form-control-sm" required disabled placeholder="{{ number_format($balanceDue, 2, '.', '') }}">
-                            <small class="text-muted" data-change-hint></small>
-                        </div>
-                        <div data-pay="gcash" class="d-none">
-                            <label class="form-label small mb-1">GCash reference number *</label>
-                            <input type="text" name="gcash_reference" class="form-control form-control-sm" disabled maxlength="100">
-                        </div>
-                    </div>
+                    @include('receptionist.partials.desk-payment-fields', ['due' => $balanceDue, 'mode' => 'full', 'disabled' => true, 'containerId' => 'checkInPayment'])
                 @elseif($changeDue > 0)
                     <div class="alert alert-primary py-2 mb-0">
                         <div class="form-check mb-0">

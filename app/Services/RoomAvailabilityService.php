@@ -190,19 +190,38 @@ class RoomAvailabilityService
      */
     public function assignableRoomsOfType(int $roomTypeId, Booking $booking): Collection
     {
+        // Rooms are only ever assigned at check-in, i.e. NOW - even for a guest arriving ahead of their booked
+        // date - so the stay is taken to start today (or on its booked date if that already passed).
+        $from = $booking->check_in->lt(Carbon::today()) ? $booking->check_in : Carbon::today();
+
+        return $this->freeRoomsOfType($roomTypeId, $from, $booking->check_out, $booking->id);
+    }
+
+    /**
+     * Rooms of a type a guest can be put into right now for a stay ending
+     * $checkOut - the Walk-in Check-in form's room picker (and the same rule
+     * the Check In panel uses). A room is NOT free while:
+     *  - anyone is checked in to it (whatever their dates - checkout is manual,
+     *    so a guest is in the room until the receptionist checks them out), or
+     *  - it's pre-assigned to a confirmed booking whose stay overlaps.
+     * Maintenance and archived rooms are never offered.
+     */
+    public function freeRoomsOfType(int $roomTypeId, Carbon $from, Carbon $checkOut, ?int $excludingBookingId = null): Collection
+    {
         return Room::notArchived()->where('room_type_id', $roomTypeId)
             ->where('status', '!=', 'maintenance')
-            ->whereDoesntHave('assignedBookings', function ($q) use ($booking) {
-                $q->whereIn('bookings.booking_status', [Booking::STATUS_ACTIVE, Booking::STATUS_CHECKED_IN])
-                  ->where('bookings.id', '!=', $booking->id)
-                  // A room already individually checked out (see
-                  // Receptionist\CheckOutController::checkOutRoom()) is free
-                  // again immediately even while its sibling rooms' shared
-                  // booking is still CHECKED_IN overall - it must not stay
-                  // blocked from assignment until the whole multi-room
-                  // booking finishes.
-                  ->whereNull('booking_rooms.checked_out_at');
-                $this->occupiesRoom($q, $booking->check_in, $booking->check_out, 'bookings.');
+            ->whereDoesntHave('assignedBookings', function ($q) use ($from, $checkOut, $excludingBookingId) {
+                // A room individually checked out of a multi-room stay (CheckOutController::checkOutRoom()) is free
+                // again at once, even while its sibling rooms' booking is still CHECKED_IN.
+                $q->whereNull('booking_rooms.checked_out_at')
+                  ->when($excludingBookingId, fn ($q) => $q->where('bookings.id', '!=', $excludingBookingId))
+                  ->where(function ($q) use ($from, $checkOut) {
+                      $q->where('bookings.booking_status', Booking::STATUS_CHECKED_IN)
+                        ->orWhere(function ($q) use ($from, $checkOut) {
+                            $q->where('bookings.booking_status', Booking::STATUS_ACTIVE);
+                            $this->occupiesRoom($q, $from, $checkOut, 'bookings.');
+                        });
+                  });
             })
             ->orderBy('room_number')
             ->get();

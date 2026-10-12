@@ -584,3 +584,71 @@ document.addEventListener('submit', function (event) {
         }).observe(document.body, { childList: true, subtree: true });
     });
 })();
+
+// Desk payment fields (resources/views/receptionist/partials/desk-payment-fields.blade.php) - the Check In panel,
+// Walk-in Check-in and Create Booking. Shows the fields for the chosen method (only those are required) and a hint:
+// change to hand back, or how much is still owed. window.syncDeskPayment(box) re-applies it after the page changes
+// the amount due (data-due) or enables the fields.
+(function () {
+    const peso = function (n) {
+        return '\u20B1' + Number(n).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    };
+
+    function sync(box) {
+        if (!box) return;
+        const checked = box.querySelector('input[name="payment_method"]:checked');
+        const method = checked ? checked.value : 'none';
+        const due = box.dataset.due === '' || box.dataset.due === undefined ? null : parseFloat(box.dataset.due);
+        const full = box.dataset.mode === 'full';
+
+        const dueRow = box.querySelector('[data-due-row]');
+        if (dueRow) dueRow.classList.toggle('d-none', due === null);
+        const dueLabel = box.querySelector('[data-due-label]');
+        if (dueLabel && due !== null) dueLabel.textContent = peso(due);
+
+        box.querySelectorAll('[data-pay]').forEach(function (section) {
+            const on = section.dataset.pay === method;
+            section.classList.toggle('d-none', !on);
+            section.querySelectorAll('input').forEach(function (input) {
+                input.required = on && !input.disabled;
+            });
+        });
+
+        const section = box.querySelector('[data-pay="' + method + '"]');
+        if (!section) return;
+        const hint = section.querySelector('[data-pay-hint]');
+        const amountInput = section.querySelector('input[type="number"]');
+        if (!hint || !amountInput) return;
+        const got = parseFloat(amountInput.value);
+        let text = '', cls = 'text-muted';
+        if (due !== null && !isNaN(got)) {
+            const diff = Math.round((got - due) * 100) / 100;
+            if (diff < 0) {
+                text = full ? 'Not enough - the full ' + peso(due) + ' is required.' : 'Partial payment - ' + peso(-diff) + ' still owed.';
+                cls = full ? 'text-danger' : 'text-muted';
+            } else if (diff === 0) {
+                text = 'Paid in full.';
+                cls = 'text-success';
+            } else if (method === 'cash') {
+                text = 'Paid in full - change to hand back: ' + peso(diff) + '.';
+                cls = 'text-primary';
+            } else {
+                text = 'More than the ' + peso(due) + ' owed - enter the exact GCash amount.';
+                cls = 'text-danger';
+            }
+        }
+        hint.textContent = text;
+        hint.className = 'd-block mt-1 small ' + cls;
+    }
+
+    window.syncDeskPayment = sync;
+    ['change', 'input'].forEach(function (type) {
+        document.addEventListener(type, function (e) {
+            const box = e.target.closest && e.target.closest('[data-desk-payment]');
+            if (box) sync(box);
+        });
+    });
+    document.addEventListener('DOMContentLoaded', function () {
+        document.querySelectorAll('[data-desk-payment]').forEach(sync);
+    });
+})();

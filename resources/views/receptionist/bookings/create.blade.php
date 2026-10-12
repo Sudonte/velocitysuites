@@ -109,6 +109,12 @@
 
                     @include('receptionist.partials.offer-field', ['canApproveNow' => true])
 
+                    <h6 class="form-section-heading mt-3">Payment <small class="text-muted fw-normal">(optional - partial or full)</small></h6>
+                    <div class="mb-3">
+                        @include('receptionist.partials.desk-payment-fields', ['due' => null, 'mode' => 'optional', 'containerId' => 'bookingPayment'])
+                        <small class="text-muted d-block mt-1">The total shown is an estimate from the rooms and dates above (less an approved discount); the payment can't be more than the booking's total.</small>
+                    </div>
+
                     <div class="form-group">
                         <button type="submit" class="btn btn-primary">
                             <i class="fas fa-save"></i> Create Booking
@@ -136,8 +142,8 @@
                     </li>
                     <li class="mb-3">
                         <i class="fas fa-money-bill-wave text-brand"></i>
-                        <strong>Payment isn't collected here</strong>
-                        <p class="mb-0 ms-4 text-sm text-muted">Record it from the booking's own page whenever the guest actually pays.</p>
+                        <strong>Payment (optional)</strong>
+                        <p class="mb-0 ms-4 text-sm text-muted">Record what the guest paid now - partial or full, cash or GCash (with the receipt). Anything left can be paid later or at check-in.</p>
                     </li>
                 </ul>
             </x-card>
@@ -145,3 +151,38 @@
     </div>
 </div>
 @endsection
+
+@push('scripts')
+<script>
+// Estimated total for the payment hint: rooms x nights, less the discount when it's approved now.
+document.addEventListener('DOMContentLoaded', function () {
+    const form = document.querySelector('form[action="{{ route('receptionist.bookings.store') }}"]');
+    const pay = document.getElementById('bookingPayment');
+    if (!form || !pay) return;
+    function estimate() {
+        const inV = (form.querySelector('[name="check_in"]') || {}).value, outV = (form.querySelector('[name="check_out"]') || {}).value;
+        let total = 0;
+        if (inV && outV) {
+            const nights = Math.max(1, Math.round((new Date(outV + 'T00:00:00') - new Date(inV + 'T00:00:00')) / 86400000));
+            form.querySelectorAll('.room-line-row').forEach(function (row) {
+                const opt = (row.querySelector('select') || {}).selectedOptions;
+                const qty = parseInt((row.querySelector('input[type="number"]') || {}).value || '0', 10);
+                if (opt && opt[0] && opt[0].dataset.rate) total += parseFloat(opt[0].dataset.rate) * nights * qty;
+            });
+            const offer = (form.querySelector('input[name="offer"]:checked') || {}).value;
+            const approve = form.querySelector('#offerApprove');
+            const dOpt = (form.querySelector('#offerDiscount') || {}).selectedOptions;
+            if (offer === 'discount' && approve && approve.checked && dOpt && dOpt[0] && dOpt[0].value) {
+                const off = dOpt[0].dataset.type === 'percentage' ? total * parseFloat(dOpt[0].dataset.value) / 100 : parseFloat(dOpt[0].dataset.value);
+                total = Math.max(0, total - Math.min(total, Math.round(off * 100) / 100));
+            }
+        }
+        pay.dataset.due = total > 0 ? total.toFixed(2) : '';
+        window.syncDeskPayment(pay);
+    }
+    form.addEventListener('change', estimate);
+    form.addEventListener('input', estimate);
+    estimate();
+});
+</script>
+@endpush

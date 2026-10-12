@@ -117,181 +117,216 @@ class CheckInController extends Controller
     }
 
     /**
-     * "Walk-in Check-in" form - the fast path for a guest who shows up with
-     * no prior reservation or booking at all: room type, check-out date
-     * (check-in is always today - there's nothing to walk in for otherwise),
-     * rooms/adults/children, and a name to identify who this is. No account
-     * created. Only active room types are offered, matching every other
-     * room-type picker in the app.
+     * "Walk-in Check-in" - one page for a guest at the desk with no booking:
+     * guest + registration details, the actual rooms (picked by room number),
+     * amenities, a discount (ID checked now) or promotion, and the full
+     * payment. Submitting checks the guest in straight away - the stay never
+     * sits in Expected Check-ins.
      */
-    public function createWalkIn(): View
+    public function createWalkIn(Request $request): View
     {
         $roomTypes = RoomType::where('status', 'active')->orderBy('name')->get();
         // Paid amenities a walk-in can add up front (billed and paid at check-in), with what's left in stock.
         $walkInAmenities = \App\Models\Amenity::where('status', 'active')->where('charge', '>', 0)->orderBy('amenity_name')->get();
         $remaining = \App\Models\Amenity::remainingStockFor($walkInAmenities->pluck('id'));
         $walkInAmenities->each(fn ($a) => $a->remaining = (int) ($remaining[$a->id] ?? 0));
+        // The form came back with errors: re-open the room types that were picked.
+        $oldRoomTypes = Room::whereIn('id', (array) $request->old('room_ids', []))->pluck('room_type_id')->unique()->map(fn ($id) => (string) $id)->values()->all();
 
-        return view('receptionist.check-in.walk-in', compact('roomTypes', 'walkInAmenities') + app(\App\Services\StayOffersService::class)->formOptions());
+        return view('receptionist.check-in.walk-in', compact('roomTypes', 'walkInAmenities', 'oldRoomTypes') + app(\App\Services\StayOffersService::class)->formOptions());
+    }
+
+    /** Walk-in room picker: the rooms of a type a guest can be put into now, for a stay ending check_out. */
+    public function walkInRooms(Request $request)
+    {
+        $validated = $request->validate([
+            'room_type_id' => 'required|integer|exists:room_types,id',
+            'check_out' => 'required|date|after:today',
+        ]);
+        $roomType = RoomType::findOrFail($validated['room_type_id']);
+        $checkOut = Carbon::parse($validated['check_out'])->startOfDay();
+        $rooms = $this->availability->freeRoomsOfType($roomType->id, Carbon::today(), $checkOut);
+        // Confirmed bookings of this type that haven't been given a room yet still need one - never sell those.
+        $sellable = min($rooms->count(), $this->availability->availableCount($roomType, Carbon::today(), $checkOut));
+
+        return response()->json([
+            'rooms' => $rooms->map(fn ($r) => ['id' => $r->id, 'room_number' => $r->room_number])->values(),
+            'sellable' => $sellable,
+        ]);
     }
 
     /**
-     * Creates a brand-new Booking - check_in = today, booking_status =
-     * 'confirmed' - then redirects straight back to the Check-in index with
-     * ?open={booking} so its own JS auto-opens the exact same Guest Details
-     * + Assign Room panel (panel()/store() above) an "Expected Check-ins"
-     * row would open, no separate walk-in-specific room-assignment code
-     * needed. reservation_id and guest_id both stay null; payment isn't
-     * addressed here at all, matching Create Reservation/Create Booking -
-     * see BookingController::store()'s docblock for why.
+     * Create the walk-in stay AND check the guest in, as one transaction:
+     * booking + rooms + amenities, the discount (approved now) or promotion,
+     * the full payment (CheckInController::settleAtCheckIn()), then the rooms
+     * are assigned and marked occupied. Anything that fails - a room taken a
+     * moment ago, not enough paid - rolls the whole thing back.
      */
     public function storeWalkIn(Request $request): RedirectResponse
     {
-        // A walk-in is a guest standing at the desk: this form always checks them in TODAY. The 48-hour
-        // advance rule (CheckInWindow) is for bookings/reservations made ahead of time, not walk-ins.
+        $linkedGuest = \App\Support\GuestAccountLink::resolve($request->input('guest_user_id'));
         $validated = $request->validate([
             'guest_first_name' => 'required|string|max:100',
             'guest_middle_name' => 'nullable|string|max:100',
             'guest_last_name' => 'required|string|max:100',
-            // Multi-room-type shape (see RoomAvailabilityService::
-            // resolveAndValidateRoomLines()) - 'rooms' present is
-            // authoritative; the legacy singular pair below is only used
-            // when 'rooms' isn't sent, matching Receptionist\
-            // BookingController::store()'s identical contract.
-            'rooms' => 'nullable|array|min:1',
-            'rooms.*.room_type_id' => 'required_with:rooms|exists:room_types,id',
-            'rooms.*.quantity' => 'required_with:rooms|integer|min:1|max:50',
-            'room_type_id' => 'required_without:rooms|exists:room_types,id',
+            'checkin_permanent_address' => 'required|string|max:255',
+            'current_address_same_as_permanent' => 'nullable|boolean',
+            'checkin_current_address' => 'exclude_if:current_address_same_as_permanent,1|required|string|max:255',
+            'checkin_contact_number' => ['required', 'string', 'max:20', new ValidPhoneNumber($linkedGuest?->country ?? 'Philippines')],
             'check_out' => 'required|date|after:today',
-            'rooms_requested' => 'nullable|integer|min:1|max:50',
             'adults' => 'required|integer|min:1',
             'children' => 'nullable|integer|min:0',
+            'room_ids' => 'required|array|min:1',
+            'room_ids.*' => 'required|integer|distinct|exists:rooms,id',
             'amenities' => 'nullable|array',
             'amenities.*.amenity_id' => 'required_with:amenities|integer',
             'amenities.*.quantity' => 'nullable|integer|min:0|max:50',
-        ] + \App\Support\GuestAccountLink::rules() + \App\Services\StayOffersService::rules(), \App\Support\CheckInWindow::staffMessages());
-        $linkedGuest = \App\Support\GuestAccountLink::resolve($validated['guest_user_id'] ?? null);
+        ] + \App\Support\GuestAccountLink::rules() + \App\Services\StayOffersService::rules() + \App\Support\DeskPayment::rules(), [
+            'room_ids.required' => 'Tick at least one room for the guest.',
+        ] + \App\Support\DeskPayment::messages() + [
+            'checkin_current_address.required' => 'Enter the guest\'s current address, or tick "Same as permanent address".',
+        ]);
+
+        $checkIn = Carbon::today();
+        $checkOut = Carbon::parse($validated['check_out'])->startOfDay();
+        $nights = max(1, $checkIn->diffInDays($checkOut));
+        $children = (int) ($validated['children'] ?? 0);
+        $currentAddress = ! empty($validated['current_address_same_as_permanent'])
+            ? $validated['checkin_permanent_address']
+            : $validated['checkin_current_address'];
+
+        // The rooms picked, grouped by room type - one booking line per type.
+        $pickedRooms = Room::with('roomType')->whereIn('id', $validated['room_ids'])->get();
+        if ($pickedRooms->contains(fn ($room) => ! $room->roomType || $room->roomType->status !== 'active')) {
+            return back()->withInput()->with('error', 'One of the selected rooms is not a room type that can be booked.');
+        }
+        $roomLines = $pickedRooms->groupBy('room_type_id')
+            ->map(fn ($rooms) => ['room_type' => $rooms->first()->roomType, 'quantity' => $rooms->count(), 'room_ids' => $rooms->pluck('id')->all()])
+            ->values()->all();
+
+        $capacityError = \App\Support\GuestCapacity::error($roomLines, (int) $validated['adults'] + $children);
+        if ($capacityError !== null) {
+            return back()->withInput()->with('error', $capacityError);
+        }
 
         // Amenities picked on the form (rows left at 0 are ignored) - checked against live stock before anything is created.
         $pickedAmenities = collect($validated['amenities'] ?? [])->filter(fn ($a) => (int) ($a['quantity'] ?? 0) > 0)->values()->all();
         $resolvedAmenities = app(\App\Services\ReservationAmenityService::class)->validateSelection($pickedAmenities);
 
-        $checkIn = Carbon::today();
-        $checkOut = Carbon::parse($validated['check_out']);
-
-        $error = $this->availability->resolveAndValidateRoomLines(
-            $validated['rooms'] ?? [],
-            isset($validated['room_type_id']) ? (int) $validated['room_type_id'] : null,
-            isset($validated['rooms_requested']) ? (int) $validated['rooms_requested'] : null,
-            $checkIn,
-            $checkOut,
-            $roomLines
-        );
-        if ($error !== null) {
-            return back()->withInput()->with('error', $error);
-        }
-
-        $capacityError = \App\Support\GuestCapacity::error($roomLines, (int) $validated['adults'] + (int) ($validated['children'] ?? 0));
-        if ($capacityError !== null) {
-            return back()->withInput()->with('error', $capacityError);
-        }
-
-        $children = (int) ($validated['children'] ?? 0);
-        $nights = max(1, $checkIn->diffInDays($checkOut));
-        $firstRoomType = $roomLines[0]['room_type'];
-        $totalRoomsRequested = collect($roomLines)->sum('quantity');
-
-        $booking = DB::transaction(function () use (
-            $validated, $children, $checkIn, $checkOut, $firstRoomType, $totalRoomsRequested, $roomLines, $nights, $linkedGuest, $resolvedAmenities
-        ) {
-            $booking = Booking::create([
-                'reservation_id' => null,
-                'guest_id' => $linkedGuest?->id,
-                'guest_first_name' => $validated['guest_first_name'],
-                'guest_middle_name' => $validated['guest_middle_name'] ?? null,
-                'guest_last_name' => $validated['guest_last_name'],
-                'room_type_id' => $firstRoomType->id,
-                'rooms_requested' => $totalRoomsRequested,
-                'check_in' => $checkIn,
-                'check_out' => $checkOut,
-                'adults' => $validated['adults'],
-                'children' => $children,
-                'number_of_guests' => $validated['adults'] + $children,
-                'confirmed_at' => now(),
-                'booking_status' => Booking::STATUS_ACTIVE,
-                // Same walk-in/cash reasoning as Create Booking/Create
-                // Reservation - never GCash (no guest-submitted receipt exists
-                // for a receptionist-typed walk-in).
-                'payment_method' => 'cash',
-                // Whoever creates it has obviously already seen it - shouldn't
-                // show up as "new" (see index()'s ordering / the red-dot
-                // indicator in the view) the moment it's created. Also
-                // immediately opened via the redirect below, which would mark
-                // it anyway - stated here just for clarity/consistency with
-                // Create Reservation/Create Booking.
-                'viewed_at' => now(),
-                // No online (GCash) payment exists to verify here - a
-                // receptionist typed this in directly, same reasoning as
-                // Create Booking. Never lands in the "For Verification" tab.
-                'verified_at' => now(),
-                'verified_by' => auth()->id(),
-            ]);
-
-            // Itemized multi-room-type breakdown - same shape/purpose as
-            // Receptionist\BookingController::store()'s identical addition,
-            // so a walk-in with several room types (e.g. Deluxe x2 +
-            // Family x1) gets the same per-room-type Assign Room grouping
-            // (RoomAvailabilityService::assignableRoomsByLine()) as any
-            // other multi-room-type booking.
-            foreach ($roomLines as $line) {
-                $booking->roomLines()->create([
-                    'room_type_id' => $line['room_type']->id,
-                    'room_type_name' => $line['room_type']->name,
-                    'quantity' => $line['quantity'],
-                    'price_per_night' => $line['room_type']->rate,
-                    'number_of_nights' => $nights,
-                    'subtotal' => round((float) $line['room_type']->rate * $nights * $line['quantity'], 2),
-                ]);
-            }
-
-            // Approved straight away - the receptionist added them with the guest at the desk; billed at check-in.
-            foreach ($resolvedAmenities as $entry) {
-                \App\Models\AmenityRequest::create([
-                    'guest_id' => $linkedGuest?->id,
-                    'reservation_id' => null,
-                    'booking_id' => $booking->id,
-                    'room_type_id' => $booking->room_type_id,
-                    'amenity_id' => $entry['amenity']->id,
-                    'amenity_name' => $entry['amenity']->amenity_name,
-                    'category' => $entry['amenity']->category,
-                    'quantity' => $entry['quantity'],
-                    'charge' => $entry['amenity']->charge,
-                    'status' => 'approved',
-                    'origin' => \App\Models\AmenityRequest::ORIGIN_STAFF,
-                    'note' => 'Added on the walk-in form',
-                ]);
-            }
-
-            return $booking;
-        });
-
-        $roomTypeSummary = collect($roomLines)->map(fn ($l) => "{$l['room_type']->name} x{$l['quantity']}")->implode(', ');
-        Activity::log(
-            'Created walk-in booking',
-            "Booking #{$booking->id} for {$roomTypeSummary} ({$booking->guest_display_name}) - walk-in, ready for room assignment",
-            $booking
-        );
-
-        // Discount (ID) or promotion chosen on the form - one or the other.
         try {
-            app(\App\Services\StayOffersService::class)->applyFromRequest($request, $validated, $booking, collect($roomLines)->map(fn ($l) => $l['room_type']->id)->all(), auth()->user());
+            [$booking, $rooms, $settled] = DB::transaction(function () use (
+                $request, $validated, $children, $checkIn, $checkOut, $nights, $roomLines, $linkedGuest, $resolvedAmenities, $currentAddress
+            ) {
+                $this->availability->lockRoomTypesForAvailabilityCheck(collect($roomLines)->map(fn ($l) => $l['room_type']->id));
+                foreach ($roomLines as $line) {
+                    $left = $this->availability->availableCount($line['room_type'], $checkIn, $checkOut);
+                    if ($left < $line['quantity']) {
+                        throw ValidationException::withMessages(['room_ids' => "Only {$left} {$line['room_type']->name} room(s) can still be booked for these dates."]);
+                    }
+                }
+
+                $booking = Booking::create([
+                    'reservation_id' => null,
+                    'guest_id' => $linkedGuest?->id,
+                    'guest_first_name' => $validated['guest_first_name'],
+                    'guest_middle_name' => $validated['guest_middle_name'] ?? null,
+                    'guest_last_name' => $validated['guest_last_name'],
+                    'room_type_id' => $roomLines[0]['room_type']->id,
+                    'rooms_requested' => collect($roomLines)->sum('quantity'),
+                    'check_in' => $checkIn,
+                    'check_out' => $checkOut,
+                    'adults' => $validated['adults'],
+                    'children' => $children,
+                    'number_of_guests' => $validated['adults'] + $children,
+                    'confirmed_at' => now(),
+                    'booking_status' => Booking::STATUS_ACTIVE, // checked in below, in this same transaction
+                    'payment_method' => ($validated['payment_method'] ?? 'cash') === 'gcash' ? 'gcash' : 'cash',
+                    'viewed_at' => now(),
+                    'verified_at' => now(),
+                    'verified_by' => auth()->id(),
+                ]);
+
+                foreach ($roomLines as $line) {
+                    $booking->roomLines()->create([
+                        'room_type_id' => $line['room_type']->id,
+                        'room_type_name' => $line['room_type']->name,
+                        'quantity' => $line['quantity'],
+                        'price_per_night' => $line['room_type']->rate,
+                        'number_of_nights' => $nights,
+                        'subtotal' => round((float) $line['room_type']->rate * $nights * $line['quantity'], 2),
+                    ]);
+                }
+
+                // Approved straight away - the receptionist added them with the guest at the desk; billed now.
+                foreach ($resolvedAmenities as $entry) {
+                    \App\Models\AmenityRequest::create([
+                        'guest_id' => $linkedGuest?->id,
+                        'reservation_id' => null,
+                        'booking_id' => $booking->id,
+                        'room_type_id' => $booking->room_type_id,
+                        'amenity_id' => $entry['amenity']->id,
+                        'amenity_name' => $entry['amenity']->amenity_name,
+                        'category' => $entry['amenity']->category,
+                        'quantity' => $entry['quantity'],
+                        'charge' => $entry['amenity']->charge,
+                        'status' => 'approved',
+                        'origin' => \App\Models\AmenityRequest::ORIGIN_STAFF,
+                        'note' => 'Added on the walk-in form',
+                    ]);
+                }
+
+                // Discount (the ID is checked at the desk, so it's approved now) or promotion - one or the other.
+                app(\App\Services\StayOffersService::class)->applyFromRequest(
+                    $request,
+                    ['approve_discount' => true] + $validated,
+                    $booking,
+                    collect($roomLines)->map(fn ($l) => $l['room_type']->id)->all(),
+                    auth()->user()
+                );
+
+                // The full bill is paid now (cash: amount paid; GCash: amount, reference and receipt).
+                $settled = $this->settleAtCheckIn($booking->fresh(), $validated, $request->file('gcash_receipt'));
+
+                $rooms = $this->availability->assignRoomsForLines(
+                    $booking,
+                    collect($roomLines)->mapWithKeys(fn ($l) => [(string) $l['room_type']->id => $l['room_ids']])->all()
+                );
+                foreach ($rooms as $room) {
+                    $room->update(['status' => 'occupied']);
+                }
+
+                $booking->update([
+                    'checkin_permanent_address' => $validated['checkin_permanent_address'],
+                    'checkin_current_address' => $currentAddress,
+                    'checkin_contact_number' => $validated['checkin_contact_number'],
+                    'booking_status' => Booking::STATUS_CHECKED_IN,
+                    'checked_in_at' => now(),
+                ]);
+
+                return [$booking, $rooms, $settled];
+            });
         } catch (ValidationException $e) {
-            return redirect()->route('receptionist.check-in.index', ['open' => $booking->id])->withErrors($e->errors())->with('error', collect($e->errors())->flatten()->first());
+            return back()->withInput()->withErrors($e->errors());
+        } catch (HttpExceptionInterface $e) {
+            return back()->withInput()->with('error', $e->getMessage());
         }
 
-        return redirect()
-            ->route('receptionist.check-in.index', ['open' => $booking->id])
-            ->with('success', 'Walk-in guest added - now assign their room to finish checking them in.');
+        $roomNumbers = $rooms->pluck('room_number')->implode(', ');
+        Activity::log('Walk-in check-in', "Booking #{$booking->id} - {$booking->guest_display_name} to {$roomNumbers} - paid ₱" . number_format($settled['paid_now'], 2), $booking);
+
+        if ($accountUser = $booking->account_guest?->user) {
+            if ($settled['paid_now'] > 0) {
+                $this->notificationService->notifyPaymentReceived($accountUser, $settled['paid_now'], $rooms->pluck('room_name')->implode(', '), $booking->id);
+            }
+            $this->notificationService->notifyCheckIn($accountUser, $rooms->pluck('room_name')->implode(', '), $booking->id, $booking);
+        }
+
+        $msg = "{$booking->guest_display_name} is checked in to " . ($rooms->count() > 1 ? 'rooms ' : 'room ') . $roomNumbers . '.';
+        if (($settled['change'] ?? 0) > 0) {
+            $msg .= ' Change to hand back: ₱' . number_format($settled['change'], 2) . '.';
+        }
+
+        return redirect()->route('receptionist.check-in.index', ['tab' => 'checked_in'])->with('success', $msg);
     }
 
     /**
@@ -402,13 +437,11 @@ class CheckInController extends Controller
             'room_ids.*.*' => 'required|integer|distinct',
             // Check-in settles the bill: the full balance is paid now (no partial payment), or - when a discount
             // left the guest overpaid - the change is handed back. A fully paid stay just confirms.
-            'payment_method' => 'nullable|in:cash,gcash',
-            'amount_received' => 'nullable|numeric|min:0',
-            'gcash_reference' => 'nullable|string|max:100',
+        ] + \App\Support\DeskPayment::rules() + [
             'change_returned' => 'nullable|boolean',
         ], [
             'checkin_current_address.required_if' => 'Enter the guest\'s current address, or check "Same as permanent address".',
-        ]);
+        ] + \App\Support\DeskPayment::messages());
 
         $children = (int) ($validated['children'] ?? 0);
 
@@ -427,9 +460,9 @@ class CheckInController extends Controller
         try {
             $rooms = null;
             $settled = null;
-            DB::transaction(function () use ($booking, $validated, $children, $currentAddress, &$rooms, &$settled) {
+            DB::transaction(function () use ($request, $booking, $validated, $children, $currentAddress, &$rooms, &$settled) {
                 // Settle first, on the bill as of check-in (scheduled nights) - before rooms are assigned.
-                $settled = $this->settleAtCheckIn($booking, $validated);
+                $settled = $this->settleAtCheckIn($booking, $validated, $request->file('gcash_receipt'));
 
                 $rooms = $this->availability->assignRoomsForLines($booking, $validated['room_ids']);
 
@@ -498,7 +531,7 @@ class CheckInController extends Controller
      * @return array{paid_now: float, change: float}
      * @throws ValidationException
      */
-    private function settleAtCheckIn(Booking $booking, array $validated): array
+    private function settleAtCheckIn(Booking $booking, array $validated, ?\Illuminate\Http\UploadedFile $gcashReceipt = null): array
     {
         $locked = Booking::whereKey($booking->id)->lockForUpdate()->firstOrFail();
         $locked->unsetRelation('billing');
@@ -511,33 +544,37 @@ class CheckInController extends Controller
         $base = $locked->reservation_id ? ['reservation_id' => $locked->reservation_id] : ['booking_id' => $locked->id];
         if ($balance > 0.004) {
             $method = $validated['payment_method'] ?? null;
-            if (! $method) {
+            if (! $method || $method === 'none') {
                 throw ValidationException::withMessages(['payment_method' => 'The guest must pay the full balance of ₱' . number_format($balance, 2) . ' to check in.']);
             }
             if ($method === 'cash') {
                 $received = (float) ($validated['amount_received'] ?? 0);
                 if ($received + 0.004 < $balance) {
-                    throw ValidationException::withMessages(['amount_received' => 'Cash received must cover the full balance of ₱' . number_format($balance, 2) . ' - partial payment isn\'t accepted at check-in.']);
+                    throw ValidationException::withMessages(['amount_received' => 'The amount paid must cover the full balance of ₱' . number_format($balance, 2) . ' - partial payment isn\'t accepted at check-in.']);
                 }
                 $tender = \App\Support\CashTender::resolve('cash', $balance, $received);
-                \App\Models\Payment::create($base + [
-                    'payment_method' => 'cash', 'amount_paid' => $balance,
+                \App\Support\DeskPayment::record($locked, 'cash', $balance, [
                     'cash_received' => $tender['cash_received'], 'change_given' => $tender['change_given'],
-                    'payment_stage' => 'deposit', 'payment_status' => 'completed', 'payment_date' => now(),
                     'reference_number' => 'CHECKIN-' . $locked->id . '-' . now()->format('YmdHis'),
-                    'verified_by' => auth()->id(), 'verified_at' => now(),
                 ]);
                 $change = (float) $tender['change_given'];
             } else {
                 $reference = trim((string) ($validated['gcash_reference'] ?? ''));
-                if ($reference === '') {
-                    throw ValidationException::withMessages(['gcash_reference' => 'Enter the GCash reference number of the guest\'s payment.']);
+                $amount = round((float) ($validated['gcash_amount'] ?? 0), 2);
+                $errors = [];
+                if (abs($amount - $balance) > 0.004) {
+                    $errors['gcash_amount'] = 'The GCash amount must be the full balance of ₱' . number_format($balance, 2) . ' - partial payment isn\'t accepted at check-in.';
                 }
-                \App\Models\Payment::create($base + [
-                    'payment_method' => 'gcash', 'amount_paid' => $balance, 'reference_number' => $reference,
-                    'payment_stage' => 'deposit', 'payment_status' => 'completed', 'payment_date' => now(),
-                    'verified_by' => auth()->id(), 'verified_at' => now(), // confirmed at the desk
-                ]);
+                if ($reference === '') {
+                    $errors['gcash_reference'] = 'Enter the GCash reference number of the guest\'s payment.';
+                }
+                if (! $gcashReceipt) {
+                    $errors['gcash_receipt'] = 'Upload a photo or screenshot of the GCash receipt.';
+                }
+                if ($errors) {
+                    throw ValidationException::withMessages($errors);
+                }
+                \App\Support\DeskPayment::record($locked, 'gcash', $balance, ['reference_number' => $reference], $gcashReceipt);
             }
             $paidNow = $balance;
         } elseif ($balance < -0.004) {

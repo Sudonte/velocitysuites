@@ -354,6 +354,7 @@ Route::middleware(['auth', 'account.status', 'log.activity', 'no.cache'])->group
         // Optional guest-account link on Create Reservation / Create Booking / Walk-in Check-in.
         Route::get('/guest-accounts/search', [\App\Http\Controllers\Receptionist\GuestAccountController::class, 'search'])->name('guest-accounts.search');
         Route::post('/check-in/walk-in', [ReceptionistCheckInController::class, 'storeWalkIn'])->name('check-in.walk-in.store');
+        Route::get('/check-in/walk-in/rooms', [ReceptionistCheckInController::class, 'walkInRooms'])->name('check-in.walk-in.rooms');
         Route::get('/check-in/{booking}/panel', [ReceptionistCheckInController::class, 'panel'])->name('check-in.panel');
         Route::post('/check-in/{booking}', [ReceptionistCheckInController::class, 'store'])->name('check-in.store');
 

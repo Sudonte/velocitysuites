@@ -85,8 +85,9 @@
                          open the one same booking-level Add Amenity/checkout
                          flow, keyed by booking id, not room id. --}}
                     @forelse($bookings as $room)
-                        @php $booking = $room->assignedBookings->first(); @endphp
-                        @continue(!$booking)
+                        {{-- Every guest checked in to this room gets a row - never only the first, so a room that
+                             somehow holds two stays is visible instead of one of them silently disappearing. --}}
+                        @foreach($room->assignedBookings as $booking)
                         <tr>
                             <td style="min-width: 200px;">
                                 {{-- The physical room's OWN type, not the booking's legacy
@@ -108,6 +109,7 @@
                                 </button>
                             </td>
                         </tr>
+                        @endforeach
                     @empty
                         <tr>
                             <td colspan="6">
@@ -326,15 +328,41 @@ document.addEventListener('DOMContentLoaded', function () {
         const box = document.getElementById('checkInOfferBox');
         const errBox = box.querySelector('[data-offer-error]');
         const action = btn.dataset.offerAction;
+        const rejectBox = box.querySelector('[data-reject-box]');
+        if (action === 'reject-open' || action === 'reject-cancel') {
+            rejectBox.classList.toggle('d-none', action === 'reject-cancel');
+            if (action === 'reject-open') rejectBox.querySelector('textarea').focus();
+            return;
+        }
         const fd = new FormData();
         let url = box.dataset.approveUrl;
+        errBox.classList.add('d-none');
         if (action === 'approve') {
-            fd.append('discount_id', box.querySelector('[data-offer-field="discount_id"]').value);
+            const sel = box.querySelector('[data-offer-field="discount_id"]');
             const file = box.querySelector('[data-offer-field="id_document"]');
+            const name = sel.selectedOptions[0] ? sel.selectedOptions[0].dataset.label : 'this discount';
+            // Approving changes what the guest pays - make sure it's intended.
+            const ok = await window.confirmAction({
+                title: 'Approve the ' + name + ' discount?',
+                message: 'Confirm you checked the guest\'s ID. The discount comes off this stay\'s bill right away.',
+                button: 'Approve Discount', variant: 'success',
+            }, btn);
+            if (!ok) return;
+            fd.append('discount_id', sel.value);
             if (file && file.files[0]) fd.append('id_document', file.files[0]);
         } else if (action === 'reject') {
-            const reason = window.prompt('Reason for rejecting the ID (shown to the guest):');
-            if (!reason) return;
+            const reason = rejectBox.querySelector('textarea').value.trim();
+            if (!reason) {
+                errBox.textContent = 'Enter the reason for rejecting the ID.';
+                errBox.classList.remove('d-none');
+                return;
+            }
+            const ok = await window.confirmAction({
+                title: 'Reject the guest\'s ID?',
+                message: 'No discount will apply to this stay. The guest is told the reason.',
+                button: 'Reject ID', variant: 'danger',
+            }, btn);
+            if (!ok) return;
             url = box.dataset.rejectUrl;
             fd.append('reason', reason);
         } else {
@@ -355,23 +383,6 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     });
 
-    // Payment method / change hint on the rooms step.
-    content.addEventListener('change', function (e) {
-        if (e.target.name !== 'payment_method') return;
-        const pay = document.getElementById('checkInPayment');
-        const gcash = e.target.value === 'gcash';
-        pay.querySelector('[data-pay="cash"]').classList.toggle('d-none', gcash);
-        pay.querySelector('[data-pay="gcash"]').classList.toggle('d-none', !gcash);
-        pay.querySelector('[name="amount_received"]').required = !gcash;
-        pay.querySelector('[name="gcash_reference"]').required = gcash;
-    });
-    content.addEventListener('input', function (e) {
-        if (e.target.name !== 'amount_received') return;
-        const pay = document.getElementById('checkInPayment');
-        const due = parseFloat(pay.dataset.balance), got = parseFloat(e.target.value || '0');
-        pay.querySelector('[data-change-hint]').textContent = got >= due ? 'Change: ₱' + (got - due).toFixed(2) : 'Not enough - the full ₱' + due.toFixed(2) + ' is required.';
-    });
-
     content.addEventListener('click', function (e) {
         if (e.target.closest('#checkInNextBtn')) {
             const form = document.getElementById('checkInForm');
@@ -379,7 +390,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
             content.querySelectorAll('.room-select').forEach(s => s.disabled = false);
             content.querySelectorAll('#checkInPayment input, #ciChangeReturned').forEach(i => i.disabled = false);
-            content.querySelectorAll('#checkInPayment [data-pay="gcash"] input').forEach(i => { i.required = false; });
+            window.syncDeskPayment(document.getElementById('checkInPayment'));
             document.getElementById('checkInStepDetails').classList.add('d-none');
             document.getElementById('checkInStepRooms').classList.remove('d-none');
             document.getElementById('checkInNextBtn').classList.add('d-none');
@@ -411,22 +422,23 @@ document.addEventListener('DOMContentLoaded', function () {
             if (!roomIds[typeId]) roomIds[typeId] = [];
             roomIds[typeId].push(select.value);
         });
-        const payload = {
-            guest_first_name: form.querySelector('[name="guest_first_name"]').value,
-            guest_middle_name: form.querySelector('[name="guest_middle_name"]').value,
-            guest_last_name: form.querySelector('[name="guest_last_name"]').value,
-            checkin_permanent_address: form.querySelector('[name="checkin_permanent_address"]').value,
-            checkin_current_address: form.querySelector('[name="checkin_current_address"]').value,
-            current_address_same_as_permanent: form.querySelector('[name="current_address_same_as_permanent"]').checked,
-            checkin_contact_number: form.querySelector('[name="checkin_contact_number"]').value,
-            adults: form.querySelector('[name="adults"]').value,
-            children: form.querySelector('[name="children"]').value,
-            room_ids: roomIds,
-            payment_method: (form.querySelector('[name="payment_method"]:checked') || {}).value || null,
-            amount_received: (form.querySelector('[name="amount_received"]') || {}).value || null,
-            gcash_reference: (form.querySelector('[name="gcash_reference"]') || {}).value || null,
-            change_returned: !!(form.querySelector('[name="change_returned"]') || {}).checked,
-        };
+        // Multipart, so a GCash receipt photo can go with it.
+        const fd = new FormData();
+        ['guest_first_name', 'guest_middle_name', 'guest_last_name', 'checkin_permanent_address', 'checkin_current_address',
+         'checkin_contact_number', 'adults', 'children', 'amount_received', 'gcash_amount', 'gcash_reference'].forEach(function (name) {
+            const el = form.querySelector('[name="' + name + '"]');
+            if (el && !el.disabled && el.value !== '') fd.append(name, el.value);
+        });
+        fd.append('current_address_same_as_permanent', form.querySelector('[name="current_address_same_as_permanent"]').checked ? '1' : '0');
+        const method = form.querySelector('[name="payment_method"]:checked');
+        if (method && !method.disabled) fd.append('payment_method', method.value);
+        const receipt = form.querySelector('[name="gcash_receipt"]');
+        if (receipt && receipt.files[0]) fd.append('gcash_receipt', receipt.files[0]);
+        const change = form.querySelector('[name="change_returned"]');
+        fd.append('change_returned', change && change.checked ? '1' : '0');
+        Object.keys(roomIds).forEach(function (typeId) {
+            roomIds[typeId].forEach(function (id) { fd.append('room_ids[' + typeId + '][]', id); });
+        });
 
         try {
             const response = await fetch(buildUrl(urls.store, activeBookingId), {
@@ -434,9 +446,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 headers: {
                     'X-CSRF-TOKEN': csrfToken,
                     'Accept': 'application/json',
-                    'Content-Type': 'application/json',
                 },
-                body: JSON.stringify(payload),
+                body: fd,
             });
             const data = await response.json().catch(() => ({}));
             if (!response.ok) throw new Error(data.message || 'Something went wrong.');

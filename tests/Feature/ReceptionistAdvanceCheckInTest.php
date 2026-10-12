@@ -76,13 +76,16 @@ class ReceptionistAdvanceCheckInTest extends ApiFlowTestCase
 
         $this->actingAs($this->staff())->post(route('receptionist.check-in.walk-in.store'), [
             'guest_first_name' => 'Walk', 'guest_last_name' => 'Today',
-            'room_type_id' => $rt->id, 'rooms_requested' => 1,
+            'checkin_permanent_address' => '1 Test St', 'current_address_same_as_permanent' => 1, 'checkin_contact_number' => '09171234567',
+            'room_ids' => [$rt->rooms()->first()->id],
             'check_out' => $this->today()->addDays(3)->toDateString(),
             'adults' => 1, 'children' => 0,
-        ])->assertSessionHasNoErrors()->assertRedirect();
+            'payment_method' => 'cash', 'amount_received' => 3000,
+        ])->assertSessionHasNoErrors()->assertRedirect(route('receptionist.check-in.index', ['tab' => 'checked_in']));
 
         $this->assertSame(1, Booking::count());
         $this->assertSame(\Carbon\Carbon::today()->toDateString(), Booking::first()->check_in->toDateString());
+        $this->assertSame(Booking::STATUS_CHECKED_IN, Booking::first()->booking_status);
     }
 
     public function test_the_receptionist_forms_show_the_note_and_disable_dates_before_the_earliest(): void

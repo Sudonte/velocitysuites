@@ -154,7 +154,8 @@ class BookingController extends Controller
             'rooms_requested' => 'nullable|integer|min:1|max:50',
             'adults' => 'required|integer|min:1',
             'children' => 'nullable|integer|min:0',
-        ] + \App\Support\GuestAccountLink::rules() + \App\Services\StayOffersService::rules(), \App\Support\CheckInWindow::staffMessages());
+        ] + \App\Support\GuestAccountLink::rules() + \App\Services\StayOffersService::rules() + \App\Support\DeskPayment::rules(),
+            \App\Support\CheckInWindow::staffMessages() + \App\Support\DeskPayment::messages());
         $linkedGuest = \App\Support\GuestAccountLink::resolve($validated['guest_user_id'] ?? null);
 
         $checkIn = Carbon::parse($validated['check_in']);
@@ -278,6 +279,12 @@ class BookingController extends Controller
             return redirect()->route('receptionist.bookings.show', $booking)->withErrors($e->errors())->with('error', collect($e->errors())->flatten()->first());
         }
 
+        // Payment the guest made now (optional - nothing, part or all of it).
+        $paymentNote = $this->recordPaymentFromCreateForm($request, $validated, $booking);
+        if ($paymentNote instanceof RedirectResponse) {
+            return $paymentNote;
+        }
+
         $roomTypeSummary = collect($roomLines)->map(fn ($l) => "{$l['room_type']->name} x{$l['quantity']}")->implode(', ');
         Activity::log(
             'Created booking',
@@ -292,7 +299,7 @@ class BookingController extends Controller
 
         return redirect()
             ->route('receptionist.bookings.show', $booking)
-            ->with('success', 'Booking created for ' . $booking->guest_display_name . '. Record their payment whenever they pay, and check them in from the Check-in Module when they arrive.');
+            ->with('success', 'Booking created for ' . $booking->guest_display_name . '.' . ($paymentNote !== '' ? $paymentNote : ' Record their payment whenever they pay.') . ' Check them in from the Check-in Module when they arrive.');
     }
 
     /**
@@ -414,6 +421,44 @@ class BookingController extends Controller
      * recorded, so it lands completed + verified immediately, same
      * semantics as Receptionist\ReservationController::confirmCashPayment().
      */
+    /**
+     * Create Booking's optional payment: cash (amount paid - anything over the
+     * total is change) or GCash (amount, reference and receipt). Partial or
+     * full; never more than the booking's total after its discount. Returns a
+     * short note for the success message, or a redirect when it was refused
+     * (the booking itself is kept - the payment can be recorded on its page).
+     */
+    private function recordPaymentFromCreateForm(Request $request, array $validated, Booking $booking): string|RedirectResponse
+    {
+        $method = $validated['payment_method'] ?? 'none';
+        if (! in_array($method, ['cash', 'gcash'], true)) {
+            return '';
+        }
+
+        $booking->unsetRelation('billing');
+        $total = max(0, round($booking->payableTotal() - $booking->paidTotal(), 2));
+        $amount = round((float) ($method === 'cash' ? $validated['amount_received'] : $validated['gcash_amount']), 2);
+        if ($method === 'gcash' && $amount > $total + 0.004) {
+            return redirect()->route('receptionist.bookings.show', $booking)
+                ->with('error', 'Booking created, but the GCash payment was not recorded: ₱' . number_format($amount, 2) . ' is more than the total of ₱' . number_format($total, 2) . '.');
+        }
+
+        $applied = min($amount, $total);
+        if ($method === 'cash') {
+            $tender = \App\Support\CashTender::resolve('cash', $applied, $amount);
+            \App\Support\DeskPayment::record($booking, 'cash', $applied, ['cash_received' => $tender['cash_received'], 'change_given' => $tender['change_given']]);
+        } else {
+            \App\Support\DeskPayment::record($booking, 'gcash', $applied, ['reference_number' => trim($validated['gcash_reference'])], $request->file('gcash_receipt'));
+            $booking->update(['payment_method' => 'gcash']);
+        }
+
+        Activity::log('Recorded booking payment', "Booking #{$booking->id} - ₱" . number_format($applied, 2) . " ({$method}) " . ($applied + 0.004 >= $total ? 'paid in full' : 'partial'), $booking);
+
+        return $applied + 0.004 >= $total
+            ? ' Paid in full (₱' . number_format($applied, 2) . ')' . ($amount > $applied ? ' - change ₱' . number_format($amount - $applied, 2) : '') . '.'
+            : ' Partial payment of ₱' . number_format($applied, 2) . ' recorded - ₱' . number_format($total - $applied, 2) . ' still owed.';
+    }
+
     public function recordPayment(Request $request, Booking $booking): RedirectResponse
     {
         if (!in_array($booking->booking_status, [Booking::STATUS_ACTIVE, Booking::STATUS_CHECKED_IN], true)) {
