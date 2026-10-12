@@ -89,4 +89,54 @@ class GuestDeleteEligibilityTest extends ApiFlowTestCase
         $this->assertSame(403, $this->destroyAs($user, $r));
         $this->assertNull($r->fresh()->hidden_at);
     }
+
+    private function convertedWithBooking(int $guestId, int $roomTypeId, string $bookingStatus): Reservation
+    {
+        $r = $this->reservation($guestId, $roomTypeId, Reservation::STATUS_CONVERTED);
+        Booking::create([
+            'reservation_id' => $r->id, 'guest_id' => $guestId, 'room_type_id' => $roomTypeId, 'rooms_requested' => 1,
+            'check_in' => '2026-12-10', 'check_out' => '2026-12-12', 'adults' => 1, 'children' => 0, 'number_of_guests' => 1,
+            'booking_status' => $bookingStatus, 'payment_method' => 'cash',
+        ]);
+
+        return $r;
+    }
+
+    public function test_a_completed_reservation_can_be_deleted_and_the_row_stays(): void
+    {
+        [$user, $guest] = $this->makeGuestUser('DelC');
+        $rt = $this->makeRoomTypeWithRooms('Deluxe', 1000, 2, 2);
+        $r = $this->convertedWithBooking($guest->id, $rt->id, Booking::STATUS_COMPLETED);
+        $this->assertContains($r->id, $this->listedIds($user));
+
+        $this->assertSame(200, $this->destroyAs($user, $r));
+
+        $this->assertNotContains($r->id, $this->listedIds($user), 'gone from the guest list');
+        $this->assertNotNull(Reservation::find($r->id), 'the row stays for staff, billing and reports');
+        $this->assertNotNull(Booking::find($r->booking->id), 'and so does its booking');
+    }
+
+    public function test_hiding_the_completed_copy_of_a_converted_reservation_leaves_the_booking_visible(): void
+    {
+        [$user, $guest] = $this->makeGuestUser('DelD');
+        $rt = $this->makeRoomTypeWithRooms('Deluxe', 1000, 2, 2);
+        $r = $this->convertedWithBooking($guest->id, $rt->id, Booking::STATUS_ACTIVE);
+        $bookingId = $r->booking->id;
+
+        $this->actingAs($user);
+        app()->instance('request', Request::create('/x', 'DELETE', ['snapshot_only' => 1]));
+        $this->assertSame(200, app(ReservationController::class)->destroy($r)->getStatusCode());
+
+        // The app builds the Booking list from this same reservation row (its nested booking), so the row must
+        // still be listed, with its booking attached and not hidden.
+        $this->assertContains($r->id, $this->listedIds($user));
+        $fresh = Reservation::find($r->id);
+        $this->assertNotNull($fresh->snapshot_hidden_at);
+        $this->assertNull($fresh->hidden_at);
+        $booking = Booking::find($bookingId);
+        $this->assertNotNull($booking, 'receptionist side still has the booking');
+        $this->assertNull($booking->hidden_at);
+        $this->assertNull($booking->hidden_by_guest_at);
+        $this->assertSame(Booking::STATUS_ACTIVE, $booking->booking_status);
+    }
 }
