@@ -297,6 +297,26 @@ class User extends Authenticatable
         return $this->hasOne(Guest::class);
     }
 
+    public function receptionist()
+    {
+        return $this->hasOne(Receptionist::class);
+    }
+
+    public function manager()
+    {
+        return $this->hasOne(Manager::class);
+    }
+
+    /** The receptionist / manager profile holding this staff member's personal details (null for other roles). */
+    public function getStaffProfileAttribute(): Receptionist|Manager|null
+    {
+        return match ($this->role) {
+            'receptionist' => $this->receptionist,
+            'manager' => $this->manager,
+            default => null,
+        };
+    }
+
     /**
      * Get the notifications for the user.
      */

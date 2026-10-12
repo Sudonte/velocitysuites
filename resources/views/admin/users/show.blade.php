@@ -81,6 +81,23 @@
             </x-card>
         </div>
         @endif
+
+        @if($staffProfile = $user->staff_profile)
+        <div class="col-md-6 mb-4">
+            <x-card title="Personal Details" icon="fas fa-address-card" bodyClass="card-body">
+                <dl class="row mb-0">
+                    <dt class="col-sm-4">Home Address</dt>
+                    <dd class="col-sm-8">{{ $staffProfile->home_address ?? '—' }}</dd>
+                    <dt class="col-sm-4">Date of Birth</dt>
+                    <dd class="col-sm-8">{{ $staffProfile->date_of_birth ? $staffProfile->date_of_birth->format('M d, Y') . ' (' . $staffProfile->age . ' years old)' : '—' }}</dd>
+                    <dt class="col-sm-4">Gender</dt>
+                    <dd class="col-sm-8">{{ $staffProfile->gender ? ucfirst($staffProfile->gender) : '—' }}</dd>
+                    <dt class="col-sm-4">Mobile Number</dt>
+                    <dd class="col-sm-8">{{ $staffProfile->mobile_number ?? '—' }}</dd>
+                </dl>
+            </x-card>
+        </div>
+        @endif
     </div>
 
     @if($user->guest)

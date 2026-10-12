@@ -76,6 +76,8 @@
                         @enderror
                     </div>
 
+                    @include('admin.users.partials.personal-details-fields', ['profile' => $user->staff_profile])
+
                     <div class="form-group">
                         <button type="submit" class="btn btn-primary">
                             <i class="fas fa-save"></i> Save Changes

@@ -55,7 +55,7 @@
             @if($isElevatedStaff)
                 <div class="alert alert-info">
                     <i class="fas fa-info-circle"></i>
-                    Your account name, email, and password are managed by the System Administrator.
+                    Your account name, email, password, and personal details are managed by the System Administrator.
                     Contact them if you need any of this updated or your password reset.
                 </div>
 
@@ -78,6 +78,20 @@
 
                         <dt class="col-sm-4">Last Login</dt>
                         <dd class="col-sm-8">{{ $user->last_login_at ? $user->last_login_at->format('M d, Y h:i A') : 'Never' }}</dd>
+                    </dl>
+                </x-card>
+
+                @php $staffProfile = $user->staff_profile; @endphp
+                <x-card title="Personal Details" icon="fas fa-address-card" class="mt-4">
+                    <dl class="row mb-0">
+                        <dt class="col-sm-4">Home Address</dt>
+                        <dd class="col-sm-8">{{ $staffProfile?->home_address ?? '—' }}</dd>
+                        <dt class="col-sm-4">Date of Birth</dt>
+                        <dd class="col-sm-8">{{ $staffProfile?->date_of_birth?->format('M d, Y') ?? '—' }}</dd>
+                        <dt class="col-sm-4">Gender</dt>
+                        <dd class="col-sm-8">{{ $staffProfile?->gender ? ucfirst($staffProfile->gender) : '—' }}</dd>
+                        <dt class="col-sm-4">Mobile Number</dt>
+                        <dd class="col-sm-8">{{ $staffProfile?->mobile_number ?? '—' }}</dd>
                     </dl>
                 </x-card>
             @else

@@ -8,6 +8,8 @@ use App\Models\User;
 use App\Support\Activity;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\View\View;
 
@@ -96,17 +98,19 @@ class UserManagementController extends Controller
      */
     public function store(Request $request): RedirectResponse
     {
+        $role = $request->input('role');
         $validated = $request->validate([
             'first_name' => 'required|string|max:100',
             'last_name' => 'required|string|max:100',
             'middle_name' => 'nullable|string|max:100',
             'role' => 'required|in:manager,receptionist',
-        ]);
+        ] + $this->personalDetailRules(in_array($role, ['manager', 'receptionist'], true) ? $role : 'receptionist'), $this->personalDetailMessages());
 
         $email = $this->generateStaffEmail($validated['last_name'], $validated['role']);
         $temporaryPassword = self::DEFAULT_STAFF_PASSWORD;
 
-        $user = User::create([
+        $user = DB::transaction(function () use ($validated, $email, $temporaryPassword) {
+            $user = User::create([
             'first_name' => $validated['first_name'],
             'last_name' => $validated['last_name'],
             'middle_name' => $validated['middle_name'] ?? null,
@@ -116,7 +120,12 @@ class UserManagementController extends Controller
             'role' => $validated['role'],
             'status' => 'active',
             'email_verified_at' => now(),
-        ]);
+            ]);
+            // Personal details live in the receptionist / manager table, referencing this account.
+            $this->profileRelation($user)->create($this->personalDetails($validated));
+
+            return $user;
+        });
 
         Activity::log('Created staff account', "{$user->full_name} ({$validated['role']}, {$email})", $user);
 
@@ -143,18 +152,57 @@ class UserManagementController extends Controller
     {
         abort_unless($this->isElevatedStaff($user), 404);
 
+        $profile = $user->staff_profile;
         $validated = $request->validate([
             'first_name' => 'required|string|max:100',
             'last_name' => 'required|string|max:100',
             'middle_name' => 'nullable|string|max:100',
             'status' => 'required|in:active,suspended',
-        ]);
+        ] + $this->personalDetailRules($user->role, $profile?->id), $this->personalDetailMessages());
 
-        $user->update($validated);
+        DB::transaction(function () use ($user, $validated) {
+            $user->update(collect($validated)->only(['first_name', 'last_name', 'middle_name', 'status'])->all());
+            $this->profileRelation($user)->updateOrCreate(['user_id' => $user->id], $this->personalDetails($validated));
+        });
 
         Activity::log('Updated staff account', $user->full_name, $user);
 
         return redirect()->route('admin.users.index')->with('success', 'Account updated successfully!');
+    }
+
+    /** Personal details of a receptionist / manager: home address, date of birth & gender, contact number. */
+    private function personalDetailRules(string $role, ?int $ignoreProfileId = null): array
+    {
+        $table = $role === 'manager' ? 'managers' : 'receptionists';
+
+        return [
+            'street' => 'required|string|max:255',
+            'barangay' => 'required|string|max:100',
+            'city' => 'required|string|max:100',
+            'province' => 'required|string|max:100',
+            'date_of_birth' => 'required|date|before_or_equal:' . now()->subYears(18)->toDateString() . '|after:1900-01-01',
+            'gender' => 'required|in:male,female',
+            'mobile_number' => ['required', 'string', 'regex:/^09\d{9}$/', Rule::unique($table, 'mobile_number')->ignore($ignoreProfileId)],
+        ];
+    }
+
+    private function personalDetailMessages(): array
+    {
+        return [
+            'date_of_birth.before_or_equal' => 'Staff must be at least 18 years old.',
+            'mobile_number.regex' => 'Enter an 11-digit mobile number starting with 09 (e.g. 09171234567).',
+            'mobile_number.unique' => 'This mobile number is already used by another staff account.',
+        ];
+    }
+
+    private function personalDetails(array $validated): array
+    {
+        return collect($validated)->only(['street', 'barangay', 'city', 'province', 'date_of_birth', 'gender', 'mobile_number'])->all();
+    }
+
+    private function profileRelation(User $user)
+    {
+        return $user->role === 'manager' ? $user->manager() : $user->receptionist();
     }
 
     /**

@@ -70,6 +70,8 @@
                         @enderror
                     </div>
 
+                    @include('admin.users.partials.personal-details-fields', ['profile' => null])
+
                     <div class="alert alert-info">
                         <i class="fas fa-info-circle"></i>
                         The login email and password are generated automatically - see "How this works" for details.
