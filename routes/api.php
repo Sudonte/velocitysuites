@@ -116,6 +116,8 @@ Route::middleware(['auth.api', 'role:guest'])->group(function () {
         Route::post('/guest/profile/picture', [ProfileController::class, 'updatePicture']);
         Route::post('/guest/profile/email/request', [ProfileController::class, 'requestEmailChange'])->middleware('throttle:20,1');
         Route::post('/guest/profile/email/confirm', [ProfileController::class, 'confirmEmailChange'])->middleware('throttle:20,1');
+        // In-app password change: needs the reset_token that /verify-reset-otp issues after a correct OTP.
+        Route::post('/guest/password/change', [AuthController::class, 'changePasswordWithToken'])->middleware('throttle:20,1');
         // Password change is OTP-emailed only (reuses /forgot-password +
         // /reset-password, same as the website) - the current-password-gated
         // changePassword() this route used to point at was never actually

@@ -11,6 +11,7 @@ use App\Services\AccountReactivationService;
 use App\Services\PasswordResetService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
@@ -393,6 +394,16 @@ class AuthController extends Controller
     {
         $validated = $request->validate(['email' => 'required|email']);
 
+        // Server-side resend cooldown, keyed on the address alone (not on whether it is
+        // registered) so the 429 can't be used to probe which emails exist.
+        $cooldownKey = 'pwreset:cooldown:' . sha1(strtolower($validated['email']));
+        if (! Cache::add($cooldownKey, 1, now()->addSeconds(PasswordResetService::RESEND_COOLDOWN_SECONDS))) {
+            return response()->json([
+                'message' => 'Please wait ' . PasswordResetService::RESEND_COOLDOWN_SECONDS . ' seconds before requesting another code.',
+                'retry_after' => PasswordResetService::RESEND_COOLDOWN_SECONDS,
+            ], 429);
+        }
+
         $user = User::where('email', $validated['email'])->first();
 
         // Same policy as the web's Auth\ForgotPasswordController::sendResetLink() -
@@ -422,11 +433,56 @@ class AuthController extends Controller
             'otp' => 'required|string|size:6',
         ]);
 
-        if (! $this->passwordReset->verifyOtp($validated['email'], $validated['otp'])) {
-            return response()->json(['message' => 'Invalid or expired code.'], 422);
+        if ($this->passwordReset->tooManyAttempts($validated['email'])) {
+            return $this->tooManyResetAttempts();
         }
 
-        return response()->json(['message' => 'OTP verified.']);
+        if (! $this->passwordReset->verifyOtp($validated['email'], $validated['otp'])) {
+            return $this->passwordReset->tooManyAttempts($validated['email'])
+                ? $this->tooManyResetAttempts()
+                : response()->json(['message' => 'Invalid or expired code.'], 422);
+        }
+
+        return response()->json([
+            'message' => 'OTP verified.',
+            // One-time proof of this verification - the in-app change-password endpoint requires it.
+            'reset_token' => $this->passwordReset->issueResetToken($validated['email']),
+            'expires_in' => PasswordResetService::RESET_TOKEN_TTL_MINUTES * 60,
+        ]);
+    }
+
+    private function tooManyResetAttempts(): JsonResponse
+    {
+        return response()->json([
+            'message' => 'Too many incorrect codes. Please request a new code.',
+        ], 429);
+    }
+
+    /**
+     * The signed-in guest's password change. Impossible without proof of a verified OTP: the
+     * reset_token comes only from verifyResetOtp(), is bound to this account's email, works once
+     * and lasts RESET_TOKEN_TTL_MINUTES. Same aftermath as resetPassword(): every API token (this
+     * device and all others) is revoked, so the app signs the guest out to log in with the new password.
+     */
+    public function changePasswordWithToken(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'reset_token' => 'required|string',
+            'password' => ['required', 'confirmed', Password::min(8)],
+        ]);
+
+        $user = $request->user();
+
+        if (! $this->passwordReset->consumeResetToken($validated['reset_token'], $user->email)) {
+            return response()->json([
+                'message' => 'Your verification has expired. Please verify a new code to change your password.',
+            ], 422);
+        }
+
+        $this->passwordReset->resetPassword($user, $validated['password']);
+        $user->apiTokens()->delete();
+
+        return response()->json(['message' => 'Password changed successfully.']);
     }
 
     /**
@@ -442,6 +498,10 @@ class AuthController extends Controller
             'otp' => 'required|string|size:6',
             'password' => ['required', 'confirmed', Password::min(8)],
         ]);
+
+        if ($this->passwordReset->tooManyAttempts($validated['email'])) {
+            return $this->tooManyResetAttempts();
+        }
 
         if (! $this->passwordReset->verifyOtp($validated['email'], $validated['otp'])) {
             return response()->json(['message' => 'Invalid or expired code.'], 422);

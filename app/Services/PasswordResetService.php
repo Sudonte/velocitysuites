@@ -3,10 +3,12 @@
 namespace App\Services;
 
 use App\Models\User;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Str;
 
 /**
  * Shared 6-digit OTP password-reset logic for both the web
@@ -24,6 +26,52 @@ use Illuminate\Support\Facades\Mail;
  */
 class PasswordResetService
 {
+    /** Wrong codes allowed per OTP; the code is destroyed on the last one and a new one must be requested. */
+    public const MAX_ATTEMPTS = 5;
+
+    /** How long the one-time token issued after a verified OTP stays usable. */
+    public const RESET_TOKEN_TTL_MINUTES = 10;
+
+    /** Minimum gap between two codes for the same email (enforced by Api\AuthController::forgotPassword()). */
+    public const RESEND_COOLDOWN_SECONDS = 30;
+
+    private function attemptsKey(string $email): string
+    {
+        return 'pwreset:attempts:' . sha1(strtolower($email));
+    }
+
+    private function tokenKey(string $plainToken): string
+    {
+        return 'pwreset:token:' . hash('sha256', $plainToken);
+    }
+
+    /** True once MAX_ATTEMPTS wrong codes were entered against the current OTP. */
+    public function tooManyAttempts(string $email): bool
+    {
+        return (int) Cache::get($this->attemptsKey($email), 0) >= self::MAX_ATTEMPTS;
+    }
+
+    /**
+     * A short-lived, single-use token proving this email's OTP was verified. The authenticated
+     * password-change endpoint refuses to run without one (see Api\AuthController::changePasswordWithToken()).
+     * Only a hash of it is used as the cache key, and it is bound to the email it was issued for.
+     */
+    public function issueResetToken(string $email): string
+    {
+        $plain = Str::random(48);
+        Cache::put($this->tokenKey($plain), strtolower($email), now()->addMinutes(self::RESET_TOKEN_TTL_MINUTES));
+
+        return $plain;
+    }
+
+    /** Consumes the token (it works exactly once) and checks it was issued for this email. */
+    public function consumeResetToken(string $plainToken, string $email): bool
+    {
+        $bound = Cache::pull($this->tokenKey($plainToken));
+
+        return is_string($bound) && hash_equals($bound, strtolower($email));
+    }
+
     /**
      * Returns whether the OTP email was actually handed off successfully.
      * Callers that show the guest a definite "code sent" message (as
@@ -35,6 +83,7 @@ class PasswordResetService
     public function sendOtp(User $user): bool
     {
         $otp = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+        Cache::forget($this->attemptsKey($user->email)); // a fresh code starts with a fresh attempt budget
 
         DB::table('password_reset_tokens')->updateOrInsert(
             ['email' => $user->email],
@@ -70,9 +119,24 @@ class PasswordResetService
      */
     public function verifyOtp(string $email, string $otp): bool
     {
+        if ($this->tooManyAttempts($email)) {
+            return false;
+        }
+
         $row = DB::table('password_reset_tokens')->where('email', $email)->first();
 
-        if (! $row || ! Hash::check($otp, $row->token)) {
+        if (! $row) {
+            return false;
+        }
+
+        if (! Hash::check($otp, $row->token)) {
+            // Brute-force guard: MAX_ATTEMPTS wrong guesses destroy this code outright.
+            $key = $this->attemptsKey($email);
+            Cache::add($key, 0, now()->addMinutes(15));
+            if (Cache::increment($key) >= self::MAX_ATTEMPTS) {
+                DB::table('password_reset_tokens')->where('email', $email)->delete();
+            }
+
             return false;
         }
 
@@ -85,6 +149,8 @@ class PasswordResetService
             DB::table('password_reset_tokens')->where('email', $email)->delete();
             return false;
         }
+
+        Cache::forget($this->attemptsKey($email));
 
         return true;
     }
