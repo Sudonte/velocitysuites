@@ -127,6 +127,39 @@ class CheckInSettlementTest extends ApiFlowTestCase
         $this->assertSame(1, Payment::where('booking_id', $booking->id)->where('amount_paid', '<', 0)->count());
     }
 
+    public function test_check_out_only_collects_what_was_added_since_check_in_in_full(): void
+    {
+        [$rt, $room, $booking] = $this->arriving();
+        $desk = $this->desk();
+        $this->actingAs($desk)->postJson(route('receptionist.check-in.store', $booking), $this->checkInPayload($rt, $room, ['payment_method' => 'cash', 'amount_received' => 2000]))->assertOk();
+
+        // checking out on the scheduled day, with an amenity added during the stay
+        \Carbon\Carbon::setTestNow(now()->addDays(2)->setTime(11, 0));
+        $amenity = Amenity::create(['amenity_name' => 'Late Snack', 'category' => 'Food', 'quantity' => 5, 'is_unlimited' => false, 'charge' => 250, 'status' => 'active']);
+        AmenityRequest::create(['booking_id' => $booking->id, 'room_type_id' => $rt->id, 'amenity_id' => $amenity->id, 'amenity_name' => 'Late Snack',
+            'category' => 'Food', 'quantity' => 1, 'charge' => 250, 'status' => 'approved', 'origin' => AmenityRequest::ORIGIN_STAFF]);
+
+        $this->actingAs($desk)->get(route('receptionist.check-out.billing', $booking))->assertOk()
+            ->assertSee('Paid at check-in')->assertSee('Added during stay')->assertSee('Due at check-out')
+            ->assertSee('₱250.00', false)->assertDontSee('cancelBillingBtn', false);
+
+        $billing = $booking->billing()->first();
+        // no discount at check-out, no partial payment
+        $this->actingAs($desk)->postJson(route('receptionist.billing.discount.store', $billing), ['discount_id' => 1])->assertStatus(422);
+        $this->actingAs($desk)->postJson(route('receptionist.billing.payment.store', $billing), ['payment_method' => 'cash', 'amount_paid' => 100, 'amount_received' => 100])->assertStatus(422);
+        $this->assertSame(Booking::STATUS_CHECKED_IN, $booking->fresh()->booking_status);
+
+        $this->actingAs($desk)->postJson(route('receptionist.billing.payment.store', $billing), ['payment_method' => 'cash', 'amount_paid' => 250, 'amount_received' => 300])
+            ->assertOk()->assertJson(['completed' => true]);
+        $this->assertSame(Booking::STATUS_COMPLETED, $booking->fresh()->booking_status);
+        $this->assertEqualsWithDelta(2250, $booking->fresh()->paidTotal(), 0.01);
+
+        // the receipt shows the check-in and check-out payments apart
+        $this->actingAs($desk)->get(route('receptionist.billing.receipt', $billing))->assertOk()
+            ->assertSee('Paid at check-in')->assertSee('Paid at check-out')->assertSee('Paid at Check-in');
+        \Carbon\Carbon::setTestNow();
+    }
+
     public function test_walk_in_amenities_are_billed_at_check_in(): void
     {
         $rt = $this->makeRoomTypeWithRooms('Deluxe', 1000, 2, 1);

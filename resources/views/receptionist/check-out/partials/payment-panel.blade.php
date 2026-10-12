@@ -38,7 +38,18 @@
             <td>Grand Total</td>
             <td class="text-end">₱{{ number_format($paymentSummary['grand_total'], 2) }}</td>
         </tr>
-        @if($paymentSummary['total_amount_paid'] > 0)
+        @if($settlementTotals)
+            <tr>
+                <td>Paid at check-in</td>
+                <td class="text-end">₱{{ number_format($settlementTotals['at_check_in'], 2) }}</td>
+            </tr>
+            @if($settlementTotals['at_check_out'] > 0)
+                <tr>
+                    <td>Paid at check-out</td>
+                    <td class="text-end">₱{{ number_format($settlementTotals['at_check_out'], 2) }}</td>
+                </tr>
+            @endif
+        @elseif($paymentSummary['total_amount_paid'] > 0)
             <tr>
                 <td>Total Amount Already Paid</td>
                 <td class="text-end">₱{{ number_format($paymentSummary['total_amount_paid'], 2) }}</td>
@@ -85,9 +96,9 @@
                 <label class="form-label" for="amountPaidInput">Amount Applied <span class="text-danger">*</span></label>
                 <div class="input-group">
                     <span class="input-group-text">₱</span>
-                    <input type="number" step="0.01" min="0.01" max="{{ $balance }}" name="amount_paid" id="amountPaidInput" class="form-control" value="{{ $balance }}" data-balance="{{ $balance }}" required aria-describedby="amountPaidHelp amountPaidError">
+                    <input type="number" step="0.01" min="{{ $balance }}" max="{{ $balance }}" name="amount_paid" id="amountPaidInput" class="form-control" value="{{ $balance }}" data-balance="{{ $balance }}" required readonly aria-describedby="amountPaidHelp amountPaidError">
                 </div>
-                <div class="form-text" id="amountPaidHelp">Remaining balance: <strong>₱{{ number_format($balance, 2) }}</strong> - the payment can't be more than this.</div>
+                <div class="form-text" id="amountPaidHelp">The full balance of <strong>₱{{ number_format($balance, 2) }}</strong> is paid now - partial payment isn't accepted at check-out.</div>
                 <div class="text-danger small d-none mt-1" id="amountPaidError" role="alert"></div>
             </div>
             <div class="alert alert-info py-2 d-none" id="changeDueBox" role="status"></div>

@@ -24,6 +24,13 @@
         </div>
     </div>
 
+    @if($settledAtCheckIn)
+        <div class="alert alert-success py-2 small">
+            <i class="fas fa-check-circle"></i> The stay was paid in full at check-in ({{ $settledAtCheckIn->format('M j, Y g:i A') }}).
+            Items marked <span class="badge bg-success">Paid at check-in</span> are not charged again - only what was added since is due now.
+        </div>
+    @endif
+
     <h6><i class="fas fa-calculator"></i> Charges</h6>
     <p class="small text-muted mb-2">
         Booked {{ \Carbon\Carbon::parse($stay['check_in'])->format('M j, Y') }} to {{ \Carbon\Carbon::parse($stay['scheduled_check_out'])->format('M j, Y') }}
@@ -42,6 +49,7 @@
                     Room {{ $line['room_number'] }}@if($line['room_type']) <span class="text-muted">({{ $line['room_type'] }})</span>@endif
                     - ₱{{ number_format($line['rate'], 2) }} x {{ $line['nights'] }} night{{ $line['nights'] === 1 ? '' : 's' }}
                     @if($line['extra_nights'] > 0)<span class="badge bg-warning text-dark">+{{ $line['extra_nights'] }} extra</span>@endif
+                    @if($settledAtCheckIn && $line['extra_nights'] <= 0)<span class="badge bg-success">Paid at check-in</span>@endif
                     @if($line['status'] === 'checked_out')<span class="badge bg-secondary">out {{ \Carbon\Carbon::parse($line['checked_out_on'])->format('M j') }}</span>@endif
                 </td>
                 <td class="text-end">₱{{ number_format($line['subtotal'], 2) }}</td>
@@ -84,7 +92,14 @@
         <tbody>
             @forelse($amenityRequests as $req)
                 <tr>
-                    <td>{{ $req->amenity->amenity_name ?? 'N/A' }}</td>
+                    <td>
+                        {{ $req->amenity->amenity_name ?? $req->amenity_name ?? 'N/A' }}
+                        @if(\App\Support\CheckInSettlement::wasOnCheckInBill($billing, $req->created_at))
+                            <span class="badge bg-success">Paid at check-in</span>
+                        @elseif($settledAtCheckIn)
+                            <span class="badge bg-warning text-dark">Added during stay</span>
+                        @endif
+                    </td>
                     <td>{{ $req->quantity }}</td>
                     <td class="text-end">₱{{ number_format($req->charge * $req->quantity, 2) }}</td>
                 </tr>
@@ -119,7 +134,14 @@
         @include('receptionist.check-out.partials.charges-table', ['billing' => $billing])
     </div>
 
-    @include('receptionist.check-out.partials.discount-panel', ['billing' => $billing, 'discounts' => $discounts])
+    @if($settledAtCheckIn)
+        {{-- Discounts and promotions are decided at check-in only. --}}
+        @if($billing->discount > 0)
+            <p class="small text-muted mb-0"><i class="fas fa-percentage"></i> Discount applied at check-in{{ $billing->discountApplied ? ' (' . $billing->discountApplied->name . ')' : '' }}.</p>
+        @endif
+    @else
+        @include('receptionist.check-out.partials.discount-panel', ['billing' => $billing, 'discounts' => $discounts])
+    @endif
 
     <div class="table-responsive">
     <table class="table table-sm mb-0 mt-3">
@@ -129,15 +151,27 @@
                 <td class="text-end text-success">-₱{{ number_format($billing->discount, 2) }}</td>
             </tr>
         @endif
-        <tr class="fw-bold fs-5">
-            <td>Running Total</td>
-            <td class="text-end text-brand" id="runningTotalDisplay">₱{{ number_format($billing->running_total, 2) }}</td>
+        <tr class="{{ $settledAtCheckIn ? 'fw-semibold' : 'fw-bold fs-5' }}">
+            <td>{{ $settledAtCheckIn ? 'Stay Total' : 'Running Total' }}</td>
+            <td class="text-end {{ $settledAtCheckIn ? '' : 'text-brand' }}" id="runningTotalDisplay">₱{{ number_format($billing->running_total, 2) }}</td>
         </tr>
+        @if($settledAtCheckIn)
+            <tr>
+                <td>Already paid (at check-in)</td>
+                <td class="text-end text-success">-₱{{ number_format($alreadyPaid, 2) }}</td>
+            </tr>
+            <tr class="fw-bold fs-5">
+                <td>Due at check-out</td>
+                <td class="text-end text-brand" id="dueAtCheckOutDisplay" data-paid="{{ $alreadyPaid }}">₱{{ number_format($dueNow, 2) }}</td>
+            </tr>
+        @endif
     </table>
     </div>
 </div>
 <div class="modal-footer">
-    <button type="button" class="btn btn-secondary" id="cancelBillingBtn">Cancel Billing</button>
+    @unless($settledAtCheckIn)
+        <button type="button" class="btn btn-secondary" id="cancelBillingBtn">Cancel Billing</button>
+    @endunless
     <button type="button" class="btn btn-primary" id="proceedToPaymentBtn">
         <i class="fas fa-arrow-right"></i> Proceed to Payment
     </button>

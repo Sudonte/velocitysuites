@@ -93,7 +93,7 @@
                     <tr>
                         <td>{{ $tx['payment_date'] ? \Carbon\Carbon::parse($tx['payment_date'])->format('M d, Y') : 'N/A' }}</td>
                         <td>{{ ucfirst($tx['payment_method']) }}</td>
-                        <td>{{ ucwords(str_replace('_', ' ', $tx['transaction_type'])) }}</td>
+                        <td>{{ \App\Support\CheckInSettlement::label($tx, ucwords(str_replace('_', ' ', strtolower($tx['transaction_type'])))) }}</td>
                         <td class="{{ $statusClass }}">{{ $statusLabel }}</td>
                         <td>&#8369;{{ number_format($tx['amount_paid'], 2) }}</td>
                     </tr>

@@ -32,6 +32,8 @@
                     <div class="d-flex justify-content-between align-items-center {{ ! $loop->last ? 'mb-2 pb-2 border-bottom' : '' }}">
                         <div>
                             {{ $payment->payment_method === 'gcash' ? 'GCash' : ucfirst($payment->payment_method) }} &middot; ₱{{ number_format($payment->amount_paid, 2) }}
+                            @php $stageLabel = \App\Support\CheckInSettlement::label(['reference_number' => $payment->reference_number], $payment->billing_id && $payment->payment_stage === 'final' ? 'Paid at Check-out' : ''); @endphp
+                            @if($stageLabel)<span class="badge bg-light text-dark border">{{ $stageLabel }}</span>@endif
                             <small class="text-muted d-block">{{ ($payment->payment_date ?? $payment->created_at)->format('M d, Y') }}{{ $payment->reference_number ? ' - ' . $payment->reference_number : '' }}</small>
                         </div>
                         <x-status-badge :status="$payment->verification_status ?? $payment->payment_status" :domain="$payment->verification_status ? 'verification_status' : 'payment'" />

@@ -109,9 +109,15 @@ class CheckOutController extends Controller
         $isEarlyCheckout = $stay['is_early_checkout'];
         $isLateCheckout = $stay['is_late_checkout'];
 
+        // Settled at check-in: those items are listed as paid, and only what was added since is due now.
+        $settledAtCheckIn = \App\Support\CheckInSettlement::settledAt($billing);
+        $alreadyPaid = $booking->paidTotal();
+        $dueNow = max(0, round((float) $billing->running_total - $alreadyPaid, 2));
+
         return view('receptionist.check-out.partials.billing-panel', compact(
             'booking', 'billing', 'amenityRequests', 'discounts', 'stay', 'pendingAmenityCount',
-            'effectiveCheckOutDate', 'effectiveNights', 'isEarlyCheckout', 'isLateCheckout'
+            'effectiveCheckOutDate', 'effectiveNights', 'isEarlyCheckout', 'isLateCheckout',
+            'settledAtCheckIn', 'alreadyPaid', 'dueNow'
         ));
     }
 
@@ -272,7 +278,7 @@ class CheckOutController extends Controller
             return response()->json(['message' => 'Cannot cancel a paid bill.'], 422);
         }
 
-        if ($billing->payments()->where('payment_status', 'completed')->exists()) {
+        if ($billing->checkin_settled_at || $billing->payments()->where('payment_status', 'completed')->exists()) {
             return response()->json(['message' => 'This bill already has recorded payments and cannot be discarded.'], 422);
         }
 
@@ -305,9 +311,10 @@ class CheckOutController extends Controller
         $paymentSummary = $booking->paymentSummary();
         $paymentTransactions = $booking->paymentTransactionsPayload();
         $balance = $paymentSummary['remaining_balance'];
+        $settlementTotals = \App\Support\CheckInSettlement::totals($billing, $paymentTransactions);
 
         return view('receptionist.check-out.partials.payment-panel', compact(
-            'billing', 'booking', 'balance', 'paymentSummary', 'paymentTransactions'
+            'billing', 'booking', 'balance', 'paymentSummary', 'paymentTransactions', 'settlementTotals'
         ));
     }
 
@@ -402,6 +409,10 @@ class CheckOutController extends Controller
             // balance, so two submissions racing for the same balance can't both pass and overpay it together.
             if ($amountPaid > round($currentBalance, 2) + 0.004) {
                 return ['status' => 'overpayment', 'balance' => $currentBalance];
+            }
+            // Full payment only - no partial payment at check-out.
+            if ($amountPaid > 0 && $amountPaid + 0.004 < round($currentBalance, 2)) {
+                return ['status' => 'partial_refused', 'balance' => $currentBalance];
             }
 
             if ($amountPaid > 0) {
@@ -531,6 +542,12 @@ class CheckOutController extends Controller
                 'balance' => $result['balance'],
             ], 422);
         }
+        if ($result['status'] === 'partial_refused') {
+            return response()->json([
+                'message' => 'The full balance of ₱' . number_format($result['balance'], 2) . ' must be paid - partial payment isn\'t accepted at check-out.',
+                'balance' => $result['balance'],
+            ], 422);
+        }
         if ($result['status'] === 'amount_required') {
             return response()->json([
                 'message' => 'A payment amount is required - the remaining balance is ₱' . number_format($result['balance'], 2) . '.',
@@ -562,6 +579,10 @@ class CheckOutController extends Controller
     {
         if ($billing->billing_status === 'paid') {
             return response()->json(['message' => 'Cannot change the discount on a paid bill.'], 422);
+        }
+
+        if ($billing->checkin_settled_at) {
+            return response()->json(['message' => 'Discounts and promotions are applied at check-in only.'], 422);
         }
 
         $booking = $billing->booking;

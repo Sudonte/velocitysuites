@@ -95,7 +95,7 @@
                                 <i class="fas {{ $tx['payment_method'] === 'gcash' ? 'fa-mobile-screen' : 'fa-money-bill-wave' }} me-1"></i>
                                 {{ ucfirst($tx['payment_method']) }}
                                 &middot;
-                                {{ $transactionTypeLabels[$tx['transaction_type']] ?? $tx['transaction_type'] }}
+                                {{ \App\Support\CheckInSettlement::label($tx, $transactionTypeLabels[$tx['transaction_type']] ?? $tx['transaction_type']) }}
                             </div>
                             <div class="small text-muted">
                                 {{ $tx['payment_date'] ? \Carbon\Carbon::parse($tx['payment_date'])->format('F j, Y \a\t g:i A') : '—' }}

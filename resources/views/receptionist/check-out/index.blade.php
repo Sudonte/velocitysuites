@@ -486,7 +486,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     body: JSON.stringify(payload),
                 });
                 document.getElementById('chargesTableContainer').innerHTML = data.html;
-                document.getElementById('runningTotalDisplay').textContent = '₱' + Number(data.running_total).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                document.getElementById('runningTotalDisplay').textContent = '₱' + Number(data.running_total).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); updateDueAtCheckOut(data.running_total);
             } catch (err) {
                 showBillingError(err.message);
             }
@@ -502,7 +502,7 @@ document.addEventListener('DOMContentLoaded', function () {
             try {
                 const data = await fetchJson(buildUrl(urls.chargeDestroy, chargeId), { method: 'DELETE' });
                 document.getElementById('chargesTableContainer').innerHTML = data.html;
-                document.getElementById('runningTotalDisplay').textContent = '₱' + Number(data.running_total).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                document.getElementById('runningTotalDisplay').textContent = '₱' + Number(data.running_total).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); updateDueAtCheckOut(data.running_total);
             } catch (err) {
                 showBillingError(err.message);
             }
@@ -523,7 +523,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 body: JSON.stringify(payload),
             });
             document.getElementById('chargesTableContainer').innerHTML = data.html;
-            document.getElementById('runningTotalDisplay').textContent = '₱' + Number(data.running_total).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            document.getElementById('runningTotalDisplay').textContent = '₱' + Number(data.running_total).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); updateDueAtCheckOut(data.running_total);
         } catch (err) {
             showBillingError(err.message);
         }
@@ -548,6 +548,14 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     });
 
+    // Settled at check-in: "Due at check-out" = the stay total minus what was already paid.
+    function updateDueAtCheckOut(total) {
+        const due = document.getElementById('dueAtCheckOutDisplay');
+        if (!due) return;
+        const amount = Math.max(0, Number(total) - Number(due.dataset.paid));
+        due.textContent = '₱' + amount.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
     // ---- Payment Panel interactions ----
     const peso = (n) => '₱' + Number(n).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -569,6 +577,8 @@ document.addEventListener('DOMContentLoaded', function () {
             message = 'The amount must be greater than ₱0.00.';
         } else if (Math.round(amount * 100) > balanceCents) {
             message = 'The amount can\'t be more than the remaining balance of ' + peso(balanceCents / 100) + '.';
+        } else if (Math.round(amount * 100) < balanceCents) {
+            message = 'The full balance of ' + peso(balanceCents / 100) + ' must be paid - partial payment isn\'t accepted.';
         }
 
         // Cash: what was handed over must cover what is applied; the rest is change.

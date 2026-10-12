@@ -279,18 +279,20 @@ class StayBillCheckoutTest extends ApiFlowTestCase
         $this->assertSame(2000.0, (float) Payment::where('billing_id', $billing->id)->sum('amount_paid'));
     }
 
-    public function test_a_partial_payment_lowers_the_cap_and_a_double_submission_cannot_overpay(): void
+    public function test_check_out_refuses_a_partial_payment_and_a_double_submission_cannot_overpay(): void
     {
         [$booking] = $this->stay([1000], '2026-10-05', '2026-10-07');
         $this->at('2026-10-07 10:00');
         $billing = $this->openBilling($booking);
         $url = route('receptionist.billing.payment.store', $billing);
 
-        $this->actingAs($this->receptionist())->postJson($url, ['payment_method' => 'cash', 'amount_paid' => 1500])->assertOk()->assertJson(['completed' => false]);
-        // the same 1500 again (a double click): only 500 is left, so it's refused
+        // full payment only at check-out
         $this->actingAs($this->receptionist())->postJson($url, ['payment_method' => 'cash', 'amount_paid' => 1500])->assertStatus(422);
-        $this->assertSame(1500.0, (float) Payment::where('billing_id', $billing->id)->sum('amount_paid'));
-        $this->actingAs($this->receptionist())->postJson($url, ['payment_method' => 'cash', 'amount_paid' => 500])->assertOk()->assertJson(['completed' => true]);
+        $this->assertSame(0.0, (float) Payment::where('billing_id', $billing->id)->sum('amount_paid'));
+        $this->actingAs($this->receptionist())->postJson($url, ['payment_method' => 'cash', 'amount_paid' => 2000])->assertOk()->assertJson(['completed' => true]);
+        // the same 2000 again (a double click): nothing is left, so it's refused
+        $this->actingAs($this->receptionist())->postJson($url, ['payment_method' => 'cash', 'amount_paid' => 2000])->assertStatus(422);
+        $this->assertSame(2000.0, (float) Payment::where('billing_id', $billing->id)->sum('amount_paid'));
     }
 
     public function test_settling_stamps_every_room_and_tells_the_guest_when_the_stay_ran_longer_than_booked(): void

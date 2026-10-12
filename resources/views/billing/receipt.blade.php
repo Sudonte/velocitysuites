@@ -75,6 +75,17 @@
                         <td>Total</td>
                         <td class="text-end text-brand">₱{{ number_format($paymentSummary['grand_total'], 2) }}</td>
                     </tr>
+                    @php $settlementTotals = \App\Support\CheckInSettlement::totals($billing, $paymentTransactions); @endphp
+                    @if($settlementTotals)
+                        <tr>
+                            <td>Paid at check-in</td>
+                            <td class="text-end">₱{{ number_format($settlementTotals['at_check_in'], 2) }}</td>
+                        </tr>
+                        <tr>
+                            <td>Paid at check-out</td>
+                            <td class="text-end">₱{{ number_format($settlementTotals['at_check_out'], 2) }}</td>
+                        </tr>
+                    @endif
                 </table>
             </x-card>
 
