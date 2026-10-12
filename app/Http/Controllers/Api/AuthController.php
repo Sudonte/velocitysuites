@@ -41,7 +41,13 @@ class AuthController extends Controller
 
         $user = User::where('email', $credentials['email'])->first();
 
-        if (! $user || $user->status === 'suspended') {
+        // Distinct results so the app can tell the guest what to fix:
+        // no such account vs. a wrong password (see the failure branch below).
+        if (! $user) {
+            return response()->json(['code' => 'ACCOUNT_NOT_FOUND', 'message' => 'Account does not exist.'], 401);
+        }
+
+        if ($user->status === 'suspended') {
             return response()->json(['message' => 'Account suspended or credentials invalid.'], 401);
         }
 
@@ -71,10 +77,10 @@ class AuthController extends Controller
             }
 
             $message = $failures === User::LOGIN_LOCK_THRESHOLD - 1
-                ? 'Invalid credentials. One more failed attempt will require you to verify your account by email.'
-                : 'Invalid credentials.';
+                ? 'Incorrect password. One more failed attempt will require you to verify your account by email.'
+                : 'Incorrect password. Please try again.';
 
-            return response()->json(['message' => $message], 401);
+            return response()->json(['code' => 'WRONG_PASSWORD', 'message' => $message], 401);
         }
 
         // This API/app is guest-facing only - staff (admin/manager/
@@ -160,7 +166,7 @@ class AuthController extends Controller
             'first_name' => 'required|string|max:100',
             'last_name' => 'required|string|max:100',
             'middle_name' => 'nullable|string|max:100',
-            'email' => ['required', 'email', 'unique:users', 'regex:/^[a-zA-Z0-9._%+-]+@gmail\.com$/i'],
+            'email' => ['required', 'email:rfc', 'max:255', 'unique:users'],
             'password' => ['required', 'confirmed', Password::min(8)],
             'age' => 'required|integer|min:18',
             'gender' => 'required|in:male,female',
@@ -180,7 +186,6 @@ class AuthController extends Controller
             'timezone' => 'nullable|string|max:64',
             'otp_channel' => 'required|in:email,mobile',
         ], [
-            'email.regex' => 'Please register using a valid Gmail (@gmail.com) address.',
             'mobile_number.unique' => 'This mobile number is already registered to another account.',
             'email.unique' => 'This email address is already registered. Please login instead.',
             'age.min' => 'You must be at least 18 years old to register.',

@@ -103,7 +103,7 @@ class FailedLoginLockoutTest extends TestCase
 
         $r2 = $this->postJson('/api/login', ['email' => $user->email, 'password' => 'wrong']);
         $r2->assertStatus(401);
-        $r2->assertJsonFragment(['message' => 'Invalid credentials. One more failed attempt will require you to verify your account by email.']);
+        $r2->assertJsonFragment(['message' => 'Incorrect password. One more failed attempt will require you to verify your account by email.']);
         $this->assertSame(2, $user->refresh()->failed_login_attempts);
 
         $r3 = $this->postJson('/api/login', ['email' => $user->email, 'password' => 'wrong']);
@@ -112,6 +112,19 @@ class FailedLoginLockoutTest extends TestCase
 
         $r4 = $this->postJson('/api/login', ['email' => $user->email, 'password' => 'correct-password']);
         $r4->assertStatus(423);
+    }
+
+    public function test_api_login_tells_unknown_account_apart_from_wrong_password(): void
+    {
+        $user = $this->makeUser('guest');
+
+        $this->postJson('/api/login', ['email' => 'nobody-here@example.test', 'password' => 'whatever1'])
+            ->assertStatus(401)
+            ->assertJsonFragment(['code' => 'ACCOUNT_NOT_FOUND', 'message' => 'Account does not exist.']);
+
+        $this->postJson('/api/login', ['email' => $user->email, 'password' => 'wrong'])
+            ->assertStatus(401)
+            ->assertJsonFragment(['code' => 'WRONG_PASSWORD', 'message' => 'Incorrect password. Please try again.']);
     }
 
     public function test_web_login_locks_on_third_failed_attempt_not_fourth(): void

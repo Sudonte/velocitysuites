@@ -267,17 +267,6 @@ class ReservationController extends Controller
                 return response()->json(['message' => "No {$roomType->name} rooms are currently in service."], 422);
             }
 
-            // The Android app now sends every room type in a single call
-            // (no more sequential single-room-type requests for one
-            // multi-room-type stay), so this can safely apply the same
-            // guard Guest\ReservationController::store() already uses, per
-            // room type in the request - reaching parity between the two
-            // entry points for every line, not just the first.
-            if ($this->workflow->hasOverlappingReservation($guest, $roomType, $checkIn, $checkOut)) {
-                return response()->json([
-                    'message' => "You already have a {$roomType->name} reservation that overlaps these dates. Check My Reservations to modify or cancel it instead of submitting a duplicate.",
-                ], 422);
-            }
         }
 
         // Adults + children combined must not exceed the summed guest
@@ -624,16 +613,6 @@ class ReservationController extends Controller
                 }
                 if (! $roomType->rooms()->notArchived()->where('status', '!=', 'maintenance')->exists()) {
                     return response()->json(['message' => "No {$roomType->name} rooms are currently in service."], 422);
-                }
-                // Excludes this reservation itself (see
-                // ReservationWorkflowService::hasOverlappingReservation()'s
-                // $excludeReservationId param) - editing a reservation's own
-                // dates/room selection must never conflict with its own
-                // prior selection.
-                if ($guest && $this->workflow->hasOverlappingReservation($guest, $roomType, $checkIn, $checkOut, $reservation->id)) {
-                    return response()->json([
-                        'message' => "You already have a {$roomType->name} reservation that overlaps these dates.",
-                    ], 422);
                 }
             }
 

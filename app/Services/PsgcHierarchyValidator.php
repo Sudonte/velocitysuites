@@ -97,7 +97,7 @@ class PsgcHierarchyValidator
 
         return Cache::remember($cacheKey, now()->addMinutes(self::CACHE_TTL_MINUTES), function () use ($path) {
             try {
-                $response = Http::timeout(5)->get(self::BASE . $path);
+                $response = Http::connectTimeout(2)->timeout(3)->get(self::BASE . $path);
                 if (! $response->successful()) {
                     return null;
                 }

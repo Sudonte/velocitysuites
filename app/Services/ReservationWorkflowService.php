@@ -255,43 +255,6 @@ class ReservationWorkflowService
     }
 
     /**
-     * True if this guest already has an active (not cancelled/rejected)
-     * reservation or booking of the same room type whose stay genuinely
-     * OVERLAPS the requested dates (a partial overlap, not an exact
-     * check_in/check_out match) - used by Guest\ReservationController::store(),
-     * Api\ReservationController::store(), and Api\ReservationController::update()
-     * to block a guest from committing to an overlapping stay for the same
-     * room type. An EXACT date match is deliberately NOT treated as a
-     * conflict here: a guest is allowed to create multiple Bookings, and
-     * separately multiple Reservations, using the same check-in/check-out
-     * dates (e.g. two separate transactions for the same trip), as long as
-     * room availability and every other condition is independently
-     * satisfied - only a genuinely different, overlapping range blocks.
-     * Half-open interval comparison (check_in < newCheckOut AND
-     * check_out > newCheckIn) so back-to-back stays (one check-out day the
-     * next check-in day) don't count as overlapping either.
-     */
-    public function hasOverlappingReservation(Guest $guest, RoomType $roomType, Carbon $checkIn, Carbon $checkOut, ?int $excludeReservationId = null): bool
-    {
-        return Reservation::where('guest_id', $guest->id)
-            ->whereNotIn('status', [Reservation::STATUS_CANCELLED, Reservation::STATUS_REJECTED])
-            ->when($excludeReservationId, fn ($q) => $q->where('id', '!=', $excludeReservationId))
-            // whereHas(roomLines) rather than the parent row's own
-            // room_type_id - that column only ever reflects a multi-room-
-            // type reservation's FIRST line (kept in sync purely for
-            // backward-compatible display - see e.g. DirectBookingService::
-            // create()'s identical convention on the Booking side), so
-            // checking it alone silently missed an overlap on any 2nd+ room
-            // type in a multi-room-type reservation. reservation_room_lines
-            // is the authoritative per-type record.
-            ->whereHas('roomLines', fn ($q) => $q->where('room_type_id', $roomType->id))
-            ->where('check_in', '<', $checkOut)
-            ->where('check_out', '>', $checkIn)
-            ->where(fn ($q) => $q->where('check_in', '!=', $checkIn)->orWhere('check_out', '!=', $checkOut))
-            ->exists();
-    }
-
-    /**
      * Guest submits a GCash payment - either at booking/reservation time
      * (pay_now) or later against an existing Pay Later reservation, as
      * either a Partial (deposit) or Full (final) payment. A GCash payment
@@ -844,10 +807,13 @@ class ReservationWorkflowService
      */
     public function cancel(Reservation $reservation): void
     {
-        if ($reservation->status === Reservation::STATUS_CONVERTED) {
-            $this->cancelConvertedBooking($reservation);
-            return;
-        }
+        // Guest-side cancel only (every caller is a guest endpoint; the
+        // receptionist has its own flow). Once staff have verified a Cash
+        // reservation, or it has been converted to a Booking (the GCash
+        // Pay Later case included), the guest can no longer cancel it -
+        // the app hides the button and this is the real enforcement.
+        abort_if($reservation->status === Reservation::STATUS_CONVERTED, 422, 'This reservation has already been converted to a booking and can no longer be cancelled.');
+        abort_if($reservation->verified_at !== null, 422, 'This reservation has already been verified by our staff and can no longer be cancelled.');
 
         abort_unless(in_array($reservation->status, Reservation::ACTIVE_STATUSES, true), 422, 'Cannot cancel this reservation.');
 

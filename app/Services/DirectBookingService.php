@@ -105,27 +105,6 @@ class DirectBookingService
     }
 
     /**
-     * True if this guest already has another non-cancelled direct Booking
-     * for the SAME room type whose date range genuinely overlaps (not just
-     * an identical resubmission of the same dates) the requested stay.
-     * Mirrors ReservationWorkflowService::hasOverlappingReservation()
-     * exactly, including checking booking_room_lines (not the parent row's
-     * own room_type_id, which only ever reflects a multi-room-type
-     * booking's FIRST line) so a 2nd+ room type in a multi-room-type
-     * booking is covered too.
-     */
-    private function hasOverlappingBooking(Guest $guest, RoomType $roomType, Carbon $checkIn, Carbon $checkOut): bool
-    {
-        return Booking::where('guest_id', $guest->id)
-            ->whereNotIn('booking_status', [Booking::STATUS_CANCELLED, Booking::STATUS_NO_SHOW])
-            ->whereHas('roomLines', fn ($q) => $q->where('room_type_id', $roomType->id))
-            ->where('check_in', '<', $checkOut)
-            ->where('check_out', '>', $checkIn)
-            ->where(fn ($q) => $q->where('check_in', '!=', $checkIn)->orWhere('check_out', '!=', $checkOut))
-            ->exists();
-    }
-
-    /**
      * The full amount due for a direct booking - every room line's own
      * rate x nights x quantity, summed, plus every selected paid amenity's
      * subtotal. amount_paid may now be less than this (a partial/deposit
@@ -206,22 +185,6 @@ class DirectBookingService
             // own doc.
             $this->availability->lockRoomTypesForAvailabilityCheck(collect($roomLines)->pluck('room_type.id'));
             $this->validateRoomLinesAvailability($roomLines, $checkIn, $checkOut);
-
-            // Guest-scoped, not inventory-scoped - unrelated to the lock/
-            // re-check above. Mirrors ReservationWorkflowService::
-            // hasOverlappingReservation() exactly (Booking-vs-Booking only,
-            // not cross-checked against Reservations, matching that
-            // existing precedent). Without this, a direct API call
-            // (bypassing the Android UI, which has no such guard either)
-            // could let one guest hold two overlapping paid direct bookings
-            // of the same room type against themselves.
-            foreach (collect($roomLines)->pluck('room_type')->unique('id') as $roomTypeToCheck) {
-                if ($this->hasOverlappingBooking($guest, $roomTypeToCheck, $checkIn, $checkOut)) {
-                    throw ValidationException::withMessages([
-                        'check_in' => "You already have another booking for {$roomTypeToCheck->name} that overlaps these dates.",
-                    ]);
-                }
-            }
 
             $nights = max(1, abs($checkOut->diffInDays($checkIn)));
             $firstRoomType = $roomLines[0]['room_type'];

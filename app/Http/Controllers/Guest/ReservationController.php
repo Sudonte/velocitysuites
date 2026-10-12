@@ -216,11 +216,6 @@ class ReservationController extends Controller
         }
 
         $guest = auth()->user()->guest;
-        if ($this->workflow->hasOverlappingReservation($guest, $roomType, \Carbon\Carbon::parse($validated['check_in']), \Carbon\Carbon::parse($validated['check_out']))) {
-            return back()->withInput()->with('error',
-                "You already have a {$roomType->name} reservation that overlaps these dates. " .
-                'Check "My Reservations" to modify or cancel it instead of submitting a duplicate.');
-        }
 
         [$paymentPreference, $paymentMethod] = match ($validated['payment_choice']) {
             'pay_now_gcash' => ['pay_now', 'gcash'],

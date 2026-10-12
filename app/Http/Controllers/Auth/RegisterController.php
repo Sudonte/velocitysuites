@@ -36,7 +36,7 @@ class RegisterController extends Controller
             'first_name' => 'required|string|max:100',
             'last_name' => 'required|string|max:100',
             'middle_name' => 'nullable|string|max:100',
-            'email' => ['required', 'email', 'unique:users', 'regex:/^[a-zA-Z0-9._%+-]+@gmail\.com$/i'],
+            'email' => ['required', 'email:rfc', 'max:255', 'unique:users'],
             'password' => ['required', 'confirmed', Password::min(8)],
             'age' => 'required|integer|min:18',
             'gender' => 'required|in:male,female',
@@ -59,7 +59,6 @@ class RegisterController extends Controller
         ], [
             'mobile_number.unique' => 'This mobile number is already registered to another account.',
             'email.unique' => 'This email address is already registered. Please login instead.',
-            'email.regex' => 'Please register using a valid Gmail (@gmail.com) address.',
             'age.min' => 'You must be at least 18 years old to register.',
         ]);
 

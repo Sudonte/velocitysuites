@@ -78,8 +78,8 @@ class ReservationPolicy
             return true;
         }
 
-        // Guest can cancel their own reservations if not checked in
-        if ($user->role === 'guest' && $user->guest && $user->guest->id === $reservation->guest_id && in_array($reservation->status, [...Reservation::ACTIVE_STATUSES, Reservation::STATUS_CONVERTED], true)) {
+        // Guest can cancel their own reservation only while it is still awaiting the front desk: once it is verified or converted to a booking (Cash verified, GCash Pay Later converted) only staff can cancel
+        if ($user->role === 'guest' && $user->guest && $user->guest->id === $reservation->guest_id && in_array($reservation->status, Reservation::ACTIVE_STATUSES, true) && $reservation->verified_at === null) {
             return true;
         }
 
