@@ -167,6 +167,9 @@
                                 </form>
                             @endif
                         @elseif($tab === 'verified' || $tab === 'rejected')
+                            @if($tab === 'verified')
+                                @include('receptionist.bookings.partials.cancel-button', ['booking' => $booking, 'mobile' => true])
+                            @endif
                             <form action="{{ route('receptionist.bookings.archive', $booking) }}" method="POST" class="flex-fill" data-confirm="It will move to Archived Bookings." data-confirm-title="Archive this booking?" data-confirm-button="Archive Booking" data-confirm-variant="secondary">
                                 @csrf
                                 @method('PUT')
@@ -293,6 +296,7 @@
                                     </form>
                                 @endif
                             @elseif($tab === 'verified')
+                                @include('receptionist.bookings.partials.cancel-button', ['booking' => $booking, 'mobile' => false])
                                 <form action="{{ route('receptionist.bookings.archive', $booking) }}" method="POST" class="d-inline" data-confirm="It will move to the Archived list." data-confirm-title="Archive this completed booking?" data-confirm-button="Archive Booking" data-confirm-variant="secondary">
                                     @csrf
                                     @method('PUT')
@@ -344,7 +348,56 @@
     </x-card>
 </div>
 
+@if($tab === 'verified')
+@push('modals')
+    {{-- One shared Cancel Booking popup for the whole list - each row's Cancel button fills it in. --}}
+    <div class="modal fade" id="cancelBookingModal" tabindex="-1" aria-labelledby="cancelBookingTitle" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <form method="POST" class="modal-content" id="cancelBookingFormList"
+                  data-confirm="The guest is notified and the room is released." data-confirm-title="Cancel this booking?" data-confirm-button="Cancel Booking" data-confirm-variant="danger">
+                @csrf
+                @method('PUT')
+                <div class="modal-header modal-header-brand">
+                    <h5 class="modal-title" id="cancelBookingTitle"><i class="fas fa-ban"></i> Cancel <span data-cancel-ref></span></h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="mb-2">Guest: <strong data-cancel-guest></strong></p>
+                    <div class="alert alert-warning py-2 small d-none" data-cancel-paid></div>
+                    <label for="cancelReasonList" class="form-label">Reason (optional)</label>
+                    <textarea name="reason" id="cancelReasonList" class="form-control" rows="3" maxlength="500" placeholder="e.g. Guest called to cancel"></textarea>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Keep Booking</button>
+                    <button type="submit" class="btn btn-danger"><i class="fas fa-ban"></i> Cancel Booking</button>
+                </div>
+            </form>
+        </div>
+    </div>
+@endpush
+@endif
+
 @endsection
+
+@push('scripts')
+<script>
+document.addEventListener('click', function (e) {
+    const btn = e.target.closest('.btn-cancel-booking');
+    if (!btn) return;
+    const modal = document.getElementById('cancelBookingModal');
+    const form = document.getElementById('cancelBookingFormList');
+    form.action = btn.dataset.url;
+    form.reset();
+    form.dataset.confirmTitle = 'Cancel ' + btn.dataset.ref + '?';
+    modal.querySelector('[data-cancel-ref]').textContent = btn.dataset.ref;
+    modal.querySelector('[data-cancel-guest]').textContent = btn.dataset.guest;
+    const paid = modal.querySelector('[data-cancel-paid]');
+    paid.textContent = btn.dataset.paid ? 'The guest has paid ' + btn.dataset.paid + ' on this booking - cancelling does not refund it automatically; handle the refund per hotel policy.' : '';
+    paid.classList.toggle('d-none', !btn.dataset.paid);
+    bootstrap.Modal.getOrCreateInstance(modal).show();
+});
+</script>
+@endpush
 
 
 
