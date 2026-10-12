@@ -94,6 +94,7 @@ abstract class ApiFlowTestCase extends TestCase
             $table->timestamp('cancelled_at')->nullable();
             $table->timestamp('hidden_at')->nullable();
             $table->timestamp('hidden_by_guest_at')->nullable();
+            $table->timestamp('snapshot_hidden_at')->nullable();
             $table->timestamp('viewed_at')->nullable();
             $table->string('payment_preference', 20)->nullable();
             $table->string('payment_method', 20)->nullable();

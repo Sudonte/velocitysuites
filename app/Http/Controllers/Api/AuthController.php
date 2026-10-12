@@ -217,16 +217,9 @@ class AuthController extends Controller
             ], 422);
         }
 
-        // Reject a Region/Province/City/Barangay combination that doesn't actually form a
-        // valid PSGC chain - defends against a hand-crafted API request bypassing the
-        // Android client's own AddressHierarchyController dependent-option constraint.
-        $hierarchyErrors = (new \App\Services\PsgcHierarchyValidator())->validate($validated);
-        if (! empty($hierarchyErrors)) {
-            return response()->json([
-                'message' => reset($hierarchyErrors),
-                'errors' => array_map(fn ($msg) => [$msg], $hierarchyErrors),
-            ], 422);
-        }
+        // The Region/Province/City/Barangay chain check calls a third-party API and used to run here, delaying
+        // the code. It now runs in verifyOtp(), right before the account is created, so the code goes out
+        // straight after the cheap checks above (the app only offers valid chains anyway).
 
         // SMS OTP only reaches Philippine numbers (Semaphore) - the
         // Android client already disables this pairing in the UI, but the
@@ -286,6 +279,17 @@ class AuthController extends Controller
         }
 
         $data = $pending->payload;
+
+        // Address chain check (moved here from register() so the OTP is not held up by the PSGC lookups).
+        $hierarchyErrors = (new \App\Services\PsgcHierarchyValidator())->validate($data);
+        if (! empty($hierarchyErrors)) {
+            $pending->delete();
+
+            return response()->json([
+                'message' => reset($hierarchyErrors) . ' Please register again.',
+                'errors' => array_map(fn ($msg) => [$msg], $hierarchyErrors),
+            ], 422);
+        }
 
         // User::create() + Guest::create() + token issuance used to be three
         // unguarded, separate writes - if Guest::create() (or anything after

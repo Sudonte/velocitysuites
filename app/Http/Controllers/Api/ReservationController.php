@@ -948,6 +948,25 @@ class ReservationController extends Controller
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 
+        // ?snapshot_only=1: the guest removed the frozen "Completed" copy of a converted reservation from the
+        // Reservation list. Only that copy is hidden - the booking (open or closed), the reservation's own
+        // hidden_at and Transaction History are left exactly as they were.
+        if (request()->boolean('snapshot_only')) {
+            if ($reservation->status !== Reservation::STATUS_CONVERTED) {
+                return response()->json(['message' => 'Only a reservation that became a booking has a completed copy to remove.'], 409);
+            }
+            if ($reservation->snapshot_hidden_at === null) {
+                $reservation->update(['snapshot_hidden_at' => now()]);
+                Activity::log(
+                    'Removed completed reservation copy from guest list',
+                    "Reservation #{$reservation->id} (booking kept)",
+                    $reservation
+                );
+            }
+
+            return response()->json(['message' => 'Removed from your reservations. The booking and your Transaction History are unchanged.']);
+        }
+
         $booking = $reservation->booking;
 
         if ($booking) {
