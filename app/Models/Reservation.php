@@ -121,7 +121,7 @@ class Reservation extends Model
      * payment_deadline is the 48-hour Pay Later/Pay Now cutoff (see
      * getPaymentDeadlineAttribute()) - also always derived, never stored.
      */
-    protected $appends = ['discount_preview', 'payment_deadline', 'room_lines', 'deposit_cap', 'hidden_by_guest'];
+    protected $appends = ['discount_preview', 'payment_deadline', 'room_lines', 'deposit_cap', 'hidden_by_guest', 'discount_rejection_reason'];
 
     /**
      * The staff member who verified/converted this reservation.
@@ -519,5 +519,11 @@ class Reservation extends Model
     public function receiptsPayload(): array
     {
         return $this->booking ? $this->booking->receiptsPayload() : [];
+    }
+
+    /** Why the receptionist rejected the discount ID at check-in (stored on the booking); null unless rejected. */
+    public function getDiscountRejectionReasonAttribute(): ?string
+    {
+        return $this->discount_verification_status === 'rejected' ? $this->booking?->discount_rejection_reason : null;
     }
 }

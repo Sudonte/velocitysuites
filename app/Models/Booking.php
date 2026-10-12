@@ -74,6 +74,8 @@ class Booking extends Model
         'checked_out_at',
         'completed_at',
         'discount_verified_at',
+        'discount_rejection_reason',
+        'discount_decided_by',
     ];
 
     protected $casts = [
@@ -683,5 +685,11 @@ class Booking extends Model
     public function receiptsPayload(): array
     {
         return app(ReceiptService::class)->receiptsList($this);
+    }
+
+    /** The receptionist who approved or rejected the discount ID at check-in (null when undecided or decided before this was recorded). */
+    public function discountDecidedBy()
+    {
+        return $this->belongsTo(User::class, 'discount_decided_by');
     }
 }

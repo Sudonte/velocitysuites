@@ -189,6 +189,17 @@ deny-all rule is active).
 
 ## Important Notes
 
+### Discount ID decisions (check-in only)
+- A guest's discount ID is approved or rejected **only in the Check In module**; the Bookings and Reservations
+  pages are view-only. Check-in is refused (422) while a requested discount is still pending.
+- Migration `2026_10_13_000001_add_discount_decision_details_to_bookings_table` adds two nullable columns to
+  `bookings` (`discount_rejection_reason`, `discount_decided_by` -> users). Existing rows are untouched; older
+  decisions simply show "not recorded". After deploying run `php artisan migrate --force`, and if routes or
+  config are cached, `php artisan route:clear && php artisan config:clear` (then re-cache).
+- The routes `receptionist.bookings.discount-id.approve` / `.reject` no longer exist; use
+  `receptionist.check-in.discount.approve` / `.reject`.
+
+
 ### File Storage
 - All uploaded files (room images, profile images) are stored in `storage/app/public/`
 - The `php artisan storage:link` command must be run to make files publicly accessible
