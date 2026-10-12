@@ -685,6 +685,7 @@ class ReservationWorkflowService
             'additional_guest_details' => $reservation->additional_guest_details,
             'id_card_type' => $reservation->id_card_type,
             'discount_id' => $reservation->discount_id,
+            'promotion_id' => $reservation->promotion_id,
             'id_card_image_path' => $reservation->id_card_image_path,
             'discount_requested' => $reservation->discount_requested,
             'discount_verification_status' => $reservation->discount_verification_status,

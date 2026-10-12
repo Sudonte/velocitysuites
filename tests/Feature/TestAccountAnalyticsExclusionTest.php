@@ -71,6 +71,7 @@ class TestAccountAnalyticsExclusionTest extends TestCase
 
         Schema::create('reservations', function (Blueprint $table) {
             $table->id();
+            $table->unsignedBigInteger('promotion_id')->nullable();
             $table->unsignedBigInteger('guest_id')->nullable();
             $table->unsignedBigInteger('room_type_id');
             $table->unsignedTinyInteger('rooms_requested')->default(1);
@@ -85,6 +86,7 @@ class TestAccountAnalyticsExclusionTest extends TestCase
 
         Schema::create('bookings', function (Blueprint $table) {
             $table->id();
+            $table->unsignedBigInteger('promotion_id')->nullable();
             $table->unsignedBigInteger('reservation_id')->nullable()->unique();
             $table->unsignedBigInteger('guest_id')->nullable();
             $table->unsignedBigInteger('room_type_id');

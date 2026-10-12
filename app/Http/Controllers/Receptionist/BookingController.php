@@ -121,7 +121,7 @@ class BookingController extends Controller
     {
         $roomTypes = RoomType::where('status', 'active')->orderBy('name')->get();
 
-        return view('receptionist.bookings.create', compact('roomTypes'));
+        return view('receptionist.bookings.create', compact('roomTypes') + app(\App\Services\StayOffersService::class)->formOptions());
     }
 
     /**
@@ -154,7 +154,7 @@ class BookingController extends Controller
             'rooms_requested' => 'nullable|integer|min:1|max:50',
             'adults' => 'required|integer|min:1',
             'children' => 'nullable|integer|min:0',
-        ] + \App\Support\GuestAccountLink::rules(), \App\Support\CheckInWindow::staffMessages());
+        ] + \App\Support\GuestAccountLink::rules() + \App\Services\StayOffersService::rules(), \App\Support\CheckInWindow::staffMessages());
         $linkedGuest = \App\Support\GuestAccountLink::resolve($validated['guest_user_id'] ?? null);
 
         $checkIn = Carbon::parse($validated['check_in']);
@@ -269,6 +269,13 @@ class BookingController extends Controller
             });
         } catch (ValidationException $e) {
             return back()->withInput()->with('error', collect($e->errors())->flatten()->first());
+        }
+
+        // Discount (ID) or promotion chosen on the form - one or the other.
+        try {
+            app(\App\Services\StayOffersService::class)->applyFromRequest($request, $validated, $booking, collect($roomLines)->map(fn ($l) => $l['room_type']->id)->all(), auth()->user());
+        } catch (ValidationException $e) {
+            return redirect()->route('receptionist.bookings.show', $booking)->withErrors($e->errors())->with('error', collect($e->errors())->flatten()->first());
         }
 
         $roomTypeSummary = collect($roomLines)->map(fn ($l) => "{$l['room_type']->name} x{$l['quantity']}")->implode(', ');

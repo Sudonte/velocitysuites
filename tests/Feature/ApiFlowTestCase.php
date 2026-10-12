@@ -75,6 +75,7 @@ abstract class ApiFlowTestCase extends TestCase
 
         Schema::create('reservations', function (Blueprint $table) {
             $table->id();
+            $table->unsignedBigInteger('promotion_id')->nullable();
             $table->string('idempotency_key')->nullable()->unique();
             $table->unsignedBigInteger('guest_id')->nullable();
             $table->string('guest_first_name')->nullable();
@@ -150,6 +151,7 @@ abstract class ApiFlowTestCase extends TestCase
 
         Schema::create('bookings', function (Blueprint $table) {
             $table->id();
+            $table->unsignedBigInteger('promotion_id')->nullable();
             $table->string('idempotency_key')->nullable()->unique();
             $table->unsignedBigInteger('reservation_id')->nullable()->unique();
             $table->unsignedBigInteger('guest_id')->nullable();

@@ -28,7 +28,7 @@
                     </div>
                 @endif
 
-                <form action="{{ route('receptionist.bookings.store') }}" method="POST" data-confirm="It will hold rooms of the selected types for these dates." data-confirm-title="Create this booking?" data-confirm-button="Create Booking" data-confirm-variant="success" data-guest-capacity>
+                <form action="{{ route('receptionist.bookings.store') }}" method="POST" enctype="multipart/form-data" data-confirm="It will hold rooms of the selected types for these dates." data-confirm-title="Create this booking?" data-confirm-button="Create Booking" data-confirm-variant="success" data-guest-capacity>
                     @csrf
 
                     <h6 class="form-section-heading">Guest</h6>
@@ -106,6 +106,8 @@
                             </div>
                         </div>
                     </div>
+
+                    @include('receptionist.partials.offer-field', ['canApproveNow' => true])
 
                     <div class="form-group">
                         <button type="submit" class="btn btn-primary">

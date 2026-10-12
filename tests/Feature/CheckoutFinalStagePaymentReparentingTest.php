@@ -54,6 +54,7 @@ class CheckoutFinalStagePaymentReparentingTest extends TestCase
 
         Schema::create('reservations', function (Blueprint $table) {
             $table->id();
+            $table->unsignedBigInteger('promotion_id')->nullable();
             $table->string('idempotency_key')->nullable()->unique();
             $table->unsignedBigInteger('guest_id')->nullable();
             $table->string('guest_first_name')->nullable();
@@ -100,6 +101,7 @@ class CheckoutFinalStagePaymentReparentingTest extends TestCase
 
         Schema::create('bookings', function (Blueprint $table) {
             $table->id();
+            $table->unsignedBigInteger('promotion_id')->nullable();
             $table->timestamp('checked_in_at')->nullable();
             $table->timestamp('checked_out_at')->nullable();
             $table->timestamp('completed_at')->nullable();

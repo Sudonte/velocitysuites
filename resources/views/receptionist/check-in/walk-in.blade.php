@@ -32,7 +32,7 @@
                     <i class="fas fa-info-circle"></i> For a guest checking in <strong>today</strong> without a booking. Next you assign rooms and complete the check-in.
                     To check in a guest who already has a booking, use the Expected Check-ins list.
                 </div>
-                <form action="{{ route('receptionist.check-in.walk-in.store') }}" method="POST" data-confirm="Next you will assign rooms and complete the check-in." data-confirm-title="Create this walk-in booking?" data-confirm-button="Create Walk-in" data-confirm-variant="success" data-guest-capacity>
+                <form action="{{ route('receptionist.check-in.walk-in.store') }}" method="POST" enctype="multipart/form-data" data-confirm="Next you will assign rooms and complete the check-in." data-confirm-title="Create this walk-in booking?" data-confirm-button="Create Walk-in" data-confirm-variant="success" data-guest-capacity>
                     @csrf
 
                     <h6 class="form-section-heading">Guest</h6>
@@ -109,6 +109,8 @@
                             </div>
                         </div>
                     </div>
+
+                    @include('receptionist.partials.offer-field', ['canApproveNow' => true])
 
                     <div class="form-group">
                         <button type="submit" class="btn btn-primary">

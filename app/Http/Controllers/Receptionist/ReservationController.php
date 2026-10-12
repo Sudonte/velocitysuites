@@ -18,6 +18,7 @@ use App\Support\Activity;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
@@ -95,7 +96,7 @@ class ReservationController extends Controller
     {
         $roomTypes = RoomType::where('status', 'active')->orderBy('name')->get();
 
-        return view('receptionist.reservations.create', compact('roomTypes'));
+        return view('receptionist.reservations.create', compact('roomTypes') + app(\App\Services\StayOffersService::class)->formOptions());
     }
 
     /**
@@ -151,7 +152,7 @@ class ReservationController extends Controller
             'rooms_requested' => 'nullable|integer|min:1|max:50',
             'adults' => 'required|integer|min:1',
             'children' => 'nullable|integer|min:0',
-        ] + \App\Support\GuestAccountLink::rules(), \App\Support\CheckInWindow::staffMessages());
+        ] + \App\Support\GuestAccountLink::rules() + \App\Services\StayOffersService::rules(), \App\Support\CheckInWindow::staffMessages());
         $linkedGuest = \App\Support\GuestAccountLink::resolve($validated['guest_user_id'] ?? null);
 
         $checkIn = Carbon::parse($validated['check_in']);
@@ -222,6 +223,13 @@ class ReservationController extends Controller
 
             return $reservation;
         });
+
+        // Discount (ID) or promotion chosen on the form - one or the other.
+        try {
+            app(\App\Services\StayOffersService::class)->applyFromRequest($request, $validated, $reservation, collect($roomLines)->map(fn ($l) => $l['room_type']->id)->all(), auth()->user());
+        } catch (ValidationException $e) {
+            return redirect()->route('receptionist.reservations.index', ['tab' => 'active'])->withErrors($e->errors())->with('error', collect($e->errors())->flatten()->first());
+        }
 
         $roomTypeSummary = collect($roomLines)->map(fn ($l) => "{$l['room_type']->name} x{$l['quantity']}")->implode(', ');
         Activity::log(
@@ -536,6 +544,9 @@ class ReservationController extends Controller
             ->get();
 
         foreach ($promos as $promo) {
+            if ((int) $reservation->promotion_id === $promo->id) {
+                continue; // already applied by the receptionist (StayOffersService)
+            }
             foreach ($promo->amenities as $amenity) {
                 $alreadyGranted = AmenityRequest::where('reservation_id', $reservation->id)
                     ->where('amenity_id', $amenity->id)

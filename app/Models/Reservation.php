@@ -67,6 +67,7 @@ class Reservation extends Model
         'rejection_reason',
         'id_card_type',
         'discount_id',
+        'promotion_id',
         'id_card_image_path',
         'additional_guest_details',
         'verified_at',
