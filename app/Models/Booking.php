@@ -161,6 +161,12 @@ class Booking extends Model
     /**
      * The staff member who verified this booking's payment.
      */
+    /** Same shape as Reservation::display_ref - a booking is always "Booking #n". */
+    public function getDisplayRefAttribute(): string
+    {
+        return "Booking #{$this->id}";
+    }
+
     /** The receptionist who marked this booking No-Show or Cancelled. */
     public function statusChangedBy()
     {

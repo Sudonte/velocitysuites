@@ -36,6 +36,7 @@
                     @csrf
 
                     <h6 class="form-section-heading">Guest</h6>
+                    @include('receptionist.partials.guest-account-field')
                     <div class="row">
                         <div class="col-md-4">
                             <div class="form-group mb-3">

@@ -131,5 +131,31 @@
             {{ $reservations->links() }}
         </x-slot:footer>
     </x-card>
+
+    @if($directBookings->isNotEmpty())
+        <x-card title="Bookings" icon="fas fa-credit-card" bodyClass="table-responsive" class="mt-4">
+            <table class="table table-hover mb-0">
+                <thead>
+                    <tr><th>Reference</th><th>Room</th><th>Check-In</th><th>Check-Out</th><th class="text-end">Total</th><th>Status</th><th>Action</th></tr>
+                </thead>
+                <tbody>
+                    @foreach($directBookings as $booking)
+                        <tr>
+                            <td>{{ $booking->display_ref }}</td>
+                            <td>{{ $booking->roomType->name ?? 'N/A' }}</td>
+                            <td>{{ $booking->check_in->format('M d, Y') }}</td>
+                            <td>{{ $booking->check_out->format('M d, Y') }}</td>
+                            <td class="text-end">₱{{ number_format($booking->billing ? (float) $booking->billing->total_amount : $booking->total_amount_due, 2) }}</td>
+                            <td><x-status-badge :status="$booking->display_status" domain="booking" /></td>
+                            <td>
+                                <a href="{{ route('guest.bookings.show', $booking) }}" class="btn btn-outline-primary btn-sm btn-icon" title="View" aria-label="View">
+                                    <i class="fas fa-eye"></i></a>
+                            </td>
+                        </tr>
+                    @endforeach
+                </tbody>
+            </table>
+        </x-card>
+    @endif
 </div>
 @endsection

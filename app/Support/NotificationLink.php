@@ -22,7 +22,7 @@ use App\Models\User;
 final class NotificationLink
 {
     /** Titles whose reference_id is always a (direct) booking id. */
-    private const BOOKING_TITLES = ['New Booking', 'Booking Pending', 'Booking Cancelled', 'Booking Cancelled - No Show'];
+    private const BOOKING_TITLES = ['New Booking', 'Booking Pending', 'Booking Cancelled', 'Booking Cancelled - No Show', 'Booking Added', 'Checked In (Walk-in)'];
 
     /** Titles whose reference_id is always a reservation id. */
     private const RESERVATION_TITLES = ['New Reservation', 'Payment Deadline Approaching', 'New Amenity Request', 'Amenity Request Approved', 'Amenity Request Rejected'];

@@ -160,7 +160,8 @@ class CheckInController extends Controller
             'rooms_requested' => 'nullable|integer|min:1|max:50',
             'adults' => 'required|integer|min:1',
             'children' => 'nullable|integer|min:0',
-        ], \App\Support\CheckInWindow::staffMessages());
+        ] + \App\Support\GuestAccountLink::rules(), \App\Support\CheckInWindow::staffMessages());
+        $linkedGuest = \App\Support\GuestAccountLink::resolve($validated['guest_user_id'] ?? null);
 
         $checkIn = Carbon::today();
         $checkOut = Carbon::parse($validated['check_out']);
@@ -188,11 +189,11 @@ class CheckInController extends Controller
         $totalRoomsRequested = collect($roomLines)->sum('quantity');
 
         $booking = DB::transaction(function () use (
-            $validated, $children, $checkIn, $checkOut, $firstRoomType, $totalRoomsRequested, $roomLines, $nights
+            $validated, $children, $checkIn, $checkOut, $firstRoomType, $totalRoomsRequested, $roomLines, $nights, $linkedGuest
         ) {
             $booking = Booking::create([
                 'reservation_id' => null,
-                'guest_id' => null,
+                'guest_id' => $linkedGuest?->id,
                 'guest_first_name' => $validated['guest_first_name'],
                 'guest_middle_name' => $validated['guest_middle_name'] ?? null,
                 'guest_last_name' => $validated['guest_last_name'],

@@ -63,7 +63,13 @@ class GuestController extends Controller
         // built from the guest's own reservations so options never show a status they don't have.
         $statusOptions = auth()->user()->guest->reservations()->distinct()->pluck('status');
 
-        return view('guest.reservations.index', compact('reservations', 'statusOptions'));
+        // Bookings on this account with no reservation behind them - made in the app (pay first) or added by
+        // the front desk (Create Booking / Walk-in Check-in linked to this account).
+        $directBookings = auth()->user()->guest->bookings()->whereNull('reservation_id')
+            ->whereNull('hidden_at')->whereNull('hidden_by_guest_at')
+            ->with(['roomType', 'billing'])->latest()->get();
+
+        return view('guest.reservations.index', compact('reservations', 'statusOptions', 'directBookings'));
     }
 
     /**

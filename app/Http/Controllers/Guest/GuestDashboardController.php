@@ -111,7 +111,11 @@ class GuestDashboardController extends Controller
             ->with(['roomType', 'booking'])
             ->latest('created_at')
             ->limit(5)
-            ->get();
+            ->get()
+            // plus bookings with no reservation behind them (app pay-first, front-desk walk-in / booking)
+            ->concat($guest->bookings()->whereNull('reservation_id')->whereNull('hidden_at')->whereNull('hidden_by_guest_at')
+                ->with('roomType')->latest('created_at')->limit(5)->get())
+            ->sortByDesc('created_at')->take(5)->values();
 
         // Active promotions
         $activePromotions = Promotion::with('amenities')->where('status', 'active')

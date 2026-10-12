@@ -347,6 +347,8 @@ Route::middleware(['auth', 'account.status', 'log.activity', 'no.cache'])->group
         // registered before POST /check-in/{booking} below, since "walk-in"
         // would otherwise route-model-bind as a booking id there.
         Route::get('/check-in/walk-in/create', [ReceptionistCheckInController::class, 'createWalkIn'])->name('check-in.walk-in.create');
+        // Optional guest-account link on Create Reservation / Create Booking / Walk-in Check-in.
+        Route::get('/guest-accounts/search', [\App\Http\Controllers\Receptionist\GuestAccountController::class, 'search'])->name('guest-accounts.search');
         Route::post('/check-in/walk-in', [ReceptionistCheckInController::class, 'storeWalkIn'])->name('check-in.walk-in.store');
         Route::get('/check-in/{booking}/panel', [ReceptionistCheckInController::class, 'panel'])->name('check-in.panel');
         Route::post('/check-in/{booking}', [ReceptionistCheckInController::class, 'store'])->name('check-in.store');
@@ -414,6 +416,8 @@ Route::middleware(['auth', 'account.status', 'log.activity', 'no.cache'])->group
         Route::get('/reservations/create', [\App\Http\Controllers\Guest\ReservationController::class, 'create'])->name('reservations.create');
         Route::post('/reservations', [\App\Http\Controllers\Guest\ReservationController::class, 'store'])->name('reservations.store');
         Route::get('/reservations/{reservation}', [\App\Http\Controllers\Guest\ReservationController::class, 'show'])->name('reservations.show');
+        // Bookings on the account with no reservation behind them (app pay-first, or added by the front desk).
+        Route::get('/bookings/{booking}', [\App\Http\Controllers\Guest\ReservationController::class, 'showBooking'])->name('bookings.show');
         Route::put('/reservations/{reservation}', [\App\Http\Controllers\Guest\ReservationController::class, 'update'])->name('reservations.update');
         Route::put('/reservations/{reservation}/cancel', [\App\Http\Controllers\Guest\ReservationController::class, 'cancel'])->name('reservations.cancel');
         Route::put('/reservations/{reservation}/switch-to-gcash', [\App\Http\Controllers\Guest\ReservationController::class, 'switchToGcash'])->name('reservations.switch-to-gcash');

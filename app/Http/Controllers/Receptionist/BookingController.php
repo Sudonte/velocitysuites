@@ -154,7 +154,8 @@ class BookingController extends Controller
             'rooms_requested' => 'nullable|integer|min:1|max:50',
             'adults' => 'required|integer|min:1',
             'children' => 'nullable|integer|min:0',
-        ], \App\Support\CheckInWindow::staffMessages());
+        ] + \App\Support\GuestAccountLink::rules(), \App\Support\CheckInWindow::staffMessages());
+        $linkedGuest = \App\Support\GuestAccountLink::resolve($validated['guest_user_id'] ?? null);
 
         $checkIn = Carbon::parse($validated['check_in']);
         $checkOut = Carbon::parse($validated['check_out']);
@@ -188,7 +189,7 @@ class BookingController extends Controller
 
         try {
             $booking = DB::transaction(function () use (
-                $validated, $children, $checkIn, $checkOut, $firstRoomType, $totalRoomsRequested, $roomLines, $nights
+                $validated, $children, $checkIn, $checkOut, $firstRoomType, $totalRoomsRequested, $roomLines, $nights, $linkedGuest
             ) {
             // The resolveAndValidateRoomLines() call above is only a fast-
             // fail check against a snapshot that's already stale by the
@@ -215,7 +216,7 @@ class BookingController extends Controller
 
             $booking = Booking::create([
                 'reservation_id' => null,
-                'guest_id' => null,
+                'guest_id' => $linkedGuest?->id,
                 'guest_first_name' => $validated['guest_first_name'],
                 'guest_middle_name' => $validated['guest_middle_name'] ?? null,
                 'guest_last_name' => $validated['guest_last_name'],
@@ -276,6 +277,11 @@ class BookingController extends Controller
             "Booking #{$booking->id} for {$roomTypeSummary} ({$booking->guest_display_name}) - created directly by staff",
             $booking
         );
+
+        // Linked to a guest account: tell the guest it's on their account now.
+        if ($linkedGuest?->user) {
+            $this->notifications->toUser($linkedGuest->user, 'Booking Added', "Velocity Suites added Booking #{$booking->id} ({$roomTypeSummary}, {$booking->check_in->format('M d')} - {$booking->check_out->format('M d, Y')}) to your account.", 'booking', $booking->id);
+        }
 
         return redirect()
             ->route('receptionist.bookings.show', $booking)

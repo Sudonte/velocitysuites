@@ -98,7 +98,7 @@
                 </div>
                 <div class="card-body">
                     @forelse($recentBookings as $booking)
-                        <a href="{{ route('guest.reservations.show', $booking) }}"
+                        <a href="{{ $booking instanceof \App\Models\Booking ? route('guest.bookings.show', $booking) : route('guest.reservations.show', $booking) }}"
                            class="d-flex align-items-center justify-content-between text-decoration-none text-reset py-2 {{ !$loop->last ? 'border-bottom' : '' }}">
                             <div>
                                 <div class="fw-bold">{{ $booking->display_ref }}</div>

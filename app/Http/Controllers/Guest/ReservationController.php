@@ -32,6 +32,20 @@ class ReservationController extends Controller
     /**
      * Show reservation details.
      */
+    /** A booking on the guest's own account with no reservation behind it (app pay-first, or front-desk walk-in / booking). */
+    public function showBooking(\App\Models\Booking $booking)
+    {
+        abort_unless($booking->reservation_id === null && $booking->guest_id === auth()->user()->guest?->id, 403, 'Unauthorized');
+
+        $booking->loadMissing(['roomType', 'rooms', 'billing']);
+        $stay = \App\Support\StayBill::forBooking($booking, $booking->billing ? \App\Support\StayBill::FINAL : \App\Support\StayBill::PROJECTED, null, $booking->billing);
+        $payments = $booking->allPayments()->sortByDesc(fn ($p) => $p->payment_date ?? $p->created_at)->values();
+        $amenityRequests = \App\Models\AmenityRequest::where('booking_id', $booking->id)
+            ->where('origin', \App\Models\AmenityRequest::ORIGIN_GUEST_REQUEST)->latest()->get();
+
+        return view('guest.bookings.show', compact('booking', 'stay', 'payments', 'amenityRequests'));
+    }
+
     public function show(Reservation $reservation): View
     {
         // Verify ownership
