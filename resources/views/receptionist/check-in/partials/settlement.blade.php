@@ -12,6 +12,11 @@
          data-reject-url="{{ route('receptionist.check-in.discount.reject', $booking) }}"
          data-promotion-url="{{ route('receptionist.check-in.promotion', $booking) }}">
         <div class="alert alert-danger py-1 px-2 small d-none mb-2" data-offer-error></div>
+        @if($discountRequested && $discountStatus === 'pending')
+            <div class="alert alert-warning py-1 px-2 small mb-2" id="discountPendingReminder">
+                <i class="fas fa-exclamation-triangle"></i> The guest's discount ID is still pending. Approve or reject it before you can continue with check-in.
+            </div>
+        @endif
 
         @if($discountStatus === 'approved')
             <div class="d-flex justify-content-between align-items-center">

@@ -195,6 +195,8 @@ abstract class ApiFlowTestCase extends TestCase
             $table->timestamp('checked_out_at')->nullable();
             $table->timestamp('completed_at')->nullable();
             $table->timestamp('discount_verified_at')->nullable();
+            $table->text('discount_rejection_reason')->nullable();
+            $table->unsignedBigInteger('discount_decided_by')->nullable();
             $table->timestamp('deleted_at')->nullable();
             $table->timestamps();
         });
@@ -423,5 +425,24 @@ abstract class ApiFlowTestCase extends TestCase
             'amount_paid' => $amountPaid,
             'idempotency_key' => $idemKey,
         ];
+    }
+
+    /**
+     * Approve a booking's discount ID through the Check In route (the only way). Fixture bookings that are already
+     * checked in / cancelled are put in the check-in stage for the call and restored afterwards.
+     */
+    protected function approveDiscountAtCheckIn(\App\Models\Booking $booking, \App\Models\Discount $discount, \App\Models\User $receptionist)
+    {
+        $prior = $booking->fresh()->booking_status;
+        $holder = $booking->reservation ?? $booking;
+        if (! ($booking->id_card_image_path || $holder->id_card_image_path)) {
+            \App\Models\Booking::whereKey($booking->id)->update(['id_card_image_path' => 'ids/fixture.jpg']); // the desk needs a photo to approve
+        }
+        \App\Models\Booking::whereKey($booking->id)->update(['booking_status' => \App\Models\Booking::STATUS_ACTIVE]);
+        $response = $this->actingAs($receptionist)->postJson(route('receptionist.check-in.discount.approve', $booking->id), ['discount_id' => $discount->id]);
+        \App\Models\Booking::whereKey($booking->id)->update(['booking_status' => $prior]);
+        $response->assertOk();
+
+        return $response;
     }
 }

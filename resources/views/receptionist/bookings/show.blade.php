@@ -234,14 +234,23 @@
             @endif
 
             @if($booking->discount_requested)
-                <x-card title="Senior Citizen / PWD Identification" icon="fas fa-id-card" bodyClass="card-body" class="mb-4">
+                {{-- View only: the ID is approved or rejected in the Check In module, never here. --}}
+                <x-card title="Discount ID" icon="fas fa-id-card" bodyClass="card-body" class="mb-4">
                     <p class="mb-2">
-                        <strong>ID status:</strong>
+                        <strong>Status:</strong>
                         <x-status-badge :status="$booking->discount_verification_status" domain="discount_verification" />
-                        @if($booking->discount_verification_status === 'approved' && $discountChoices->firstWhere('id', $booking->discount_id))
-                            <span class="small text-muted ms-1">{{ $discountChoices->firstWhere('id', $booking->discount_id)->name }}</span>
-                        @endif
+                        <span class="badge bg-light text-muted border ms-1">View only</span>
                     </p>
+                    <dl class="detail-list mb-2">
+                        <div><dt>Discount type</dt><dd>{{ $discountChoices->firstWhere('id', $booking->discount_id)?->name ?? ($booking->id_card_type ?: 'N/A') }}</dd></div>
+                        @if($booking->discount_verification_status === 'rejected')
+                            <div><dt>Rejection reason</dt><dd class="text-danger">{{ $booking->discount_rejection_reason ?: 'No reason recorded' }}</dd></div>
+                        @endif
+                        @if(in_array($booking->discount_verification_status, ['approved', 'rejected'], true))
+                            <div><dt>Decided by</dt><dd>{{ $discountDecidedBy?->name ?? 'Not recorded' }}</dd></div>
+                            <div><dt>Decided at</dt><dd>{{ $booking->discount_verified_at ? $booking->discount_verified_at->timezone('Asia/Manila')->format('M d, Y g:i A') : 'Not recorded' }}</dd></div>
+                        @endif
+                    </dl>
                     @if($booking->id_card_image_path)
                         <a href="{{ route('receptionist.bookings.id-card', $booking) }}" target="_blank" rel="noopener" class="d-block mt-1">
                             <img src="{{ route('receptionist.bookings.id-card', $booking) }}"
@@ -254,44 +263,8 @@
                     @else
                         <p class="text-muted mb-0">Requested but no ID uploaded.</p>
                     @endif
-
-                    {{-- The ID is decided HERE, separately from verifying / rejecting the transaction above: two
-                         statuses, two actions. The discount reaches the bill only while the ID is approved. --}}
-                    @if($discountIdDecidable)
-                        <hr>
-                        <form action="{{ route('receptionist.bookings.discount-id.approve', $booking) }}" method="POST" class="row g-2 align-items-end mb-2">
-                            @csrf
-                            @method('PUT')
-                            <div class="col-sm-8">
-                                <label class="form-label small mb-1" for="approveIdDiscount">Discount this ID earns</label>
-                                <select name="discount_id" id="approveIdDiscount" class="form-select form-select-sm" required>
-                                    @foreach($discountChoices as $choice)
-                                        <option value="{{ $choice->id }}" @selected(($booking->discount_id ?? $claimedDiscount?->id) == $choice->id)>
-                                            {{ $choice->name }} ({{ $choice->discount_type === 'percentage' ? rtrim(rtrim(number_format($choice->value, 2), '0'), '.') . '%' : '₱' . number_format($choice->value, 2) }})
-                                        </option>
-                                    @endforeach
-                                </select>
-                            </div>
-                            <div class="col-sm-4">
-                                <button type="submit" class="btn btn-success btn-sm w-100" @disabled($discountChoices->isEmpty() || ! $booking->id_card_image_path)>
-                                    <i class="fas fa-check"></i> {{ $booking->discount_verification_status === 'approved' ? 'Change Discount' : 'Approve ID' }}
-                                </button>
-                            </div>
-                        </form>
-                        @if($booking->discount_verification_status !== 'rejected')
-                            <button type="button" class="btn btn-outline-danger btn-sm" data-bs-toggle="collapse" data-bs-target="#rejectIdForm">
-                                <i class="fas fa-times"></i> Reject ID
-                            </button>
-                            <div class="collapse mt-2" id="rejectIdForm">
-                                <form action="{{ route('receptionist.bookings.discount-id.reject', $booking) }}" method="POST">
-                                    @csrf
-                                    @method('PUT')
-                                    <textarea name="reason" class="form-control form-control-sm mb-2" rows="2" required maxlength="500" placeholder="Why is this ID not accepted? The guest is told."></textarea>
-                                    <button type="submit" class="btn btn-danger btn-sm">Confirm Reject ID</button>
-                                </form>
-                            </div>
-                        @endif
-                        <p class="text-muted small mt-2 mb-0"><i class="fas fa-info-circle"></i> Approving or rejecting the ID does not verify or reject the transaction. Rejecting the whole booking rejects the ID too.</p>
+                    @if($booking->discount_verification_status === 'pending')
+                        <p class="text-muted small mt-2 mb-0"><i class="fas fa-info-circle"></i> The ID is approved or rejected by the receptionist at check-in.</p>
                     @endif
                 </x-card>
             @endif

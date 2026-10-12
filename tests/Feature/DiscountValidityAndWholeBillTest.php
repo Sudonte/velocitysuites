@@ -194,9 +194,7 @@ class DiscountValidityAndWholeBillTest extends ApiFlowTestCase
     /** The ID is decided in the Booking module first; only then can the check-out panel choose/change the discount. */
     private function approveId(\App\Models\Billing $billing, Discount $d, User $receptionist): void
     {
-        $this->actingAs($receptionist)
-            ->put(route('receptionist.bookings.discount-id.approve', $billing->booking_id), ['discount_id' => $d->id])
-            ->assertSessionHasNoErrors();
+        $this->approveDiscountAtCheckIn(\App\Models\Booking::findOrFail($billing->booking_id), $d, $receptionist);
     }
 
     public function test_the_guest_estimate_and_receptionist_billing_agree_for_room_only_and_room_plus_add_ons_percentage_and_fixed(): void
@@ -219,7 +217,6 @@ class DiscountValidityAndWholeBillTest extends ApiFlowTestCase
             $this->assertEquals($expected, $quote['discount'], "$label: guest estimate");
 
             $this->approveId($billing, $d, $receptionist);
-            $this->actingAs($receptionist)->postJson(route('receptionist.billing.discount.store', $billing), ['discount_id' => $d->id])->assertOk();
             $billing = $billing->fresh();
             $this->assertEquals($quote['discount'], (float) $billing->discount, "$label: Billing equals the estimate");
             $this->assertEquals($expected, (float) $billing->discount, "$label: Billing amount");
@@ -232,7 +229,6 @@ class DiscountValidityAndWholeBillTest extends ApiFlowTestCase
         $d = $this->discount('Senior Citizen', ['value' => 20]);
         [$reservation, $billing] = $this->billedBooking($d, [500]);
         $this->approveId($billing, $d, $this->staff('receptionist'));
-        $this->actingAs($this->staff('receptionist'))->postJson(route('receptionist.billing.discount.store', $billing), ['discount_id' => $d->id])->assertOk();
         $summary = app(\App\Services\ReceiptService::class)->paymentSummary($billing->fresh()->booking->fresh());
         $this->assertEquals(500.0, $summary['discount']);
         $this->assertEquals((float) $billing->fresh()->discount, $summary['discount']);
@@ -244,7 +240,7 @@ class DiscountValidityAndWholeBillTest extends ApiFlowTestCase
         [, $billing] = $this->billedBooking($d, [500]);
         $this->approveId($billing, $d, $this->staff('receptionist'));
         $billing->update(['additional_guest_fee' => 100]); // room 2000 + amenities 500 + extra-guest fee 100 = 2600
-        $this->actingAs($this->staff('receptionist'))->postJson(route('receptionist.billing.discount.store', $billing), ['discount_id' => $d->id])->assertOk();
+        $billing->fresh()->syncFromStayBill($billing->booking); // re-priced through the one StayBill calculation
         $this->assertEquals(520.00, (float) $billing->fresh()->discount);
         $this->assertEquals(BillDiscount::amount($d, 2000, 600), (float) $billing->fresh()->discount);
     }
@@ -273,12 +269,12 @@ class DiscountValidityAndWholeBillTest extends ApiFlowTestCase
         $this->assertEquals(440.0, app(BookingService::class)->quoteRoomCharge($reservation->fresh())['discount'], 'estimate still honors it');
         $receptionist = $this->staff('receptionist');
         $this->approveId($billing, $sc, $receptionist);
-        $this->actingAs($receptionist)->postJson(route('receptionist.billing.discount.store', $billing), ['discount_id' => $sc->id])->assertOk();
         $this->assertEquals(440.0, (float) $billing->fresh()->discount, 'Billing honors the discount the guest booked with');
 
         // ...but the receptionist can't hand a different expired discount to this guest
         $other = $this->discount('Other', ['end_date' => $t->copy()->subDay()->toDateString()]);
-        $this->actingAs($receptionist)->postJson(route('receptionist.billing.discount.store', $billing), ['discount_id' => $other->id])->assertStatus(422);
+        Booking::whereKey($billing->booking_id)->update(['booking_status' => Booking::STATUS_ACTIVE]); // the check-in stage
+        $this->actingAs($receptionist)->postJson(route('receptionist.check-in.discount.approve', $billing->booking_id), ['discount_id' => $other->id])->assertStatus(422);
     }
 
     public function test_billing_panel_shows_validity_next_to_the_discount_name(): void

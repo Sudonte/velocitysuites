@@ -357,9 +357,7 @@ class StayBillCheckoutTest extends ApiFlowTestCase
     public function test_approving_the_id_is_its_own_action_and_does_not_verify_the_transaction(): void
     {
         [$booking, $d] = $this->bookingWithDiscountId();
-        $this->actingAs($this->receptionist())
-            ->put(route('receptionist.bookings.discount-id.approve', $booking), ['discount_id' => $d->id])
-            ->assertSessionHasNoErrors();
+        $this->approveDiscountAtCheckIn($booking, $d, $this->receptionist());
 
         $booking = $booking->fresh();
         $this->assertSame('approved', $booking->discount_verification_status);
@@ -368,24 +366,81 @@ class StayBillCheckoutTest extends ApiFlowTestCase
         $this->assertNotNull(Notification::where('title', 'Discount ID Approved')->first());
     }
 
-    public function test_rejecting_the_id_alone_leaves_the_transaction_and_takes_the_discount_off_an_open_bill(): void
+    public function test_rejecting_at_check_in_saves_reason_and_decider_and_keeps_the_regular_rate(): void
+    {
+        [$booking, $d] = $this->bookingWithDiscountId();
+        $receptionist = $this->receptionist();
+        $this->at('2026-10-05 10:00');
+
+        $this->actingAs($receptionist)->postJson(route('receptionist.check-in.discount.reject', $booking), ['reason' => ''])->assertStatus(422);
+        $this->actingAs($receptionist)->postJson(route('receptionist.check-in.discount.reject', $booking), ['reason' => 'Blurry photo'])->assertOk();
+
+        $booking = $booking->fresh();
+        $this->assertSame('rejected', $booking->discount_verification_status);
+        $this->assertSame('Blurry photo', $booking->discount_rejection_reason);
+        $this->assertSame($receptionist->id, (int) $booking->discount_decided_by);
+        $this->assertSame(Booking::STATUS_ACTIVE, $booking->booking_status, 'the transaction itself is untouched');
+        $this->assertSame(2000.0, \App\Support\StayBill::forBooking($booking, \App\Support\StayBill::PROJECTED)['total'], 'regular rate');
+        $this->assertNotNull(Notification::where('title', 'Discount ID Rejected')->first());
+    }
+
+    public function test_approving_at_check_in_saves_the_decider_and_clears_an_earlier_reason(): void
+    {
+        [$booking, $d] = $this->bookingWithDiscountId();
+        $receptionist = $this->receptionist();
+        $this->at('2026-10-05 10:00');
+        $this->actingAs($receptionist)->postJson(route('receptionist.check-in.discount.reject', $booking), ['reason' => 'Blurry photo'])->assertOk();
+
+        $this->actingAs($receptionist)->postJson(route('receptionist.check-in.discount.approve', $booking), ['discount_id' => $d->id])->assertOk();
+
+        $booking = $booking->fresh();
+        $this->assertSame('approved', $booking->discount_verification_status);
+        $this->assertNull($booking->discount_rejection_reason, 'the reason is cleared on approve');
+        $this->assertSame($receptionist->id, (int) $booking->discount_decided_by);
+        $this->assertNotNull($booking->discount_verified_at);
+    }
+
+    public function test_the_id_cannot_be_approved_or_rejected_once_the_booking_has_checked_in(): void
     {
         [$booking, $d] = $this->bookingWithDiscountId(Booking::STATUS_CHECKED_IN);
-        $this->at('2026-10-07 10:00');
-        $this->actingAs($this->receptionist())->put(route('receptionist.bookings.discount-id.approve', $booking), ['discount_id' => $d->id]);
-        $billing = $this->openBilling($booking);
-        $this->assertSame(400.0, (float) $billing->discount);
-        $this->assertSame(1600.0, (float) $billing->total_amount);
+        $receptionist = $this->receptionist();
 
-        $this->actingAs($this->receptionist())->put(route('receptionist.bookings.discount-id.reject', $booking), ['reason' => 'Blurry photo'])->assertSessionHasNoErrors();
+        $this->actingAs($receptionist)->postJson(route('receptionist.check-in.discount.approve', $booking), ['discount_id' => $d->id])->assertStatus(422);
+        $this->actingAs($receptionist)->postJson(route('receptionist.check-in.discount.reject', $booking), ['reason' => 'x'])->assertStatus(422);
+        $this->assertSame('pending', $booking->fresh()->discount_verification_status);
+        $this->assertNull($booking->fresh()->discount_decided_by);
 
-        $billing = $billing->fresh();
-        $this->assertSame(0.0, (float) $billing->discount);
-        $this->assertNull($billing->discount_id);
-        $this->assertSame(2000.0, (float) $billing->total_amount);
-        $this->assertSame('rejected', $booking->fresh()->discount_verification_status);
-        $this->assertSame(Booking::STATUS_CHECKED_IN, $booking->fresh()->booking_status, 'the transaction itself is untouched');
-        $this->assertNotNull(Notification::where('title', 'Discount ID Rejected')->first());
+        // ...and the service refuses too, whatever route reaches it
+        $this->expectException(\Illuminate\Validation\ValidationException::class);
+        app(\App\Services\DiscountIdVerificationService::class)->approve($booking->fresh(), $d->id, $receptionist);
+    }
+
+    public function test_the_bookings_module_has_no_discount_approve_or_reject_routes(): void
+    {
+        $this->assertFalse(\Illuminate\Support\Facades\Route::has('receptionist.bookings.discount-id.approve'));
+        $this->assertFalse(\Illuminate\Support\Facades\Route::has('receptionist.bookings.discount-id.reject'));
+        [$booking, $d] = $this->bookingWithDiscountId();
+        $this->actingAs($this->receptionist())->put('/receptionist/bookings/'.$booking->id.'/discount-id/approve', ['discount_id' => $d->id])->assertStatus(404);
+        $this->actingAs($this->receptionist())->put('/receptionist/bookings/'.$booking->id.'/discount-id/reject', ['reason' => 'x'])->assertStatus(404);
+        $this->assertSame('pending', $booking->fresh()->discount_verification_status);
+    }
+
+    public function test_the_booking_page_and_guest_api_show_the_rejection_reason_read_only(): void
+    {
+        [$booking, $d] = $this->bookingWithDiscountId();
+        $receptionist = $this->receptionist();
+        $this->actingAs($receptionist)->postJson(route('receptionist.check-in.discount.reject', $booking), ['reason' => 'Name does not match'])->assertOk();
+
+        $page = $this->actingAs($receptionist)->get(route('receptionist.bookings.show', $booking))->assertOk()->getContent();
+        $this->assertStringContainsString('Name does not match', $page);
+        $this->assertStringContainsString(e($receptionist->name), $page, 'who decided it');
+        $this->assertStringNotContainsString('/discount-id/', $page, 'no Approve / Reject controls');
+
+        $user = User::find($booking->fresh()->guest->user_id);
+        $this->actingAs($user);
+        $payload = json_decode(app(\App\Http\Controllers\Api\BookingController::class)->show($booking->fresh())->getContent(), true);
+        $this->assertSame('rejected', $payload['discount_verification_status']);
+        $this->assertSame('Name does not match', $payload['discount_rejection_reason']);
     }
 
     public function test_rejecting_the_transaction_rejects_the_id_in_the_same_commit_and_tells_the_guest(): void
@@ -404,7 +459,7 @@ class StayBillCheckoutTest extends ApiFlowTestCase
     public function test_an_id_cannot_be_decided_on_a_cancelled_or_finished_booking(): void
     {
         [$booking, $d] = $this->bookingWithDiscountId(Booking::STATUS_CANCELLED);
-        $this->actingAs($this->receptionist())->put(route('receptionist.bookings.discount-id.approve', $booking), ['discount_id' => $d->id])->assertSessionHas('error');
+        $this->actingAs($this->receptionist())->postJson(route('receptionist.check-in.discount.approve', $booking), ['discount_id' => $d->id])->assertStatus(422);
         $this->assertSame('pending', $booking->fresh()->discount_verification_status);
     }
 

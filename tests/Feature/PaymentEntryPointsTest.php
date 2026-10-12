@@ -114,7 +114,7 @@ class PaymentEntryPointsTest extends ApiFlowTestCase
         $booking = $this->booking('pending');
         $this->walkIn($booking, ['amount_paid' => 500, 'amount_received' => 500])->assertSessionHas('success');
 
-        $this->actingAs($this->receptionist())->put(route('receptionist.bookings.discount-id.approve', $booking), ['discount_id' => Discount::first()->id]);
+        $this->approveDiscountAtCheckIn($booking, Discount::first(), $this->receptionist());
 
         $booking = $booking->fresh();
         $this->assertSame(1100.0, round($booking->payableTotal() - $booking->paidTotal(), 2), '1,600 - 500 already paid');
@@ -220,7 +220,7 @@ class PaymentEntryPointsTest extends ApiFlowTestCase
 
     // ---------------------------------------------------------------- GCash pay-later conversion
 
-    public function test_a_gcash_pay_later_conversion_makes_id_verification_available_on_the_booking_page_separately_from_the_transaction(): void
+    public function test_a_gcash_pay_later_conversion_shows_the_id_read_only_on_the_booking_page_and_it_is_decided_at_check_in_separately_from_the_transaction(): void
     {
         [, $guest] = $this->makeGuestUser('GC'.uniqid());
         $rt = $this->makeRoomTypeWithRooms('GC'.uniqid(), 1000, 2, 2);
@@ -245,12 +245,13 @@ class PaymentEntryPointsTest extends ApiFlowTestCase
 
         $this->assertSame('pending', $booking->discount_verification_status, 'the ID carries over, still undecided');
         $page = $this->actingAs($this->receptionist())->get(route('receptionist.bookings.show', $booking))->assertOk()->getContent();
-        $this->assertStringContainsString(route('receptionist.bookings.discount-id.approve', $booking), $page, 'Approve ID is offered on the Booking page');
-        $this->assertStringContainsString(route('receptionist.bookings.discount-id.reject', $booking), $page);
+        $this->assertStringNotContainsString('/discount-id/approve', $page, 'the Booking page does NOT offer Approve ID (view only)');
+        $this->assertStringNotContainsString('/discount-id/reject', $page, 'the Booking page does NOT offer Reject ID (view only)');
+        $this->assertStringContainsString('Discount ID', $page, 'but the ID is still shown, read-only');
         $this->assertStringContainsString(route('receptionist.bookings.reject', $booking), $page, 'rejecting the transaction is its own, separate control');
 
         // approving the ID does not verify the transaction...
-        $this->actingAs($this->receptionist())->put(route('receptionist.bookings.discount-id.approve', $booking), ['discount_id' => $d->id])->assertSessionHasNoErrors();
+        $this->approveDiscountAtCheckIn($booking, $d, $this->receptionist());
         $booking = $booking->fresh();
         $this->assertSame('approved', $booking->discount_verification_status);
         $this->assertNull($booking->verified_at);

@@ -252,9 +252,16 @@
             </x-card>
         @endif
 
-        <x-card title="Discount Request" icon="fas fa-id-card" bodyClass="card-body" class="mb-4">
+        <x-card title="Discount ID" icon="fas fa-id-card" bodyClass="card-body" class="mb-4">
             @if($reservation->discount_requested)
-                <p class="mb-1"><strong>Status:</strong> <x-status-badge :status="$reservation->discount_verification_status" domain="discount_verification" /></p>
+                <p class="mb-1"><strong>Status:</strong> <x-status-badge :status="$reservation->discount_verification_status" domain="discount_verification" /> <span class="badge bg-light text-muted border ms-1">View only</span></p>
+                @php $decidedBooking = $reservation->booking; @endphp
+                @if($reservation->discount_verification_status === 'rejected')
+                    <p class="mb-1 text-danger small"><strong>Rejection reason:</strong> {{ $decidedBooking?->discount_rejection_reason ?: 'No reason recorded' }}</p>
+                @endif
+                @if($decidedBooking && in_array($reservation->discount_verification_status, ['approved', 'rejected'], true))
+                    <p class="mb-1 small text-muted">Decided at check-in by {{ $decidedBooking->discountDecidedBy?->name ?? 'not recorded' }}{{ $decidedBooking->discount_verified_at ? ' on '.$decidedBooking->discount_verified_at->timezone('Asia/Manila')->format('M d, Y g:i A') : '' }}.</p>
+                @endif
                 @if($reservation->id_card_image_path)
                     <a href="{{ route('receptionist.reservations.id-card', $reservation) }}" target="_blank" class="d-block mt-1">
                         <img src="{{ route('receptionist.reservations.id-card', $reservation) }}" alt="ID Card{{ $reservation->id_card_type ? " ({$reservation->id_card_type})" : '' }}" class="img-thumbnail" style="max-height: 150px;">

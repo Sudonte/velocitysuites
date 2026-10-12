@@ -406,6 +406,14 @@ class CheckInController extends Controller
             return response()->json(['message' => 'This booking has been archived and can no longer be checked in.'], 422);
         }
 
+        // A requested discount must be decided (approved or rejected) first: the bill is settled from it.
+        $holder = $booking->reservation ?? $booking;
+        if (($booking->discount_requested || $holder->discount_requested) && \App\Support\StayBill::discountIdStatus($booking) === 'pending') {
+            $message = "The guest's discount ID is still pending. Approve or reject it before checking in.";
+
+            return response()->json(['message' => $message, 'errors' => ['discount_id' => [$message]]], 422);
+        }
+
         // Early check-in is allowed for now (temporarily relaxed per
         // request - previously blocked a booking from being checked in
         // before its scheduled check_in date). Re-add a calendar-day

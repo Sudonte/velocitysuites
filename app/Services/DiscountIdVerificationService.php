@@ -18,8 +18,10 @@ use Illuminate\Validation\ValidationException;
  *
  * Only a BOOKING's ID can be decided. A Reservation is not a confirmed stay yet - the receptionist may not verify
  * or validate its discount ID, and nothing here accepts one (there is deliberately no Reservation overload; the
- * Reservation module has no route that reaches this class). The ID becomes decidable in the Booking module once
- * the reservation has been converted - or the guest paid and it converted by itself.
+ * Reservation module has no route that reaches this class). The Bookings module is view-only for the ID too.
+ * The ID is decided ONLY during check-in, by the receptionist, on a confirmed booking that has not checked in yet
+ * (Receptionist\CheckInController::approveDiscount() / rejectDiscount()). The deciding user, the time and - on a
+ * rejection - the reason are stored on the booking.
  *
  * The discount only ever reaches a bill while the ID is 'approved' (App\Support\StayBill reads exactly that).
  */
@@ -29,8 +31,8 @@ class DiscountIdVerificationService
     {
     }
 
-    /** Booking states in which an ID can still be decided: confirmed or in house. */
-    private const DECIDABLE = [Booking::STATUS_ACTIVE, Booking::STATUS_CHECKED_IN];
+    /** The only booking state in which an ID can be decided: confirmed, not yet checked in (i.e. at check-in). */
+    private const DECIDABLE = [Booking::STATUS_ACTIVE];
 
     /**
      * Approve the ID and fix which discount it earns. Changing the discount of an already-approved ID goes through here too.
@@ -49,7 +51,11 @@ class DiscountIdVerificationService
             $this->assertDecidable($locked);
 
             $shared = ['discount_id' => $discount->id, 'discount_verification_status' => 'approved'];
-            $locked->update($shared + ['discount_verified_at' => now()]);
+            $locked->update($shared + [
+                'discount_verified_at' => now(),
+                'discount_decided_by' => $staff->id,
+                'discount_rejection_reason' => null,
+            ]);
             $locked->reservation?->update($shared);
 
             $this->syncBilling($locked);
@@ -76,10 +82,10 @@ class DiscountIdVerificationService
     {
         $this->assertDecidable($booking);
 
-        DB::transaction(function () use ($booking) {
+        DB::transaction(function () use ($booking, $reason, $staff) {
             $locked = Booking::whereKey($booking->id)->lockForUpdate()->firstOrFail();
             $this->assertDecidable($locked);
-            $this->markRejected($locked);
+            $this->markRejected($locked, $reason, $staff);
         });
 
         $booking->refresh();
@@ -127,9 +133,15 @@ class DiscountIdVerificationService
         );
     }
 
-    private function markRejected(Booking $booking): void
+    /** $staff is null when the rejection is the automatic one that follows a rejected transaction. */
+    private function markRejected(Booking $booking, ?string $reason = null, ?User $staff = null): void
     {
-        $booking->update(['discount_verification_status' => 'rejected', 'discount_verified_at' => null]);
+        $booking->update([
+            'discount_verification_status' => 'rejected',
+            'discount_verified_at' => $staff ? now() : null,
+            'discount_decided_by' => $staff?->id,
+            'discount_rejection_reason' => $reason ?? 'The transaction was rejected.',
+        ]);
         $booking->reservation?->update(['discount_verification_status' => 'rejected']);
 
         $this->syncBilling($booking);
@@ -181,7 +193,7 @@ class DiscountIdVerificationService
     private function assertDecidable(Booking $booking): void
     {
         if (! in_array($booking->booking_status, self::DECIDABLE, true) || $booking->hidden_at !== null) {
-            throw ValidationException::withMessages(['discount_id' => 'The discount ID can only be decided on a confirmed or checked-in booking.']);
+            throw ValidationException::withMessages(['discount_id' => 'The discount ID can only be approved or rejected during check-in, on a confirmed booking that has not checked in yet.']);
         }
 
         $holder = $booking->reservation ?? $booking;

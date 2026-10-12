@@ -199,7 +199,8 @@
 <div class="modal-footer">
     <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
     @if(!$shortfallLine)
-        <button type="button" id="checkInBillContinueBtn" class="btn btn-primary">
+        @php $idPending = ($discountRequested ?? false) && ($discountStatus ?? '') === 'pending'; @endphp
+        <button type="button" id="checkInBillContinueBtn" class="btn btn-primary" @disabled($idPending) @if($idPending) title="Approve or reject the discount ID first" @endif>
             Next: Guest Details <i class="fas fa-arrow-right"></i>
         </button>
         <button type="button" id="checkInNextBtn" class="btn btn-primary d-none">
@@ -208,7 +209,7 @@
         <button type="button" id="checkInBackBtn" class="btn btn-outline-secondary d-none">
             <i class="fas fa-arrow-left"></i> Back
         </button>
-        <button type="submit" form="checkInForm" id="checkInSubmitBtn" class="btn btn-success d-none">
+        <button type="submit" form="checkInForm" id="checkInSubmitBtn" class="btn btn-success d-none" @disabled($idPending) @if($idPending) title="Approve or reject the discount ID first" @endif>
             <i class="fas fa-check"></i> Complete Check-In
         </button>
     @endif

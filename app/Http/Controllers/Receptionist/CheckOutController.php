@@ -606,9 +606,9 @@ class CheckOutController extends Controller
 
         $booking = $billing->booking;
         if (StayBill::discountIdStatus($booking) !== 'approved') {
-            // The ID is decided ONCE, in the Booking module (Approve / Reject ID) - this panel only chooses which
-            // discount an already-approved ID earns. A discount never reaches a bill before that.
-            return response()->json(['message' => "The guest's discount ID is not approved yet. Approve it in the Booking module first."], 422);
+            // The ID is decided ONCE, in the Check In module - this panel only chooses which discount an
+            // already-approved ID earns. A discount never reaches a bill before that.
+            return response()->json(['message' => "The guest's discount ID is not approved yet. Approve it in the Check In module first."], 422);
         }
 
         $validated = $request->validate([

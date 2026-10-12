@@ -304,10 +304,8 @@ Route::middleware(['auth', 'account.status', 'log.activity', 'no.cache'])->group
         Route::get('/bookings/{booking}/id-card', [ReceptionistBookingController::class, 'idCard'])->name('bookings.id-card');
         Route::put('/bookings/{booking}/verify', [ReceptionistBookingController::class, 'verify'])->name('bookings.verify');
         Route::put('/bookings/{booking}/reject', [ReceptionistBookingController::class, 'reject'])->name('bookings.reject');
-        // Discount ID verification - a decision of its own, separate from Verify/Reject above. Bookings only: the
-        // Reservation module deliberately has no route that can decide a discount ID.
-        Route::put('/bookings/{booking}/discount-id/approve', [ReceptionistBookingController::class, 'approveId'])->name('bookings.discount-id.approve');
-        Route::put('/bookings/{booking}/discount-id/reject', [ReceptionistBookingController::class, 'rejectId'])->name('bookings.discount-id.reject');
+        // Discount IDs are VIEW-ONLY in the Bookings and Reservations modules; they are approved or rejected only in
+        // the Check In module (check-in.discount.approve / reject below).
         // Walk-in top-up payment against an active booking's remaining
         // balance, reachable any time during the stay - see
         // ReceptionistBookingController::recordPayment()'s docblock for why

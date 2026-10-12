@@ -88,6 +88,31 @@ class CheckInSettlementTest extends ApiFlowTestCase
         $this->assertNotNull($billing->checkin_settled_at);
     }
 
+    public function test_check_in_is_refused_with_422_while_the_requested_discount_is_still_pending(): void
+    {
+        [$rt, $room, $booking] = $this->arriving();
+        Payment::create(['booking_id' => $booking->id, 'payment_method' => 'cash', 'amount_paid' => 2000, 'payment_stage' => 'deposit',
+            'payment_status' => 'completed', 'payment_date' => now()]);
+        $discount = Discount::create(['name' => 'Senior Citizen', 'discount_type' => 'percentage', 'value' => 20, 'status' => 'active']);
+        $booking->forceFill(['discount_requested' => true, 'discount_id' => $discount->id, 'id_card_type' => 'Senior Citizen',
+            'id_card_image_path' => 'id-cards/x.jpg', 'discount_verification_status' => 'pending'])->save();
+        $desk = $this->desk();
+
+        $this->actingAs($desk)->postJson(route('receptionist.check-in.store', $booking), $this->checkInPayload($rt, $room))
+            ->assertStatus(422)->assertJsonPath('errors.discount_id.0', "The guest's discount ID is still pending. Approve or reject it before checking in.");
+        $this->assertSame(Booking::STATUS_ACTIVE, $booking->fresh()->booking_status);
+
+        // the panel says so and offers no way to continue
+        $html = $this->actingAs($desk)->get(route('receptionist.check-in.panel', $booking))->assertOk()->getContent();
+        $this->assertStringContainsString('discountPendingReminder', $html);
+        $this->assertMatchesRegularExpression('/id="checkInBillContinueBtn"[^>]*disabled/', $html);
+
+        // once rejected (a decision), check-in goes through at the regular rate
+        $this->actingAs($desk)->postJson(route('receptionist.check-in.discount.reject', $booking), ['reason' => 'Expired ID'])->assertOk();
+        $this->actingAs($desk)->postJson(route('receptionist.check-in.store', $booking), $this->checkInPayload($rt, $room, ['payment_method' => 'cash', 'amount_received' => 2000]))->assertOk();
+        $this->assertSame(Booking::STATUS_CHECKED_IN, $booking->fresh()->booking_status);
+    }
+
     public function test_fully_paid_stay_skips_payment(): void
     {
         [$rt, $room, $booking] = $this->arriving();
@@ -269,7 +294,7 @@ class CheckInSettlementTest extends ApiFlowTestCase
         $this->actingAs($desk)->get(route('receptionist.check-in.index', ['range' => 'all']))->assertOk()->assertSee('Fully paid');
     }
 
-    public function test_discount_approved_on_the_booking_page_after_full_payment_asks_for_the_change_back(): void
+    public function test_discount_approved_at_check_in_after_full_payment_asks_for_the_change_back(): void
     {
         Storage::fake('local');
         [$rt, $room, $booking] = $this->arriving();
@@ -280,8 +305,8 @@ class CheckInSettlementTest extends ApiFlowTestCase
             'id_card_image_path' => 'id-cards/x.jpg', 'discount_verification_status' => 'pending'])->save();
         $desk = $this->desk();
 
-        $this->actingAs($desk)->put(route('receptionist.bookings.discount-id.approve', $booking), ['discount_id' => $discount->id])
-            ->assertSessionHas('success', fn ($m) => str_contains($m, 'return ₱400.00'));
+        $this->actingAs($desk)->postJson(route('receptionist.check-in.discount.approve', $booking), ['discount_id' => $discount->id])
+            ->assertOk()->assertJsonPath('message', fn ($m) => str_contains($m, 'return ₱400.00'));
         $this->actingAs($desk)->get(route('receptionist.bookings.show', $booking))->assertOk()
             ->assertSee('Overpaid - return ₱400.00')->assertSee('Record Change Returned');
 
