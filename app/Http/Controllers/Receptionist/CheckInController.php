@@ -583,13 +583,7 @@ class CheckInController extends Controller
                 throw ValidationException::withMessages(['change_returned' => 'Hand back ₱' . number_format($change, 2) . ' to the guest and confirm it before checking in.']);
             }
             // Recorded as a negative payment: the guest's paid total now equals the discounted bill.
-            \App\Models\Payment::create($base + [
-                'payment_method' => 'cash', 'amount_paid' => -$change,
-                'payment_stage' => 'deposit', 'payment_status' => 'completed', 'payment_date' => now(),
-                'reference_number' => 'CHANGE-RETURNED-' . $locked->id,
-                'verified_by' => auth()->id(), 'verified_at' => now(),
-            ]);
-            \App\Support\Activity::log('Returned change at check-in', "Booking #{$locked->id} - ₱" . number_format($change, 2) . ' handed back after the discount', $locked);
+            \App\Support\StayPayment::recordChangeReturned($locked, $change, 'at check-in, after the discount');
         }
 
         $billing = app(\App\Services\StayBillingService::class)->ensure($locked, \App\Support\StayBill::PROJECTED);
@@ -619,6 +613,7 @@ class CheckInController extends Controller
         $holder = $booking->reservation ?? $booking;
 
         return [
+            'stayPayment' => \App\Support\StayPayment::from($payable, $paid),
             'stay' => $stay,
             'payable' => $payable,
             'paidSoFar' => $paid,
@@ -656,7 +651,7 @@ class CheckInController extends Controller
         }
         $this->discountIds->approve($booking->fresh(), (int) $validated['discount_id'], auth()->user());
 
-        return response()->json(['message' => 'Discount approved.']);
+        return response()->json(['message' => 'Discount approved.' . \App\Support\StayPayment::returnNote($booking->fresh())]);
     }
 
     /** Reject the guest's discount ID from the Check In panel. */

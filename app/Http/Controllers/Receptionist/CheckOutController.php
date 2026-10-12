@@ -312,9 +312,11 @@ class CheckOutController extends Controller
         $paymentTransactions = $booking->paymentTransactionsPayload();
         $balance = $paymentSummary['remaining_balance'];
         $settlementTotals = \App\Support\CheckInSettlement::totals($billing, $paymentTransactions);
+        // Paid more than the final bill: shown as change to hand back before the check-out completes.
+        $excess = round(max(0, $paymentSummary['total_amount_paid'] - $paymentSummary['grand_total']), 2);
 
         return view('receptionist.check-out.partials.payment-panel', compact(
-            'billing', 'booking', 'balance', 'paymentSummary', 'paymentTransactions', 'settlementTotals'
+            'billing', 'booking', 'balance', 'paymentSummary', 'paymentTransactions', 'settlementTotals', 'excess'
         ));
     }
 
@@ -358,6 +360,7 @@ class CheckOutController extends Controller
             'reference_number' => 'required_if:payment_method,gcash|nullable|string|max:255',
             'amount_paid' => 'required|numeric|min:0',
             'amount_received' => 'nullable|numeric|min:0',
+            'change_returned' => 'nullable|boolean',
         ]);
 
         // Cash: the amount RECEIVED may exceed the amount APPLIED (change is handed back); only the applied amount is
@@ -400,6 +403,16 @@ class CheckOutController extends Controller
             // just committed.
             $currentPaid = (float) $lockedBilling->payments()->where('payment_status', 'completed')->sum('amount_paid');
             $currentBalance = max(0, (float) $lockedBilling->total_amount - $currentPaid);
+
+            // Paid more than the final bill (an early check-out, a discount approved after paying in full): the
+            // receptionist hands the excess back and confirms it, and only the actual total stays recorded as paid.
+            $excess = round($currentPaid - (float) $lockedBilling->total_amount, 2);
+            if ($excess > 0.004) {
+                if (empty($validated['change_returned'])) {
+                    return ['status' => 'change_required', 'excess' => $excess];
+                }
+                \App\Support\StayPayment::recordChangeReturned($lockedBooking, $excess, 'at check-out', $lockedBilling->id);
+            }
 
             $amountPaid = round((float) $validated['amount_paid'], 2);
             if ($amountPaid <= 0 && $currentBalance > 0.009) {
@@ -540,6 +553,12 @@ class CheckOutController extends Controller
             return response()->json([
                 'message' => 'The amount cannot be more than the remaining balance of ₱' . number_format($result['balance'], 2) . '.',
                 'balance' => $result['balance'],
+            ], 422);
+        }
+        if ($result['status'] === 'change_required') {
+            return response()->json([
+                'message' => 'The guest paid ₱' . number_format($result['excess'], 2) . ' more than the final bill - hand it back and tick the confirmation to check out.',
+                'excess' => $result['excess'],
             ], 422);
         }
         if ($result['status'] === 'partial_refused') {

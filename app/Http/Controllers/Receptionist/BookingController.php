@@ -358,6 +358,8 @@ class BookingController extends Controller
             fn (Booking $b) => (float) $b->allPayments()->where('payment_status', 'completed')->sum('amount_paid')
         );
         $remainingBalance = max(0, round($totalDue - $amountPaid, 2));
+        // Same status every screen shows - incl. OVERPAID (e.g. paid in full, then a discount was approved).
+        $stayPayment = \App\Support\StayPayment::from($totalDue, $amountPaid);
 
         // Amenities: same query getTotalAmountDueAttribute() itself uses for
         // money (reservation_id for a converted booking, booking_id for a
@@ -406,7 +408,7 @@ class BookingController extends Controller
             && $booking->hidden_at === null;
 
         return view('receptionist.bookings.show', compact(
-            'booking', 'totalDue', 'amountPaid', 'remainingBalance',
+            'booking', 'totalDue', 'amountPaid', 'remainingBalance', 'stayPayment',
             'siblings', 'roomLines', 'roomTotal', 'amenityRows', 'amenitiesTotal', 'history', 'billDiscount', 'discountLabel',
             'discountChoices', 'claimedDiscount', 'discountIdDecidable'
         ));
@@ -457,6 +459,31 @@ class BookingController extends Controller
         return $applied + 0.004 >= $total
             ? ' Paid in full (₱' . number_format($applied, 2) . ')' . ($amount > $applied ? ' - change ₱' . number_format($amount - $applied, 2) : '') . '.'
             : ' Partial payment of ₱' . number_format($applied, 2) . ' recorded - ₱' . number_format($total - $applied, 2) . ' still owed.';
+    }
+
+    /**
+     * The guest paid more than the stay now costs (a discount approved after
+     * they paid in full, ...): record the excess as handed back, so what the
+     * stay is recorded as paid equals its actual total.
+     */
+    public function returnChange(Request $request, Booking $booking): RedirectResponse
+    {
+        $request->validate(['confirm' => 'accepted'], ['confirm.accepted' => 'Confirm that you handed the money back to the guest.']);
+
+        $returned = DB::transaction(function () use ($booking) {
+            $locked = Booking::whereKey($booking->id)->lockForUpdate()->firstOrFail();
+            $excess = \App\Support\StayPayment::of($locked)['excess'];
+            if ($excess <= 0.004) {
+                return 0.0;
+            }
+            \App\Support\StayPayment::recordChangeReturned($locked, $excess, 'from the booking page');
+
+            return $excess;
+        });
+
+        return $returned > 0
+            ? back()->with('success', '₱' . number_format($returned, 2) . ' recorded as returned to the guest. The booking is now paid at its actual total.')
+            : back()->with('error', 'Nothing to return - the guest has not paid more than the total.');
     }
 
     public function recordPayment(Request $request, Booking $booking): RedirectResponse
@@ -659,7 +686,7 @@ class BookingController extends Controller
             return back()->with('error', collect($e->errors())->flatten()->first());
         }
 
-        return back()->with('success', 'Discount ID approved. The discount now applies to the bill.');
+        return back()->with('success', 'Discount ID approved. The discount now applies to the bill.' . \App\Support\StayPayment::returnNote($booking->fresh()));
     }
 
     /** Reject the guest's discount ID on its own - the booking itself stays as it is. */

@@ -35,7 +35,17 @@
     <hr class="my-2">
     <div class="d-flex justify-content-between"><strong>Total</strong><strong class="text-brand">{{ $peso($stay['total']) }}</strong></div>
     <div class="d-flex justify-content-between"><span>Paid</span><span>{{ $peso($stay['total_paid']) }}</span></div>
-    <div class="d-flex justify-content-between"><strong>Balance</strong><strong>{{ $peso($stay['balance']) }}</strong></div>
+    @php $paymentState = \App\Support\StayPayment::from($stay['total'], $stay['total_paid']); @endphp
+    @if($paymentState['state'] === 'overpaid')
+        {{-- Paid more than the total (e.g. a discount approved after paying in full) - handed back at the front desk. --}}
+        <div class="d-flex justify-content-between text-primary"><strong>To be returned to you</strong><strong>{{ $peso($paymentState['excess']) }}</strong></div>
+        <small class="text-muted d-block">The front desk returns the difference; only the actual total is kept as paid.</small>
+    @else
+        <div class="d-flex justify-content-between"><strong>Balance</strong><strong>{{ $peso($stay['balance']) }}</strong></div>
+        @if($paymentState['state'] === 'paid')
+            <span class="badge bg-success mt-1">Fully paid</span>
+        @endif
+    @endif
     @if($stay['mode'] !== \App\Support\StayBill::FINAL)
         <small class="text-muted d-block mt-2"><i class="fas fa-info-circle"></i> Estimate until check-out - extra charges or a late check-out are added then.</small>
     @endif

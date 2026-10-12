@@ -50,6 +50,11 @@
                         <div class="fw-bold fs-5 {{ $paymentSummary['remaining_balance'] > 0.009 ? 'text-brand' : 'text-success' }}">
                             ₱{{ number_format($paymentSummary['remaining_balance'], 2) }}
                         </div>
+                        @php $overpaid = round($paymentSummary['total_amount_paid'] - $paymentSummary['grand_total'], 2); @endphp
+                        @if($overpaid > 0.004)
+                            {{-- Paid more than the total (App\Support\StayPayment) - the excess is handed back at the desk. --}}
+                            <div class="small text-primary fw-semibold">₱{{ number_format($overpaid, 2) }} to return to the guest</div>
+                        @endif
                     </div>
                     <div class="col-6 col-md-3">
                         <div class="small text-muted mb-1">Payment Status</div>

@@ -314,17 +314,26 @@
                         <dd class="{{ $remainingBalance > 0.009 ? 'text-danger' : 'text-success' }}">₱{{ number_format($remainingBalance, 2) }}</dd>
                     </div>
                     <div><dt>Payment Status</dt>
-                        <dd>
-                            @if($remainingBalance <= 0.009)
-                                <span class="badge bg-success">Fully Paid</span>
-                            @elseif($amountPaid > 0)
-                                <span class="badge bg-warning text-dark">Partially Paid</span>
-                            @else
-                                <span class="badge bg-secondary">Unpaid</span>
-                            @endif
-                        </dd>
+                        <dd><span class="badge {{ $stayPayment['badge'] }}">{{ $stayPayment['label'] }}</span></dd>
                     </div>
                 </dl>
+
+                @if($stayPayment['state'] === 'overpaid' && in_array($booking->booking_status, [\App\Models\Booking::STATUS_ACTIVE, \App\Models\Booking::STATUS_CHECKED_IN]))
+                    {{-- Paid more than the stay now costs (e.g. paid in full, then the discount was approved). --}}
+                    <div class="alert alert-primary">
+                        <strong><i class="fas fa-hand-holding-dollar"></i> Return ₱{{ number_format($stayPayment['excess'], 2) }} to the guest.</strong>
+                        They paid ₱{{ number_format($amountPaid, 2) }} but the total is now ₱{{ number_format($totalDue, 2) }}. Only the actual total is kept as paid.
+                        <form action="{{ route('receptionist.bookings.return-change', $booking) }}" method="POST" class="mt-2"
+                              data-confirm="₱{{ number_format($stayPayment['excess'], 2) }} is recorded as handed back to the guest." data-confirm-title="Record the change as returned?" data-confirm-button="Record Returned" data-confirm-variant="primary">
+                            @csrf
+                            <div class="form-check mb-2">
+                                <input class="form-check-input" type="checkbox" name="confirm" value="1" id="returnChangeConfirm" required>
+                                <label class="form-check-label" for="returnChangeConfirm">I handed ₱{{ number_format($stayPayment['excess'], 2) }} back to the guest</label>
+                            </div>
+                            <button type="submit" class="btn btn-sm btn-primary">Record Change Returned</button>
+                        </form>
+                    </div>
+                @endif
 
                 @if($booking->payment_method === 'cash' && in_array($booking->booking_status, [\App\Models\Booking::STATUS_ACTIVE, \App\Models\Booking::STATUS_CHECKED_IN]) && $remainingBalance > 0.009)
                     <hr>

@@ -256,4 +256,64 @@ class CheckInSettlementTest extends ApiFlowTestCase
         $this->assertEqualsWithDelta(500, $booking->paidTotal(), 0.01);
         $this->assertSame(Booking::STATUS_ACTIVE, $booking->booking_status);
     }
+
+    public function test_paid_in_full_shows_on_the_check_in_panel(): void
+    {
+        [$rt, $room, $booking] = $this->arriving();
+        Payment::create(['booking_id' => $booking->id, 'payment_method' => 'cash', 'amount_paid' => 2000, 'payment_stage' => 'deposit',
+            'payment_status' => 'completed', 'payment_date' => now()]);
+
+        $desk = $this->desk();
+        $this->actingAs($desk)->get(route('receptionist.check-in.panel', $booking))->assertOk()
+            ->assertSee('Fully paid')->assertSee('Paid in full when booking');
+        $this->actingAs($desk)->get(route('receptionist.check-in.index', ['range' => 'all']))->assertOk()->assertSee('Fully paid');
+    }
+
+    public function test_discount_approved_on_the_booking_page_after_full_payment_asks_for_the_change_back(): void
+    {
+        Storage::fake('local');
+        [$rt, $room, $booking] = $this->arriving();
+        Payment::create(['booking_id' => $booking->id, 'payment_method' => 'cash', 'amount_paid' => 2000, 'payment_stage' => 'deposit',
+            'payment_status' => 'completed', 'payment_date' => now()]);
+        $discount = Discount::create(['name' => 'Senior Citizen', 'discount_type' => 'percentage', 'value' => 20, 'status' => 'active']);
+        $booking->forceFill(['discount_requested' => true, 'discount_id' => $discount->id, 'id_card_type' => 'Senior Citizen',
+            'id_card_image_path' => 'id-cards/x.jpg', 'discount_verification_status' => 'pending'])->save();
+        $desk = $this->desk();
+
+        $this->actingAs($desk)->put(route('receptionist.bookings.discount-id.approve', $booking), ['discount_id' => $discount->id])
+            ->assertSessionHas('success', fn ($m) => str_contains($m, 'return ₱400.00'));
+        $this->actingAs($desk)->get(route('receptionist.bookings.show', $booking))->assertOk()
+            ->assertSee('Overpaid - return ₱400.00')->assertSee('Record Change Returned');
+
+        $this->actingAs($desk)->post(route('receptionist.bookings.return-change', $booking))->assertSessionHasErrors('confirm');
+        $this->actingAs($desk)->post(route('receptionist.bookings.return-change', $booking), ['confirm' => 1])->assertSessionHas('success');
+        $this->assertEqualsWithDelta(1600, $booking->fresh()->paidTotal(), 0.01);
+        $this->assertSame('paid', \App\Support\StayPayment::of($booking->fresh())['state']);
+
+        // nothing left to return
+        $this->actingAs($desk)->post(route('receptionist.bookings.return-change', $booking), ['confirm' => 1])->assertSessionHas('error');
+        $this->assertEqualsWithDelta(1600, $booking->fresh()->paidTotal(), 0.01);
+    }
+
+    public function test_early_check_out_returns_the_excess_and_keeps_only_the_actual_total(): void
+    {
+        [$rt, $room, $booking] = $this->arriving();
+        $desk = $this->desk();
+        // paid 2 nights at check-in
+        $this->actingAs($desk)->postJson(route('receptionist.check-in.store', $booking), $this->checkInPayload($rt, $room, ['payment_method' => 'cash', 'amount_received' => 2000]))->assertOk();
+
+        // leaves after 1 night
+        \Carbon\Carbon::setTestNow(now()->addDay()->setTime(10, 0));
+        $this->actingAs($desk)->get(route('receptionist.check-out.billing', $booking))->assertOk()->assertSee('Return to the guest');
+        $billing = $booking->billing()->first();
+        $this->actingAs($desk)->get(route('receptionist.check-out.payment', $billing))->assertOk()->assertSee('₱1,000.00 more', false);
+
+        $url = route('receptionist.billing.payment.store', $billing);
+        $this->actingAs($desk)->postJson($url, ['payment_method' => 'cash', 'amount_paid' => 0])->assertStatus(422)->assertJsonPath('excess', 1000);
+        $this->actingAs($desk)->postJson($url, ['payment_method' => 'cash', 'amount_paid' => 0, 'change_returned' => 1])->assertOk()->assertJson(['completed' => true]);
+
+        $this->assertSame(Booking::STATUS_COMPLETED, $booking->fresh()->booking_status);
+        $this->assertEqualsWithDelta(1000, $booking->fresh()->paidTotal(), 0.01);
+        \Carbon\Carbon::setTestNow();
+    }
 }

@@ -160,9 +160,10 @@
                 <td>Already paid (at check-in)</td>
                 <td class="text-end text-success">-₱{{ number_format($alreadyPaid, 2) }}</td>
             </tr>
+            @php $toReturn = round(max(0, $alreadyPaid - (float) $billing->running_total), 2); @endphp
             <tr class="fw-bold fs-5">
-                <td>Due at check-out</td>
-                <td class="text-end text-brand" id="dueAtCheckOutDisplay" data-paid="{{ $alreadyPaid }}">₱{{ number_format($dueNow, 2) }}</td>
+                <td id="dueAtCheckOutLabel">{{ $toReturn > 0 ? 'Return to the guest' : 'Due at check-out' }}</td>
+                <td class="text-end text-brand" id="dueAtCheckOutDisplay" data-paid="{{ $alreadyPaid }}">₱{{ number_format($toReturn > 0 ? $toReturn : $dueNow, 2) }}</td>
             </tr>
         @endif
     </table>

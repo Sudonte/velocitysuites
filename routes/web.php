@@ -314,6 +314,7 @@ Route::middleware(['auth', 'account.status', 'log.activity', 'no.cache'])->group
         // this exists separately from /billing/{billing}/payment (that one
         // needs a Billing row, which doesn't exist until checkout).
         Route::post('/bookings/{booking}/record-payment', [ReceptionistBookingController::class, 'recordPayment'])->name('bookings.record-payment');
+        Route::post('/bookings/{booking}/return-change', [ReceptionistBookingController::class, 'returnChange'])->name('bookings.return-change');
         // Archive / Restore - nothing is deleted.
         Route::put('/bookings/{booking}/archive', [ReceptionistBookingController::class, 'archive'])->name('bookings.archive');
         Route::put('/bookings/{booking}/restore', [ReceptionistBookingController::class, 'restore'])->name('bookings.restore');

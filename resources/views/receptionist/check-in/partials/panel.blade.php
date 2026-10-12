@@ -18,6 +18,20 @@
         </div>
     </div>
 
+    {{-- Payment so far, at a glance - same answer as the booking page and Expected Check-ins (App\Support\StayPayment). --}}
+    <div class="alert {{ $stayPayment['state'] === 'paid' ? 'alert-success' : ($stayPayment['state'] === 'overpaid' ? 'alert-primary' : 'alert-light border') }} py-2 small mb-3">
+        <span class="badge {{ $stayPayment['badge'] }}">{{ $stayPayment['state'] === 'overpaid' ? 'Overpaid' : $stayPayment['label'] }}</span>
+        @if($stayPayment['state'] === 'paid')
+            Paid in full when booking (₱{{ number_format($stayPayment['paid'], 2) }}) - nothing to collect at check-in.
+        @elseif($stayPayment['state'] === 'overpaid')
+            Paid ₱{{ number_format($stayPayment['paid'], 2) }} but the total is now ₱{{ number_format($stayPayment['total'], 2) }} - <strong>return ₱{{ number_format($stayPayment['excess'], 2) }}</strong> to the guest. Only the actual total is kept as paid.
+        @elseif($stayPayment['state'] === 'partial')
+            Paid ₱{{ number_format($stayPayment['paid'], 2) }} of ₱{{ number_format($stayPayment['total'], 2) }} - ₱{{ number_format($stayPayment['balance'], 2) }} is paid at check-in.
+        @else
+            Nothing paid yet - the full ₱{{ number_format($stayPayment['total'], 2) }} is paid at check-in.
+        @endif
+    </div>
+
     @php
         // Every distinct room type this booking needs rooms for must have
         // enough free inventory - a shortfall in ANY one line blocks the

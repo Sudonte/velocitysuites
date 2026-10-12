@@ -111,7 +111,10 @@
                 <h2 class="mb-0" style="color: {{ $paymentSummary['remaining_balance'] > 0 ? 'var(--danger-color)' : 'var(--success-color)' }};">
                     ₱{{ number_format($paymentSummary['remaining_balance'], 2) }}
                 </h2>
-                @if($paymentSummary['remaining_balance'] <= 0)
+                @php $overpaid = round($paymentSummary['total_amount_paid'] - $paymentSummary['grand_total'], 2); @endphp
+                @if($overpaid > 0.004)
+                    <p class="text-primary mb-0 mt-2"><i class="fas fa-hand-holding-dollar"></i> Paid ₱{{ number_format($overpaid, 2) }} more than the total - returned at the front desk</p>
+                @elseif($paymentSummary['remaining_balance'] <= 0)
                     <p class="text-success mb-0 mt-2"><i class="fas fa-check-circle"></i> Fully paid</p>
                 @else
                     <p class="text-muted mb-0 mt-2">Remaining balance</p>

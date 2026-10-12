@@ -74,6 +74,7 @@
                     <th>Check-In</th>
                     <th>Check-Out</th>
                     <th>Guests</th>
+                    @if($tab !== 'checked_in')<th>Payment</th>@endif
                     <th class="text-nowrap">Actions</th>
                 </tr>
             </thead>
@@ -139,6 +140,8 @@
                             </td>
                             <td>{{ $booking->check_out->format('M d, Y') }}</td>
                             <td>{{ $booking->number_of_guests }}</td>
+                            @php $pay = \App\Support\StayPayment::of($booking); @endphp
+                            <td><span class="badge {{ $pay['badge'] }}">{{ $pay['label'] }}</span>@if($pay['state'] === 'partial')<div class="small text-muted">₱{{ number_format($pay['paid'], 2) }} of ₱{{ number_format($pay['total'], 2) }}</div>@endif</td>
                             <td class="text-nowrap">
                                 <div class="d-flex gap-2">
                                     <button type="button" class="btn btn-sm btn-success btn-open-check-in" data-booking-id="{{ $booking->id }}">
@@ -161,7 +164,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="7">
+                            <td colspan="8">
                                 <x-empty-state icon="fas fa-sign-in-alt" message="No expected check-ins." />
                             </td>
                         </tr>

@@ -34,7 +34,7 @@ final class CheckInSettlement
             return 'Paid at Check-in';
         }
         if (str_starts_with($ref, 'CHANGE-RETURNED-')) {
-            return 'Change Returned at Check-in';
+            return 'Change Returned';
         }
 
         return $default;

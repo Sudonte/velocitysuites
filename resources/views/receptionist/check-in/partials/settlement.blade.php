@@ -103,6 +103,7 @@
             <div class="d-flex justify-content-between fw-bold text-danger"><span>To pay now (in full)</span><span>{{ $peso($balanceDue) }}</span></div>
         @elseif($changeDue > 0)
             <div class="d-flex justify-content-between fw-bold text-primary"><span>Change to hand back</span><span>{{ $peso($changeDue) }}</span></div>
+            <div class="d-flex justify-content-between text-muted"><span>Kept as paid (the actual total)</span><span>{{ $peso($payable) }}</span></div>
         @else
             <div class="d-flex justify-content-between fw-bold text-success"><span>Paid in full</span><span><i class="fas fa-check"></i></span></div>
         @endif

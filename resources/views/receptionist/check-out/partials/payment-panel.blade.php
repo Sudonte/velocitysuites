@@ -115,9 +115,20 @@
                  receptionist with a payment field that can never validate. --}}
             <input type="hidden" name="payment_method" value="cash">
             <input type="hidden" name="amount_paid" value="0">
-            <div class="alert alert-success mb-0">
-                <i class="fas fa-check-circle"></i> This stay is already fully paid - no additional payment is required. Click "Complete Check-Out" to finish.
-            </div>
+            @if($excess > 0.004)
+                {{-- Paid more than the final bill - only the actual total stays recorded as paid. --}}
+                <div class="alert alert-primary mb-0">
+                    <p class="mb-2"><i class="fas fa-hand-holding-dollar"></i> The guest paid <strong>₱{{ number_format($excess, 2) }} more</strong> than the final bill of ₱{{ number_format($paymentSummary['grand_total'], 2) }}. Hand it back before completing the check-out.</p>
+                    <div class="form-check mb-0">
+                        <input class="form-check-input" type="checkbox" name="change_returned" value="1" id="coChangeReturned" required>
+                        <label class="form-check-label" for="coChangeReturned">I handed ₱{{ number_format($excess, 2) }} back to the guest</label>
+                    </div>
+                </div>
+            @else
+                <div class="alert alert-success mb-0">
+                    <i class="fas fa-check-circle"></i> This stay is already fully paid - no additional payment is required. Click "Complete Check-Out" to finish.
+                </div>
+            @endif
         @endif
     </form>
 </div>

@@ -552,8 +552,10 @@ document.addEventListener('DOMContentLoaded', function () {
     function updateDueAtCheckOut(total) {
         const due = document.getElementById('dueAtCheckOutDisplay');
         if (!due) return;
-        const amount = Math.max(0, Number(total) - Number(due.dataset.paid));
-        due.textContent = '₱' + amount.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        const diff = Number(total) - Number(due.dataset.paid);
+        const label = document.getElementById('dueAtCheckOutLabel');
+        if (label) label.textContent = diff < 0 ? 'Return to the guest' : 'Due at check-out';
+        due.textContent = '₱' + Math.abs(diff).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     }
 
     // ---- Payment Panel interactions ----
