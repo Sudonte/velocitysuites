@@ -119,6 +119,8 @@ class ReceptionistAdvanceCheckInTest extends ApiFlowTestCase
             'checkin_contact_number' => '09171234567',
             'adults' => 1, 'children' => 0,
             'room_ids' => [(string) $rt->id => [$room->id]],
+            // the full balance is paid at check-in (2 nights x 1000)
+            'payment_method' => 'cash', 'amount_received' => 2000,
         ])->assertOk();
 
         $this->assertSame(Booking::STATUS_CHECKED_IN, $booking->fresh()->booking_status);

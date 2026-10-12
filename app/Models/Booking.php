@@ -130,7 +130,7 @@ class Booking extends Model
         }
         $billing = $this->billing()->with('additionalCharges')->first();
 
-        return $billing ? \App\Support\StayBill::forBooking($this, \App\Support\StayBill::FINAL, null, $billing) : null;
+        return $billing ? \App\Support\StayBill::forBooking($this, \App\Support\StayBill::modeFor($this), null, $billing) : null;
     }
 
     public function getHiddenByGuestAttribute(): bool

@@ -33,6 +33,7 @@ class CheckInController extends Controller
     public function __construct(
         private NotificationService $notificationService,
         private RoomAvailabilityService $availability,
+        private \App\Services\DiscountIdVerificationService $discountIds,
     ) {
     }
 
@@ -126,8 +127,12 @@ class CheckInController extends Controller
     public function createWalkIn(): View
     {
         $roomTypes = RoomType::where('status', 'active')->orderBy('name')->get();
+        // Paid amenities a walk-in can add up front (billed and paid at check-in), with what's left in stock.
+        $walkInAmenities = \App\Models\Amenity::where('status', 'active')->where('charge', '>', 0)->orderBy('amenity_name')->get();
+        $remaining = \App\Models\Amenity::remainingStockFor($walkInAmenities->pluck('id'));
+        $walkInAmenities->each(fn ($a) => $a->remaining = (int) ($remaining[$a->id] ?? 0));
 
-        return view('receptionist.check-in.walk-in', compact('roomTypes') + app(\App\Services\StayOffersService::class)->formOptions());
+        return view('receptionist.check-in.walk-in', compact('roomTypes', 'walkInAmenities') + app(\App\Services\StayOffersService::class)->formOptions());
     }
 
     /**
@@ -161,8 +166,15 @@ class CheckInController extends Controller
             'rooms_requested' => 'nullable|integer|min:1|max:50',
             'adults' => 'required|integer|min:1',
             'children' => 'nullable|integer|min:0',
+            'amenities' => 'nullable|array',
+            'amenities.*.amenity_id' => 'required_with:amenities|integer',
+            'amenities.*.quantity' => 'nullable|integer|min:0|max:50',
         ] + \App\Support\GuestAccountLink::rules() + \App\Services\StayOffersService::rules(), \App\Support\CheckInWindow::staffMessages());
         $linkedGuest = \App\Support\GuestAccountLink::resolve($validated['guest_user_id'] ?? null);
+
+        // Amenities picked on the form (rows left at 0 are ignored) - checked against live stock before anything is created.
+        $pickedAmenities = collect($validated['amenities'] ?? [])->filter(fn ($a) => (int) ($a['quantity'] ?? 0) > 0)->values()->all();
+        $resolvedAmenities = app(\App\Services\ReservationAmenityService::class)->validateSelection($pickedAmenities);
 
         $checkIn = Carbon::today();
         $checkOut = Carbon::parse($validated['check_out']);
@@ -190,7 +202,7 @@ class CheckInController extends Controller
         $totalRoomsRequested = collect($roomLines)->sum('quantity');
 
         $booking = DB::transaction(function () use (
-            $validated, $children, $checkIn, $checkOut, $firstRoomType, $totalRoomsRequested, $roomLines, $nights, $linkedGuest
+            $validated, $children, $checkIn, $checkOut, $firstRoomType, $totalRoomsRequested, $roomLines, $nights, $linkedGuest, $resolvedAmenities
         ) {
             $booking = Booking::create([
                 'reservation_id' => null,
@@ -239,6 +251,24 @@ class CheckInController extends Controller
                     'price_per_night' => $line['room_type']->rate,
                     'number_of_nights' => $nights,
                     'subtotal' => round((float) $line['room_type']->rate * $nights * $line['quantity'], 2),
+                ]);
+            }
+
+            // Approved straight away - the receptionist added them with the guest at the desk; billed at check-in.
+            foreach ($resolvedAmenities as $entry) {
+                \App\Models\AmenityRequest::create([
+                    'guest_id' => $linkedGuest?->id,
+                    'reservation_id' => null,
+                    'booking_id' => $booking->id,
+                    'room_type_id' => $booking->room_type_id,
+                    'amenity_id' => $entry['amenity']->id,
+                    'amenity_name' => $entry['amenity']->amenity_name,
+                    'category' => $entry['amenity']->category,
+                    'quantity' => $entry['quantity'],
+                    'charge' => $entry['amenity']->charge,
+                    'status' => 'approved',
+                    'origin' => \App\Models\AmenityRequest::ORIGIN_STAFF,
+                    'note' => 'Added on the walk-in form',
                 ]);
             }
 
@@ -312,9 +342,9 @@ class CheckInController extends Controller
             $booking->update(['viewed_at' => now()]);
         }
 
-        return view('receptionist.check-in.partials.panel', compact(
+        return view('receptionist.check-in.partials.panel', array_merge(compact(
             'booking', 'assignableRoomsByLine', 'roomLines', 'assignedRoomIds', 'assignedRoomIdsByType', 'accountGuest'
-        ));
+        ), $this->settlement($booking)));
     }
 
     /**
@@ -370,6 +400,12 @@ class CheckInController extends Controller
             'room_ids' => 'required|array|min:1',
             'room_ids.*' => 'required|array',
             'room_ids.*.*' => 'required|integer|distinct',
+            // Check-in settles the bill: the full balance is paid now (no partial payment), or - when a discount
+            // left the guest overpaid - the change is handed back. A fully paid stay just confirms.
+            'payment_method' => 'nullable|in:cash,gcash',
+            'amount_received' => 'nullable|numeric|min:0',
+            'gcash_reference' => 'nullable|string|max:100',
+            'change_returned' => 'nullable|boolean',
         ], [
             'checkin_current_address.required_if' => 'Enter the guest\'s current address, or check "Same as permanent address".',
         ]);
@@ -390,7 +426,11 @@ class CheckInController extends Controller
 
         try {
             $rooms = null;
-            DB::transaction(function () use ($booking, $validated, $children, $currentAddress, &$rooms) {
+            $settled = null;
+            DB::transaction(function () use ($booking, $validated, $children, $currentAddress, &$rooms, &$settled) {
+                // Settle first, on the bill as of check-in (scheduled nights) - before rooms are assigned.
+                $settled = $this->settleAtCheckIn($booking, $validated);
+
                 $rooms = $this->availability->assignRoomsForLines($booking, $validated['room_ids']);
 
                 foreach ($rooms as $room) {
@@ -414,9 +454,14 @@ class CheckInController extends Controller
             });
         } catch (HttpExceptionInterface $e) {
             return response()->json(['message' => $e->getMessage()], $e->getStatusCode());
+        } catch (ValidationException $e) {
+            return response()->json(['message' => collect($e->errors())->flatten()->first(), 'errors' => $e->errors()], 422);
         }
 
         $accountGuest = $booking->account_guest?->user;
+        if ($accountGuest && ($settled['paid_now'] ?? 0) > 0) {
+            $this->notificationService->notifyPaymentReceived($accountGuest, $settled['paid_now'], $booking->roomType->name ?? null, $booking->reservation_id ?? $booking->id);
+        }
         if ($accountGuest) {
             $this->notificationService->notifyCheckIn(
                 $accountGuest,
@@ -434,7 +479,178 @@ class CheckInController extends Controller
 
         $roomLabel = $rooms->count() > 1 ? 'Rooms ' . $rooms->pluck('room_number')->implode(', ') : 'Room ' . $rooms->first()->room_number;
 
-        return response()->json(['message' => 'Guest checked in to ' . $roomLabel . '!']);
+        $msg = 'Guest checked in to ' . $roomLabel . '!';
+        if (($settled['change'] ?? 0) > 0) {
+            $msg .= ' Change: ₱' . number_format($settled['change'], 2) . '.';
+        }
+
+        return response()->json(['message' => $msg]);
+    }
+
+    /**
+     * Settle the stay at check-in (inside the check-in transaction):
+     *  - balance owed  -> the full balance must be paid now (cash with enough received, or GCash with a reference);
+     *  - fully paid    -> nothing to pay;
+     *  - overpaid (a discount approved after the guest paid) -> the change must be confirmed as handed back, and is
+     *    recorded as a negative "change returned" payment so every total stays right.
+     * Then the Billing is created (or refreshed) on the scheduled nights and marked settled at check-in.
+     *
+     * @return array{paid_now: float, change: float}
+     * @throws ValidationException
+     */
+    private function settleAtCheckIn(Booking $booking, array $validated): array
+    {
+        $locked = Booking::whereKey($booking->id)->lockForUpdate()->firstOrFail();
+        $locked->unsetRelation('billing');
+        $payable = round((float) \App\Support\StayBill::forBooking($locked, \App\Support\StayBill::PROJECTED)['total'], 2);
+        $paid = $locked->paidTotal();
+        $balance = round($payable - $paid, 2);
+        $paidNow = 0.0;
+        $change = 0.0;
+
+        $base = $locked->reservation_id ? ['reservation_id' => $locked->reservation_id] : ['booking_id' => $locked->id];
+        if ($balance > 0.004) {
+            $method = $validated['payment_method'] ?? null;
+            if (! $method) {
+                throw ValidationException::withMessages(['payment_method' => 'The guest must pay the full balance of ₱' . number_format($balance, 2) . ' to check in.']);
+            }
+            if ($method === 'cash') {
+                $received = (float) ($validated['amount_received'] ?? 0);
+                if ($received + 0.004 < $balance) {
+                    throw ValidationException::withMessages(['amount_received' => 'Cash received must cover the full balance of ₱' . number_format($balance, 2) . ' - partial payment isn\'t accepted at check-in.']);
+                }
+                $tender = \App\Support\CashTender::resolve('cash', $balance, $received);
+                \App\Models\Payment::create($base + [
+                    'payment_method' => 'cash', 'amount_paid' => $balance,
+                    'cash_received' => $tender['cash_received'], 'change_given' => $tender['change_given'],
+                    'payment_stage' => 'deposit', 'payment_status' => 'completed', 'payment_date' => now(),
+                    'reference_number' => 'CHECKIN-' . $locked->id . '-' . now()->format('YmdHis'),
+                    'verified_by' => auth()->id(), 'verified_at' => now(),
+                ]);
+                $change = (float) $tender['change_given'];
+            } else {
+                $reference = trim((string) ($validated['gcash_reference'] ?? ''));
+                if ($reference === '') {
+                    throw ValidationException::withMessages(['gcash_reference' => 'Enter the GCash reference number of the guest\'s payment.']);
+                }
+                \App\Models\Payment::create($base + [
+                    'payment_method' => 'gcash', 'amount_paid' => $balance, 'reference_number' => $reference,
+                    'payment_stage' => 'deposit', 'payment_status' => 'completed', 'payment_date' => now(),
+                    'verified_by' => auth()->id(), 'verified_at' => now(), // confirmed at the desk
+                ]);
+            }
+            $paidNow = $balance;
+        } elseif ($balance < -0.004) {
+            $change = round(-$balance, 2);
+            if (empty($validated['change_returned'])) {
+                throw ValidationException::withMessages(['change_returned' => 'Hand back ₱' . number_format($change, 2) . ' to the guest and confirm it before checking in.']);
+            }
+            // Recorded as a negative payment: the guest's paid total now equals the discounted bill.
+            \App\Models\Payment::create($base + [
+                'payment_method' => 'cash', 'amount_paid' => -$change,
+                'payment_stage' => 'deposit', 'payment_status' => 'completed', 'payment_date' => now(),
+                'reference_number' => 'CHANGE-RETURNED-' . $locked->id,
+                'verified_by' => auth()->id(), 'verified_at' => now(),
+            ]);
+            \App\Support\Activity::log('Returned change at check-in', "Booking #{$locked->id} - ₱" . number_format($change, 2) . ' handed back after the discount', $locked);
+        }
+
+        $billing = app(\App\Services\StayBillingService::class)->ensure($locked, \App\Support\StayBill::PROJECTED);
+        app(\App\Services\StayBillingService::class)->refresh($locked, $billing, \App\Support\StayBill::PROJECTED);
+        $billing->update(['checkin_settled_total' => $billing->total_amount, 'checkin_settled_at' => now()]);
+
+        if ($paidNow > 0) {
+            \App\Support\Activity::log('Payment at check-in', "Booking #{$locked->id} - ₱" . number_format($paidNow, 2) . ' (' . ($validated['payment_method'] ?? 'cash') . ') - paid in full', $locked);
+        }
+
+        return ['paid_now' => $paidNow, 'change' => $change];
+    }
+
+    /**
+     * What the Check In panel's "Discount & Bill" step shows: the stay's bill
+     * as of check-in (scheduled nights), the discount state, promotions that
+     * can be applied instead, and what is still owed or must be handed back.
+     */
+    private function settlement(Booking $booking): array
+    {
+        $booking->unsetRelation('billing');
+        $stay = \App\Support\StayBill::forBooking($booking, \App\Support\StayBill::PROJECTED);
+        $payable = round((float) $stay['total'], 2);
+        $paid = $booking->paidTotal();
+        $offers = app(\App\Services\StayOffersService::class);
+        $roomTypeIds = ! empty($booking->room_lines) ? collect($booking->room_lines)->pluck('room_type_id')->map(fn ($id) => (int) $id)->all() : [(int) $booking->room_type_id];
+        $holder = $booking->reservation ?? $booking;
+
+        return [
+            'stay' => $stay,
+            'payable' => $payable,
+            'paidSoFar' => $paid,
+            'balanceDue' => max(0, round($payable - $paid, 2)),
+            'changeDue' => max(0, round($paid - $payable, 2)),
+            'discountStatus' => $booking->discount_verification_status ?: 'not_requested',
+            'discountRequested' => (bool) ($booking->discount_requested || $holder->discount_requested),
+            'hasIdPhoto' => (bool) ($booking->id_card_image_path || $holder->id_card_image_path),
+            'idCardUrl' => $booking->id_card_image_path ? route('receptionist.bookings.id-card', $booking)
+                : ($booking->reservation?->id_card_image_path ? route('receptionist.reservations.id-card', $booking->reservation) : null),
+            'discountChoices' => $this->discountIds->choices($booking),
+            'claimedDiscount' => $this->discountIds->claimed($booking),
+            'promotionChoices' => $offers->promotionsFor($roomTypeIds, \Carbon\Carbon::parse($booking->check_in)),
+            'appliedPromotion' => $booking->promotion_id ? \App\Models\Promotion::find($booking->promotion_id) : null,
+        ];
+    }
+
+    /** Approve the guest's discount ID from the Check In panel (optionally uploading the photo now). */
+    public function approveDiscount(Request $request, Booking $booking)
+    {
+        abort_unless($booking->booking_status === Booking::STATUS_ACTIVE, 422, 'Only a confirmed booking that has not checked in can be changed here.');
+        $validated = $request->validate([
+            'discount_id' => 'required|integer|exists:discounts,id',
+            'id_document' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:4096',
+        ]);
+        $offers = app(\App\Services\StayOffersService::class);
+        $holder = $booking->reservation ?? $booking;
+        if ($request->hasFile('id_document') || ! ($booking->id_card_image_path || $holder->id_card_image_path)) {
+            if (! $request->hasFile('id_document')) {
+                return response()->json(['message' => 'Upload a photo of the guest\'s ID first.', 'errors' => ['id_document' => ['Upload a photo of the guest\'s ID first.']]], 422);
+            }
+            $offers->attachDiscount($booking, (int) $validated['discount_id'], $request->file('id_document'));
+        } elseif ($booking->promotion_id) {
+            $offers->clearPromotion($booking);
+        }
+        $this->discountIds->approve($booking->fresh(), (int) $validated['discount_id'], auth()->user());
+
+        return response()->json(['message' => 'Discount approved.']);
+    }
+
+    /** Reject the guest's discount ID from the Check In panel. */
+    public function rejectDiscount(Request $request, Booking $booking)
+    {
+        abort_unless($booking->booking_status === Booking::STATUS_ACTIVE, 422, 'Only a confirmed booking that has not checked in can be changed here.');
+        $validated = $request->validate(['reason' => 'required|string|max:500']);
+        $this->discountIds->reject($booking, $validated['reason'], auth()->user());
+
+        return response()->json(['message' => 'Discount ID rejected.']);
+    }
+
+    /** Apply (or, with no promotion_id, remove) a promotion from the Check In panel - only without an approved ID discount. */
+    public function applyPromotion(Request $request, Booking $booking)
+    {
+        abort_unless($booking->booking_status === Booking::STATUS_ACTIVE, 422, 'Only a confirmed booking that has not checked in can be changed here.');
+        $validated = $request->validate(['promotion_id' => 'nullable|integer|exists:promotions,id']);
+        $offers = app(\App\Services\StayOffersService::class);
+        if (empty($validated['promotion_id'])) {
+            $offers->clearPromotion($booking);
+
+            return response()->json(['message' => 'Promotion removed.']);
+        }
+        $roomTypeIds = ! empty($booking->room_lines) ? collect($booking->room_lines)->pluck('room_type_id')->map(fn ($id) => (int) $id)->all() : [(int) $booking->room_type_id];
+        try {
+            $offers->applyPromotion($booking, \App\Models\Promotion::findOrFail((int) $validated['promotion_id']), $roomTypeIds);
+        } catch (ValidationException $e) {
+            return response()->json(['message' => collect($e->errors())->flatten()->first(), 'errors' => $e->errors()], 422);
+        }
+        \App\Support\Activity::log('Applied promotion at check-in', "Booking #{$booking->id} - promotion #{$validated['promotion_id']}", $booking);
+
+        return response()->json(['message' => 'Promotion applied.']);
     }
 }
-

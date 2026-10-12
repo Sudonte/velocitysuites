@@ -310,12 +310,76 @@ document.addEventListener('DOMContentLoaded', function () {
     // throws "is not focusable", silently aborting this whole handler
     // before the step toggle below ever runs) - `disabled` is the one
     // exclusion the spec actually guarantees.
+    // Step 1 "Discount & Bill" -> Step 2 Guest Details. The bill step is shown first on every check-in.
+    content.addEventListener('click', function (e) {
+        if (!e.target.closest('#checkInBillContinueBtn')) return;
+        document.getElementById('checkInStepBill').classList.add('d-none');
+        document.getElementById('checkInStepDetails').classList.remove('d-none');
+        document.getElementById('checkInBillContinueBtn').classList.add('d-none');
+        document.getElementById('checkInNextBtn').classList.remove('d-none');
+    });
+
+    // Discount / promotion actions on the bill step: post, then reload the panel (still on step 1).
+    content.addEventListener('click', async function (e) {
+        const btn = e.target.closest('[data-offer-action]');
+        if (!btn) return;
+        const box = document.getElementById('checkInOfferBox');
+        const errBox = box.querySelector('[data-offer-error]');
+        const action = btn.dataset.offerAction;
+        const fd = new FormData();
+        let url = box.dataset.approveUrl;
+        if (action === 'approve') {
+            fd.append('discount_id', box.querySelector('[data-offer-field="discount_id"]').value);
+            const file = box.querySelector('[data-offer-field="id_document"]');
+            if (file && file.files[0]) fd.append('id_document', file.files[0]);
+        } else if (action === 'reject') {
+            const reason = window.prompt('Reason for rejecting the ID (shown to the guest):');
+            if (!reason) return;
+            url = box.dataset.rejectUrl;
+            fd.append('reason', reason);
+        } else {
+            url = box.dataset.promotionUrl;
+            const sel = box.querySelector('[data-offer-field="promotion_id"]');
+            fd.append('promotion_id', btn.dataset.promotionId !== undefined ? btn.dataset.promotionId : (sel ? sel.value : ''));
+        }
+        btn.disabled = true;
+        try {
+            const r = await fetch(url, { method: 'POST', headers: { 'X-CSRF-TOKEN': csrfToken, 'Accept': 'application/json' }, body: fd });
+            const data = await r.json().catch(() => ({}));
+            if (!r.ok) throw new Error(data.message || 'Something went wrong.');
+            openCheckInPanel(activeBookingId);
+        } catch (err) {
+            errBox.textContent = err.message;
+            errBox.classList.remove('d-none');
+            btn.disabled = false;
+        }
+    });
+
+    // Payment method / change hint on the rooms step.
+    content.addEventListener('change', function (e) {
+        if (e.target.name !== 'payment_method') return;
+        const pay = document.getElementById('checkInPayment');
+        const gcash = e.target.value === 'gcash';
+        pay.querySelector('[data-pay="cash"]').classList.toggle('d-none', gcash);
+        pay.querySelector('[data-pay="gcash"]').classList.toggle('d-none', !gcash);
+        pay.querySelector('[name="amount_received"]').required = !gcash;
+        pay.querySelector('[name="gcash_reference"]').required = gcash;
+    });
+    content.addEventListener('input', function (e) {
+        if (e.target.name !== 'amount_received') return;
+        const pay = document.getElementById('checkInPayment');
+        const due = parseFloat(pay.dataset.balance), got = parseFloat(e.target.value || '0');
+        pay.querySelector('[data-change-hint]').textContent = got >= due ? 'Change: ₱' + (got - due).toFixed(2) : 'Not enough - the full ₱' + due.toFixed(2) + ' is required.';
+    });
+
     content.addEventListener('click', function (e) {
         if (e.target.closest('#checkInNextBtn')) {
             const form = document.getElementById('checkInForm');
             if (!form.reportValidity()) return;
 
             content.querySelectorAll('.room-select').forEach(s => s.disabled = false);
+            content.querySelectorAll('#checkInPayment input, #ciChangeReturned').forEach(i => i.disabled = false);
+            content.querySelectorAll('#checkInPayment [data-pay="gcash"] input').forEach(i => { i.required = false; });
             document.getElementById('checkInStepDetails').classList.add('d-none');
             document.getElementById('checkInStepRooms').classList.remove('d-none');
             document.getElementById('checkInNextBtn').classList.add('d-none');
@@ -323,6 +387,7 @@ document.addEventListener('DOMContentLoaded', function () {
             document.getElementById('checkInSubmitBtn').classList.remove('d-none');
         } else if (e.target.closest('#checkInBackBtn')) {
             content.querySelectorAll('.room-select').forEach(s => s.disabled = true);
+            content.querySelectorAll('#checkInPayment input, #ciChangeReturned').forEach(i => i.disabled = true);
             document.getElementById('checkInStepRooms').classList.add('d-none');
             document.getElementById('checkInStepDetails').classList.remove('d-none');
             document.getElementById('checkInBackBtn').classList.add('d-none');
@@ -357,6 +422,10 @@ document.addEventListener('DOMContentLoaded', function () {
             adults: form.querySelector('[name="adults"]').value,
             children: form.querySelector('[name="children"]').value,
             room_ids: roomIds,
+            payment_method: (form.querySelector('[name="payment_method"]:checked') || {}).value || null,
+            amount_received: (form.querySelector('[name="amount_received"]') || {}).value || null,
+            gcash_reference: (form.querySelector('[name="gcash_reference"]') || {}).value || null,
+            change_returned: !!(form.querySelector('[name="change_returned"]') || {}).checked,
         };
 
         try {

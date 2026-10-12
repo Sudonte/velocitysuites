@@ -83,6 +83,8 @@ class TestAccountClassificationIntegrityTest extends TestCase
         Schema::create('billings', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('booking_id');
+            $table->decimal('checkin_settled_total', 10, 2)->nullable();
+            $table->timestamp('checkin_settled_at')->nullable();
             $table->timestamps();
         });
 

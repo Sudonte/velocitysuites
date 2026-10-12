@@ -38,7 +38,7 @@ class ReservationController extends Controller
         abort_unless($booking->reservation_id === null && $booking->guest_id === auth()->user()->guest?->id, 403, 'Unauthorized');
 
         $booking->loadMissing(['roomType', 'rooms', 'billing']);
-        $stay = \App\Support\StayBill::forBooking($booking, $booking->billing ? \App\Support\StayBill::FINAL : \App\Support\StayBill::PROJECTED, null, $booking->billing);
+        $stay = \App\Support\StayBill::forBooking($booking, \App\Support\StayBill::modeFor($booking), null, $booking->billing);
         $payments = $booking->allPayments()->sortByDesc(fn ($p) => $p->payment_date ?? $p->created_at)->values();
         $amenityRequests = \App\Models\AmenityRequest::where('booking_id', $booking->id)
             ->where('origin', \App\Models\AmenityRequest::ORIGIN_GUEST_REQUEST)->latest()->get();
@@ -63,7 +63,7 @@ class ReservationController extends Controller
         // The same itemized bill the mobile app shows, once the reservation is a booking.
         $booking = $reservation->booking;
         $stay = $booking
-            ? \App\Support\StayBill::forBooking($booking, $booking->billing ? \App\Support\StayBill::FINAL : \App\Support\StayBill::PROJECTED, null, $booking->billing)
+            ? \App\Support\StayBill::forBooking($booking, \App\Support\StayBill::modeFor($booking), null, $booking->billing)
             : null;
         $amenityRequests = \App\Models\AmenityRequest::where(fn ($q) => $q->where('reservation_id', $reservation->id)
                 ->when($booking, fn ($w) => $w->orWhere('booking_id', $booking->id)))

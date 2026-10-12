@@ -178,6 +178,8 @@ class CheckoutFinalStagePaymentReparentingTest extends TestCase
             $table->decimal('total_amount', 10, 2)->default(0);
             $table->string('billing_status')->default('pending');
             $table->string('receipt_number')->nullable()->unique();
+            $table->decimal('checkin_settled_total', 10, 2)->nullable();
+            $table->timestamp('checkin_settled_at')->nullable();
             $table->timestamps();
         });
 

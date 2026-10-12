@@ -40,6 +40,12 @@ final class StayBill
     /** Active rooms billed up to the later of today and the scheduled check-out - a stay still in progress. */
     public const PROJECTED = 'projected';
 
+    /** FINAL once the stay is over, PROJECTED while it is still running (the bill exists from check-in). */
+    public static function modeFor(Booking $booking): string
+    {
+        return $booking->booking_status === Booking::STATUS_COMPLETED ? self::FINAL : self::PROJECTED;
+    }
+
     /** @return array<string,mixed> */
     public static function forBooking(Booking $booking, string $mode = self::FINAL, ?CarbonInterface $asOf = null, ?Billing $billing = null): array
     {

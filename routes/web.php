@@ -347,6 +347,10 @@ Route::middleware(['auth', 'account.status', 'log.activity', 'no.cache'])->group
         // registered before POST /check-in/{booking} below, since "walk-in"
         // would otherwise route-model-bind as a booking id there.
         Route::get('/check-in/walk-in/create', [ReceptionistCheckInController::class, 'createWalkIn'])->name('check-in.walk-in.create');
+        // Check In panel, step 1: discount check / promotion before the bill is settled.
+        Route::post('/check-in/{booking}/discount/approve', [ReceptionistCheckInController::class, 'approveDiscount'])->name('check-in.discount.approve');
+        Route::post('/check-in/{booking}/discount/reject', [ReceptionistCheckInController::class, 'rejectDiscount'])->name('check-in.discount.reject');
+        Route::post('/check-in/{booking}/promotion', [ReceptionistCheckInController::class, 'applyPromotion'])->name('check-in.promotion');
         // Optional guest-account link on Create Reservation / Create Booking / Walk-in Check-in.
         Route::get('/guest-accounts/search', [\App\Http\Controllers\Receptionist\GuestAccountController::class, 'search'])->name('guest-accounts.search');
         Route::post('/check-in/walk-in', [ReceptionistCheckInController::class, 'storeWalkIn'])->name('check-in.walk-in.store');

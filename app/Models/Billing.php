@@ -33,6 +33,9 @@ class Billing extends Model
         'discount_verified_at',
         'total_amount',
         'billing_status',
+        // What was settled when the guest checked in - check-out only collects what was added after that.
+        'checkin_settled_total',
+        'checkin_settled_at',
         // receipt_number is deliberately NOT fillable - see
         // Payment::$fillable's identical note; it's system-generated,
         // lazily assigned by ensureOfficialReceiptNumber() below.
@@ -42,6 +45,8 @@ class Billing extends Model
         'room_charge' => 'decimal:2',
         'additional_guest_fee' => 'decimal:2',
         'amenity_charge' => 'decimal:2',
+        'checkin_settled_total' => 'decimal:2',
+        'checkin_settled_at' => 'datetime',
         'discount' => 'decimal:2',
         'total_amount' => 'decimal:2',
         'discount_verified_at' => 'datetime',
@@ -166,7 +171,7 @@ class Billing extends Model
             return null;
         }
 
-        return StayBill::forBooking($booking, StayBill::FINAL, null, $this);
+        return StayBill::forBooking($booking, StayBill::modeFor($booking), null, $this);
     }
 
     /**
@@ -174,9 +179,11 @@ class Billing extends Model
      * the discount (only while the guest's discount ID is approved) and the total. Add-ons already on the row
      * (amenity_charge, additional charges) are kept - the caller refreshes those first.
      */
-    public function syncFromStayBill(Booking $booking): void
+    public function syncFromStayBill(Booking $booking, ?string $mode = null): void
     {
-        $bill = StayBill::forBooking($booking, StayBill::FINAL, null, $this);
+        // Check-out passes FINAL (nights actually stayed); otherwise the stay is still running, so it is priced on
+        // the scheduled nights (the bill exists from check-in and must not shrink to "nights so far" mid-stay).
+        $bill = StayBill::forBooking($booking, $mode ?? StayBill::modeFor($booking), null, $this);
 
         $this->room_charge = $bill['room_charge'];
         $this->discount = $bill['discount'];

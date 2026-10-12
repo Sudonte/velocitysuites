@@ -110,6 +110,8 @@
                         </div>
                     </div>
 
+                    @include('receptionist.partials.walk-in-amenities')
+
                     @include('receptionist.partials.offer-field', ['canApproveNow' => true])
 
                     <div class="form-group">
@@ -139,8 +141,8 @@
                     </li>
                     <li class="mb-3">
                         <i class="fas fa-money-bill-wave text-brand"></i>
-                        <strong>Payment isn't collected here</strong>
-                        <p class="mb-0 ms-4 text-sm text-muted">Handle it at checkout, same as any other stay.</p>
+                        <strong>Paid in full at check-in</strong>
+                        <p class="mb-0 ms-4 text-sm text-muted">The rooms and amenities above are paid in full when you finish checking the guest in. Anything added during the stay is paid at check-out.</p>
                     </li>
                 </ul>
             </x-card>

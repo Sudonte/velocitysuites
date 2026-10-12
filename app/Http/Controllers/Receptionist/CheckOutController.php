@@ -385,7 +385,7 @@ class CheckOutController extends Controller
 
             // Settle against today's bill: re-price it first (nights actually stayed up to now, discount only if the
             // ID is approved), so the balance checked below is the same figure the guest's receipt will show.
-            $lockedBilling->syncFromStayBill($lockedBooking);
+            $lockedBilling->syncFromStayBill($lockedBooking, StayBill::FINAL);
 
             // Re-derive the balance from the LOCKED billing's own fresh
             // payment sum - never the pre-transaction $billing->balance,
@@ -751,54 +751,8 @@ class CheckOutController extends Controller
      */
     private function refreshStayCharges(Booking $booking, Billing $billing): void
     {
-        // The amenities on the bill: approved (or in progress / completed) requests - a guest's PENDING request is not
-        // billed until the front desk approves it (AmenityRequestService); the same rows StayBill itemizes.
-        $amenityCharge = $booking->billedAmenityTotal();
-
-        $billing->update([
-            // Over-capacity stays are blocked (App\Support\GuestCapacity), so
-            // there is no extra-guest fee; only past bills keep a stored one.
-            'additional_guest_fee' => 0,
-            'amenity_charge' => round($amenityCharge, 2),
-        ]);
-        // Room charge (rate x ACTUAL nights, per room), the discount (only once the guest's ID is approved) and the
-        // total all come from the one StayBill calculation - re-run on every open, so a late check-out's extra
-        // nights, or an ID decision, reach the bill instead of the figure frozen at creation.
-        $billing->syncFromStayBill($booking);
-
-        // Reservation-derived: re-parent every completed, still-unparented
-        // payment regardless of stage. A prior version of this only
-        // reparented 'deposit'-stage payments, on the mistaken assumption
-        // that a 'final'-stage one (a Pay-Now-Full reservation, or a Cash
-        // reservation confirmed in full at conversion time - see
-        // ReservationWorkflowService::convertToBooking()'s own "Not stage-
-        // filtered" comment) was "already re-parented at conversion time" -
-        // conversion only ever marks that payment payment_status=completed,
-        // it never touches billing_id, since no Billing exists yet at
-        // conversion time (one is only ever created later, here, at
-        // check-in/checkout). The result was a real, live bug: a guest who
-        // paid their full reservation total upfront (GCash Pay-Now-Full, or
-        // a Cash reservation confirmed in full) had that entire payment
-        // silently excluded from every checkout balance calculation below,
-        // making checkout believe the full original amount was still owed
-        // all over again. Direct booking (else branch): unaffected either
-        // way, already unconditional.
-        if ($booking->reservation_id) {
-            $booking->reservation->payments()
-                ->where('payment_status', 'completed')
-                ->whereNull('billing_id')
-                ->update(['billing_id' => $billing->id]);
-        } else {
-            $booking->payments()
-                ->where('payment_status', 'completed')
-                ->whereNull('billing_id')
-                ->update(['billing_id' => $billing->id]);
-        }
-
-        $paid = (float) $billing->payments()->where('payment_status', 'completed')->sum('amount_paid');
-        $billing->update([
-            'billing_status' => $paid <= 0 ? 'pending' : ($paid >= (float) $billing->total_amount ? 'paid' : 'partial'),
-        ]);
+        // Same refresh the check-in uses (App\Services\StayBillingService) - priced on the nights actually stayed.
+        app(\App\Services\StayBillingService::class)->refresh($booking, $billing, StayBill::FINAL);
     }
 
     /**
