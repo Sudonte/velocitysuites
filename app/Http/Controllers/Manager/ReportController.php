@@ -4,7 +4,9 @@ namespace App\Http\Controllers\Manager;
 
 use App\Http\Controllers\Controller;
 use App\Models\RoomType;
+use App\Services\Dae1aReportService;
 use App\Services\HotelReportService;
+use App\Support\Dae1aSpreadsheet;
 use App\Support\ReportFilters;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
@@ -53,7 +55,7 @@ class ReportController extends Controller
         return $pdf->download('Velocity-Suites-Manager-Report_' . now()->format('Y-m-d_His') . '.pdf');
     }
 
-    /** Daily Guest Arrival (DAE-1A) for ?arrival_date= (default today) as a PDF [REQ065]. */
+    /** Daily Guest Arrivals for ?arrival_date= (default today) as a PDF [REQ065]. */
     public function arrivalsPdf(Request $request)
     {
         $day = $this->arrivalDate($request);
@@ -63,6 +65,14 @@ class ReportController extends Controller
             'arrivalDate' => $day,
             'generatedAt' => now(),
         ])->setPaper('a4', 'portrait')->download('Velocity-Suites-Daily-Arrivals_' . $day->toDateString() . '.pdf');
+    }
+
+    /** Monthly DAE-1A form for ?month=YYYY-MM (default this month) as an Excel file. */
+    public function dae1a(Request $request, Dae1aReportService $dae1a)
+    {
+        [$year, $month] = Dae1aReportService::monthFrom($request->query('month'));
+
+        return Dae1aSpreadsheet::download($dae1a->build($year, $month));
     }
 
     private function arrivalDate(Request $request): \Carbon\Carbon

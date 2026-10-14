@@ -26,6 +26,8 @@
     @include('partials.report-filters', ['route' => 'admin.reports.index', 'showPaymentMethod' => true])
     @include('reports.partials.screen-body', ['report' => $report, 'withRevenue' => true])
 
+    @include('reports.partials.dae1a-card', ['excelRoute' => 'admin.reports.dae1a'])
+
     @include('reports.partials.arrivals-card', ['arrivals' => $arrivals, 'arrivalDate' => $arrivalDate, 'route' => 'admin.reports.index', 'pdfRoute' => 'admin.reports.arrivalsPdf'])
 
     <!-- Activity Logs -->

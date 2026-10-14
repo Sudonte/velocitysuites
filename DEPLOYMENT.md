@@ -4,7 +4,7 @@
 This document provides deployment instructions for the Laravel 12 Hotel Booking and Reservation System to be hosted on Hostinger.
 
 ## Requirements
-- PHP 8.2+
+- PHP 8.2+ (64-bit) with the `gd`, `zip`, `xml`, `xmlreader`, `xmlwriter`, `dom`, `fileinfo`, `iconv`, `mbstring` and `zlib` extensions (needed by PhpSpreadsheet for the DAE-1A Excel export; Hostinger has all of them enabled)
 - MySQL 8.0+
 - Laravel 12
 - Composer
@@ -241,6 +241,16 @@ deny-all rule is active).
   (cdnjs, added 2026-10-10; wired up by `public/js/date-pickers.js` for every
   `<input type="date">`). The server needs no extra setup; browsers need
   internet access to those CDNs.
+
+### DAE-1A Excel export
+- Admin and Manager Reports have a **DAE-1A Monthly Report** card that downloads the
+  Monthly Recording Format for Accommodation Establishment as an `.xlsx` file
+  (`/admin/reports/dae-1a?month=YYYY-MM`, `/manager/reports/dae-1a?month=YYYY-MM`).
+- Built by `phpoffice/phpspreadsheet` (added 2026-10-14) in memory and streamed to the
+  browser - nothing is written to `storage/`, no queue or cron involved. `composer install`
+  on deploy pulls it in; the PHP extensions it needs are listed under Requirements.
+- Columns follow the rooms in the system (every non-archived room, plus any archived room
+  that was occupied that month); the printed form breaks to a new page every 15 rooms.
 
 ### Test data in reports
 

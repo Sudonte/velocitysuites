@@ -20,6 +20,8 @@
 
     @include('reports.partials.screen-body', ['report' => $report, 'withRevenue' => true])
 
+    @include('reports.partials.dae1a-card', ['excelRoute' => 'manager.reports.dae1a'])
+
     @include('reports.partials.arrivals-card', ['arrivals' => $arrivals, 'arrivalDate' => $arrivalDate, 'route' => 'manager.reports.index', 'pdfRoute' => 'manager.reports.arrivalsPdf'])
 </div>
 @endsection

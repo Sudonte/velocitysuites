@@ -6,7 +6,7 @@
 </head>
 <body>
     @include('reports.partials.pdf-header', [
-        'reportTitle' => 'Daily Guest Arrival (DAE-1A)',
+        'reportTitle' => 'Daily Guest Arrivals',
         'generatedAt' => $generatedAt,
         'periodLabel' => $arrivalDate->format('l, M d, Y'),
     ])

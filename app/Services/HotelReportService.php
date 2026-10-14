@@ -234,7 +234,7 @@ class HotelReportService
     }
 
     /**
-     * Daily Guest Arrival (DAE-1A) [REQ065]: everyone expected to check in on
+     * Daily Guest Arrivals: everyone expected to check in on
      * $day - bookings (confirmed, checked in, no-show) and reservations still
      * awaiting payment.
      */

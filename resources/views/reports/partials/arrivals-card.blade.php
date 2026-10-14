@@ -1,5 +1,5 @@
 {{--
-    Daily Guest Arrival (DAE-1A) report card [REQ065] - shared by the Admin
+    Daily Guest Arrivals report card - shared by the Admin
     and Manager report screens. Its own date picker (one day), independent
     of the period filters above.
 
@@ -8,7 +8,7 @@
     @param string $route        report index route name
     @param string $pdfRoute     arrivals PDF route name
 --}}
-<x-card title="Daily Guest Arrival (DAE-1A)" icon="fas fa-plane-arrival" bodyClass="table-responsive" class="mb-4">
+<x-card title="Daily Guest Arrivals" icon="fas fa-plane-arrival" bodyClass="table-responsive" class="mb-4">
     <form method="GET" action="{{ route($route) }}" class="row g-2 align-items-end p-3 pb-0">
         {{-- keep the period filters while changing the arrival day --}}
         @foreach(request()->only(\App\Support\ReportFilters::QUERY_KEYS) as $key => $value)
