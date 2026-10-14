@@ -102,6 +102,23 @@ class Dae1aReportTest extends ApiFlowTestCase
         $this->assertSame(['R1', 'AF1'], array_keys($sheet->getColumnBreaks()));
     }
 
+    public function test_uses_the_actual_check_in_and_out_in_hotel_time(): void
+    {
+        $rt = $this->makeRoomTypeWithRooms('Deluxe', 1000, 2, 1);
+        $roomId = Room::value('id');
+        // Planned Oct 5-7, but checked in early: 23:30 UTC on Oct 1 is 07:30 on Oct 2 in Manila,
+        // and the room was checked out 03:00 UTC on Oct 4 (11:00 Manila).
+        $booking = $this->stay($rt->id, [$roomId], '2026-10-05', '2026-10-07', 2, Booking::STATUS_COMPLETED, '2026-10-04 03:00:00');
+        $booking->forceFill(['checked_in_at' => '2026-10-01 23:30:00'])->save();
+
+        $r = app(Dae1aReportService::class)->build(2026, 10);
+        $guests = fn (int $d) => $r['days'][$d - 1]['rooms'][$roomId]['guests'] ?? 0;
+
+        $this->assertSame([0, 2, 2, 0, 0], [$guests(1), $guests(2), $guests(3), $guests(4), $guests(5)]);
+        $this->assertTrue($r['days'][1]['rooms'][$roomId]['checked_in']);
+        $this->assertSame(['checked_in' => 2, 'overnight' => 4, 'rooms_occupied' => 2, 'rooms_available' => 31], $r['totals']);
+    }
+
     public function test_admin_and_manager_download_receptionist_cannot(): void
     {
         $this->makeRoomTypeWithRooms('Deluxe', 1000, 2, 2);

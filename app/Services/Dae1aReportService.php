@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Booking;
 use App\Models\Room;
+use App\Support\CheckInWindow;
 use App\Support\TestAccountScope;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -13,11 +14,13 @@ use Illuminate\Support\Facades\DB;
  * Admin and Manager reports - the figures behind the Excel form.
  *
  * Built from actual room assignments (booking_rooms) of stays that were
- * checked in, the same way HotelReportService counts occupancy: a guest is
- * in a room every night from the booking's check-in until that room was
- * checked out (or the planned check-out while still in house); a same-day
- * stay counts as one night. A booking's guests are split across its rooms
- * (the system records guests per booking, not per room).
+ * checked in: a guest is in a room every night from the day they actually
+ * checked in (bookings.checked_in_at, else the planned check-in) until that
+ * room was checked out (else the planned check-out, or today while still in
+ * house); a same-day stay counts as one night. Timestamps are stored in UTC
+ * and read as hotel (Asia/Manila) calendar days. A booking's guests are
+ * split across its rooms (the system records guests per booking, not per
+ * room).
  *
  * Per day: guests in each room (and whether they checked in that day),
  * (5) guests checked in, (6) guests staying overnight, (7) rooms occupied.
@@ -45,22 +48,23 @@ class Dae1aReportService
             ->whereIn('bookings.booking_status', [Booking::STATUS_CHECKED_IN, Booking::STATUS_COMPLETED])
             ->whereNull('bookings.deleted_at')
             ->whereNotIn('bookings.id', TestAccountScope::testBookingIdsQuery())
-            ->where('bookings.check_in', '<', $periodEnd)
+            ->where(fn ($q) => $q->where('bookings.check_in', '<', $periodEnd)
+                ->orWhere('bookings.checked_in_at', '<', $periodEnd->copy()->shiftTimezone(CheckInWindow::TIMEZONE)->utc()))
             ->get(['booking_rooms.booking_id', 'booking_rooms.room_id', 'booking_rooms.checked_out_at',
-                'bookings.check_in', 'bookings.check_out', 'bookings.booking_status',
+                'bookings.check_in', 'bookings.check_out', 'bookings.checked_in_at', 'bookings.booking_status',
                 'bookings.adults', 'bookings.children', 'bookings.number_of_guests']);
 
         $stays = $stays->sortBy(['booking_id', 'room_id'])->values();
         $roomsPerBooking = $stays->countBy('booking_id');
         $roomIndex = [];
-        $today = Carbon::today();
+        $today = Carbon::parse(now(CheckInWindow::TIMEZONE)->toDateString());
 
         // cells[room_id][day] = ['guests' => int, 'checked_in' => bool]
         $cells = [];
         foreach ($stays as $row) {
-            $start = Carbon::parse($row->check_in)->startOfDay();
+            $start = $row->checked_in_at ? self::hotelDay($row->checked_in_at) : Carbon::parse($row->check_in)->startOfDay();
             $end = $row->checked_out_at
-                ? Carbon::parse($row->checked_out_at)->startOfDay()
+                ? self::hotelDay($row->checked_out_at)
                 : ($row->booking_status === Booking::STATUS_CHECKED_IN
                     ? Carbon::parse($row->check_out)->startOfDay()->max($today->copy()->addDay())
                     : Carbon::parse($row->check_out)->startOfDay());
@@ -137,6 +141,12 @@ class Dae1aReportService
                 'guests_per_room' => $totals['rooms_occupied'] > 0 ? round($totals['overnight'] / $totals['rooms_occupied'], 2) : 0.0,
             ],
         ];
+    }
+
+    /** A stored (UTC) timestamp as the hotel's calendar day. */
+    private static function hotelDay(string $utc): Carbon
+    {
+        return Carbon::parse(Carbon::parse($utc, 'UTC')->setTimezone(CheckInWindow::TIMEZONE)->toDateString());
     }
 
     /** The booking's guests split across its rooms; the first rooms take any remainder. */
