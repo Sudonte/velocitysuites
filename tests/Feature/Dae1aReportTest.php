@@ -87,9 +87,19 @@ class Dae1aReportTest extends ApiFlowTestCase
         $this->assertEquals(4, $sheet->getCell('X38')->getCalculatedValue());
         $this->assertEquals(2, $sheet->getCell('Y38')->getCalculatedValue());
         $this->assertEquals(2, $sheet->getCell('Y40')->getCalculatedValue());    // average guest-night
-        // 20 rooms -> the 16th room starts a new printed page
+        // 20 rooms -> the 16th room starts a new printed page; the last 5 rooms leave room for (5)-(7)
         $this->assertSame(['R1'], array_keys($sheet->getColumnBreaks()));
+        $this->assertSame('Room Identification', $sheet->getCell('R5')->getValue());
         $this->assertSame(['A', 'B'], $sheet->getPageSetup()->getColumnsToRepeatAtLeft());
+    }
+
+    public function test_totals_move_to_their_own_page_when_they_do_not_fit(): void
+    {
+        $this->makeRoomTypeWithRooms('Std', 800, 2, 29);
+        $sheet = Dae1aSpreadsheet::make(app(Dae1aReportService::class)->build(2026, 10))->getActiveSheet();
+
+        // rooms 1-15 | rooms 16-29 | (5)-(7) starting at column AF
+        $this->assertSame(['R1', 'AF1'], array_keys($sheet->getColumnBreaks()));
     }
 
     public function test_admin_and_manager_download_receptionist_cannot(): void

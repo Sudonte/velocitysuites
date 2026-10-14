@@ -94,8 +94,15 @@ class Dae1aSpreadsheet
         $sheet->setCellValue('A6', 'Day');
         $sheet->setCellValue('B6', 'Day of the week Sun-Sat');
         $sheet->getStyle('A6:B6')->getAlignment()->setTextRotation(90);
-        $sheet->mergeCells("C5:{$lastRoomCol}5");
-        $sheet->setCellValue('C5', 'Room Identification');
+        // One "Room Identification" heading per printed page of rooms.
+        for ($i = 0; $i < $roomCount; $i += self::ROOMS_PER_PAGE) {
+            $from = $col($firstRoom + $i);
+            $to = $col($firstRoom + min($i + self::ROOMS_PER_PAGE, $roomCount) - 1);
+            if ($from !== $to) {
+                $sheet->mergeCells("{$from}5:{$to}5");
+            }
+            $sheet->setCellValue("{$from}5", 'Room Identification');
+        }
         foreach ($rooms as $i => $room) {
             $sheet->setCellValue($col($firstRoom + $i) . '6', "Room No.\n" . $room->room_number);
         }
@@ -204,6 +211,11 @@ class Dae1aSpreadsheet
         // a new printed page after every ROOMS_PER_PAGE rooms
         for ($i = self::ROOMS_PER_PAGE; $i < $roomCount; $i += self::ROOMS_PER_PAGE) {
             $sheet->setBreak($col($firstRoom + $i) . '1', Worksheet::BREAK_COLUMN);
+        }
+        // (5)-(7) go on their own page when they don't fit beside the last rooms.
+        $lastPageRooms = $roomCount - intdiv($roomCount - 1, self::ROOMS_PER_PAGE) * self::ROOMS_PER_PAGE;
+        if ($lastPageRooms > self::ROOMS_WITH_TOTALS) {
+            $sheet->setBreak("{$c5}1", Worksheet::BREAK_COLUMN);
         }
 
         return $spreadsheet;
