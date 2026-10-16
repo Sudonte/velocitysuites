@@ -202,4 +202,27 @@ class ThreeReceiptsTest extends ApiFlowTestCase
             $last = $at;
         }
     }
+
+    public function test_the_checkout_form_continues_the_summary_with_amount_received_and_change_or_balance(): void
+    {
+        [, $rt, $room, $booking] = $this->arriving();
+        $desk = $this->desk();
+        $this->actingAs($desk)->postJson(route('receptionist.check-in.store', $booking),
+            $this->payload($rt, $room, ['payment_method' => 'cash', 'amount_received' => 2000]))->assertOk();
+        $booking = $booking->fresh();
+        $billing = $booking->billing()->first();
+        $billing->additionalCharges()->create(['description' => 'Broken lamp', 'amount' => 2500]);
+        app(\App\Services\StayBillingService::class)->refresh($booking->fresh(), $billing->fresh());
+
+        $html = $this->actingAs($desk)->get(route('receptionist.check-out.payment', $billing->fresh()))->assertOk()->getContent();
+
+        $last = -1;
+        foreach (['Total Due', 'Payment Method', 'Amount Received', 'Amount Applied to Total Due', 'changeBalanceRow'] as $label) {
+            $at = strpos($html, $label);
+            $this->assertNotFalse($at, "{$label} is missing");
+            $this->assertGreaterThan($last, $at, "{$label} is out of order");
+            $last = $at;
+        }
+        $this->assertStringContainsString('Change', $html);
+    }
 }

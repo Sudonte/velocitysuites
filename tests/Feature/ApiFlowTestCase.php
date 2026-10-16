@@ -134,6 +134,8 @@ abstract class ApiFlowTestCase extends TestCase
             $table->string('description')->nullable();
             $table->string('charge_name')->nullable();
             $table->decimal('amount', 10, 2)->default(0);
+            $table->string('category')->nullable();
+            $table->text('notes')->nullable();
             $table->timestamps();
         });
 

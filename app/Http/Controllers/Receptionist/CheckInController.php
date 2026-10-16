@@ -319,6 +319,9 @@ class CheckInController extends Controller
                 $this->notificationService->notifyPaymentReceived($accountUser, $settled['paid_now'], $rooms->pluck('room_name')->implode(', '), $booking->id);
             }
             $this->notificationService->notifyCheckIn($accountUser, $rooms->pluck('room_name')->implode(', '), $booking->id, $booking);
+            if (! empty($settled['receipt_number'])) {
+                $this->notificationService->notifyCheckinReceipt($accountUser, $settled['receipt_number'], $booking->id);
+            }
             $this->notificationService->notifyAmenitiesUnlocked($accountUser, $booking->id);
         }
 

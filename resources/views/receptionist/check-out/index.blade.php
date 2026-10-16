@@ -586,17 +586,25 @@ document.addEventListener('DOMContentLoaded', function () {
         // Cash: what was handed over must cover what is applied; the rest is change.
         const method = paymentPanelContent.querySelector('#paymentMethodSelect');
         const receivedInput = paymentPanelContent.querySelector('#cashReceivedInput');
-        const changeBox = paymentPanelContent.querySelector('#changeDueBox');
+        // Change / Balance row: for cash, what is handed back (or, while short, what is still missing); for GCash nothing is handed back.
+        const balLabel = paymentPanelContent.querySelector('#changeBalanceLabel');
+        const balValue = paymentPanelContent.querySelector('#changeBalanceValue');
         const isCash = !method || method.value === 'cash';
-        if (changeBox) changeBox.classList.add('d-none');
+        const setRow = (label, value, cls) => {
+            if (!balLabel || !balValue) return;
+            balLabel.textContent = label;
+            balValue.textContent = value;
+            balValue.className = 'col-sm-7 text-end fw-bold fs-5 ' + cls;
+        };
+        setRow('Change', peso(0), '');
         if (message === '' && isCash && receivedInput) {
             const receivedCents = Math.round(parseFloat(receivedInput.value) * 100);
             const appliedCents = Math.round(amount * 100);
             if (isNaN(receivedCents) || receivedCents < appliedCents) {
                 message = 'The cash received must be at least the amount applied.';
-            } else if (receivedCents > appliedCents && changeBox) {
-                changeBox.textContent = 'Change due: ' + peso((receivedCents - appliedCents) / 100);
-                changeBox.classList.remove('d-none');
+                if (!isNaN(receivedCents)) setRow('Balance still due', peso((appliedCents - receivedCents) / 100), 'text-danger');
+            } else {
+                setRow('Change', peso((receivedCents - appliedCents) / 100), receivedCents > appliedCents ? 'text-success' : '');
             }
         }
 

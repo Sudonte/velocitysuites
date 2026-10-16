@@ -95,34 +95,47 @@
 
     <form id="paymentForm">
         @if($balance > 0.009)
-            <div class="mb-3">
-                <label class="form-label">Payment Method <span class="text-danger">*</span></label>
-                <select name="payment_method" id="paymentMethodSelect" class="form-select" required>
-                    <option value="cash">Cash</option>
-                    <option value="gcash">GCash</option>
-                </select>
-            </div>
-            <div class="mb-3" id="cashReceivedGroup">
-                <label class="form-label" for="cashReceivedInput">Amount Received <span class="text-danger">*</span></label>
-                <div class="input-group">
-                    <span class="input-group-text">₱</span>
-                    <input type="number" step="0.01" min="0.01" name="amount_received" id="cashReceivedInput" class="form-control" value="{{ $balance }}">
+            {{-- The form continues the Payment Summary above: the same label-left / field-right rows, in the order the
+                 desk works through it - how it is paid, what was received, what is applied, then change or balance. --}}
+            <div class="row g-2 align-items-center mb-2">
+                <label class="col-sm-5 col-form-label fw-semibold" for="paymentMethodSelect">Payment Method <span class="text-danger">*</span></label>
+                <div class="col-sm-7">
+                    <select name="payment_method" id="paymentMethodSelect" class="form-select" required>
+                        <option value="cash">Cash</option>
+                        <option value="gcash">GCash</option>
+                    </select>
                 </div>
-                <div class="form-text">The cash the guest hands over. Only the amount applied below is recorded as paid.</div>
             </div>
-            <div class="mb-3">
-                <label class="form-label" for="amountPaidInput">Amount Applied to Total Due <span class="text-danger">*</span></label>
-                <div class="input-group">
-                    <span class="input-group-text">₱</span>
-                    <input type="number" step="0.01" min="{{ $balance }}" max="{{ $balance }}" name="amount_paid" id="amountPaidInput" class="form-control" value="{{ $balance }}" data-balance="{{ $balance }}" required readonly aria-describedby="amountPaidHelp amountPaidError">
+            <div class="row g-2 align-items-center mb-2" id="cashReceivedGroup">
+                <label class="col-sm-5 col-form-label fw-semibold" for="cashReceivedInput">Amount Received <span class="text-danger">*</span></label>
+                <div class="col-sm-7">
+                    <div class="input-group">
+                        <span class="input-group-text">₱</span>
+                        <input type="number" step="0.01" min="0.01" name="amount_received" id="cashReceivedInput" class="form-control text-end" value="{{ $balance }}">
+                    </div>
+                    <div class="form-text">The cash the guest hands over.</div>
                 </div>
-                <div class="form-text" id="amountPaidHelp">The full balance of <strong>₱{{ number_format($balance, 2) }}</strong> is paid now - partial payment isn't accepted at check-out.</div>
-                <div class="text-danger small d-none mt-1" id="amountPaidError" role="alert"></div>
             </div>
-            <div class="alert alert-info py-2 d-none" id="changeDueBox" role="status"></div>
-            <div class="mb-3 d-none" id="referenceNumberGroup">
-                <label class="form-label">Reference Number <span class="text-danger">*</span></label>
-                <input type="text" name="reference_number" id="referenceNumberInput" class="form-control" placeholder="GCash reference number">
+            <div class="row g-2 align-items-center mb-2">
+                <label class="col-sm-5 col-form-label fw-semibold" for="amountPaidInput">Amount Applied to Total Due <span class="text-danger">*</span></label>
+                <div class="col-sm-7">
+                    <div class="input-group">
+                        <span class="input-group-text">₱</span>
+                        <input type="number" step="0.01" min="{{ $balance }}" max="{{ $balance }}" name="amount_paid" id="amountPaidInput" class="form-control text-end" value="{{ $balance }}" data-balance="{{ $balance }}" required readonly aria-describedby="amountPaidHelp amountPaidError">
+                    </div>
+                    <div class="form-text" id="amountPaidHelp">The full <strong>₱{{ number_format($balance, 2) }}</strong> is paid now - partial payment isn't accepted at check-out.</div>
+                    <div class="text-danger small d-none mt-1" id="amountPaidError" role="alert"></div>
+                </div>
+            </div>
+            <div class="row g-2 align-items-center mb-3 border-top pt-2" id="changeBalanceRow" role="status">
+                <span class="col-sm-5 fw-bold" id="changeBalanceLabel">Change</span>
+                <span class="col-sm-7 text-end fw-bold fs-5" id="changeBalanceValue">₱0.00</span>
+            </div>
+            <div class="row g-2 align-items-center mb-2 d-none" id="referenceNumberGroup">
+                <label class="col-sm-5 col-form-label fw-semibold" for="referenceNumberInput">Reference Number <span class="text-danger">*</span></label>
+                <div class="col-sm-7">
+                    <input type="text" name="reference_number" id="referenceNumberInput" class="form-control" placeholder="GCash reference number">
+                </div>
             </div>
 
         @else

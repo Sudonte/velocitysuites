@@ -220,6 +220,13 @@ class CheckInSettlementTest extends ApiFlowTestCase
         $this->assertSame('occupied', $rt->rooms()->first()->status);
         $this->assertSame(2, (int) AmenityRequest::where('booking_id', $booking->id)->value('quantity'));
         $this->assertNotNull($booking->billing()->first()->checkin_settled_at);
+
+        // a walk-in check-in settles the bill too, so it gets Receipt 2 like a normal check-in
+        $billing = $booking->billing()->first();
+        $this->assertStringStartsWith('SR-', $billing->checkin_receipt_number);
+        $this->assertSame('full_payment', $billing->checkin_receipt_snapshot['settlement_type']);
+        $this->assertEquals(1600.0, $billing->checkin_receipt_snapshot['amount_settled']);
+        $this->assertEquals(0.0, $billing->checkin_receipt_snapshot['balance']);
     }
 
     public function test_walk_in_gcash_needs_the_exact_amount_reference_and_receipt(): void
