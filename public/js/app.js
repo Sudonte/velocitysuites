@@ -611,6 +611,7 @@ document.addEventListener('submit', function (event) {
             section.classList.toggle('d-none', !on);
             section.querySelectorAll('input').forEach(function (input) {
                 input.required = on && !input.disabled;
+                if (input.type === 'number') input.setCustomValidity('');
             });
         });
 
@@ -639,6 +640,9 @@ document.addEventListener('submit', function (event) {
         }
         hint.textContent = text;
         hint.className = 'd-block mt-1 small ' + cls;
+        // Check-in and walk-in take the full amount only: a short amount (or a GCash amount that isn't exact)
+        // blocks the submit here too, not just on the server.
+        amountInput.setCustomValidity(full && cls === 'text-danger' ? text : '');
     }
 
     window.syncDeskPayment = sync;

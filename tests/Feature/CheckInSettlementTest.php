@@ -245,6 +245,25 @@ class CheckInSettlementTest extends ApiFlowTestCase
         Storage::disk('public')->assertExists($payment->receipt_path);
     }
 
+    public function test_walk_in_without_paying_the_full_bill_is_refused(): void
+    {
+        $rt = $this->makeRoomTypeWithRooms('Deluxe', 1000, 2, 1);
+        $desk = $this->desk();
+
+        // "No payment yet" (only offered on Create Booking) or no payment at all: refused, nothing is created.
+        foreach ([['payment_method' => 'none'], []] as $payment) {
+            $this->actingAs($desk)->post(route('receptionist.check-in.walk-in.store'), $this->walkInPayload($rt, $payment))
+                ->assertSessionHasErrors();
+        }
+        // A cent short in cash is still a partial payment.
+        $this->actingAs($desk)->post(route('receptionist.check-in.walk-in.store'), $this->walkInPayload($rt, ['payment_method' => 'cash', 'amount_received' => 999.99]))
+            ->assertSessionHasErrors('amount_received');
+
+        $this->assertSame(0, Booking::count());
+        $this->assertSame(0, Payment::count());
+        $this->assertSame('available', $rt->rooms()->first()->status);
+    }
+
     public function test_an_occupied_room_is_never_offered_even_for_an_early_check_in(): void
     {
         // Room 1 is occupied today by a stay ending tomorrow.
