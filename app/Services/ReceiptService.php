@@ -6,6 +6,7 @@ use App\Models\Billing;
 use App\Models\Booking;
 use App\Models\Guest;
 use App\Models\Payment;
+use App\Models\Receipt;
 use App\Support\PaymentMath;
 use Illuminate\Support\Collection;
 
@@ -254,6 +255,14 @@ class ReceiptService
      */
     public function findReceiptPayload(string $receiptNumber, Guest $guest): ?array
     {
+        // A stored receipt is a frozen snapshot: show exactly what was issued, never a recomputation from live data.
+        $stored = Receipt::where('receipt_no', $receiptNumber)->first();
+        if ($stored) {
+            $booking = Booking::find($stored->booking_id);
+
+            return $booking && $this->ownedBy($booking, $guest) ? $stored->snapshot : null;
+        }
+
         if (str_starts_with($receiptNumber, 'PR-') || str_starts_with($receiptNumber, 'FR-')) {
             $payment = Payment::where('receipt_number', $receiptNumber)->first();
             if (!$payment) {

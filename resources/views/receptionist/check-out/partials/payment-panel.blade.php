@@ -21,7 +21,7 @@
         $extrasTotal = round(array_sum(array_column($extraLines, 'amount')) + $guestFee, 2);
         $previouslyPaid = (float) $paymentSummary['total_amount_paid'];
     @endphp
-    <h6 class="mb-2">Payment Summary</h6>
+    <h6 class="mb-2">6. Payment Summary</h6>
     <div class="table-responsive">
     <table class="table table-sm table-borderless align-middle mb-3" id="paymentSummaryTable">
         <colgroup><col><col style="width: 9rem;"></colgroup>
@@ -93,6 +93,7 @@
 
     <div class="alert alert-danger d-none mt-3" id="paymentErrorAlert"></div>
 
+    <h6 class="mt-3">7. Payment Input</h6>
     <form id="paymentForm">
         @if($balance > 0.009)
             {{-- The form continues the Payment Summary above: the same label-left / field-right rows, in the order the
@@ -168,6 +169,6 @@
         <i class="fas fa-arrow-left"></i> Back to Billing
     </button>
     <button type="submit" form="paymentForm" class="btn btn-success" id="completePaymentBtn">
-        <i class="fas fa-check"></i> {{ $balance > 0.009 ? 'Complete Payment' : 'Complete Check-Out' }}
+        <i class="fas fa-check"></i> 8. {{ $balance > 0.009 ? 'Confirm Payment & Check-out' : 'Confirm Check-out' }}
     </button>
 </div>

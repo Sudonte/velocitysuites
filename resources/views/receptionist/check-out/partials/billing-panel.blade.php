@@ -5,6 +5,7 @@
 <div class="modal-body" data-billing-id="{{ $billing->id }}" data-booking-id="{{ $booking->id }}">
     <div class="alert alert-danger d-none" id="billingErrorAlert"></div>
 
+    <h6><i class="fas fa-user"></i> 1. Guest &amp; Booking Info</h6>
     <div class="row mb-3">
         <div class="col-md-6">
             <strong>Guest:</strong> {{ $booking->guest_display_name }}<br>
@@ -31,7 +32,7 @@
         </div>
     @endif
 
-    <h6><i class="fas fa-calculator"></i> Charges</h6>
+    <h6><i class="fas fa-bed"></i> 2. Room Charges</h6>
     <p class="small text-muted mb-2">
         Booked {{ \Carbon\Carbon::parse($stay['check_in'])->format('M j, Y') }} to {{ \Carbon\Carbon::parse($stay['scheduled_check_out'])->format('M j, Y') }}
         ({{ $stay['scheduled_nights'] }} night{{ $stay['scheduled_nights'] === 1 ? '' : 's' }}).
@@ -79,7 +80,7 @@
         </div>
     @endif
 
-    <h6><i class="fas fa-spa"></i> Amenities & Services</h6>
+    <h6><i class="fas fa-spa"></i> 3. Amenities</h6>
     <div class="table-responsive">
     <table class="table table-sm mb-3">
         <thead>
@@ -134,6 +135,29 @@
         @include('receptionist.check-out.partials.charges-table', ['billing' => $billing])
     </div>
 
+    {{-- 5. Payments already made: the receipts issued before check-out (stored, frozen), then what is still owed. --}}
+    @php
+        $storedReceipts = \App\Models\Receipt::where('booking_id', $booking->id)->orderBy('receipt_type')->get();
+        $receiptNames = [1 => 'Receipt 1 - Booking verification', 2 => 'Receipt 2 - Check-in payment'];
+        $paidBeforeCheckout = round((float) $booking->paidTotal(), 2);
+    @endphp
+    <h6 class="mt-3"><i class="fas fa-receipt"></i> 5. Payments Already Made</h6>
+    <div class="table-responsive">
+    <table class="table table-sm table-borderless mb-2">
+        @foreach($storedReceipts->whereIn('receipt_type', [1, 2]) as $r)
+            <tr>
+                <td>{{ $receiptNames[$r->receipt_type] }} <span class="text-muted small">{{ $r->receipt_no }}</span></td>
+                <td class="text-end">₱{{ number_format((float) ($r->snapshot['highlight']['amount_paid_now'] ?? 0), 2) }}</td>
+            </tr>
+        @endforeach
+        <tr class="fw-semibold">
+            <td>Total paid so far</td>
+            <td class="text-end">₱{{ number_format($paidBeforeCheckout, 2) }}</td>
+        </tr>
+    </table>
+    </div>
+
+    <h6 class="mt-3"><i class="fas fa-calculator"></i> 6. Payment Summary</h6>
     {{-- Discounts and promotions are decided at check-in only - none can be added or changed at check-out. --}}
     @if($billing->discount > 0)
         <p class="small text-muted mb-0"><i class="fas fa-percentage"></i> Discount applied at check-in{{ $billing->discountApplied ? ' (' . $billing->discountApplied->name . ')' : '' }}.</p>
@@ -170,6 +194,6 @@
         <button type="button" class="btn btn-secondary" id="cancelBillingBtn">Cancel Billing</button>
     @endunless
     <button type="button" class="btn btn-primary" id="proceedToPaymentBtn">
-        <i class="fas fa-arrow-right"></i> Proceed to Payment
+        <i class="fas fa-arrow-right"></i> Continue to Payment
     </button>
 </div>

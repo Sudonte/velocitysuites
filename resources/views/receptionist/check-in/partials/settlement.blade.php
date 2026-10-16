@@ -90,7 +90,7 @@
         @endif
     </div>
 
-    <h6 class="mb-2"><i class="fas fa-file-invoice"></i> Bill at Check-in</h6>
+    <h6 class="mb-2"><i class="fas fa-file-invoice"></i> Payment Summary</h6>
     <div class="border rounded p-2 mb-2 small">
         @foreach($stay['rooms'] as $line)
             <div class="d-flex justify-content-between"><span>{{ $line['room_type'] ?? 'Room' }} &middot; {{ $peso($line['rate']) }} &times; {{ \App\Support\StayBill::nightsLabel($line['nights']) }}</span><span>{{ $peso($line['subtotal']) }}</span></div>

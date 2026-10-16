@@ -639,6 +639,8 @@ class CheckInController extends Controller
             'verified_by' => auth()->user()?->full_name,
         ]);
 
+        app(\App\Services\ReceiptSnapshotService::class)->issueCheckinPayment($locked->fresh(), $billing->fresh(), auth()->id());
+
         if ($paidNow > 0) {
             \App\Support\Activity::log('Payment at check-in', "Booking #{$locked->id} - ₱" . number_format($paidNow, 2) . ' (' . ($validated['payment_method'] ?? 'cash') . ') - paid in full', $locked);
         }

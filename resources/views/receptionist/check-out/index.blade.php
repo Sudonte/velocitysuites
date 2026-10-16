@@ -509,6 +509,14 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     });
 
+    // Line total preview while typing (quantity x unit price); the server computes the real total.
+    billingPanelContent.addEventListener('input', function (e) {
+        if (e.target.id !== 'chargeQty' && e.target.id !== 'chargeUnit') return;
+        const q = parseFloat(document.getElementById('chargeQty').value) || 0;
+        const u = parseFloat(document.getElementById('chargeUnit').value) || 0;
+        document.getElementById('chargeLineTotal').textContent = '₱' + (q * u).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    });
+
     // Add charge form submit
     billingPanelContent.addEventListener('submit', async function (e) {
         if (e.target.id !== 'addChargeForm') return;
@@ -650,6 +658,9 @@ document.addEventListener('DOMContentLoaded', function () {
         if (!validateAmount()) return;
         const payload = Object.fromEntries(new FormData(form).entries());
         const method = payload.payment_method;
+
+        // Check-out cannot be undone and issues the final receipt: ask first.
+        if (!(await window.confirmAction({ title: 'Confirm check-out?', message: 'This completes the check-out and issues the guest their final receipt (Receipt 3). It cannot be undone.', button: 'Confirm Check-out', variant: 'primary' }, form))) return;
 
         if (method === 'gcash' && !payload.reference_number) {
             showPaymentError('Reference number is required for GCash payments.');

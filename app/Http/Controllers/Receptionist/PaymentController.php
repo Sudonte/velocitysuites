@@ -93,6 +93,9 @@ class PaymentController extends Controller
         // isFullPaymentReceiptEligible() is a pure read here - $payment's
         // in-memory receipt_number was already set by ensureReceiptNumber()
         // above, so this just reads it back, it does not mint anything.
+        if ($booking = $this->resolveBooking($payment)) {
+            app(\App\Services\ReceiptSnapshotService::class)->issueBookingVerification($booking->fresh(), $payment->fresh(), auth()->id());
+        }
         $receiptLabel = $payment->isFullPaymentReceiptEligible() ? 'Payment Receipt' : 'Partial Payment Receipt';
         // Same pure read as $receiptLabel above (Payment::receiptType() -
         // reads $payment's now-set in-memory receipt_number, mints

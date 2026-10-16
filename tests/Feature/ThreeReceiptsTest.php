@@ -238,4 +238,49 @@ class ThreeReceiptsTest extends ApiFlowTestCase
             ->assertStatus(422)->assertJsonValidationErrors('amount');
         $this->assertSame(0, $billing->additionalCharges()->count());
     }
+
+    public function test_an_additional_charge_is_quantity_times_unit_price_computed_by_the_server(): void
+    {
+        [, $rt, $room, $booking] = $this->arriving();
+        $desk = $this->desk();
+        $this->actingAs($desk)->postJson(route('receptionist.check-in.store', $booking),
+            $this->payload($rt, $room, ['payment_method' => 'cash', 'amount_received' => 2000]))->assertOk();
+        $billing = $booking->fresh()->billing()->first();
+        $billing->update(['billing_status' => 'pending']);
+
+        // a client-supplied "amount" cannot override quantity x unit price
+        $this->actingAs($desk)->postJson(route('receptionist.billing.additional-charge.store', $billing),
+            ['description' => 'Broken glass', 'quantity' => 3, 'unit_price' => 150.5, 'amount' => 1, 'category' => 'damage'])->assertSuccessful();
+        $line = $billing->additionalCharges()->first();
+        $this->assertSame(3, (int) $line->quantity);
+        $this->assertEquals(150.5, (float) $line->unit_price);
+        $this->assertEquals(451.5, (float) $line->amount);
+
+        // editing recomputes the line; a legacy amount-only request is one unit
+        $this->actingAs($desk)->putJson(route('receptionist.billing.additional-charge.update', $line), ['description' => 'Broken glass', 'quantity' => 2, 'unit_price' => 100, 'category' => 'damage'])->assertSuccessful();
+        $this->assertEquals(200.0, (float) $line->fresh()->amount);
+        $this->actingAs($desk)->postJson(route('receptionist.billing.additional-charge.store', $billing), ['description' => 'Old style', 'amount' => 75, 'category' => 'other'])->assertSuccessful();
+        $this->assertEquals(275.0, (float) $billing->fresh()->additional_charges_total);
+        $this->actingAs($desk)->postJson(route('receptionist.billing.additional-charge.store', $billing), ['quantity' => 0, 'unit_price' => 5, 'category' => 'other'])->assertStatus(422);
+    }
+
+    public function test_the_checkout_billing_panel_has_the_numbered_sections_in_order_with_payments_already_made(): void
+    {
+        [, $rt, $room, $booking] = $this->arriving();
+        $desk = $this->desk();
+        $deposit = Payment::create(['booking_id' => $booking->id, 'payment_method' => 'cash', 'amount_paid' => 500, 'payment_stage' => 'deposit', 'payment_status' => 'pending', 'payment_date' => now()]);
+        $this->actingAs($desk)->put(route('receptionist.payments.verify', $deposit))->assertSessionHasNoErrors();
+        $this->actingAs($desk)->postJson(route('receptionist.check-in.store', $booking),
+            $this->payload($rt, $room, ['payment_method' => 'cash', 'amount_received' => 1500]))->assertOk();
+        $this->actingAs($desk)->putJson(route('receptionist.check-out.rooms.checkout-many', $booking->fresh()), ['all' => 1])->assertOk();
+
+        $html = $this->actingAs($desk)->get(route('receptionist.check-out.billing', $booking->fresh()))->assertOk()->getContent();
+        $last = -1;
+        foreach (['1. Guest', '2. Room Charges', '3. Amenities', '4. Additional / Other / Damage Charges', '5. Payments Already Made', 'Receipt 1 - Booking verification', 'Receipt 2 - Check-in payment', '6. Payment Summary'] as $needle) {
+            $at = strpos($html, $needle);
+            $this->assertNotFalse($at, "{$needle} is missing");
+            $this->assertGreaterThan($last, $at, "{$needle} is out of order");
+            $last = $at;
+        }
+    }
 }

@@ -178,7 +178,7 @@
                     <i class="fas fa-info-circle"></i> Only rooms of the matching type, free for the full stay, are listed in each dropdown. Each room can only be picked once.
                 </p>
 
-                <h6 class="mt-3 mb-2"><i class="fas fa-money-bill-wave"></i> Payment</h6>
+                <h6 class="mt-3 mb-2"><i class="fas fa-money-bill-wave"></i> Payment Input</h6>
                 @if($balanceDue > 0)
                     {{-- Full payment only - the server refuses anything less. Disabled until this step shows. --}}
                     @include('receptionist.partials.desk-payment-fields', ['due' => $balanceDue, 'mode' => 'full', 'disabled' => true, 'containerId' => 'checkInPayment'])

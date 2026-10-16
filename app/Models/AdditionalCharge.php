@@ -12,6 +12,8 @@ class AdditionalCharge extends Model
     protected $fillable = [
         'billing_id',
         'description',
+        'quantity',
+        'unit_price',
         'amount',
         'category',
         'notes',
@@ -19,6 +21,7 @@ class AdditionalCharge extends Model
 
     protected $casts = [
         'amount' => 'decimal:2',
+        'unit_price' => 'decimal:2',
     ];
 
     /**

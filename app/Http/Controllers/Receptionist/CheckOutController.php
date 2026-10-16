@@ -506,6 +506,12 @@ class CheckOutController extends Controller
                 // this whole method can now only ever reach here once per
                 // booking - defense in depth, not load-bearing anymore.
                 $officialReceiptNumber = $lockedBilling->ensureOfficialReceiptNumber();
+                if ($officialReceiptNumber) {
+                    // Receipt 3: frozen now, after the last payment above, so it carries the final figures.
+                    app(\App\Services\ReceiptSnapshotService::class)->issueCheckoutFinal(
+                        $lockedBooking->fresh(), $lockedBilling->fresh(), auth()->id()
+                    );
+                }
 
                 if ($guest) {
                     // Check-out came earlier or later than the dates the guest booked: tell them the dates, nights and
@@ -593,10 +599,13 @@ class CheckOutController extends Controller
     {
         $validated = $request->validate([
             'description' => 'nullable|string',
-            'amount' => 'required|numeric|min:0.01|max:9999999.99',
+            'quantity' => 'nullable|integer|min:1|max:999',
+            'unit_price' => 'nullable|numeric|min:0.01|max:9999999.99',
+            'amount' => 'required_without:unit_price|nullable|numeric|min:0.01|max:9999999.99',
             'category' => 'required|in:damage,lost_item,broken_equipment,mini_bar,laundry,other',
             'notes' => 'nullable|string|max:1000',
         ]);
+        $validated = $this->priceChargeLine($validated);
 
         if ($billing->billing_status === 'paid') {
             return response()->json(['message' => 'Cannot add charges to a paid bill.'], 422);
@@ -606,6 +615,8 @@ class CheckOutController extends Controller
             $charge = AdditionalCharge::create([
                 'billing_id' => $billing->id,
                 'description' => $validated['description'],
+                'quantity' => $validated['quantity'],
+                'unit_price' => $validated['unit_price'],
                 'amount' => $validated['amount'],
                 'category' => $validated['category'],
                 'notes' => $validated['notes'] ?? null,
@@ -641,14 +652,38 @@ class CheckOutController extends Controller
     /**
      * Update an existing additional charge (Billing Panel, AJAX).
      */
+    /**
+     * A charge is quantity x unit price; the server computes the line total (never trusts a client sum). A legacy request
+     * that only sends `amount` is one unit at that price.
+     *
+     * @return array the validated data with quantity, unit_price and amount filled in
+     */
+    private function priceChargeLine(array $validated): array
+    {
+        $quantity = (int) ($validated['quantity'] ?? 1);
+        $unit = isset($validated['unit_price']) ? round((float) $validated['unit_price'], 2) : round((float) $validated['amount'], 2);
+        $total = round($quantity * $unit, 2);
+        if ($total > 9999999.99) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['amount' => 'That line total is too large.']);
+        }
+        $validated['quantity'] = $quantity;
+        $validated['unit_price'] = $unit;
+        $validated['amount'] = $total;
+
+        return $validated;
+    }
+
     public function updateAdditionalCharge(Request $request, AdditionalCharge $additionalCharge)
     {
         $validated = $request->validate([
             'description' => 'nullable|string',
-            'amount' => 'required|numeric|min:0.01|max:9999999.99',
+            'quantity' => 'nullable|integer|min:1|max:999',
+            'unit_price' => 'nullable|numeric|min:0.01|max:9999999.99',
+            'amount' => 'required_without:unit_price|nullable|numeric|min:0.01|max:9999999.99',
             'category' => 'required|in:damage,lost_item,broken_equipment,mini_bar,laundry,other',
             'notes' => 'nullable|string|max:1000',
         ]);
+        $validated = $this->priceChargeLine($validated);
 
         $billing = $additionalCharge->billing;
 
@@ -659,6 +694,8 @@ class CheckOutController extends Controller
         DB::transaction(function () use ($additionalCharge, $validated, $billing) {
             $additionalCharge->update([
                 'description' => $validated['description'],
+                'quantity' => $validated['quantity'],
+                'unit_price' => $validated['unit_price'],
                 'amount' => $validated['amount'],
                 'category' => $validated['category'],
                 'notes' => $validated['notes'] ?? null,

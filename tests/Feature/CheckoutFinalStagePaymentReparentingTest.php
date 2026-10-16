@@ -165,6 +165,21 @@ class CheckoutFinalStagePaymentReparentingTest extends TestCase
             $table->timestamps();
         });
 
+        Schema::create('receipts', function (Blueprint $table) {
+            $table->id();
+            $table->unsignedBigInteger('booking_id');
+            $table->unsignedTinyInteger('receipt_type');
+            $table->string('receipt_no', 40)->unique();
+            $table->timestamp('issued_at');
+            $table->unsignedBigInteger('issued_by')->nullable();
+            $table->decimal('total_amount', 12, 2)->default(0);
+            $table->decimal('total_paid', 12, 2)->default(0);
+            $table->decimal('remaining_balance', 12, 2)->default(0);
+            $table->json('snapshot');
+            $table->timestamps();
+            $table->unique(['booking_id', 'receipt_type']);
+        });
+
         Schema::create('billings', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('booking_id')->unique();
@@ -236,6 +251,8 @@ class CheckoutFinalStagePaymentReparentingTest extends TestCase
             $table->id();
             $table->unsignedBigInteger('billing_id');
             $table->string('description')->nullable();
+            $table->unsignedInteger('quantity')->default(1);
+            $table->decimal('unit_price', 10, 2)->nullable();
             $table->decimal('amount', 10, 2);
             $table->timestamps();
         });
