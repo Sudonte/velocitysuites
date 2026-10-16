@@ -192,7 +192,8 @@ class RoomAvailabilityService
     {
         // Rooms are only ever assigned at check-in, i.e. NOW - even for a guest arriving ahead of their booked
         // date - so the stay is taken to start today (or on its booked date if that already passed).
-        $from = $booking->check_in->lt(Carbon::today()) ? $booking->check_in : Carbon::today();
+        $hotelToday = \App\Support\CheckInWindow::date();
+        $from = $booking->check_in->lt($hotelToday) ? $booking->check_in : $hotelToday;
 
         return $this->freeRoomsOfType($roomTypeId, $from, $booking->check_out, $booking->id);
     }
@@ -405,10 +406,10 @@ class RoomAvailabilityService
               ->where(function ($end) use ($checkIn, $checkOutCol, $statusCol) {
                   $end->where($checkOutCol, '>', $checkIn);
 
-                  if ($checkIn->lte(Carbon::today())) {
+                  if ($checkIn->lte(\App\Support\CheckInWindow::date())) {
                       $end->orWhere(function ($overstay) use ($checkOutCol, $statusCol) {
                           $overstay->where($statusCol, Booking::STATUS_CHECKED_IN)
-                                   ->where($checkOutCol, '<=', Carbon::today());
+                                   ->where($checkOutCol, '<=', \App\Support\CheckInWindow::date());
                       });
                   }
               });

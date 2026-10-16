@@ -31,7 +31,7 @@
                     <span class="badge badge-brand">{{ $user->role_label }}</span>
                     <hr>
                     <p class="mb-0 text-muted small">
-                        <i class="fas fa-calendar"></i> Joined {{ $user->created_at->format('M d, Y') }}
+                        <i class="fas fa-calendar"></i> Joined {{ $user->created_at->copy()->timezone('Asia/Manila')->format('M d, Y') }}
                     </p>
                 </div>
             </div>

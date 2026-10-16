@@ -109,7 +109,7 @@
                     </div>
                     <div class="monitoring-item-row">
                         <span class="text-muted">Requested</span>
-                        <span>{{ $req->created_at->format('M d, Y') }}</span>
+                        <span>{{ $req->created_at->copy()->timezone('Asia/Manila')->format('M d, Y') }}</span>
                     </div>
                     <button type="button" class="btn btn-outline-primary btn-sm w-100 mt-2 btn-icon" data-bs-toggle="modal"
                             data-bs-target="#amenityRequestDetail{{ $req->id }}" title="View Details" aria-label="View Details">
@@ -150,13 +150,13 @@
                             <td>
                                 {{ $req->amenity_name }}
                                 <small class="d-block text-muted d-lg-none">
-                                    {{ $req->category ?: '—' }} &middot; {{ $req->created_at->format('M d, Y') }}
+                                    {{ $req->category ?: '—' }} &middot; {{ $req->created_at->copy()->timezone('Asia/Manila')->format('M d, Y') }}
                                 </small>
                             </td>
                             <td class="d-none d-lg-table-cell">{{ $req->category ?: '—' }}</td>
                             <td>{{ $req->quantity }}</td>
                             <td>₱{{ number_format($req->subtotal, 2) }}</td>
-                            <td class="d-none d-lg-table-cell">{{ $req->created_at->format('M d, Y h:i A') }}</td>
+                            <td class="d-none d-lg-table-cell">{{ $req->created_at->copy()->timezone('Asia/Manila')->format('M d, Y h:i A') }}</td>
                             <td>
                                 <x-status-badge :status="$req->status" domain="amenity_request" />
                                 <small class="d-block text-muted mt-1">
@@ -294,7 +294,7 @@
                     <div class="room-type-detail-list">
                         <div class="room-type-detail-row">
                             <span class="room-type-detail-label">Requested:</span>
-                            <span class="room-type-detail-value">{{ $req->created_at->format('M d, Y g:i A') }}</span>
+                            <span class="room-type-detail-value">{{ $req->created_at->copy()->timezone('Asia/Manila')->format('M d, Y g:i A') }}</span>
                         </div>
                         <div class="room-type-detail-row">
                             <span class="room-type-detail-label">Status:</span>
@@ -309,7 +309,7 @@
                         @if($req->decided_at)
                             <div class="room-type-detail-row">
                                 <span class="room-type-detail-label">Decided:</span>
-                                <span class="room-type-detail-value">{{ $req->decided_at->format('M d, Y g:i A') }}@if($req->decider) by {{ $req->decider->full_name }}@endif</span>
+                                <span class="room-type-detail-value">{{ $req->decided_at->copy()->timezone('Asia/Manila')->format('M d, Y g:i A') }}@if($req->decider) by {{ $req->decider->full_name }}@endif</span>
                             </div>
                         @endif
                         @if($req->status === 'rejected' && $req->rejection_reason)

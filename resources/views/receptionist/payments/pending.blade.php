@@ -42,7 +42,7 @@
                         <td>{{ ucfirst($payment->payment_method) }}</td>
                         <td>{{ $payment->reference_number ?? '—' }}</td>
                         <td>₱{{ number_format($payment->amount_paid, 2) }}</td>
-                        <td>{{ $payment->created_at->format('M d, Y h:i A') }}</td>
+                        <td>{{ $payment->created_at->copy()->timezone('Asia/Manila')->format('M d, Y h:i A') }}</td>
                         <td>
                             <div class="d-flex gap-1">
                                 @if($reservation)

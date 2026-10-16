@@ -60,9 +60,9 @@ class CheckInController extends Controller
         // visible under every option, "Today" included, since hiding a
         // guest who should already be here would be worse than a longer list.
         $rangeEnd = match ($range) {
-            'today' => Carbon::today()->endOfDay(),
-            'week' => Carbon::now()->endOfWeek(),
-            'month' => Carbon::now()->endOfMonth(),
+            'today' => $this->hotelToday()->endOfDay(),
+            'week' => $this->hotelToday()->endOfWeek(),
+            'month' => $this->hotelToday()->endOfMonth(),
             'all' => null,
         };
 

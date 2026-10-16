@@ -177,7 +177,7 @@
                         <div class="d-flex justify-content-between align-items-start {{ ! $loop->last ? 'mb-2 pb-2 border-bottom' : '' }}">
                             <div>
                                 {{ $req->quantity }} &times; {{ $req->amenity_name }}
-                                <small class="text-muted d-block">{{ $req->created_at->format('M d, Y g:i A') }}</small>
+                                <small class="text-muted d-block">{{ $req->created_at->copy()->timezone('Asia/Manila')->format('M d, Y g:i A') }}</small>
                                 @if($req->status === 'rejected' && $req->rejection_reason)
                                     <small class="text-danger d-block">{{ $req->rejection_reason }}</small>
                                 @endif
@@ -387,7 +387,7 @@
                         <div class="timeline-marker" style="background-color: var(--primary-color);"></div>
                         <div class="timeline-content">
                             <strong>Reservation Requested</strong><br>
-                            <small class="text-muted">{{ $reservation->created_at->format('M d, Y h:i A') }}</small>
+                            <small class="text-muted">{{ $reservation->created_at->copy()->timezone('Asia/Manila')->format('M d, Y h:i A') }}</small>
                         </div>
                     </div>
                     @if($reservation->status === \App\Models\Reservation::STATUS_CONVERTED && $booking)

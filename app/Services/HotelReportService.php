@@ -311,7 +311,7 @@ class HotelReportService
 
         $nights = [];
         $typeNights = [];
-        $today = Carbon::today();
+        $today = \App\Support\CheckInWindow::date();
         foreach ($rows as $row) {
             $start = Carbon::parse($row->check_in)->startOfDay();
             $end = $row->checked_out_at

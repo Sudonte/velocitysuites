@@ -29,7 +29,7 @@ class DateRange
             $to = self::parseDate($request->get('to'));
 
             if (! $from || ! $to) {
-                return [Carbon::now()->startOfMonth(), Carbon::now()->endOfDay(), 'monthly'];
+                return [self::hotelNow()->startOfMonth(), self::hotelNow()->endOfDay(), 'monthly'];
             }
 
             $from = $from->startOfDay();
@@ -43,10 +43,16 @@ class DateRange
         }
 
         return match ($period) {
-            'daily' => [Carbon::now()->startOfDay(), Carbon::now()->endOfDay(), 'daily'],
-            'weekly' => [Carbon::now()->startOfWeek(), Carbon::now()->endOfDay(), 'weekly'],
-            default => [Carbon::now()->startOfMonth(), Carbon::now()->endOfDay(), 'monthly'],
+            'daily' => [self::hotelNow()->startOfDay(), self::hotelNow()->endOfDay(), 'daily'],
+            'weekly' => [self::hotelNow()->startOfWeek(), self::hotelNow()->endOfDay(), 'weekly'],
+            default => [self::hotelNow()->startOfMonth(), self::hotelNow()->endOfDay(), 'monthly'],
         };
+    }
+
+    /** The hotel's date as a plain date - the same form a custom range's picked dates take. */
+    private static function hotelNow(): Carbon
+    {
+        return \App\Support\CheckInWindow::date();
     }
 
     private static function parseDate(?string $value): ?Carbon

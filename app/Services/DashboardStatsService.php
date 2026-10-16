@@ -78,10 +78,10 @@ class DashboardStatsService
     private function computeAdminStats(): array
     {
         $todayRevenue = (float) TestAccountScope::excludeFromPayments(
-            Payment::countedAsRevenue()->whereDate('payment_date', today())
+            Payment::countedAsRevenue()->whereBetween('payment_date', \App\Support\CheckInWindow::dayBoundsUtc(\App\Support\CheckInWindow::date()))
         )->sum('amount_paid');
         $yesterdayRevenue = (float) TestAccountScope::excludeFromPayments(
-            Payment::countedAsRevenue()->whereDate('payment_date', today()->subDay())
+            Payment::countedAsRevenue()->whereBetween('payment_date', \App\Support\CheckInWindow::dayBoundsUtc(\App\Support\CheckInWindow::date()->subDay()))
         )->sum('amount_paid');
 
         $monthlyRevenue = (float) TestAccountScope::excludeFromPayments(
@@ -258,13 +258,13 @@ class DashboardStatsService
 
             // Last-7-days trend lines for the overview charts.
             'usersTrend' => $this->dailySeries(fn ($date) => TestAccountScope::excludeFromUsers(
-                User::whereDate('created_at', '<=', $date)
+                User::where('created_at', '<', \App\Support\CheckInWindow::dayBoundsUtc($date)[1])
             )->count()),
             'reservationsTrend' => $this->dailySeries(fn ($date) => TestAccountScope::excludeFromReservations(
-                Reservation::whereDate('created_at', $date)
+                Reservation::whereBetween('created_at', \App\Support\CheckInWindow::dayBoundsUtc($date))
             )->count()),
             'revenueTrend' => $this->dailySeries(fn ($date) => (float) TestAccountScope::excludeFromPayments(
-                Payment::countedAsRevenue()->whereDate('payment_date', $date)
+                Payment::countedAsRevenue()->whereBetween('payment_date', \App\Support\CheckInWindow::dayBoundsUtc($date))
             )->sum('amount_paid')),
         ];
     }
@@ -292,7 +292,7 @@ class DashboardStatsService
         $values = [];
 
         for ($i = 6; $i >= 0; $i--) {
-            $date = today()->subDays($i);
+            $date = \App\Support\CheckInWindow::date()->subDays($i);
             $labels[] = $date->format('M d');
             $values[] = $valueForDate($date);
         }
@@ -353,11 +353,11 @@ class DashboardStatsService
         // operational record from conversion onward), not on Reservation's
         // own status. Always "today", not filter-scoped (see docblock).
         $todayCheckIns = TestAccountScope::excludeFromBookings(
-            Booking::whereDate('check_in', today())->where('booking_status', Booking::STATUS_ACTIVE)
+            Booking::whereDate('check_in', \App\Support\CheckInWindow::date())->where('booking_status', Booking::STATUS_ACTIVE)
         )->count();
 
         $todayCheckOuts = TestAccountScope::excludeFromBookings(
-            Booking::whereDate('check_out', today())->where('booking_status', Booking::STATUS_CHECKED_IN)
+            Booking::whereDate('check_out', \App\Support\CheckInWindow::date())->where('booking_status', Booking::STATUS_CHECKED_IN)
         )->count();
 
         // Stays with at least one room still occupied (a multi-room booking

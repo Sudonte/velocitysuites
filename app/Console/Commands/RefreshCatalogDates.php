@@ -19,7 +19,7 @@ class RefreshCatalogDates extends Command
 
     public function handle(): int
     {
-        $today = today();
+        $today = \App\Support\CheckInWindow::date();
 
         $promotions = Promotion::where('is_recurring', false)->where('status', 'active')
             ->whereDate('end_date', '<', $today)->update(['status' => 'inactive']);

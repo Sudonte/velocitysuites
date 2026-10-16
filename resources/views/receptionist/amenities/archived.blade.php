@@ -110,7 +110,7 @@
                     </div>
                     <div class="monitoring-item-row">
                         <span class="text-muted">Requested</span>
-                        <span>{{ $req->created_at->format('M d, Y') }}</span>
+                        <span>{{ $req->created_at->copy()->timezone('Asia/Manila')->format('M d, Y') }}</span>
                     </div>
                     <div class="monitoring-item-row">
                         <span class="text-muted">Archived</span>
@@ -156,13 +156,13 @@
                             <td>
                                 {{ $req->amenity_name }}
                                 <small class="d-block text-muted d-lg-none">
-                                    {{ $req->category ?: '—' }} &middot; {{ $req->created_at->format('M d, Y') }}
+                                    {{ $req->category ?: '—' }} &middot; {{ $req->created_at->copy()->timezone('Asia/Manila')->format('M d, Y') }}
                                 </small>
                             </td>
                             <td class="d-none d-lg-table-cell">{{ $req->category ?: '—' }}</td>
                             <td>{{ $req->quantity }}</td>
                             <td>₱{{ number_format($req->subtotal, 2) }}</td>
-                            <td class="d-none d-lg-table-cell">{{ $req->created_at->format('M d, Y h:i A') }}</td>
+                            <td class="d-none d-lg-table-cell">{{ $req->created_at->copy()->timezone('Asia/Manila')->format('M d, Y h:i A') }}</td>
                             <td class="d-none d-lg-table-cell">{{ $req->archived_at?->format('M d, Y h:i A') }}</td>
                             <td><x-status-badge :status="$req->status" domain="amenity_request" /></td>
                             <td class="text-nowrap">
@@ -263,7 +263,7 @@
                     <div class="room-type-detail-list">
                         <div class="room-type-detail-row">
                             <span class="room-type-detail-label">Requested:</span>
-                            <span class="room-type-detail-value">{{ $req->created_at->format('M d, Y g:i A') }}</span>
+                            <span class="room-type-detail-value">{{ $req->created_at->copy()->timezone('Asia/Manila')->format('M d, Y g:i A') }}</span>
                         </div>
                         <div class="room-type-detail-row">
                             <span class="room-type-detail-label">Archived:</span>

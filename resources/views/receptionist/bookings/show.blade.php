@@ -490,7 +490,7 @@
                     @if($booking->booking_status === \App\Models\Booking::STATUS_ACTIVE)
                         {{-- Set by hand only - nothing marks a no-show or cancels automatically. --}}
                         <div class="d-flex flex-wrap gap-2 mb-3">
-                            @if($booking->check_in->startOfDay()->lte(today()))
+                            @if($booking->check_in->startOfDay()->lte(\App\Support\CheckInWindow::date()))
                                 <button type="button" class="btn btn-outline-dark" data-bs-toggle="collapse" data-bs-target="#noShowForm" aria-expanded="false">
                                     <i class="fas fa-user-slash"></i> Mark as No-Show
                                 </button>
@@ -499,7 +499,7 @@
                                 <i class="fas fa-ban"></i> Cancel Booking
                             </button>
                         </div>
-                        @if($booking->check_in->startOfDay()->lte(today()))
+                        @if($booking->check_in->startOfDay()->lte(\App\Support\CheckInWindow::date()))
                             <div class="collapse mb-3" id="noShowForm">
                                 <form action="{{ route('receptionist.bookings.no-show', $booking) }}" method="POST"
                                       data-confirm="The room is released. You can undo this if it was a mistake." data-confirm-title="Mark booking #{{ $booking->id }} as a no-show?" data-confirm-button="Mark as No-Show" data-confirm-variant="dark">

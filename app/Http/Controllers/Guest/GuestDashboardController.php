@@ -119,7 +119,7 @@ class GuestDashboardController extends Controller
 
         // Active promotions
         $activePromotions = Promotion::with('amenities')->where('status', 'active')
-            ->runningOn(today())
+            ->runningOn(\App\Support\CheckInWindow::date())
             ->limit(3)
             ->get();
 

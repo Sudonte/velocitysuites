@@ -144,7 +144,7 @@
             <tbody>
                 @forelse($user->activityLogs->sortByDesc('created_at')->take(25) as $log)
                     <tr>
-                        <td>{{ $log->created_at->format('M d, Y h:i A') }}</td>
+                        <td>{{ $log->created_at->copy()->timezone('Asia/Manila')->format('M d, Y h:i A') }}</td>
                         <td>{{ $log->action }}</td>
                         <td>{{ $log->description ?: '—' }}</td>
                     </tr>

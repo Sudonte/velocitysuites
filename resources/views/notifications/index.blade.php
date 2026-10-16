@@ -98,7 +98,7 @@
                  data-read-url="{{ route('notifications.markAsRead', $notification) }}"
                  data-title="{{ $notification->title }}"
                  data-message="{{ $notification->message }}"
-                 data-time="{{ $notification->created_at->format('M d, Y g:i A') }} · {{ $notification->created_at->diffForHumans() }}"
+                 data-time="{{ $notification->created_at->copy()->timezone('Asia/Manila')->format('M d, Y g:i A') }} · {{ $notification->created_at->diffForHumans() }}"
                  data-category="{{ ucfirst(str_replace('_', ' ', $category)) }}"
                  data-audience="{{ $audienceLabels }}"
                  data-link-url="{{ $link['url'] ?? '' }}"
@@ -115,7 +115,7 @@
                             @endif
                             {{ $notification->title }}
                         </h6>
-                        <span class="notification-time"><i class="fas fa-clock"></i> {{ $notification->created_at->format('M d, Y g:i A') }} &middot; {{ $notification->created_at->diffForHumans() }}</span>
+                        <span class="notification-time"><i class="fas fa-clock"></i> {{ $notification->created_at->copy()->timezone('Asia/Manila')->format('M d, Y g:i A') }} &middot; {{ $notification->created_at->diffForHumans() }}</span>
                     </div>
                     <p class="notification-message">{{ Str::limit($notification->message, 160) }}</p>
                     <div class="d-flex flex-wrap align-items-center gap-1">

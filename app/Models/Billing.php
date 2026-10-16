@@ -69,7 +69,7 @@ class Billing extends Model
                 return $locked->checkin_receipt_number;
             }
 
-            $number = 'SR-'.now()->format('Ymd').'-'.str_pad((string) $locked->id, 6, '0', STR_PAD_LEFT);
+            $number = 'SR-'.now(\App\Support\CheckInWindow::TIMEZONE)->format('Ymd').'-'.str_pad((string) $locked->id, 6, '0', STR_PAD_LEFT);
             $locked->forceFill(['checkin_receipt_number' => $number, 'checkin_receipt_snapshot' => $snapshot])->save();
             $this->forceFill(['checkin_receipt_number' => $number, 'checkin_receipt_snapshot' => $snapshot]);
 

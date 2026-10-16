@@ -395,6 +395,6 @@ class Payment extends Model
     {
         $date = $date instanceof \DateTimeInterface ? $date : now();
 
-        return $prefix . '-' . $date->format('Ymd') . '-' . str_pad((string) $id, 6, '0', STR_PAD_LEFT);
+        return $prefix . '-' . $date->copy()->timezone(\App\Support\CheckInWindow::TIMEZONE)->format('Ymd') . '-' . str_pad((string) $id, 6, '0', STR_PAD_LEFT);
     }
 }

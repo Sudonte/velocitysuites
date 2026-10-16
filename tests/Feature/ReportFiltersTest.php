@@ -32,7 +32,7 @@ class ReportFiltersTest extends ApiFlowTestCase
     {
         Reservation::create([
             'room_type_id' => $roomTypeId, 'rooms_requested' => 1, 'guest_first_name' => 'W', 'guest_last_name' => 'I',
-            'check_in' => now()->startOfDay()->addHours(14), 'check_out' => now()->addDay()->startOfDay(),
+            'check_in' => \App\Support\CheckInWindow::date()->addHours(14), 'check_out' => \App\Support\CheckInWindow::date()->addDay(),
             'adults' => 1, 'children' => 0, 'number_of_guests' => 1, 'status' => Reservation::STATUS_AWAITING_CASH,
         ]);
     }

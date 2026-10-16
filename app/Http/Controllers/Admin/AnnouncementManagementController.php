@@ -104,7 +104,7 @@ class AnnouncementManagementController extends Controller
     {
         $announcement->update([
             'status' => 'published',
-            'published_at' => $announcement->published_at ?? now()->toDateString(),
+            'published_at' => $announcement->published_at ?? \App\Support\CheckInWindow::date()->toDateString(),
         ]);
         $this->notifyIfPublished($announcement->fresh());
 

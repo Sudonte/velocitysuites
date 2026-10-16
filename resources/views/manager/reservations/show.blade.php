@@ -96,7 +96,7 @@
                 <x-card title="Booking Details" icon="fas fa-bookmark" bodyClass="card-body" class="mb-4">
                     <div class="row mb-2">
                         <div class="col-md-4"><strong>Confirmed At:</strong></div>
-                        <div class="col-md-8">{{ $reservation->booking->confirmed_at->format('M d, Y') }}</div>
+                        <div class="col-md-8">{{ $reservation->booking->confirmed_at->copy()->timezone('Asia/Manila')->format('M d, Y') }}</div>
                     </div>
                     <div class="row mb-0">
                         <div class="col-md-4"><strong>Booking Status:</strong></div>
@@ -222,7 +222,7 @@
                                 <tbody>
                                     @foreach($billing->payments as $payment)
                                         <tr>
-                                            <td>{{ $payment->payment_date->format('M d, Y') }}</td>
+                                            <td>{{ $payment->payment_date->copy()->timezone('Asia/Manila')->format('M d, Y') }}</td>
                                             <td>{{ ucfirst($payment->payment_method) }}</td>
                                             <td>{{ $payment->reference_number ?? 'N/A' }}</td>
                                             <td class="text-end">₱{{ number_format($payment->amount_paid, 2) }}</td>

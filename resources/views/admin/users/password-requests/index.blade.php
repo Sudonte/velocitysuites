@@ -66,7 +66,7 @@
                         <td><strong>{{ $req->user->full_name }}</strong></td>
                         <td><span class="badge badge-brand">{{ ucfirst($req->user->role) }}</span></td>
                         <td>{{ $req->user->email }}</td>
-                        <td>{{ $req->created_at->format('M d, Y g:i A') }}</td>
+                        <td>{{ $req->created_at->copy()->timezone('Asia/Manila')->format('M d, Y g:i A') }}</td>
                         <td>
                             @if($req->status === 'pending' && $req->isExpired())
                                 <span class="badge bg-secondary" title="Submitted {{ $req->created_at->diffForHumans() }}">

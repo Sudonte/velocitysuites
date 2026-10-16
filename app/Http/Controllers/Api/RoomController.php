@@ -100,7 +100,7 @@ class RoomController extends Controller
     {
         $checkIn = $request->filled('check_in')
             ? Carbon::parse($request->check_in)->startOfDay()
-            : now()->addDay()->startOfDay();
+            : \App\Support\CheckInWindow::date()->addDay();
 
         $checkOut = $request->filled('check_out')
             ? Carbon::parse($request->check_out)->startOfDay()

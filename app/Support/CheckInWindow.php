@@ -29,6 +29,29 @@ class CheckInWindow
         return ($now ? $now->copy() : Carbon::now())->setTimezone(self::TIMEZONE)->startOfDay();
     }
 
+    /**
+     * The hotel's date as a plain date (midnight of that calendar day, no zone games), the form Eloquent gives every
+     * date column (check_in, check_out, start_date ...). Use this - not today() / Carbon::today(), which follow the
+     * server's UTC clock and are a day behind the hotel from midnight to 8 AM - to compare with a DATE column.
+     */
+    public static function date(?Carbon $now = null): Carbon
+    {
+        return Carbon::parse(self::today($now)->toDateString());
+    }
+
+    /**
+     * The UTC instants that bound one HOTEL day, [start, end) - for TIMESTAMP columns (created_at, payment_date ...),
+     * which are stored in UTC: "today at the hotel" is not the same set of rows as "today in UTC".
+     *
+     * @return array{0: Carbon, 1: Carbon}
+     */
+    public static function dayBoundsUtc(Carbon $plainDate): array
+    {
+        $start = Carbon::parse($plainDate->toDateString(), self::TIMEZONE)->startOfDay();
+
+        return [$start->copy()->utc(), $start->copy()->addDay()->utc()];
+    }
+
     /** Earliest allowed check-in, Y-m-d. */
     public static function earliest(?Carbon $now = null): string
     {

@@ -128,7 +128,7 @@ class ReservationController extends Controller
                 $q->whereNull('room_type_id')
                   ->orWhere('room_type_id', $roomType->id);
             })
-            ->runningOn(today())
+            ->runningOn(\App\Support\CheckInWindow::date())
             ->get();
 
         $finalRate = $totalRate;

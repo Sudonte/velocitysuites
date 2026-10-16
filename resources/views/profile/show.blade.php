@@ -38,7 +38,7 @@
                     <hr>
                     <p class="mb-1 text-muted small">
                         <i class="fas fa-calendar"></i>
-                        Joined {{ $user->created_at->format('M d, Y') }}
+                        Joined {{ $user->created_at->copy()->timezone('Asia/Manila')->format('M d, Y') }}
                     </p>
                     @if($user->last_login_at)
                         <p class="mb-0 text-muted small">
@@ -74,7 +74,7 @@
                         <dd class="col-sm-8">{{ ucfirst($user->status) }}</dd>
 
                         <dt class="col-sm-4">Account Created</dt>
-                        <dd class="col-sm-8">{{ $user->created_at->format('M d, Y h:i A') }}</dd>
+                        <dd class="col-sm-8">{{ $user->created_at->copy()->timezone('Asia/Manila')->format('M d, Y h:i A') }}</dd>
 
                         <dt class="col-sm-4">Last Login</dt>
                         <dd class="col-sm-8">{{ $user->last_login_at ? $user->last_login_at->format('M d, Y h:i A') : 'Never' }}</dd>

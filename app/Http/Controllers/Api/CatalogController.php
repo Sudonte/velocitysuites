@@ -56,7 +56,7 @@ class CatalogController extends Controller
         return response()->json(
             Promotion::with(['amenities', 'roomType'])
                 ->where('status', 'active')
-                ->runningOn(today())
+                ->runningOn(\App\Support\CheckInWindow::date())
                 ->orderBy('start_date')
                 ->get()
         );

@@ -23,7 +23,7 @@
                     <div class="col-sm-6"><small class="text-muted d-block">Check-in</small><strong>{{ $booking->check_in->format('D, M d, Y') }}</strong></div>
                     <div class="col-sm-6"><small class="text-muted d-block">Check-out</small><strong>{{ $booking->check_out->format('D, M d, Y') }}</strong></div>
                     <div class="col-sm-6"><small class="text-muted d-block">Guests</small><strong>{{ (int) $booking->adults + (int) $booking->children }}</strong></div>
-                    <div class="col-sm-6"><small class="text-muted d-block">Booked</small><strong>{{ $booking->created_at->format('M d, Y g:i A') }}</strong></div>
+                    <div class="col-sm-6"><small class="text-muted d-block">Booked</small><strong>{{ $booking->created_at->copy()->timezone('Asia/Manila')->format('M d, Y g:i A') }}</strong></div>
                 </div>
             </x-card>
 
@@ -51,7 +51,7 @@
                 <x-card title="Amenity Requests" icon="fas fa-concierge-bell" bodyClass="card-body" class="mb-4">
                     @foreach($amenityRequests as $req)
                         <div class="d-flex justify-content-between align-items-start {{ ! $loop->last ? 'mb-2 pb-2 border-bottom' : '' }}">
-                            <div>{{ $req->quantity }} &times; {{ $req->amenity_name }}<small class="text-muted d-block">{{ $req->created_at->format('M d, Y g:i A') }}</small></div>
+                            <div>{{ $req->quantity }} &times; {{ $req->amenity_name }}<small class="text-muted d-block">{{ $req->created_at->copy()->timezone('Asia/Manila')->format('M d, Y g:i A') }}</small></div>
                             <x-status-badge :status="$req->status" domain="amenity_request" />
                         </div>
                     @endforeach

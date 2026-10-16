@@ -72,13 +72,13 @@ class ReceptionistController extends Controller
         // today (not yet checked in, i.e. still pending arrival) and
         // departures due today (still in house).
         $pendingArrivals = Booking::with(['reservation.guest.user', 'guest.user', 'room', 'roomType'])
-            ->whereDate('check_in', today())
+            ->whereDate('check_in', \App\Support\CheckInWindow::date())
             ->where('booking_status', Booking::STATUS_ACTIVE)
             ->whereNotNull('verified_at')
             ->get();
 
         $todayDepartures = Booking::with(['reservation.guest.user', 'guest.user', 'room'])
-            ->whereDate('check_out', today())
+            ->whereDate('check_out', \App\Support\CheckInWindow::date())
             ->where('booking_status', Booking::STATUS_CHECKED_IN)
             ->get();
 

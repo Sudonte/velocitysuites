@@ -9,7 +9,7 @@
     [$sm, $sd] = $md($promotion?->recur_start_md);
     [$em, $ed] = $md($promotion?->recur_end_md);
     $months = [1 => 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-    $today = now()->toDateString();
+    $today = \App\Support\CheckInWindow::date()->toDateString();
 @endphp
 <div class="mb-2">
     <div class="form-check form-switch">

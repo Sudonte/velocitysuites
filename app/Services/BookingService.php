@@ -92,8 +92,8 @@ class BookingService
 
             $promo = Promotion::where('status', 'active')
                 ->where('promo_type', 'discount')
-                ->whereDate('start_date', '<=', today())
-                ->whereDate('end_date', '>=', today())
+                ->whereDate('start_date', '<=', \App\Support\CheckInWindow::date())
+                ->whereDate('end_date', '>=', \App\Support\CheckInWindow::date())
                 ->where(function ($q) use ($lineRoomType) {
                     $q->whereNull('room_type_id')
                       ->orWhere('room_type_id', $lineRoomType->id);

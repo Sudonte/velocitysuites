@@ -728,7 +728,7 @@ class BookingController extends Controller
     public function markNoShow(Request $request, Booking $booking): RedirectResponse
     {
         abort_unless($booking->booking_status === Booking::STATUS_ACTIVE, 422, 'Only a confirmed booking that has not checked in can be marked as a no-show.');
-        abort_if($booking->check_in->startOfDay()->gt(today()), 422, 'A booking can only be marked as a no-show on or after its check-in date.');
+        abort_if($booking->check_in->startOfDay()->gt(\App\Support\CheckInWindow::date()), 422, 'A booking can only be marked as a no-show on or after its check-in date.');
         $validated = $request->validate(['reason' => 'nullable|string|max:500']);
 
         $booking->update([

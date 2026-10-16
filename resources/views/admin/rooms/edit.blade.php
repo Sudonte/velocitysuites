@@ -186,7 +186,7 @@
                 <p class="mb-2"><strong>Capacity:</strong> {{ $room->roomType->capacity_label ?? 'N/A' }}</p>
                 <p class="mb-2"><strong>Rate:</strong> ₱{{ number_format($room->room_rate, 2) }}/night</p>
                 <p class="mb-2"><strong>Status:</strong> <x-status-badge :status="$room->effective_status" domain="room" /></p>
-                <p class="mb-0"><strong>Created:</strong> {{ $room->created_at->format('M d, Y') }}</p>
+                <p class="mb-0"><strong>Created:</strong> {{ $room->created_at->copy()->timezone('Asia/Manila')->format('M d, Y') }}</p>
             </x-card>
 
             <x-card title="Quick Actions" bodyClass="card-body">

@@ -82,7 +82,7 @@ class Promotion extends Model
      */
     public function getIsActiveAttribute()
     {
-        $today = now()->startOfDay();
+        $today = \App\Support\CheckInWindow::date();
 
         return $this->status === 'active'
             && $this->start_date <= $today
@@ -114,7 +114,7 @@ class Promotion extends Model
         if (! $this->is_recurring || ! $this->recur_start_md || ! $this->recur_end_md) {
             return;
         }
-        $from = ($from ?? today())->copy()->startOfDay();
+        $from = ($from ?? \App\Support\CheckInWindow::date())->copy()->startOfDay();
         $make = function (int $year, int $md): \Carbon\Carbon {
             $month = intdiv($md, 100);
             $day = min($md % 100, \Carbon\Carbon::create($year, $month, 1)->daysInMonth);

@@ -48,7 +48,7 @@ class StayOffersService
         return [
             'offerDiscounts' => $this->discounts(),
             'offerPromotions' => Promotion::with(['amenities', 'roomType'])->where('status', 'active')->notArchived()
-                ->where('promo_type', 'amenity')->whereDate('end_date', '>=', today())->orderBy('promo_name')->get(),
+                ->where('promo_type', 'amenity')->whereDate('end_date', '>=', \App\Support\CheckInWindow::date())->orderBy('promo_name')->get(),
         ];
     }
 

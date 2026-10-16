@@ -83,7 +83,7 @@
             <tbody>
                 @forelse($activityLogs as $log)
                     <tr>
-                        <td>{{ $log->created_at->format('M d, Y h:i A') }}</td>
+                        <td>{{ $log->created_at->copy()->timezone('Asia/Manila')->format('M d, Y h:i A') }}</td>
                         <td>{{ $log->user->full_name ?? 'N/A' }}</td>
                         <td>{{ $log->action }}</td>
                         <td>{{ $log->description ?? '—' }}</td>

@@ -50,7 +50,7 @@
     <?php $latestPayment = $reservation->payments->sortByDesc('created_at')->first(); ?>
     <p>Transaction Ref: {{ $latestPayment->reference_number ?? 'N/A' }}</p>
     <p>Payment Method: {{ $latestPayment ? ucfirst($latestPayment->payment_method) : ($reservation->payment_method ? ucfirst($reservation->payment_method) : 'N/A') }}</p>
-    <p>Payment Date: {{ $latestPayment && $latestPayment->payment_date ? $latestPayment->payment_date->format('M d, Y') : 'N/A' }}</p>
+    <p>Payment Date: {{ $latestPayment && $latestPayment->payment_date ? $latestPayment->payment_date->copy()->timezone('Asia/Manila')->format('M d, Y') : 'N/A' }}</p>
 
     {{--
         Grand Total / Total Amount Paid / Remaining Balance come from

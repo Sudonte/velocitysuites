@@ -188,7 +188,7 @@ class Room extends Model
         $availability = app(\App\Services\RoomAvailabilityService::class);
         $bookings = Booking::where('room_type_id', $this->room_type_id)
             ->whereIn('booking_status', [Booking::STATUS_ACTIVE, Booking::STATUS_CHECKED_IN])
-            ->where('check_out', '>', now()->startOfDay())
+            ->where('check_out', '>', \App\Support\CheckInWindow::date())
             ->get(['id', 'check_in', 'check_out']);
 
         foreach ($bookings as $booking) {

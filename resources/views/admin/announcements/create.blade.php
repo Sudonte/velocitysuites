@@ -61,7 +61,7 @@
                             <div class="form-group mb-3">
                                 <label for="published_at">Publication Date</label>
                                 <input type="date" class="form-control @error('published_at') is-invalid @enderror"
-                                       id="published_at" name="published_at" value="{{ old('published_at', now()->toDateString()) }}">
+                                       id="published_at" name="published_at" value="{{ old('published_at', \App\Support\CheckInWindow::date()->toDateString()) }}">
                                 <small class="text-muted">Announcement stays hidden until this date.</small>
                                 @error('published_at')<div class="invalid-feedback">{{ $message }}</div>@enderror
                             </div>

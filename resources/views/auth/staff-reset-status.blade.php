@@ -24,12 +24,12 @@
         </div>
     @elseif ($resetRequest->status === 'pending' && $resetRequest->isExpired())
         <div class="alert alert-error" role="alert">
-            <i class="fas fa-clock"></i> Your previous request (submitted {{ $resetRequest->created_at->format('M d, Y g:i A') }})
+            <i class="fas fa-clock"></i> Your previous request (submitted {{ $resetRequest->created_at->copy()->timezone('Asia/Manila')->format('M d, Y g:i A') }})
             has expired without being processed. Please use the Forgot Password link again to submit a new one.
         </div>
     @elseif ($resetRequest->status === 'pending')
         <div class="alert alert-warning" role="alert">
-            <i class="fas fa-hourglass-half"></i> Your request submitted on {{ $resetRequest->created_at->format('M d, Y g:i A') }}
+            <i class="fas fa-hourglass-half"></i> Your request submitted on {{ $resetRequest->created_at->copy()->timezone('Asia/Manila')->format('M d, Y g:i A') }}
             is <strong>awaiting System Administrator approval</strong>. You'll be able to log in with a temporary password once it's approved -
             please check back or contact the System Administrator directly.
         </div>

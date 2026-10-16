@@ -276,7 +276,7 @@ class PromotionManagementController extends Controller
     private function notBeforeToday(?string $current): \Closure
     {
         return function (string $attribute, $value, \Closure $fail) use ($current) {
-            if ($value && $value !== $current && \Carbon\Carbon::parse($value)->lt(today())) {
+            if ($value && $value !== $current && \Carbon\Carbon::parse($value)->lt(\App\Support\CheckInWindow::date())) {
                 $fail('The ' . str_replace('_', ' ', $attribute) . ' can\'t be before today.');
             }
         };
