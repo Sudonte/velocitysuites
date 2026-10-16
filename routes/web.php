@@ -396,7 +396,6 @@ Route::middleware(['auth', 'account.status', 'log.activity', 'no.cache'])->group
         // Billing (used from the Check-Out workflow's Billing Panel, plus a read-only receipt)
         Route::get('/billing/{billing}/receipt', [\App\Http\Controllers\BillingController::class, 'receipt'])->name('billing.receipt');
         Route::post('/billing/{billing}/payment', [ReceptionistCheckOutController::class, 'recordPayment'])->name('billing.payment.store');
-        Route::post('/billing/{billing}/discount', [ReceptionistCheckOutController::class, 'applyDiscount'])->name('billing.discount.store');
         Route::post('/billing/{billing}/additional-charge', [ReceptionistCheckOutController::class, 'storeAdditionalCharge'])->name('billing.additional-charge.store');
         Route::put('/billing/additional-charge/{additionalCharge}', [ReceptionistCheckOutController::class, 'updateAdditionalCharge'])->name('billing.additional-charge.update');
         Route::delete('/billing/additional-charge/{additionalCharge}', [ReceptionistCheckOutController::class, 'destroyAdditionalCharge'])->name('billing.additional-charge.destroy');

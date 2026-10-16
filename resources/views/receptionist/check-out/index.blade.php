@@ -209,7 +209,6 @@ document.addEventListener('DOMContentLoaded', function () {
         chargeStore: @json(route('receptionist.billing.additional-charge.store', ['billing' => '__ID__'])),
         chargeUpdate: @json(route('receptionist.billing.additional-charge.update', ['additionalCharge' => '__ID__'])),
         chargeDestroy: @json(route('receptionist.billing.additional-charge.destroy', ['additionalCharge' => '__ID__'])),
-        discountStore: @json(route('receptionist.billing.discount.store', ['billing' => '__ID__'])),
         recordPayment: @json(route('receptionist.billing.payment.store', ['billing' => '__ID__'])),
         rooms: @json(route('receptionist.check-out.rooms', ['booking' => '__ID__'])),
         roomCheckout: @json(route('receptionist.check-out.rooms.checkout', ['booking' => '__BOOKING__', 'room' => '__ROOM__'])),
@@ -524,25 +523,6 @@ document.addEventListener('DOMContentLoaded', function () {
             });
             document.getElementById('chargesTableContainer').innerHTML = data.html;
             document.getElementById('runningTotalDisplay').textContent = '₱' + Number(data.running_total).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); updateDueAtCheckOut(data.running_total);
-        } catch (err) {
-            showBillingError(err.message);
-        }
-    });
-
-    // Apply discount form submit - reloads the whole panel since the
-    // discount line above Running Total lives outside the swapped fragment.
-    billingPanelContent.addEventListener('submit', async function (e) {
-        if (e.target.id !== 'applyDiscountForm') return;
-        e.preventDefault();
-        const form = e.target;
-        const payload = Object.fromEntries(new FormData(form).entries());
-        try {
-            await fetchJson(buildUrl(urls.discountStore, currentBillingId()), {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload),
-            });
-            await reloadBillingPanel();
         } catch (err) {
             showBillingError(err.message);
         }

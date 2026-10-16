@@ -276,12 +276,4 @@ class DiscountValidityAndWholeBillTest extends ApiFlowTestCase
         Booking::whereKey($billing->booking_id)->update(['booking_status' => Booking::STATUS_ACTIVE]); // the check-in stage
         $this->actingAs($receptionist)->postJson(route('receptionist.check-in.discount.approve', $billing->booking_id), ['discount_id' => $other->id])->assertStatus(422);
     }
-
-    public function test_billing_panel_shows_validity_next_to_the_discount_name(): void
-    {
-        $d = $this->discount('Senior Citizen', ['end_date' => '2099-12-31']);
-        [, $billing] = $this->billedBooking($d);
-        $html = view('receptionist.check-out.partials.discount-panel', ['billing' => $billing->load('discountApplied'), 'discounts' => Discount::all()])->render();
-        $this->assertStringContainsString('Valid until Dec 31, 2099', $html);
-    }
 }

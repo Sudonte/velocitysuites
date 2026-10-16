@@ -105,23 +105,4 @@ class StaffDiscountIdAccessTest extends ApiFlowTestCase
         $this->assertSame('Verified', $verified['status_label']);
         $this->assertSame((int) $discountId, $verified['requested_discount_id']);
     }
-
-    public function test_the_discount_panel_renders_thumbnail_details_and_the_no_id_fallback(): void
-    {
-        Storage::disk('local')->put('id-cards/p.jpg', 'png');
-        $with = $this->billingWithId('id-cards/p.jpg')->load('discountApplied');
-        $html = view('receptionist.check-out.partials.discount-panel', ['billing' => $with, 'discounts' => Discount::all()])->render();
-        $this->assertStringContainsString('<img', $html);
-        $this->assertStringContainsString(route('staff.billing.discount-id', $with), $html);
-        $this->assertStringContainsString('Senior Citizen', $html);
-        $this->assertStringContainsString('ID uploaded', $html);
-        $this->assertStringContainsString('Pending verification', $html);
-        $this->assertStringContainsString('View full size', $html);
-        $this->assertStringNotContainsString('storage/id-cards', $html, 'never a public path');
-
-        $without = $this->billingWithId(null)->load('discountApplied');
-        $html = view('receptionist.check-out.partials.discount-panel', ['billing' => $without, 'discounts' => Discount::all()])->render();
-        $this->assertStringContainsString('No ID uploaded', $html);
-        $this->assertStringNotContainsString('<img', $html);
-    }
 }

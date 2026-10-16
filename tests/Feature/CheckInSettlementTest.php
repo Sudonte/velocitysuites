@@ -170,7 +170,7 @@ class CheckInSettlementTest extends ApiFlowTestCase
 
         $billing = $booking->billing()->first();
         // no discount at check-out, no partial payment
-        $this->actingAs($desk)->postJson(route('receptionist.billing.discount.store', $billing), ['discount_id' => 1])->assertStatus(422);
+        $this->actingAs($desk)->postJson('/receptionist/billing/' . $billing->id . '/discount', ['discount_id' => 1])->assertStatus(404);
         $this->actingAs($desk)->postJson(route('receptionist.billing.payment.store', $billing), ['payment_method' => 'cash', 'amount_paid' => 100, 'amount_received' => 100])->assertStatus(422);
         $this->assertSame(Booking::STATUS_CHECKED_IN, $booking->fresh()->booking_status);
 
@@ -207,6 +207,22 @@ class CheckInSettlementTest extends ApiFlowTestCase
             ->assertOk()->assertJson(['completed' => true]);
         $this->assertEqualsWithDelta(2250, $booking->fresh()->paidTotal(), 0.01);
         \Carbon\Carbon::setTestNow();
+    }
+
+    public function test_no_discount_can_be_added_or_changed_at_check_out_even_when_check_in_was_not_settled(): void
+    {
+        [$rt, $room, $booking] = $this->arriving();
+        $desk = $this->desk();
+        $this->actingAs($desk)->postJson(route('receptionist.check-in.store', $booking), $this->checkInPayload($rt, $room, ['payment_method' => 'cash', 'amount_received' => 2000]))->assertOk();
+        $billing = $booking->billing()->first();
+        // a stay checked in before check-in settlement existed
+        \Illuminate\Support\Facades\DB::table('billings')->where('id', $billing->id)->update(['checkin_settled_at' => null]);
+        \App\Models\Discount::create(['name' => 'Senior Citizen', 'discount_type' => 'percentage', 'value' => 20, 'status' => 'active']);
+
+        $this->actingAs($desk)->get(route('receptionist.check-out.billing', $booking))->assertOk()
+            ->assertDontSee('applyDiscountForm', false)->assertDontSee('Apply Discount');
+        $this->actingAs($desk)->postJson('/receptionist/billing/' . $billing->id . '/discount', ['discount_id' => 1])->assertStatus(404);
+        $this->assertEqualsWithDelta(0, (float) $billing->fresh()->discount, 0.01);
     }
 
     private function walkInPayload($rt, array $extra = []): array

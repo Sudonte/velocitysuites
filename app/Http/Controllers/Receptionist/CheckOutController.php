@@ -7,10 +7,8 @@ use App\Models\AdditionalCharge;
 use App\Models\AmenityRequest;
 use App\Models\Billing;
 use App\Models\Booking;
-use App\Models\Discount;
 use App\Models\Payment;
 use App\Models\Room;
-use App\Services\DiscountIdVerificationService;
 use App\Services\NotificationService;
 use App\Support\Activity;
 use App\Support\StayBill;
@@ -19,7 +17,6 @@ use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
-use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 /**
@@ -32,7 +29,6 @@ class CheckOutController extends Controller
 {
     public function __construct(
         private NotificationService $notificationService,
-        private DiscountIdVerificationService $discountIds,
     ) {
     }
 
@@ -81,8 +77,8 @@ class CheckOutController extends Controller
         // initial creation - an amenity added mid-stay (Receptionist\
         // ReceptionistController::amenitiesStore()) or a headcount change
         // must actually reach the bill, not just show in the itemized list
-        // below. Leaves room_charge/discount alone - those are locked in
-        // at creation and only change via applyDiscount() itself.
+        // below. The discount is the one decided at check-in - it is never
+        // added or changed at check-out.
         $this->refreshStayCharges($booking, $billing);
 
         $billing->load(['additionalCharges', 'discountApplied']);
@@ -99,8 +95,6 @@ class CheckOutController extends Controller
         // Guest requests still waiting for a decision are NOT on this bill - warn so they are resolved before billing.
         $pendingAmenityCount = $booking->pendingAmenityRequestCount();
 
-        $discounts = $this->billableDiscounts($booking->reservation ?? $booking);
-
         // The panel's labels and the amounts below both come from the one StayBill the billing was just synced
         // from (and the guest's receipt reads), so "Nights" can never disagree with the room charge billed.
         $stay = StayBill::forBooking($booking, StayBill::FINAL, null, $billing);
@@ -115,7 +109,7 @@ class CheckOutController extends Controller
         $dueNow = max(0, round((float) $billing->running_total - $alreadyPaid, 2));
 
         return view('receptionist.check-out.partials.billing-panel', compact(
-            'booking', 'billing', 'amenityRequests', 'discounts', 'stay', 'pendingAmenityCount',
+            'booking', 'billing', 'amenityRequests', 'stay', 'pendingAmenityCount',
             'effectiveCheckOutDate', 'effectiveNights', 'isEarlyCheckout', 'isLateCheckout',
             'settledAtCheckIn', 'alreadyPaid', 'dueNow'
         ));
@@ -593,70 +587,6 @@ class CheckOutController extends Controller
     }
 
     /**
-     * Apply a manually-selected, ID-verified authorized discount (Senior
-     * Citizen, PWD, Student, etc.) to a draft billing. Only reachable when
-     * the guest actually requested one at reservation time - a receptionist
-     * never picks a discount out of thin air. Fully separate from
-     * Promotions: this only ever touches Discount/billings.discount_id,
-     * never a Promotion record.
-     */
-    public function applyDiscount(Request $request, Billing $billing)
-    {
-        if ($billing->billing_status === 'paid') {
-            return response()->json(['message' => 'Cannot change the discount on a paid bill.'], 422);
-        }
-
-        if ($billing->checkin_settled_at) {
-            return response()->json(['message' => 'Discounts and promotions are applied at check-in only.'], 422);
-        }
-
-        $booking = $billing->booking;
-        if (StayBill::discountIdStatus($booking) !== 'approved') {
-            // The ID is decided ONCE, in the Check In module - this panel only chooses which discount an
-            // already-approved ID earns. A discount never reaches a bill before that.
-            return response()->json(['message' => "The guest's discount ID is not approved yet. Approve it in the Check In module first."], 422);
-        }
-
-        $validated = $request->validate([
-            'discount_id' => 'required|exists:discounts,id',
-        ]);
-
-        try {
-            // Re-points the approved ID at the chosen discount and re-prices this open billing through StayBill.
-            $this->discountIds->approve($booking, (int) $validated['discount_id'], auth()->user());
-        } catch (ValidationException $e) {
-            return response()->json(['message' => collect($e->errors())->flatten()->first()], 422);
-        }
-
-        $billing->refresh()->load('discountApplied');
-        $discountTarget = $booking->reservation ?? $booking;
-        $discounts = $this->billableDiscounts($discountTarget);
-
-        return response()->json([
-            'html' => view('receptionist.check-out.partials.discount-panel', compact('billing', 'discounts'))->render(),
-            'running_total' => $billing->running_total,
-        ]);
-    }
-
-    /** The discount the guest claimed when booking (by id, else by name for older records), regardless of today's validity dates. */
-    private function claimedDiscountId($discountTarget): ?int
-    {
-        [$claimed] = \App\Support\DiscountSelection::resolve($discountTarget->discount_id, $discountTarget->id_card_type, null, false);
-
-        return $claimed?->id;
-    }
-
-    /** Discounts the receptionist may apply: every active one valid today, plus the one this guest claimed even if it has since expired. */
-    private function billableDiscounts($discountTarget)
-    {
-        $claimed = $this->claimedDiscountId($discountTarget);
-
-        return Discount::where('status', 'active')->orderBy('name')->get()
-            ->filter(fn (Discount $d) => $d->isValidOn() || $d->id === $claimed)
-            ->values();
-    }
-
-    /**
      * Store a new additional charge for a billing (Billing Panel, AJAX).
      */
     public function storeAdditionalCharge(Request $request, Billing $billing)
@@ -780,9 +710,8 @@ class CheckOutController extends Controller
      * requests (additional_guest_fee is always 0 now) - same
      * calculation generateBilling() uses at creation, just re-run every
      * time the panel opens so anything added mid-stay actually reaches
-     * the bill (see checkOutBilling()). room_charge/discount are
-     * deliberately left alone - those are locked in at creation and only
-     * change via applyDiscount() itself.
+     * the bill (see checkOutBilling()). The discount is the one decided at
+     * check-in - it is never added or changed at check-out.
      *
      * Also re-parents any completed payment still missing a billing_id
      * (Receptionist\BookingController::recordPayment() records a walk-in

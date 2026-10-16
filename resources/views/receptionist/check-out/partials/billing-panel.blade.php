@@ -134,13 +134,9 @@
         @include('receptionist.check-out.partials.charges-table', ['billing' => $billing])
     </div>
 
-    @if($settledAtCheckIn)
-        {{-- Discounts and promotions are decided at check-in only. --}}
-        @if($billing->discount > 0)
-            <p class="small text-muted mb-0"><i class="fas fa-percentage"></i> Discount applied at check-in{{ $billing->discountApplied ? ' (' . $billing->discountApplied->name . ')' : '' }}.</p>
-        @endif
-    @else
-        @include('receptionist.check-out.partials.discount-panel', ['billing' => $billing, 'discounts' => $discounts])
+    {{-- Discounts and promotions are decided at check-in only - none can be added or changed at check-out. --}}
+    @if($billing->discount > 0)
+        <p class="small text-muted mb-0"><i class="fas fa-percentage"></i> Discount applied at check-in{{ $billing->discountApplied ? ' (' . $billing->discountApplied->name . ')' : '' }}.</p>
     @endif
 
     <div class="table-responsive">
