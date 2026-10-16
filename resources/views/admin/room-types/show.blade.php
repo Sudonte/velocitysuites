@@ -111,12 +111,7 @@
     <x-room-gallery :images="$mergedGallery" :title="$roomType->name" id="adminMergedGallery" />
 
     <x-card icon="fas fa-eye" bodyClass="card-body" class="mb-4">
-        <x-slot:title>
-            All Amenities Available to Guests
-            <a href="{{ route('admin.room-types.edit', $roomType) }}" class="btn btn-outline-secondary btn-sm float-end">
-                <i class="fas fa-pen"></i> Manage in Edit Type
-            </a>
-        </x-slot:title>
+        <x-slot:title>All Amenities Available to Guests</x-slot:title>
         <small class="text-muted d-block mb-2">
             This type's assigned amenities - what guests see on this type's details page. Add, remove, or change
             amenities from the Edit Type form.
