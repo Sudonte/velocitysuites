@@ -37,7 +37,8 @@ class AdminReportController extends Controller
         $logRole = $request->get('log_role');
         $logUser = $request->filled('log_user') ? (int) $request->get('log_user') : null;
         $activityLogs = ActivityLog::with('user')
-            ->whereBetween('created_at', [$filters['from'], $filters['to']->copy()->endOfDay()])
+            ->where('created_at', '>=', \App\Support\CheckInWindow::rangeBoundsUtc($filters['from'], $filters['to'])[0])
+            ->where('created_at', '<', \App\Support\CheckInWindow::rangeBoundsUtc($filters['from'], $filters['to'])[1])
             ->when($logType, fn ($q) => $this->filterLogType($q, $logType))
             ->when(in_array($logRole, ['admin', 'manager', 'receptionist', 'guest'], true), fn ($q) => $q->whereHas('user', fn ($u) => $u->where('role', $logRole)))
             ->when($logUser, fn ($q) => $q->where('user_id', $logUser))

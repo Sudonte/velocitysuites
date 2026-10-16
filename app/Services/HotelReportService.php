@@ -315,7 +315,7 @@ class HotelReportService
         foreach ($rows as $row) {
             $start = Carbon::parse($row->check_in)->startOfDay();
             $end = $row->checked_out_at
-                ? Carbon::parse($row->checked_out_at)->startOfDay()
+                ? Carbon::parse(Carbon::parse($row->checked_out_at, 'UTC')->setTimezone(\App\Support\CheckInWindow::TIMEZONE)->toDateString())
                 // Still in house past the planned check-out: occupied through today.
                 : ($row->booking_status === Booking::STATUS_CHECKED_IN
                     ? Carbon::parse($row->check_out)->startOfDay()->max($today->copy()->addDay())
@@ -392,7 +392,7 @@ class HotelReportService
     {
         return round((float) TestAccountScope::excludeFromPayments(
             Payment::countedAsRevenue()
-                ->whereBetween('created_at', [$from, $to->copy()->endOfDay()])
+                ->where('created_at', '>=', \App\Support\CheckInWindow::rangeBoundsUtc($from, $to)[0])->where('created_at', '<', \App\Support\CheckInWindow::rangeBoundsUtc($from, $to)[1])
                 ->when($paymentMethod, fn ($q) => $q->where('payment_method', $paymentMethod))
                 ->when($roomTypeId, fn ($q) => $q->where(function ($w) use ($roomTypeId) {
                     $w->whereHas('reservation', fn ($r) => $r->where('room_type_id', $roomTypeId))

@@ -52,6 +52,17 @@ class CheckInWindow
         return [$start->copy()->utc(), $start->copy()->addDay()->utc()];
     }
 
+    /**
+     * The UTC instants that bound a run of HOTEL days, [start of $from, end of $to) - for filtering a TIMESTAMP column by a
+     * report period given as plain dates (see DateRange). Use dayBoundsUtc() for one day.
+     *
+     * @return array{0: Carbon, 1: Carbon}
+     */
+    public static function rangeBoundsUtc(Carbon $fromPlain, Carbon $toPlain): array
+    {
+        return [self::dayBoundsUtc($fromPlain)[0], self::dayBoundsUtc($toPlain)[1]];
+    }
+
     /** Earliest allowed check-in, Y-m-d. */
     public static function earliest(?Carbon $now = null): string
     {

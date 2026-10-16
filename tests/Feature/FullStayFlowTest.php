@@ -146,5 +146,36 @@ class FullStayFlowTest extends ApiFlowTestCase
         $this->assertEquals(900.0, collect($or['stay_bill']['additional_charges'])->firstWhere('description', 'Broken lamp')['amount']);
         $this->assertEquals(3500.0, $or['payment_summary']['grand_total']);
         $this->assertEquals(0.0, $or['payment_summary']['remaining_balance']);
+
+        // Every instant the app shows must carry its zone, so the app converts to Manila instead of guessing:
+        // ISO 8601 with "Z" or an offset (never a bare "2026-10-16 16:30:00").
+        $hasZone = fn ($v) => is_string($v) && preg_match('/T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/', $v) === 1;
+        $detail = ($json['booking'] ?? $json);
+        $this->assertTrue($hasZone($detail['checked_in_at']), 'checked_in_at: '.json_encode($detail['checked_in_at']));
+        $this->assertTrue($hasZone($detail['checked_out_at']), 'checked_out_at: '.json_encode($detail['checked_out_at']));
+        foreach ($detail['timeline'] as $step) {
+            if ($step['at'] !== null) {
+                $this->assertTrue($hasZone($step['at']), 'timeline '.$step['key'].': '.$step['at']);
+            }
+        }
+        foreach ($receipts as $r) {
+            $this->assertTrue($hasZone($r['issued_at']), 'receipt list issued_at: '.json_encode($r['issued_at']));
+        }
+        $this->assertTrue($hasZone($or['issued_at']), 'official receipt issued_at');
+        $sr = $this->asGuest($user)->getJson('/api/guest/receipts/'.$billing->checkin_receipt_number)->assertOk()->json('receipt');
+        $this->assertTrue($hasZone($sr['issued_at']), 'check-in receipt issued_at');
+        $this->assertTrue($hasZone($sr['checkin_settlement']['settled_at']), 'check-in settlement settled_at');
+        foreach ($or['payment_transactions'] as $tx) {
+            foreach (['payment_date', 'verified_at'] as $key) {
+                if (! empty($tx[$key])) {
+                    $this->assertTrue($hasZone($tx[$key]), 'transaction '.$key.': '.$tx[$key]);
+                }
+            }
+        }
+        $notes = $this->asGuest($user)->getJson('/api/notifications')->assertOk()->json('data');
+        $this->assertNotEmpty($notes);
+        foreach ($notes as $n) {
+            $this->assertTrue($hasZone($n['created_at']), 'notification created_at: '.$n['created_at']);
+        }
     }
 }

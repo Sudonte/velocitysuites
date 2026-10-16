@@ -75,6 +75,22 @@ class DashboardStatsService
         return Cache::remember('dashboard_stats:admin', now()->addSeconds(60), fn () => $this->computeAdminStats());
     }
 
+    /**
+     * UTC [start, end) of the hotel's current (offset 0) or an earlier (negative offset) calendar month or year, for the
+     * timestamp column payment_date. whereBetween is inclusive, so the end is nudged back one second.
+     *
+     * @return array{0: \\Carbon\\Carbon, 1: \\Carbon\\Carbon}
+     */
+    private function hotelPeriodBounds(string $unit, int $offset): array
+    {
+        $day = \App\Support\CheckInWindow::date();
+        $from = $unit === 'year' ? $day->copy()->startOfYear()->addYears($offset) : $day->copy()->startOfMonth()->addMonthsNoOverflow($offset);
+        $to = $unit === 'year' ? $from->copy()->endOfYear() : $from->copy()->endOfMonth();
+        [$start, $end] = \App\Support\CheckInWindow::rangeBoundsUtc($from, $to);
+
+        return [$start, $end->subSecond()];
+    }
+
     private function computeAdminStats(): array
     {
         $todayRevenue = (float) TestAccountScope::excludeFromPayments(
@@ -85,21 +101,17 @@ class DashboardStatsService
         )->sum('amount_paid');
 
         $monthlyRevenue = (float) TestAccountScope::excludeFromPayments(
-            Payment::countedAsRevenue()
-                ->whereMonth('payment_date', now()->month)
-                ->whereYear('payment_date', now()->year)
+            Payment::countedAsRevenue()->whereBetween('payment_date', $this->hotelPeriodBounds('month', 0))
         )->sum('amount_paid');
         $lastMonthRevenue = (float) TestAccountScope::excludeFromPayments(
-            Payment::countedAsRevenue()
-                ->whereMonth('payment_date', now()->subMonth()->month)
-                ->whereYear('payment_date', now()->subMonth()->year)
+            Payment::countedAsRevenue()->whereBetween('payment_date', $this->hotelPeriodBounds('month', -1))
         )->sum('amount_paid');
 
         $yearlyRevenue = (float) TestAccountScope::excludeFromPayments(
-            Payment::countedAsRevenue()->whereYear('payment_date', now()->year)
+            Payment::countedAsRevenue()->whereBetween('payment_date', $this->hotelPeriodBounds('year', 0))
         )->sum('amount_paid');
         $lastYearRevenue = (float) TestAccountScope::excludeFromPayments(
-            Payment::countedAsRevenue()->whereYear('payment_date', now()->subYear()->year)
+            Payment::countedAsRevenue()->whereBetween('payment_date', $this->hotelPeriodBounds('year', -1))
         )->sum('amount_paid');
 
         // "Active" and "completed" live on Booking (the operational record
@@ -466,7 +478,7 @@ class DashboardStatsService
                 ? $cursor->format('M d') . ' - ' . $bucketEnd->format('M d')
                 : $cursor->format('M d');
             $values[] = TestAccountScope::excludeFromReservations(
-                Reservation::whereBetween('created_at', [$cursor, $bucketEnd])
+                Reservation::where('created_at', '>=', \App\Support\CheckInWindow::rangeBoundsUtc($cursor, $bucketEnd)[0])->where('created_at', '<', \App\Support\CheckInWindow::rangeBoundsUtc($cursor, $bucketEnd)[1])
             )->count();
 
             $cursor->addDays($bucketDays);

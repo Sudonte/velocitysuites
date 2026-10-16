@@ -133,4 +133,60 @@ class HotelDateBoundaryTest extends ApiFlowTestCase
         $this->at('2026-10-17 00:30:00');
         $this->assertStringContainsString('20261017', \App\Models\Payment::formatReceiptNumber('PR', 7, now()));
     }
+
+    private function paymentAtUtc(Booking $booking, string $utc, float $amount): Payment
+    {
+        $p = Payment::create(['booking_id' => $booking->id, 'payment_method' => 'cash', 'amount_paid' => $amount, 'payment_stage' => 'deposit', 'payment_status' => 'completed']);
+        $p->forceFill(['created_at' => $utc, 'payment_date' => $utc])->save();
+
+        return $p;
+    }
+
+    private function bookingForReports(): Booking
+    {
+        $rt = $this->makeRoomTypeWithRooms('Dlx'.uniqid(), 1000, 2, 1);
+
+        return Booking::create([
+            'room_type_id' => $rt->id, 'rooms_requested' => 1, 'guest_first_name' => 'A', 'guest_last_name' => 'B',
+            'check_in' => '2026-10-17', 'check_out' => '2026-10-18', 'adults' => 1, 'children' => 0, 'number_of_guests' => 1,
+            'booking_status' => Booking::STATUS_ACTIVE, 'confirmed_at' => now(),
+        ]);
+    }
+
+    public function test_a_payment_at_0030_manila_counts_in_that_manila_days_report_not_the_previous_one(): void
+    {
+        $this->at('2026-10-17 12:00:00');
+        $booking = $this->bookingForReports();
+        $this->paymentAtUtc($booking, '2026-10-16 16:30:00', 500); // 00:30 Manila on the 17th
+        $this->paymentAtUtc($booking, '2026-10-16 15:30:00', 300); // 23:30 Manila on the 16th
+
+        // MySQL's DATEDIFF, which the report's average-stay figure uses, does not exist in sqlite
+        \Illuminate\Support\Facades\DB::connection()->getPdo()->sqliteCreateFunction('DATEDIFF', fn ($a, $b) => (int) round((strtotime($a) - strtotime($b)) / 86400));
+        $service = app(\App\Services\HotelReportService::class);
+        $collected = fn (string $day) => $service->build(Carbon::parse($day), Carbon::parse($day))['summary']['payments_collected'];
+
+        $this->assertEquals(500.0, $collected('2026-10-17'), 'the 00:30 payment is in the 17th');
+        $this->assertEquals(300.0, $collected('2026-10-16'), 'the 23:30 payment is in the 16th');
+        $this->assertEquals(800.0, $service->build(Carbon::parse('2026-10-16'), Carbon::parse('2026-10-17'))['summary']['payments_collected']);
+    }
+
+    public function test_the_monthly_and_yearly_revenue_use_the_hotel_month_and_year(): void
+    {
+        $this->at('2026-10-17 12:00:00');
+        $booking = $this->bookingForReports();
+        $this->paymentAtUtc($booking, '2026-09-30 16:30:00', 700);  // 00:30 Manila on Oct 1: October's
+        $this->paymentAtUtc($booking, '2026-09-30 15:30:00', 200);  // 23:30 Manila on Sep 30: September's
+        $stats = app(DashboardStatsService::class)->adminStats();
+
+        $this->assertEquals(700.0, (float) $stats['monthlyRevenue'], 'October at the hotel = the 00:30 Oct 1 payment');
+        $this->assertEquals(250.0, (float) $stats['monthlyRevenueChange'], 'against September at the hotel (200): +250%');
+    }
+
+    public function test_range_bounds_are_the_utc_instants_of_the_hotel_days(): void
+    {
+        [$start, $end] = CheckInWindow::rangeBoundsUtc(Carbon::parse('2026-10-16'), Carbon::parse('2026-10-17'));
+        $this->assertSame('2026-10-15 16:00:00', $start->toDateTimeString());
+        $this->assertSame('2026-10-17 16:00:00', $end->toDateTimeString());
+        $this->assertSame('UTC', $start->getTimezone()->getName());
+    }
 }
