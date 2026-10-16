@@ -190,7 +190,7 @@ class CheckInSettlementTest extends ApiFlowTestCase
         return array_merge([
             'guest_first_name' => 'Walk', 'guest_last_name' => 'In',
             'checkin_permanent_address' => '1 Test St', 'current_address_same_as_permanent' => 1, 'checkin_contact_number' => '09171234567',
-            'room_ids' => [$rt->rooms()->first()->id], 'check_out' => today()->addDay()->toDateString(), 'adults' => 1, 'children' => 0,
+            'room_ids' => [$rt->rooms()->first()->id], 'check_out' => \App\Support\CheckInWindow::today()->addDay()->toDateString(), 'adults' => 1, 'children' => 0,
         ], $extra);
     }
 
@@ -201,7 +201,7 @@ class CheckInSettlementTest extends ApiFlowTestCase
         $desk = $this->desk();
 
         $this->actingAs($desk)->get(route('receptionist.check-in.walk-in.create'))->assertOk()->assertSee('Extra Bed');
-        $this->actingAs($desk)->getJson(route('receptionist.check-in.walk-in.rooms', ['room_type_id' => $rt->id, 'check_out' => today()->addDay()->toDateString()]))
+        $this->actingAs($desk)->getJson(route('receptionist.check-in.walk-in.rooms', ['room_type_id' => $rt->id, 'check_out' => \App\Support\CheckInWindow::today()->addDay()->toDateString()]))
             ->assertOk()->assertJsonPath('sellable', 1)->assertJsonPath('rooms.0.room_number', 'Deluxe-1');
 
         // 1 night x 1000 + 2 x 300 = 1600 - less is refused and nothing is created

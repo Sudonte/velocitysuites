@@ -84,7 +84,7 @@ class ReceptionistAdvanceCheckInTest extends ApiFlowTestCase
         ])->assertSessionHasNoErrors()->assertRedirect(route('receptionist.check-in.index', ['tab' => 'checked_in']));
 
         $this->assertSame(1, Booking::count());
-        $this->assertSame(\Carbon\Carbon::today()->toDateString(), Booking::first()->check_in->toDateString());
+        $this->assertSame(\App\Support\CheckInWindow::today()->toDateString(), Booking::first()->check_in->toDateString());
         $this->assertSame(Booking::STATUS_CHECKED_IN, Booking::first()->booking_status);
     }
 

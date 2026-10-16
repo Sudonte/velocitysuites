@@ -657,7 +657,7 @@ class CheckOutController extends Controller
     {
         $validated = $request->validate([
             'description' => 'nullable|string',
-            'amount' => 'required|numeric|min:0.01',
+            'amount' => 'required|numeric|min:0.01|max:9999999.99',
             'category' => 'required|in:damage,lost_item,broken_equipment,mini_bar,laundry,other',
             'notes' => 'nullable|string|max:1000',
         ]);
@@ -709,7 +709,7 @@ class CheckOutController extends Controller
     {
         $validated = $request->validate([
             'description' => 'nullable|string',
-            'amount' => 'required|numeric|min:0.01',
+            'amount' => 'required|numeric|min:0.01|max:9999999.99',
             'category' => 'required|in:damage,lost_item,broken_equipment,mini_bar,laundry,other',
             'notes' => 'nullable|string|max:1000',
         ]);

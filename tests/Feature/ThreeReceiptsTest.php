@@ -225,4 +225,17 @@ class ThreeReceiptsTest extends ApiFlowTestCase
         }
         $this->assertStringContainsString('Change', $html);
     }
+
+    public function test_an_absurd_additional_charge_is_refused_with_a_validation_error_not_a_server_error(): void
+    {
+        [, $rt, $room, $booking] = $this->arriving();
+        $desk = $this->desk();
+        $this->actingAs($desk)->postJson(route('receptionist.check-in.store', $booking),
+            $this->payload($rt, $room, ['payment_method' => 'cash', 'amount_received' => 2000]))->assertOk();
+        $billing = $booking->fresh()->billing()->first();
+
+        $this->actingAs($desk)->postJson(route('receptionist.billing.additional-charge.store', $billing), ['description' => 'x', 'amount' => 99999999999, 'category' => 'damage'])
+            ->assertStatus(422)->assertJsonValidationErrors('amount');
+        $this->assertSame(0, $billing->additionalCharges()->count());
+    }
 }

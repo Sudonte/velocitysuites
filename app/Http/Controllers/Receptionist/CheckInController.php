@@ -117,6 +117,15 @@ class CheckInController extends Controller
     }
 
     /**
+     * Today at the hotel (Asia/Manila) as a plain date. The app runs in UTC, so Carbon::today() is still "yesterday" from
+     * midnight to 8 AM hotel time - a walk-in then got the wrong check-in date and one night too many on the bill.
+     */
+    private function hotelToday(): Carbon
+    {
+        return Carbon::parse(\App\Support\CheckInWindow::today()->toDateString());
+    }
+
+    /**
      * "Walk-in Check-in" - one page for a guest at the desk with no booking:
      * guest + registration details, the actual rooms (picked by room number),
      * amenities, a discount (ID checked now) or promotion, and the full
@@ -141,13 +150,13 @@ class CheckInController extends Controller
     {
         $validated = $request->validate([
             'room_type_id' => 'required|integer|exists:room_types,id',
-            'check_out' => 'required|date|after:today',
+            'check_out' => 'required|date|after:'.\App\Support\CheckInWindow::today()->toDateString(),
         ]);
         $roomType = RoomType::findOrFail($validated['room_type_id']);
         $checkOut = Carbon::parse($validated['check_out'])->startOfDay();
-        $rooms = $this->availability->freeRoomsOfType($roomType->id, Carbon::today(), $checkOut);
+        $rooms = $this->availability->freeRoomsOfType($roomType->id, $this->hotelToday(), $checkOut);
         // Confirmed bookings of this type that haven't been given a room yet still need one - never sell those.
-        $sellable = min($rooms->count(), $this->availability->availableCount($roomType, Carbon::today(), $checkOut));
+        $sellable = min($rooms->count(), $this->availability->availableCount($roomType, $this->hotelToday(), $checkOut));
 
         return response()->json([
             'rooms' => $rooms->map(fn ($r) => ['id' => $r->id, 'room_number' => $r->room_number])->values(),
@@ -173,7 +182,7 @@ class CheckInController extends Controller
             'current_address_same_as_permanent' => 'nullable|boolean',
             'checkin_current_address' => 'exclude_if:current_address_same_as_permanent,1|required|string|max:255',
             'checkin_contact_number' => ['required', 'string', 'max:20', new ValidPhoneNumber($linkedGuest?->country ?? 'Philippines')],
-            'check_out' => 'required|date|after:today',
+            'check_out' => 'required|date|after:'.\App\Support\CheckInWindow::today()->toDateString(),
             'adults' => 'required|integer|min:1',
             'children' => 'nullable|integer|min:0',
             'room_ids' => 'required|array|min:1',
@@ -187,7 +196,7 @@ class CheckInController extends Controller
             'checkin_current_address.required' => 'Enter the guest\'s current address, or tick "Same as permanent address".',
         ]);
 
-        $checkIn = Carbon::today();
+        $checkIn = $this->hotelToday();
         $checkOut = Carbon::parse($validated['check_out'])->startOfDay();
         $nights = max(1, $checkIn->diffInDays($checkOut));
         $children = (int) ($validated['children'] ?? 0);
