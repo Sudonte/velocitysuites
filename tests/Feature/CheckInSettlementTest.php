@@ -185,6 +185,30 @@ class CheckInSettlementTest extends ApiFlowTestCase
         \Carbon\Carbon::setTestNow();
     }
 
+    public function test_the_check_out_payment_panel_shows_the_same_balance_the_payment_is_checked_against(): void
+    {
+        [$rt, $room, $booking] = $this->arriving();
+        $desk = $this->desk();
+        $this->actingAs($desk)->postJson(route('receptionist.check-in.store', $booking), $this->checkInPayload($rt, $room, ['payment_method' => 'cash', 'amount_received' => 2000]))->assertOk();
+        \Carbon\Carbon::setTestNow(now()->addDays(2)->setTime(11, 0));
+
+        // An amenity approved during the stay, and a saved bill total that drifted from the stay's real charges.
+        $amenity = Amenity::create(['amenity_name' => 'Late Snack', 'category' => 'Food', 'quantity' => 5, 'is_unlimited' => false, 'charge' => 250, 'status' => 'active']);
+        AmenityRequest::create(['booking_id' => $booking->id, 'room_type_id' => $rt->id, 'amenity_id' => $amenity->id, 'amenity_name' => 'Late Snack',
+            'category' => 'Food', 'quantity' => 1, 'charge' => 250, 'status' => 'approved', 'origin' => AmenityRequest::ORIGIN_STAFF]);
+        $billing = $booking->billing()->first();
+        \Illuminate\Support\Facades\DB::table('billings')->where('id', $billing->id)->update(['total_amount' => 2064.80]);
+
+        // The panel shows the real balance (2000 paid at check-in + 250 owed now)...
+        $this->actingAs($desk)->get(route('receptionist.check-out.payment', $billing))->assertOk()
+            ->assertSee('₱250.00', false)->assertDontSee('₱64.80', false);
+        // ...and exactly that amount is accepted.
+        $this->actingAs($desk)->postJson(route('receptionist.billing.payment.store', $billing), ['payment_method' => 'cash', 'amount_paid' => 250, 'amount_received' => 250])
+            ->assertOk()->assertJson(['completed' => true]);
+        $this->assertEqualsWithDelta(2250, $booking->fresh()->paidTotal(), 0.01);
+        \Carbon\Carbon::setTestNow();
+    }
+
     private function walkInPayload($rt, array $extra = []): array
     {
         return array_merge([

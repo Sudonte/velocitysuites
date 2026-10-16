@@ -305,6 +305,11 @@ class CheckOutController extends Controller
      */
     public function checkOutPaymentPanel(Billing $billing)
     {
+        // Re-price the bill first - the same refresh recordPayment() checks the amount against - so the balance shown
+        // here is exactly the amount that will be accepted (a saved total can be stale).
+        if ($billing->booking && $billing->booking->booking_status === Booking::STATUS_CHECKED_IN) {
+            $this->refreshStayCharges($billing->booking, $billing);
+        }
         $billing->load(['booking.reservation.guest.user', 'booking.rooms', 'payments', 'additionalCharges', 'discountApplied']);
 
         $booking = $billing->booking;
@@ -393,9 +398,10 @@ class CheckOutController extends Controller
                 return ['status' => 'not_awaiting_checkout'];
             }
 
-            // Settle against today's bill: re-price it first (nights actually stayed up to now, discount only if the
-            // ID is approved), so the balance checked below is the same figure the guest's receipt will show.
-            $lockedBilling->syncFromStayBill($lockedBooking, StayBill::FINAL);
+            // Settle against today's bill: re-price it first (nights actually stayed up to now, amenities, discount only
+            // if the ID is approved) with the same refresh the payment panel shows, so the balance checked below is the
+            // figure the receptionist saw and the guest's receipt will show.
+            $this->refreshStayCharges($lockedBooking, $lockedBilling);
 
             // Re-derive the balance from the LOCKED billing's own fresh
             // payment sum - never the pre-transaction $billing->balance,
