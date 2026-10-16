@@ -279,11 +279,120 @@ class AdditionalAmenityRequestTest extends ApiFlowTestCase
 
         // ... and the exact JSON shape the Android app parses (AdditionalAmenityInfoDto / AdditionalAmenityRequestDto)
         $info = $this->asGuest($user)->getJson("/api/guest/reservations/{$reservation->id}/additional-amenities")->assertOk()->json();
-        $this->assertEqualsCanonicalizing(['booking_id', 'can_request', 'reason', 'requests', 'total_approved'], array_keys($info));
+        $this->assertEqualsCanonicalizing(['booking_id', 'can_request', 'reason', 'rooms', 'requests', 'total_approved'], array_keys($info));
         $this->assertEqualsCanonicalizing(
-            ['id', 'amenity_id', 'name', 'quantity', 'unit_price', 'subtotal', 'status', 'rejection_reason', 'note', 'requested_at', 'decided_at'],
+            ['id', 'amenity_id', 'room_id', 'room_number', 'room_type', 'batch_ref', 'name', 'quantity', 'unit_price', 'subtotal', 'status', 'rejection_reason', 'note', 'requested_at', 'decided_at'],
             array_keys($info['requests'][0])
         );
         $this->assertSame($booking->id, $info['booking_id']);
+    }
+
+    /** @return array{0: User, 1: Booking, 2: array<int, Room>} two room types, three rooms (1 + 2), all assigned at check-in */
+    private function stayWithThreeRooms(): array
+    {
+        [$user, $guest] = $this->makeGuestUser('AM3'.uniqid());
+        $std = $this->makeRoomTypeWithRooms('Std'.uniqid(), 1000, 2, 0);
+        $dlx = $this->makeRoomTypeWithRooms('Dlx'.uniqid(), 2000, 2, 0);
+        $booking = Booking::create([
+            'guest_id' => $guest->id, 'room_type_id' => $std->id, 'rooms_requested' => 3,
+            'check_in' => '2026-10-05', 'check_out' => '2026-10-06', 'adults' => 1, 'children' => 0, 'number_of_guests' => 1,
+            'booking_status' => Booking::STATUS_CHECKED_IN, 'payment_method' => 'cash', 'checked_in_at' => '2026-10-05 14:00:00',
+        ]);
+        $rooms = [];
+        foreach ([[$std, 'S1'], [$dlx, 'D1'], [$dlx, 'D2']] as [$type, $number]) {
+            $rooms[] = Room::create(['room_number' => $number.uniqid(), 'room_name' => 'Room '.$number, 'room_type_id' => $type->id, 'room_capacity' => 2, 'status' => 'occupied', 'rate_override' => $type->rate]);
+        }
+        $booking->rooms()->attach(collect($rooms)->pluck('id')->all());
+        Carbon::setTestNow(Carbon::parse('2026-10-06 10:00', 'Asia/Manila'));
+
+        return [$user, $booking->fresh(), $rooms];
+    }
+
+    public function test_two_room_types_three_rooms_get_different_amenities_in_one_submission_and_the_desk_sees_which_room_gets_what(): void
+    {
+        [$user, $booking, [$r1, $r2, $r3]] = $this->stayWithThreeRooms();
+        $towel = $this->amenity(50);
+        $bed = $this->amenity(300);
+        $kettle = $this->amenity(80);
+
+        // the app first learns which rooms the stay has
+        $info = $this->asGuest($user)->getJson("/api/guest/bookings/{$booking->id}/additional-amenities")->assertOk()->json();
+        $this->assertCount(3, $info['rooms']);
+        $this->assertEqualsCanonicalizing([$r1->id, $r2->id, $r3->id], array_column($info['rooms'], 'room_id'));
+
+        $payload = ['rooms' => [
+            ['room_id' => $r1->id, 'items' => [['amenity_id' => $towel->id, 'quantity' => 2], ['amenity_id' => $bed->id, 'quantity' => 1]]],
+            ['room_id' => $r2->id, 'items' => [['amenity_id' => $kettle->id, 'quantity' => 1]]],
+            ['room_id' => $r3->id, 'items' => [['amenity_id' => $towel->id, 'quantity' => 1]]],
+        ]];
+        $res = $this->asGuest($user)->postJson("/api/guest/bookings/{$booking->id}/additional-amenities", $payload)->assertCreated();
+        $this->assertCount(4, $res->json('requests'));
+
+        // one row per (room, amenity), each with its own room, all from ONE submission
+        $rows = AmenityRequest::orderBy('id')->get();
+        $this->assertSame(1, $rows->pluck('batch_ref')->unique()->count());
+        $map = $rows->groupBy('room_id')->map(fn ($g) => $g->pluck('amenity_id')->sort()->values()->all());
+        $this->assertEqualsCanonicalizing([$towel->id, $bed->id], $map[$r1->id]);
+        $this->assertSame([$kettle->id], $map[$r2->id]);
+        $this->assertSame([$towel->id], $map[$r3->id]);
+        $this->assertEquals(2, $rows->first(fn ($r) => $r->room_id === $r1->id && $r->amenity_id === $towel->id)->quantity);
+        $this->assertSame($r2->room_type_id, $rows->firstWhere('room_id', $r2->id)->room_type_id, 'a row carries the room type of ITS room');
+
+        // the receptionist's Amenity Requests page names the room of every line
+        $recep = $this->receptionist();
+        $html = $this->actingAs($recep)->get(route('receptionist.amenities.index'))->assertOk()->getContent();
+        foreach ([$r1, $r2, $r3] as $room) {
+            $this->assertStringContainsString($room->room_number, $html);
+        }
+
+        // approving ONE line bills only that line (other rooms stay pending)
+        $oneLine = $rows->first(fn ($r) => $r->room_id === $r2->id);
+        $this->actingAs($recep)->put(route('receptionist.amenity-requests.approve', $oneLine))->assertSessionHas('success');
+        $this->assertSame(80.0, StayBill::forBooking($booking->fresh())['amenity_charge']);
+        $this->assertSame(3, $booking->fresh()->pendingAmenityRequestCount());
+    }
+
+    public function test_an_amenity_cannot_be_assigned_to_a_room_that_is_not_part_of_the_stay(): void
+    {
+        [$user, $booking] = $this->stayWithThreeRooms();
+        $foreign = Room::create(['room_number' => 'X'.uniqid(), 'room_name' => 'Foreign', 'room_type_id' => $booking->room_type_id, 'room_capacity' => 2, 'status' => 'available']);
+        $a = $this->amenity();
+
+        $this->asGuest($user)->postJson("/api/guest/bookings/{$booking->id}/additional-amenities", ['rooms' => [
+            ['room_id' => $foreign->id, 'items' => [['amenity_id' => $a->id, 'quantity' => 1]]],
+        ]])->assertStatus(422);
+        $this->assertSame(0, AmenityRequest::count());
+    }
+
+    public function test_the_stock_is_checked_against_the_total_asked_across_all_rooms(): void
+    {
+        [$user, $booking, [$r1, $r2]] = $this->stayWithThreeRooms();
+        $scarce = $this->amenity(100, 3);
+
+        $this->asGuest($user)->postJson("/api/guest/bookings/{$booking->id}/additional-amenities", ['rooms' => [
+            ['room_id' => $r1->id, 'items' => [['amenity_id' => $scarce->id, 'quantity' => 2]]],
+            ['room_id' => $r2->id, 'items' => [['amenity_id' => $scarce->id, 'quantity' => 2]]],
+        ]])->assertStatus(422);
+        $this->assertSame(0, AmenityRequest::count(), 'all or nothing - a half-saved submission would be worse than none');
+    }
+
+    public function test_a_confirmed_booking_that_is_not_checked_in_yet_cannot_request_and_is_told_why(): void
+    {
+        [$user, $booking] = $this->stay(Booking::STATUS_ACTIVE);
+        $a = $this->amenity();
+
+        $this->ask($user, $booking, [['amenity_id' => $a->id, 'quantity' => 1]])->assertStatus(422);
+        $info = $this->asGuest($user)->getJson("/api/guest/bookings/{$booking->id}/additional-amenities")->assertOk()->json();
+        $this->assertFalse($info['can_request']);
+        $this->assertStringContainsString('checked you in', $info['reason']);
+        $this->assertSame(0, AmenityRequest::count());
+    }
+
+    public function test_the_guest_is_told_when_check_in_unlocks_amenity_requests(): void
+    {
+        [$user] = $this->stay();
+        app(\App\Services\NotificationService::class)->notifyAmenitiesUnlocked($user, 1);
+
+        $this->assertTrue(Notification::where('user_id', $user->id)->where('title', 'You Can Now Request Additional Amenities')->exists());
     }
 }

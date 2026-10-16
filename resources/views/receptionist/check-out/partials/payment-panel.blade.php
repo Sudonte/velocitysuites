@@ -3,60 +3,78 @@
     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
 </div>
 <div class="modal-body" data-billing-id="{{ $billing->id }}">
-    <h6>Bill Summary</h6>
+    {{-- Payment Summary: one aligned column, always in the same order - room charges, discounts, what was already paid,
+         the additional charges itemized, then the total due. Every figure is the server's own bill (StayBill). --}}
+    @php
+        $stay = $billing->stay_bill ?? [];
+        $extraLines = [];
+        foreach (($stay['amenity_lines'] ?? []) as $line) {
+            $extraLines[] = [
+                'label' => $line['amenity_name'].' x'.$line['quantity'].(! empty($line['additional']) ? ' (requested)' : ''),
+                'amount' => (float) $line['subtotal'],
+            ];
+        }
+        foreach (($stay['additional_charges'] ?? []) as $line) {
+            $extraLines[] = ['label' => $line['description'], 'amount' => (float) $line['amount']];
+        }
+        $guestFee = (float) $billing->additional_guest_fee;
+        $extrasTotal = round(array_sum(array_column($extraLines, 'amount')) + $guestFee, 2);
+        $previouslyPaid = (float) $paymentSummary['total_amount_paid'];
+    @endphp
+    <h6 class="mb-2">Payment Summary</h6>
     <div class="table-responsive">
-    <table class="table table-sm table-borderless mb-3">
+    <table class="table table-sm table-borderless align-middle mb-3" id="paymentSummaryTable">
+        <colgroup><col><col style="width: 9rem;"></colgroup>
         <tr>
-            <td>Room Charge</td>
+            <th class="fw-semibold">Room Charges</th>
             <td class="text-end">₱{{ number_format($billing->room_charge, 2) }}</td>
         </tr>
-        @if($billing->additional_guest_fee > 0)
-            <tr>
-                <td>Additional Guest Fee</td>
-                <td class="text-end">₱{{ number_format($billing->additional_guest_fee, 2) }}</td>
-            </tr>
-        @endif
-        @if($billing->amenity_charge > 0)
-            <tr>
-                <td>Amenities & Services</td>
-                <td class="text-end">₱{{ number_format($billing->amenity_charge, 2) }}</td>
-            </tr>
-        @endif
-        @if($billing->additional_charges_total > 0)
-            <tr>
-                <td>Additional Charges</td>
-                <td class="text-end">₱{{ number_format($billing->additional_charges_total, 2) }}</td>
-            </tr>
-        @endif
-        @if($billing->discount > 0)
-            <tr>
-                <td>Discount</td>
-                <td class="text-end text-success">-₱{{ number_format($billing->discount, 2) }}</td>
-            </tr>
-        @endif
-        <tr class="fw-bold">
-            <td>Grand Total</td>
-            <td class="text-end">₱{{ number_format($paymentSummary['grand_total'], 2) }}</td>
+        <tr>
+            <th class="fw-semibold">Discounts @if(! empty($stay['discount_name'])) <span class="text-muted fw-normal">({{ $stay['discount_name'] }})</span>@endif</th>
+            <td class="text-end {{ $billing->discount > 0 ? 'text-success' : 'text-muted' }}">{{ $billing->discount > 0 ? '-' : '' }}₱{{ number_format($billing->discount, 2) }}</td>
+        </tr>
+        <tr>
+            <th class="fw-semibold">Amount Previously Paid</th>
+            <td class="text-end">-₱{{ number_format($previouslyPaid, 2) }}</td>
         </tr>
         @if($settlementTotals)
-            <tr>
-                <td>Paid at check-in</td>
+            <tr class="small text-muted">
+                <td class="ps-4">Paid at check-in</td>
                 <td class="text-end">₱{{ number_format($settlementTotals['at_check_in'], 2) }}</td>
             </tr>
             @if($settlementTotals['at_check_out'] > 0)
-                <tr>
-                    <td>Paid at check-out</td>
+                <tr class="small text-muted">
+                    <td class="ps-4">Paid at check-out</td>
                     <td class="text-end">₱{{ number_format($settlementTotals['at_check_out'], 2) }}</td>
                 </tr>
             @endif
-        @elseif($paymentSummary['total_amount_paid'] > 0)
-            <tr>
-                <td>Total Amount Already Paid</td>
-                <td class="text-end">₱{{ number_format($paymentSummary['total_amount_paid'], 2) }}</td>
+        @endif
+        <tr>
+            <th class="fw-semibold">Additional Charges</th>
+            <td class="text-end">₱{{ number_format($extrasTotal, 2) }}</td>
+        </tr>
+        @forelse($extraLines as $line)
+            <tr class="small text-muted">
+                <td class="ps-4">{{ $line['label'] }}</td>
+                <td class="text-end">₱{{ number_format($line['amount'], 2) }}</td>
+            </tr>
+        @empty
+            @if($guestFee <= 0)
+                <tr class="small text-muted"><td class="ps-4" colspan="2">None</td></tr>
+            @endif
+        @endforelse
+        @if($guestFee > 0)
+            <tr class="small text-muted">
+                <td class="ps-4">Additional guest fee</td>
+                <td class="text-end">₱{{ number_format($guestFee, 2) }}</td>
             </tr>
         @endif
-        <tr class="fw-bold fs-5">
-            <td>Balance Due</td>
+        <tr class="small text-muted border-top">
+            <td>Bill total (room + additional charges - discounts)</td>
+            <td class="text-end">₱{{ number_format($paymentSummary['grand_total'], 2) }}</td>
+        </tr>
+        <tr class="fw-bold fs-5 border-top">
+            <th>Total Due</th>
             <td class="text-end text-brand" id="balanceDueDisplay">₱{{ number_format($balance, 2) }}</td>
         </tr>
     </table>
@@ -85,7 +103,7 @@
                 </select>
             </div>
             <div class="mb-3" id="cashReceivedGroup">
-                <label class="form-label" for="cashReceivedInput">Cash Received <span class="text-danger">*</span></label>
+                <label class="form-label" for="cashReceivedInput">Amount Received <span class="text-danger">*</span></label>
                 <div class="input-group">
                     <span class="input-group-text">₱</span>
                     <input type="number" step="0.01" min="0.01" name="amount_received" id="cashReceivedInput" class="form-control" value="{{ $balance }}">
@@ -93,7 +111,7 @@
                 <div class="form-text">The cash the guest hands over. Only the amount applied below is recorded as paid.</div>
             </div>
             <div class="mb-3">
-                <label class="form-label" for="amountPaidInput">Amount Applied <span class="text-danger">*</span></label>
+                <label class="form-label" for="amountPaidInput">Amount Applied to Total Due <span class="text-danger">*</span></label>
                 <div class="input-group">
                     <span class="input-group-text">₱</span>
                     <input type="number" step="0.01" min="{{ $balance }}" max="{{ $balance }}" name="amount_paid" id="amountPaidInput" class="form-control" value="{{ $balance }}" data-balance="{{ $balance }}" required readonly aria-describedby="amountPaidHelp amountPaidError">

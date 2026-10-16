@@ -379,6 +379,37 @@ class NotificationService
     }
 
     /**
+     * Receipt 2 is ready: the remaining balance was settled (or a full payment confirmed) at check-in.
+     */
+    public function notifyCheckinReceipt(User $guest, string $receiptNumber, ?int $referenceId = null): void
+    {
+        $this->toUser(
+            $guest,
+            'Check-In Receipt Ready',
+            "Your balance is settled and your Check-In Settlement Receipt ({$receiptNumber}) is ready in your Booking Details.",
+            'booking',
+            $referenceId,
+            null,
+            $receiptNumber,
+            'CHECKIN_SETTLEMENT_RECEIPT'
+        );
+    }
+
+    /**
+     * Check-in is what unlocks "Request Additional Amenities" (the guest can ask only while checked in), so tell them.
+     */
+    public function notifyAmenitiesUnlocked(User $guest, ?int $referenceId = null): void
+    {
+        $this->toUser(
+            $guest,
+            'You Can Now Request Additional Amenities',
+            'You are checked in. Open your booking and tap Request Additional Amenities to ask for extras for any of your rooms.',
+            'booking',
+            $referenceId
+        );
+    }
+
+    /**
      * The guest's stay ended on different dates than the ones they booked (a late check-out bills the extra
      * nights, an early one only the nights stayed): tell them the dates, the nights and the amount that now apply.
      * $stay is App\Support\StayBill - the same figures their Payment Receipt shows.

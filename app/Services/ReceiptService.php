@@ -192,6 +192,7 @@ class ReceiptService
             $receipts[] = [
                 'receipt_number' => $payment->receipt_number,
                 'receipt_type' => $type,
+                'stage' => 1,
                 'status' => 'VERIFIED',
                 'amount' => (float) $payment->amount_paid,
                 'payment_percentage' => $type === 'PARTIAL_RECEIPT'
@@ -202,10 +203,26 @@ class ReceiptService
         }
 
         $billing = $this->billingOf($booking);
+        // Receipt 2: the check-in settlement (the remaining balance verified in the Check-In module).
+        if ($billing && $billing->checkin_receipt_number !== null) {
+            $snapshot = $billing->checkin_receipt_snapshot ?? [];
+            $receipts[] = [
+                'receipt_number' => $billing->checkin_receipt_number,
+                'receipt_type' => 'CHECKIN_SETTLEMENT_RECEIPT',
+                'stage' => 2,
+                'status' => 'SETTLED',
+                'amount' => (float) ($snapshot['amount_settled'] ?? 0),
+                'payment_percentage' => 100,
+                'issued_at' => $snapshot['settled_at'] ?? $billing->checkin_settled_at?->toIso8601String(),
+            ];
+        }
+
+        // Receipt 3: the official receipt at check-out.
         if ($billing && $billing->receipt_number !== null) {
             $receipts[] = [
                 'receipt_number' => $billing->receipt_number,
                 'receipt_type' => 'OFFICIAL_RECEIPT',
+                'stage' => 3,
                 'status' => 'PAID',
                 'amount' => (float) $billing->total_amount,
                 'payment_percentage' => 100,
@@ -259,6 +276,17 @@ class ReceiptService
             }
 
             return $this->buildReceiptPayload($booking, $type, $payment);
+        }
+
+        if (str_starts_with($receiptNumber, 'SR-')) {
+            $billing = Billing::where('checkin_receipt_number', $receiptNumber)->first();
+            $booking = $billing?->booking;
+            if (! $billing || ! $booking || ! $this->ownedBy($booking, $guest)) {
+                return null;
+            }
+            $billing->setRelation('booking', $booking);
+
+            return $this->buildReceiptPayload($booking, 'CHECKIN_SETTLEMENT_RECEIPT', null, $billing);
         }
 
         if (str_starts_with($receiptNumber, 'OR-')) {
@@ -407,9 +435,42 @@ class ReceiptService
         // correctness issue.
         [$paymentSummary, $paymentTransactionsForReceipt] = $this->summaryAndHistoryForReceipt($booking, $anchorPayment);
 
+        // Receipt 2 is a frozen snapshot of the check-in settlement, not the live totals (extra charges at check-out
+        // would otherwise rewrite it): its summary and history stop at the moment the balance was settled.
+        $checkinSettlement = null;
+        if ($receiptType === 'CHECKIN_SETTLEMENT_RECEIPT' && $billing) {
+            $checkinSettlement = $billing->checkin_receipt_snapshot ?? [];
+            $settledPaid = (float) ($checkinSettlement['total_paid'] ?? 0);
+            $paymentSummary = [
+                'grand_total' => (float) ($checkinSettlement['total_amount'] ?? 0),
+                'total_amount_paid' => $settledPaid,
+                'remaining_balance' => (float) ($checkinSettlement['balance'] ?? 0),
+                'payment_status' => PaymentMath::paymentStatus((float) ($checkinSettlement['total_amount'] ?? 0), $settledPaid),
+                'payment_percentage' => 100,
+                'official_receipt_available' => $paymentSummary['official_receipt_available'],
+                'discount' => (float) ($checkinSettlement['discount']['amount'] ?? 0),
+            ];
+            $upTo = [];
+            foreach ($paymentTransactionsForReceipt as $row) {
+                $upTo[] = $row;
+                if ($row['total_paid_after_transaction'] + 0.004 >= $settledPaid) {
+                    break;
+                }
+            }
+            $paymentTransactionsForReceipt = $upTo;
+        }
+
         return [
             'receipt_type' => $receiptType,
-            'receipt_number' => $anchorPayment?->receipt_number ?? $billing?->receipt_number,
+            'receipt_stage' => match ($receiptType) {
+                'PARTIAL_RECEIPT', 'FULL_PAYMENT_RECEIPT' => 1,
+                'CHECKIN_SETTLEMENT_RECEIPT' => 2,
+                'OFFICIAL_RECEIPT' => 3,
+                default => null,
+            },
+            'checkin_settlement' => $checkinSettlement,
+            'receipt_number' => $anchorPayment?->receipt_number
+                ?? ($receiptType === 'CHECKIN_SETTLEMENT_RECEIPT' ? $billing?->checkin_receipt_number : $billing?->receipt_number),
             'booking_id' => $booking->id,
             'reservation_id' => $booking->reservation_id,
             'guest_account_name' => $booking->account_guest_full_name,
@@ -440,7 +501,7 @@ class ReceiptService
                 'verified_at' => $anchorPayment->verified_at?->toIso8601String(),
                 'verified_by' => $anchorPayment->verifierName(),
             ] : null,
-            'issued_at' => ($anchorPayment?->verified_at ?? $billing?->updated_at)?->toIso8601String(),
+            'issued_at' => $checkinSettlement['settled_at'] ?? ($anchorPayment?->verified_at ?? $billing?->updated_at)?->toIso8601String(),
         ];
     }
 }

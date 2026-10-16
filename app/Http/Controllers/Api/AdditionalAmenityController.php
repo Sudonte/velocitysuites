@@ -63,7 +63,8 @@ class AdditionalAmenityController extends Controller
         if (! $booking) {
             return response()->json([
                 'can_request' => false,
-                'reason' => 'Extra amenities can be requested once your booking is confirmed.',
+                'reason' => AmenityRequestService::NOT_CHECKED_IN_YET,
+                'rooms' => [],
                 'requests' => [],
                 'total_approved' => 0,
             ]);
@@ -76,6 +77,7 @@ class AdditionalAmenityController extends Controller
             'booking_id' => $booking->id,
             'can_request' => $reason === null,
             'reason' => $reason,
+            'rooms' => $this->presentRooms($booking),
             'requests' => $rows->map(fn ($r) => $this->present($r))->values(),
             'total_approved' => round((float) $rows->where('status', 'approved')->sum(fn ($r) => $r->charge * $r->quantity), 2),
         ]);
@@ -87,18 +89,24 @@ class AdditionalAmenityController extends Controller
             return response()->json(['message' => 'Unauthorized'], 403);
         }
         if (! $booking) {
-            return response()->json(['message' => 'Extra amenities can be requested once your booking is confirmed.'], 422);
+            return response()->json(['message' => AmenityRequestService::NOT_CHECKED_IN_YET], 422);
         }
 
+        // Per-room form: rooms[].room_id with its own items[] (different amenities per room). The flat items[] still works.
         $data = $request->validate([
-            'items' => 'required|array|min:1|max:20',
+            'items' => 'required_without:rooms|array|min:1|max:20',
             'items.*.amenity_id' => 'required|integer',
             'items.*.quantity' => 'required|integer|min:1|max:99',
+            'rooms' => 'required_without:items|array|min:1|max:50',
+            'rooms.*.room_id' => 'required|integer',
+            'rooms.*.items' => 'required|array|min:1|max:20',
+            'rooms.*.items.*.amenity_id' => 'required|integer',
+            'rooms.*.items.*.quantity' => 'required|integer|min:1|max:99',
             'note' => 'nullable|string|max:500',
         ]);
 
         try {
-            $created = $this->service->submit($booking, $data['items'], $data['note'] ?? null);
+            $created = $this->service->submit($booking, $data['items'] ?? [], $data['note'] ?? null, $data['rooms'] ?? null);
         } catch (ValidationException $e) {
             return response()->json(['message' => collect($e->errors())->flatten()->first(), 'errors' => $e->errors()], 422);
         }
@@ -106,14 +114,28 @@ class AdditionalAmenityController extends Controller
         return response()->json([
             'can_request' => true,
             'reason' => null,
+            'rooms' => $this->presentRooms($booking),
             'requests' => $created->map(fn ($r) => $this->present($r))->values(),
         ], 201);
+    }
+
+    /** The rooms of this stay the guest can pick amenities for (assigned at check-in, not checked out). */
+    private function presentRooms(Booking $booking): array
+    {
+        return $this->service->requestableRooms($booking)->map(fn ($room) => [
+            'room_id' => $room->id,
+            'room_number' => $room->room_number,
+            'room_name' => $room->room_name,
+            'room_type_id' => $room->room_type_id,
+            'room_type' => $room->roomType?->name,
+        ])->values()->all();
     }
 
     private function requestsFor(Booking $booking)
     {
         return AmenityRequest::where('origin', AmenityRequest::ORIGIN_GUEST_REQUEST)
             ->where($booking->reservation_id ? 'reservation_id' : 'booking_id', $booking->reservation_id ?? $booking->id)
+            ->with(['room', 'roomType'])
             ->latest('id')
             ->get();
     }
@@ -123,6 +145,10 @@ class AdditionalAmenityController extends Controller
         return [
             'id' => $r->id,
             'amenity_id' => $r->amenity_id,
+            'room_id' => $r->room_id,
+            'room_number' => $r->room?->room_number,
+            'room_type' => $r->roomType?->name,
+            'batch_ref' => $r->batch_ref,
             'name' => $r->amenity_name,
             'quantity' => (int) $r->quantity,
             'unit_price' => round((float) $r->charge, 2),

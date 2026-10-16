@@ -36,6 +36,8 @@ class Billing extends Model
         // What was settled when the guest checked in - check-out only collects what was added after that.
         'checkin_settled_total',
         'checkin_settled_at',
+        // checkin_receipt_number is system-generated like receipt_number - see issueCheckinReceipt().
+        'checkin_receipt_snapshot',
         // receipt_number is deliberately NOT fillable - see
         // Payment::$fillable's identical note; it's system-generated,
         // lazily assigned by ensureOfficialReceiptNumber() below.
@@ -47,10 +49,33 @@ class Billing extends Model
         'amenity_charge' => 'decimal:2',
         'checkin_settled_total' => 'decimal:2',
         'checkin_settled_at' => 'datetime',
+        'checkin_receipt_snapshot' => 'array',
         'discount' => 'decimal:2',
         'total_amount' => 'decimal:2',
         'discount_verified_at' => 'datetime',
     ];
+
+    /**
+     * Issue Receipt 2 (the check-in settlement receipt) exactly once and freeze $snapshot on it. A second call (a retried
+     * request) returns the number already issued and leaves the stored snapshot untouched.
+     */
+    public function issueCheckinReceipt(array $snapshot): string
+    {
+        return DB::transaction(function () use ($snapshot) {
+            $locked = static::whereKey($this->id)->lockForUpdate()->firstOrFail();
+            if ($locked->checkin_receipt_number) {
+                $this->forceFill(['checkin_receipt_number' => $locked->checkin_receipt_number, 'checkin_receipt_snapshot' => $locked->checkin_receipt_snapshot]);
+
+                return $locked->checkin_receipt_number;
+            }
+
+            $number = 'SR-'.now()->format('Ymd').'-'.str_pad((string) $locked->id, 6, '0', STR_PAD_LEFT);
+            $locked->forceFill(['checkin_receipt_number' => $number, 'checkin_receipt_snapshot' => $snapshot])->save();
+            $this->forceFill(['checkin_receipt_number' => $number, 'checkin_receipt_snapshot' => $snapshot]);
+
+            return $number;
+        });
+    }
 
     /**
      * Get the booking associated with the billing.

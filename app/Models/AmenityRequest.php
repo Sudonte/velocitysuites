@@ -19,6 +19,7 @@ class AmenityRequest extends Model
 
     protected $fillable = [
         'origin',
+        'batch_ref',
         'note',
         'rejection_reason',
         'decided_by',

@@ -180,6 +180,8 @@ class CheckoutFinalStagePaymentReparentingTest extends TestCase
             $table->string('receipt_number')->nullable()->unique();
             $table->decimal('checkin_settled_total', 10, 2)->nullable();
             $table->timestamp('checkin_settled_at')->nullable();
+            $table->string('checkin_receipt_number', 40)->nullable();
+            $table->json('checkin_receipt_snapshot')->nullable();
             $table->timestamps();
         });
 

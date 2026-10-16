@@ -319,6 +319,7 @@ class CheckInController extends Controller
                 $this->notificationService->notifyPaymentReceived($accountUser, $settled['paid_now'], $rooms->pluck('room_name')->implode(', '), $booking->id);
             }
             $this->notificationService->notifyCheckIn($accountUser, $rooms->pluck('room_name')->implode(', '), $booking->id, $booking);
+            $this->notificationService->notifyAmenitiesUnlocked($accountUser, $booking->id);
         }
 
         $msg = "{$booking->guest_display_name} is checked in to " . ($rooms->count() > 1 ? 'rooms ' : 'room ') . $roomNumbers . '.';
@@ -510,6 +511,10 @@ class CheckInController extends Controller
                 $booking->reservation_id ?? $booking->id,
                 $booking
             );
+            if (! empty($settled['receipt_number'])) {
+                $this->notificationService->notifyCheckinReceipt($accountGuest, $settled['receipt_number'], $booking->reservation_id ?? $booking->id);
+            }
+            $this->notificationService->notifyAmenitiesUnlocked($accountGuest, $booking->reservation_id ?? $booking->id);
         }
 
         Activity::log(
@@ -598,11 +603,35 @@ class CheckInController extends Controller
         app(\App\Services\StayBillingService::class)->refresh($locked, $billing, \App\Support\StayBill::PROJECTED);
         $billing->update(['checkin_settled_total' => $billing->total_amount, 'checkin_settled_at' => now()]);
 
+        // Receipt 2: what was settled here, frozen. Every figure comes from the server's own bill - never the client's.
+        $totalPaid = round((float) $locked->fresh()->paidTotal(), 2);
+        $holder = $locked->reservation ?? $locked;
+        $discountStatus = $locked->discount_verification_status ?: 'not_requested';
+        $receiptNumber = $billing->issueCheckinReceipt([
+            'settlement_type' => $paidNow <= 0.004 ? 'full_confirmation' : ($paid > 0.004 ? 'partial_to_full' : 'full_payment'),
+            'amount_settled' => round($paidNow, 2),
+            'payment_method' => $paidNow > 0.004 ? ($validated['payment_method'] ?? null) : null,
+            'change_returned' => round($change, 2),
+            'total_amount' => round((float) $billing->total_amount, 2),
+            'total_paid_before' => round($paid, 2),
+            'total_paid' => $totalPaid,
+            'balance' => round(max(0, (float) $billing->total_amount - $totalPaid), 2),
+            'discount' => [
+                'requested' => (bool) ($locked->discount_requested || $holder->discount_requested),
+                'status' => $discountStatus,
+                'name' => $billing->discountApplied?->name,
+                'amount' => round((float) $billing->discount, 2),
+                'rejection_reason' => $discountStatus === 'rejected' ? $locked->discount_rejection_reason : null,
+            ],
+            'settled_at' => now()->toIso8601String(),
+            'verified_by' => auth()->user()?->full_name,
+        ]);
+
         if ($paidNow > 0) {
             \App\Support\Activity::log('Payment at check-in', "Booking #{$locked->id} - ₱" . number_format($paidNow, 2) . ' (' . ($validated['payment_method'] ?? 'cash') . ') - paid in full', $locked);
         }
 
-        return ['paid_now' => $paidNow, 'change' => $change];
+        return ['paid_now' => $paidNow, 'change' => $change, 'receipt_number' => $receiptNumber];
     }
 
     /**

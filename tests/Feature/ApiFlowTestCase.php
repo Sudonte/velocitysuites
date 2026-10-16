@@ -236,6 +236,8 @@ abstract class ApiFlowTestCase extends TestCase
             $table->string('receipt_number')->nullable();
             $table->decimal('checkin_settled_total', 10, 2)->nullable();
             $table->timestamp('checkin_settled_at')->nullable();
+            $table->string('checkin_receipt_number', 40)->nullable();
+            $table->json('checkin_receipt_snapshot')->nullable();
             $table->timestamps();
         });
 
@@ -340,6 +342,7 @@ abstract class ApiFlowTestCase extends TestCase
             $table->string('status', 20)->default('pending');
             $table->unsignedBigInteger('room_id')->nullable();
             $table->string('origin', 20)->default('booking');
+            $table->string('batch_ref', 36)->nullable();
             $table->text('note')->nullable();
             $table->string('rejection_reason', 500)->nullable();
             $table->unsignedBigInteger('decided_by')->nullable();
