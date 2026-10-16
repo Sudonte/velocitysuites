@@ -281,7 +281,8 @@ abstract class ApiFlowTestCase extends TestCase
 
         Schema::create('room_images', function (Blueprint $table) {
             $table->id();
-            $table->unsignedBigInteger('room_id');
+            $table->unsignedBigInteger('room_type_id')->nullable();
+            $table->unsignedBigInteger('room_id')->nullable();
             $table->string('image_path');
             $table->unsignedInteger('sort_order')->default(0);
             $table->timestamps();

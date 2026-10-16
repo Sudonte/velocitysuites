@@ -4,24 +4,16 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Room;
-use App\Models\RoomImage;
 use App\Models\RoomType;
 use App\Services\NotificationService;
 use App\Support\Activity;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
 
 class RoomManagementController extends Controller
 {
-    /** A room's gallery can never have fewer than this many images - delete is blocked below this, replace/upload are not. */
-    private const GALLERY_MIN = 4;
-
-    /** A room's gallery can never exceed this many images. */
-    private const GALLERY_MAX = 5;
-
     /**
      * Rooms are now managed per-type: the entry point is the room type
      * card grid, and each type's page lists its individual rooms.
@@ -84,84 +76,6 @@ class RoomManagementController extends Controller
         Activity::log('Updated room', "Room {$room->room_number} ({$room->room_name}, {$room->status})", $room);
 
         return redirect()->route('admin.rooms.edit', $room)->with('success', 'Room updated successfully!');
-    }
-
-    /**
-     * Upload additional gallery images for this room. Enforced server-side
-     * (not just in the view) so the 5-image maximum can't be bypassed by
-     * posting directly. No cooldown - only the Room Type's main image has
-     * the 24h rule; individual room gallery photos can be managed freely.
-     */
-    public function uploadImages(Request $request, Room $room): RedirectResponse
-    {
-        if (! $request->hasFile('images')) {
-            return back()->with('error', 'Please choose at least one image to upload.');
-        }
-
-        $request->validate([
-            'images.*' => 'required|image|mimes:jpeg,png,jpg|max:5120',
-        ]);
-
-        $incoming = count($request->file('images'));
-        $existing = $room->images()->count();
-
-        if ($existing + $incoming > self::GALLERY_MAX) {
-            return back()->with('error',
-                'This room can have at most ' . self::GALLERY_MAX . ' gallery images. It currently has ' . $existing .
-                " - uploading {$incoming} more would exceed the limit.");
-        }
-
-        $nextSortOrder = ($room->images()->max('sort_order') ?? -1) + 1;
-        foreach ($request->file('images') as $image) {
-            RoomImage::create([
-                'room_id' => $room->id,
-                'image_path' => $image->store('room-images', 'public'),
-                'sort_order' => $nextSortOrder++,
-            ]);
-        }
-
-        return redirect()->route('admin.rooms.edit', $room)->with('success', 'Gallery images uploaded successfully!');
-    }
-
-    /**
-     * Replace a single gallery image in place - same row (id/sort_order
-     * unchanged), so its position in the gallery order is preserved
-     * exactly. No cooldown.
-     */
-    public function replaceImage(Request $request, RoomImage $roomImage): RedirectResponse
-    {
-        $request->validate([
-            'image' => 'required|image|mimes:jpeg,png,jpg|max:5120',
-        ]);
-
-        $oldPath = $roomImage->image_path;
-        $roomImage->update([
-            'image_path' => $request->file('image')->store('room-images', 'public'),
-        ]);
-        Storage::disk('public')->delete($oldPath);
-
-        return back()->with('success', 'Gallery image replaced successfully!');
-    }
-
-    /**
-     * Delete a gallery image. Blocked once the room would drop below the
-     * required 4-image minimum - upload a replacement or a new photo
-     * first. Replacing an image (fixed count) is never blocked this way.
-     */
-    public function deleteImage(RoomImage $roomImage): RedirectResponse
-    {
-        $room = $roomImage->room;
-
-        if ($room->images()->count() <= self::GALLERY_MIN) {
-            return back()->with('error',
-                'This room must keep at least ' . self::GALLERY_MIN . ' gallery images. ' .
-                'Upload a new photo before deleting this one, or use Replace instead.');
-        }
-
-        Storage::disk('public')->delete($roomImage->image_path);
-        $roomImage->delete();
-
-        return back()->with('success', 'Gallery image deleted successfully!');
     }
 
     /**

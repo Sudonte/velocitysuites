@@ -61,32 +61,18 @@ class Room extends Model
     }
 
     /**
-     * This room's own gallery photos (4-5, per the System Administrator's
-     * Rooms module), sort_order-ordered.
+     * Photos this room had before galleries moved to the room type - kept, not
+     * shown. Use the room type's gallery instead.
      */
     public function images()
     {
         return $this->hasMany(RoomImage::class)->orderBy('sort_order');
     }
 
-    /**
-     * This room's own photo gallery for display - not appended to $appends
-     * since Room is eager-loaded broadly (protected $with = ['roomType'],
-     * and Room shows up throughout booking/check-in/billing flows), so
-     * auto-serializing a photo gallery into every one of those payloads
-     * would be wasteful. Callers (Admin\RoomManagementController's Edit
-     * page, Receptionist\ReceptionistController::roomDetails()) reference
-     * $room->gallery directly - accessors resolve regardless of $appends.
-     * Shape: [{'id','url'}, ...].
-     */
+    /** A room shows its room type's gallery. Shape: [{'id','url','room_label'}, ...]. */
     public function getGalleryAttribute(): array
     {
-        return $this->images->map(function (RoomImage $image) {
-            return [
-                'id' => $image->id,
-                'url' => Storage::disk('public')->url($image->image_path),
-            ];
-        })->values()->all();
+        return $this->roomType?->gallery ?? [];
     }
 
     /**

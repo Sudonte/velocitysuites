@@ -121,32 +121,27 @@ class RoomType extends Model
         return $this->image ? Storage::disk('public')->url($this->image) : asset('images/logo.jpg');
     }
 
+    /** This room type's gallery photos (4-5, managed on the Edit Type page), in gallery order. */
+    public function images()
+    {
+        return $this->hasMany(RoomImage::class)->orderBy('sort_order')->orderBy('id');
+    }
+
     /**
-     * This room type's photo gallery: every individual room of this type
-     * owns its own 4-5 photo gallery (Room::images()); this pools all of
-     * them together, each photo labeled with the room it came from, for
-     * every audience that browses by type - guest web (Landing Page, Rooms
-     * Page), the mobile app, and the System Administrator/Receptionist
-     * Rooms module (Admin\RoomTypeManagementController::show(),
-     * Receptionist\ReceptionistController::roomsShow()). Ordered by
-     * room_number so photos naturally group by room. Only ever maps real
-     * RoomImage rows - never synthesizes a logo/placeholder entry, so a
-     * room with zero photos simply contributes nothing here (the gallery
-     * component's own empty state handles that, never the logo). Shape:
-     * [{'id','url','room_label'}, ...].
+     * This room type's photo gallery, shown wherever guests and staff browse
+     * by type or room - guest web (Landing Page, Rooms Page), the mobile app,
+     * and the Admin/Receptionist Rooms module. Only real photos, never a
+     * logo/placeholder (the gallery component has its own empty state).
+     * Shape: [{'id','url','room_label'}, ...] - room_label is kept (empty)
+     * so the API payload keeps its keys.
      */
     public function getGalleryAttribute(): array
     {
-        return $this->rooms()->notArchived()->with('images')->orderBy('room_number')->get()
-            ->flatMap(function (Room $room) {
-                return $room->images->map(function (RoomImage $image) use ($room) {
-                    return [
-                        'id' => $image->id,
-                        'url' => Storage::disk('public')->url($image->image_path),
-                        'room_label' => 'Room ' . $room->room_number,
-                    ];
-                });
-            })->values()->all();
+        return $this->images->map(fn (RoomImage $image) => [
+            'id' => $image->id,
+            'url' => Storage::disk('public')->url($image->image_path),
+            'room_label' => '',
+        ])->values()->all();
     }
 
     /**

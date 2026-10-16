@@ -156,13 +156,10 @@ Route::middleware(['auth', 'account.status', 'log.activity', 'no.cache'])->group
         Route::put('/rooms/{room}/reactivate', [\App\Http\Controllers\Admin\RoomManagementController::class, 'reactivate'])->name('rooms.reactivate');
         Route::put('/rooms/{room}/archive', [\App\Http\Controllers\Admin\RoomManagementController::class, 'archive'])->name('rooms.archive');
         Route::put('/rooms/{room}/restore', [\App\Http\Controllers\Admin\RoomManagementController::class, 'restore'])->name('rooms.restore');
-        // Gallery images belong to the individual Room (see Room::images()),
-        // not the Room Type - managed from each room's own Edit page. The
-        // Room Type's merged gallery (RoomType::mergedGalleryWithLabels())
-        // is read-only, pooled from these.
-        Route::post('/room-images/{room}/upload', [\App\Http\Controllers\Admin\RoomManagementController::class, 'uploadImages'])->name('rooms.gallery.upload');
-        Route::put('/room-images/{roomImage}/replace', [\App\Http\Controllers\Admin\RoomManagementController::class, 'replaceImage'])->name('rooms.gallery.replace');
-        Route::delete('/room-images/{roomImage}', [\App\Http\Controllers\Admin\RoomManagementController::class, 'deleteImage'])->name('rooms.gallery.destroy');
+        // Room type gallery (4-5 photos shown for every room of the type)
+        Route::post('/room-types/{room_type}/images', [\App\Http\Controllers\Admin\RoomTypeManagementController::class, 'uploadImages'])->name('room-types.gallery.upload');
+        Route::put('/room-images/{roomImage}/replace', [\App\Http\Controllers\Admin\RoomTypeManagementController::class, 'replaceImage'])->name('room-types.gallery.replace');
+        Route::delete('/room-images/{roomImage}', [\App\Http\Controllers\Admin\RoomTypeManagementController::class, 'deleteImage'])->name('room-types.gallery.destroy');
 
         // Promotion Management
         Route::resource('promotions', PromotionManagementController::class)->except(['destroy']);

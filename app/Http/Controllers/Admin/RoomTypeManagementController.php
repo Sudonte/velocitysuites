@@ -7,6 +7,7 @@ use App\Support\Activity;
 use App\Models\Amenity;
 use App\Models\Booking;
 use App\Models\Room;
+use App\Models\RoomImage;
 use App\Models\RoomType;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -55,7 +56,7 @@ class RoomTypeManagementController extends Controller
      */
     public function show(Request $request, RoomType $roomType): View
     {
-        $query = $roomType->rooms()->with('images');
+        $query = $roomType->rooms();
 
         if ($request->filled('search')) {
             $query->where(function ($q) use ($request) {
@@ -327,6 +328,85 @@ class RoomTypeManagementController extends Controller
         $roomType->update(['image' => null, 'image_changed_at' => now()]);
 
         return back()->with('success', 'Room type image removed - now showing the default Velocity Suites logo.');
+    }
+
+    /** A room type's gallery: delete is blocked below the minimum (replace/upload are not), upload above the maximum. */
+    private const GALLERY_MIN = 4;
+
+    private const GALLERY_MAX = 5;
+
+    /**
+     * Add photos to the room type's gallery (shown for every room of the type).
+     * The 5-photo maximum is enforced here, not just in the view. No cooldown -
+     * only the main image has the 24-hour rule.
+     */
+    public function uploadImages(Request $request, RoomType $roomType): RedirectResponse
+    {
+        if (! $request->hasFile('images')) {
+            return back()->with('error', 'Please choose at least one image to upload.');
+        }
+
+        $request->validate([
+            'images' => 'required|array',
+            'images.*' => 'required|image|mimes:jpeg,png,jpg|max:5120',
+        ]);
+
+        $incoming = count($request->file('images'));
+        $existing = $roomType->images()->count();
+        if ($existing + $incoming > self::GALLERY_MAX) {
+            return back()->with('error',
+                'A room type can have at most ' . self::GALLERY_MAX . ' gallery images. It currently has ' . $existing .
+                " - uploading {$incoming} more would exceed the limit.");
+        }
+
+        $nextSortOrder = ($roomType->images()->max('sort_order') ?? -1) + 1;
+        foreach ($request->file('images') as $image) {
+            RoomImage::create([
+                'room_type_id' => $roomType->id,
+                'image_path' => $image->store('room-images', 'public'),
+                'sort_order' => $nextSortOrder++,
+            ]);
+        }
+        Activity::log('Updated room type gallery', "{$roomType->name}: added {$incoming} photo(s)", $roomType);
+
+        return redirect()->route('admin.room-types.edit', $roomType)->with('success', 'Gallery images uploaded successfully!');
+    }
+
+    /** Replace one gallery photo in place - same row, so its position in the gallery is kept. */
+    public function replaceImage(Request $request, RoomImage $roomImage): RedirectResponse
+    {
+        $roomType = $roomImage->roomType;
+        abort_unless($roomType, 404);
+
+        $request->validate([
+            'image' => 'required|image|mimes:jpeg,png,jpg|max:5120',
+        ]);
+
+        $oldPath = $roomImage->image_path;
+        $roomImage->update(['image_path' => $request->file('image')->store('room-images', 'public')]);
+        Storage::disk('public')->delete($oldPath);
+        Activity::log('Updated room type gallery', "{$roomType->name}: replaced a photo", $roomType);
+
+        return back()->with('success', 'Gallery image replaced successfully!');
+    }
+
+    /** Delete a gallery photo - blocked once the type would drop below the 4-photo minimum. */
+    public function deleteImage(RoomImage $roomImage): RedirectResponse
+    {
+        $roomType = $roomImage->roomType;
+        abort_unless($roomType, 404);
+
+        if ($roomType->images()->count() <= self::GALLERY_MIN) {
+            return back()->with('error',
+                'A room type must keep at least ' . self::GALLERY_MIN . ' gallery images. ' .
+                'Upload a new photo before deleting this one, or use Replace instead.');
+        }
+
+        Storage::disk('public')->delete($roomImage->image_path);
+        $roomImage->delete();
+        Activity::log('Updated room type gallery', "{$roomType->name}: deleted a photo", $roomType);
+
+        return back()->with('success', 'Gallery image deleted successfully!');
     }
 
     /**

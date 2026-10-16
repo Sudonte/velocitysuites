@@ -86,8 +86,8 @@
         @endif
     </x-card>
 
-    <h5 class="mb-3"><i class="fas fa-images text-brand me-2"></i>Merged Gallery — All Rooms of This Type</h5>
-    <small class="text-muted d-block mb-2">Every photo from every individual room below, labeled by room.</small>
+    <h5 class="mb-3"><i class="fas fa-images text-brand me-2"></i>Gallery — All Rooms of This Type</h5>
+    <small class="text-muted d-block mb-2">Shown for every room of this type.</small>
     <x-room-gallery :images="$mergedGallery" :title="$roomType->name" id="receptionistTypeGallery" />
 
     <h5 class="mb-3"><i class="fas fa-door-open text-brand me-2"></i>Individual Rooms</h5>

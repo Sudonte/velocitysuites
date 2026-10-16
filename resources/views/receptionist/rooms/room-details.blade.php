@@ -15,8 +15,8 @@
 
     <div class="row">
         <div class="col-lg-8">
-            <h5 class="mb-1"><i class="fas fa-images text-brand me-2"></i>Room {{ $room->room_number }} Gallery</h5>
-            <small class="text-muted d-block mb-3">This room's own photos.</small>
+            <h5 class="mb-1"><i class="fas fa-images text-brand me-2"></i>{{ $roomType->name }} Gallery</h5>
+            <small class="text-muted d-block mb-3">The photos of this room's type.</small>
             <x-room-gallery :images="$gallery" :title="$roomType->name . ' - Room ' . $room->room_number" id="receptionistRoomGallery" />
 
             @if($room->description)

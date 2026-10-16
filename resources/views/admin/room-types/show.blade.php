@@ -102,11 +102,10 @@
     </x-card>
 
     <div class="d-flex justify-content-between align-items-center mb-2">
-        <h5 class="mb-0"><i class="fas fa-images text-brand me-2"></i>Merged Gallery — All Rooms of This Type</h5>
+        <h5 class="mb-0"><i class="fas fa-images text-brand me-2"></i>Gallery — All Rooms of This Type</h5>
     </div>
     <small class="text-muted d-block mb-2">
-        Every photo from every individual room below, labeled by room. Manage a specific room's own photos from
-        that room's Edit page.
+        Shown for every room of this type. Add, replace, or delete photos from the Edit Type page.
     </small>
     <x-room-gallery :images="$mergedGallery" :title="$roomType->name" id="adminMergedGallery" />
 

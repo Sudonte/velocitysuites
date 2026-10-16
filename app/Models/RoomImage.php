@@ -11,6 +11,7 @@ class RoomImage extends Model
     use HasFactory;
 
     protected $fillable = [
+        'room_type_id',
         'room_id',
         'image_path',
         'sort_order',
@@ -20,8 +21,15 @@ class RoomImage extends Model
         'url',
     ];
 
+    /** The room type whose gallery this photo belongs to. */
+    public function roomType()
+    {
+        return $this->belongsTo(RoomType::class);
+    }
+
     /**
-     * Get the individual room this gallery photo belongs to.
+     * The room this photo belonged to before galleries moved to the room type
+     * (null for room type photos).
      */
     public function room()
     {

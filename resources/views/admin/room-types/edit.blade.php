@@ -234,11 +234,67 @@
                 </form>
             </x-card>
 
-            <div class="alert alert-info mt-4 mb-0">
-                <i class="fas fa-circle-info"></i> Each individual room's own photo gallery is managed from that room's
-                own Edit page (<a href="{{ route('admin.room-types.show', $roomType) }}">see Individual Rooms</a>).
-                This page only manages the main image shown above.
-            </div>
+            <!-- Gallery Images: fixed 5-slot grid - vacant slots show the Velocity Suites logo with their own upload control -->
+            @php
+                $galleryImages = $roomType->images;
+                $galleryCount = $galleryImages->count();
+            @endphp
+            <x-card title="Gallery Images ({{ $galleryCount }}/5)" icon="fas fa-images" bodyClass="card-body" class="mt-4">
+                <p class="text-muted small mb-3">
+                    Shown for every room of this type - guests on the Landing Page, Rooms Page and the mobile app, and the
+                    Rooms module. Requires 4-5 photos.
+                </p>
+
+                @if($galleryCount < 4)
+                    <div class="alert alert-warning py-2">
+                        <i class="fas fa-triangle-exclamation"></i>
+                        This room type has only {{ $galleryCount }} gallery image{{ $galleryCount === 1 ? '' : 's' }} - guests
+                        see the best gallery with at least 4. Upload {{ 4 - $galleryCount }} more to reach the minimum.
+                    </div>
+                @endif
+
+                <div class="room-gallery-grid mb-3">
+                    @for($slot = 0; $slot < 5; $slot++)
+                        <div>
+                            @if($image = $galleryImages->get($slot))
+                                <div class="gallery-tile">
+                                    <img src="{{ $image->url }}" alt="{{ $roomType->name }} gallery photo">
+                                    <div class="gallery-tile-actions">
+                                        <button type="button" class="btn btn-sm btn-light border" title="Replace image"
+                                                onclick="document.getElementById('replaceTypeImageForm{{ $image->id }}').classList.toggle('d-none')">
+                                            <i class="fas fa-rotate"></i>
+                                        </button>
+                                        <form action="{{ route('admin.room-types.gallery.destroy', $image) }}" method="POST" data-confirm="This can't be undone." data-confirm-title="Delete this gallery image?" data-confirm-button="Delete" data-confirm-variant="danger">
+                                            @csrf
+                                            @method('DELETE')
+                                            <button type="submit" class="btn btn-outline-danger btn-sm btn-icon"
+                                                    {{ $galleryCount <= 4 ? 'disabled title="A room type must keep at least 4 photos - replace instead"' : '' }} aria-label="Delete">
+                                                <i class="fas fa-trash"></i></button>
+                                        </form>
+                                    </div>
+                                </div>
+                                <form id="replaceTypeImageForm{{ $image->id }}" action="{{ route('admin.room-types.gallery.replace', $image) }}"
+                                      method="POST" enctype="multipart/form-data" class="d-none mt-2">
+                                    @csrf
+                                    @method('PUT')
+                                    <input type="file" class="form-control form-control-sm mb-1" name="image" accept="image/jpeg,image/png,image/jpg" required>
+                                    <button type="submit" class="btn btn-sm btn-outline-primary w-100">Replace This Image</button>
+                                </form>
+                            @else
+                                <div class="gallery-tile gallery-tile-vacant">
+                                    <img src="{{ asset('images/logo.jpg') }}" alt="Vacant gallery slot">
+                                    <span class="badge bg-secondary gallery-tile-vacant-label">Vacant slot</span>
+                                </div>
+                                <form action="{{ route('admin.room-types.gallery.upload', $roomType) }}" method="POST" enctype="multipart/form-data" class="mt-2">
+                                    @csrf
+                                    <input type="file" class="form-control form-control-sm mb-1" name="images[]" accept="image/jpeg,image/png,image/jpg" required>
+                                    <button type="submit" class="btn btn-sm btn-success w-100"><i class="fas fa-upload"></i> Add Image</button>
+                                </form>
+                            @endif
+                        </div>
+                    @endfor
+                </div>
+            </x-card>
         </div>
 
         <div class="col-lg-4">

@@ -146,22 +146,18 @@ class ReceptionistController extends Controller
         return view('receptionist.rooms.index', compact('roomTypes'));
     }
 
-    /**
-     * Rooms of one type with their live statuses (read-only), plus the
-     * merged gallery of every room's photos, each labeled by room.
-     */
+    /** Rooms of one type with their live statuses (read-only), plus the type's gallery. */
     public function roomsShow(\App\Models\RoomType $roomType): View
     {
-        $rooms = $roomType->rooms()->notArchived()->with('images')->orderBy('room_number')->paginate(20);
+        $rooms = $roomType->rooms()->notArchived()->orderBy('room_number')->paginate(20);
         $mergedGallery = collect($roomType->gallery);
 
         return view('receptionist.rooms.show', compact('roomType', 'rooms', 'mergedGallery'));
     }
 
     /**
-     * Full details for one specific physical room (read-only), plus that
-     * room's own gallery (galleries belong to the individual room again) -
-     * the receptionist can see everything the System Administrator sees,
+     * Full details for one specific physical room (read-only), plus its
+     * room type's gallery - the receptionist can see everything the System Administrator sees,
      * but has no access to any upload/replace/remove route (those only
      * exist under admin.*), so this view-only access is enforced
      * structurally, not just by hiding buttons.
@@ -170,7 +166,7 @@ class ReceptionistController extends Controller
     {
         abort_if($room->room_type_id !== $roomType->id, 404);
 
-        $gallery = collect($room->gallery);
+        $gallery = collect($roomType->gallery);
 
         return view('receptionist.rooms.room-details', compact('roomType', 'room', 'gallery'));
     }
