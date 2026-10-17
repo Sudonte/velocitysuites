@@ -57,7 +57,7 @@ class ReservationController extends Controller
         $query = $guest->reservations()->with([
             'roomType',
             'booking' => fn ($q) => $q->withTrashed(),
-            'booking.room', 'booking.billing.payments', 'payments', 'bookingAmenities',
+            'booking.room', 'booking.rooms', 'booking.payments', 'booking.billing.payments', 'payments', 'bookingAmenities',
         ])->when(! $includeHidden, fn ($q) => $q->whereNull('hidden_at'));
 
         if ($request->filled('status')) {
@@ -94,6 +94,8 @@ class ReservationController extends Controller
             // runtime instead, since the guest-facing list needs both (see
             // Api\BookingController::index()'s identical convention).
             $r->append(['total_amount_due', 'amenities', 'timeline']);
+            // The same authoritative figures show() returns (see Api\BookingController::index()): one calculation, every screen.
+            $r->setAttribute('payment_summary', $r->paymentSummary());
         });
 
         return response()->json($reservations);
