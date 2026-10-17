@@ -85,7 +85,10 @@ class ReceiptNotificationsTest extends ApiFlowTestCase
         ])->assertOk();
         $n2 = $this->receiptNotes($user, 'CHECKIN_SETTLEMENT_RECEIPT');
         $this->assertCount(1, $n2, 'exactly one Receipt 2 notification');
+        $this->assertSame('Checked In - Receipt 2 Ready', $n2[0]->title);
+        $this->assertStringContainsString('Welcome! You are checked in to', $n2[0]->message);
         $this->assertStringContainsString('Your check-in payment was verified. Receipt 2 (', $n2[0]->message);
+        $this->assertSame(0, Notification::where('user_id', $user->id)->whereIn('title', ['Checked In', 'Payment Received'])->count(), 'no separate check-in / payment messages');
         $this->assertStringContainsString('Remaining balance: ₱0.00', $n2[0]->message);
         $this->assertSame((int) $booking->id, (int) $n2[0]->reference_id);
         $this->assertGreaterThan($bell1, $this->unread($user), 'the bell went up again');
@@ -98,7 +101,11 @@ class ReceiptNotificationsTest extends ApiFlowTestCase
         $this->actingAs($desk)->postJson(route('receptionist.billing.payment.store', $billing), ['payment_method' => 'cash', 'amount_paid' => 0])->assertSuccessful();
         $n3 = $this->receiptNotes($user, 'OFFICIAL_RECEIPT');
         $this->assertCount(1, $n3, 'exactly one Receipt 3 notification');
-        $this->assertStringContainsString('You are checked out. Receipt 3 (', $n3[0]->message);
+        $this->assertSame('Checked Out - Receipt 3 Ready', $n3[0]->title);
+        $this->assertStringContainsString('You are checked out of', $n3[0]->message);
+        $this->assertStringContainsString('. Receipt 3 (', $n3[0]->message);
+        $this->assertSame(0, Notification::where('user_id', $user->id)->whereIn('title', ['Checked Out', 'Payment Complete'])->count(), 'no separate check-out messages');
+        $this->assertSame(1, Notification::where('user_id', $user->id)->where('title', 'You Can Now Request Additional Amenities')->count(), 'the amenities-unlocked message is its own, separate notification');
         $this->assertStringContainsString('Grand total: ₱1,000.00', $n3[0]->message);
         $this->assertStringContainsString('Remaining balance: ₱0.00', $n3[0]->message);
         $this->assertSame((int) $booking->id, (int) $n3[0]->reference_id);

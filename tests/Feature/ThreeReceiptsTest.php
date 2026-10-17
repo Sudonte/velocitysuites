@@ -297,8 +297,10 @@ class ThreeReceiptsTest extends ApiFlowTestCase
         foreach (['Booking module' => $show, 'Check-in' => $panel] as $name => $html) {
             $html = html_entity_decode($html);
             $last = -1;
-            // The check-in wizard shows the bill (step 4) before the guest-details step, so its order differs.
-            $needles = $name === 'Check-in' ? ['4. Payment Summary', 'Remaining Balance', 'Amount to Pay', '1. Guest & Booking Info'] : ['1. Guest & Booking Info', '4. Payment Summary', 'Remaining Balance', 'Amount to Pay'];
+            // Check-in is numbered in the order it is shown: the bill first, then guest details, rooms and payment.
+            $needles = $name === 'Check-in'
+                ? ['1. Charges - Discount or Promotion', '2. Payment Summary', 'Remaining Balance', 'Amount to Pay', '3. Guest & Booking Info', '4. Room Assignment', '5. Payment Input']
+                : ['1. Guest & Booking Info', '4. Payment Summary', 'Remaining Balance', 'Amount to Pay'];
             foreach ($needles as $needle) {
                 $at = strpos($html, $needle);
                 $this->assertNotFalse($at, "{$name}: {$needle} is missing");
@@ -307,6 +309,5 @@ class ThreeReceiptsTest extends ApiFlowTestCase
             }
             $this->assertStringContainsString('₱1,500.00', $html, "{$name}: the amount still to pay is shown");
         }
-        $this->assertStringContainsString('5. Payment Input', $panel);
     }
 }

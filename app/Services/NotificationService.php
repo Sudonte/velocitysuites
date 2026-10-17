@@ -353,20 +353,19 @@ class NotificationService
     /**
      * Notify about check-in.
      */
-    public function notifyCheckIn(User $guest, string $roomName, ?int $referenceId = null, ?Booking $booking = null): void
+    public function notifyCheckIn(User $guest, string $roomName, ?int $referenceId = null, ?Booking $booking = null, bool $notifyGuest = true): void
     {
-        // The guest is told both ends of the stay: today's check-in and the check-out day they booked.
-        $dates = $booking
-            ? ' Your stay: ' . $booking->check_in->format('M j, Y') . ' to ' . $booking->check_out->format('M j, Y')
-                . ' (' . StayBill::nightsLabel(max(1, (int) $booking->check_in->copy()->startOfDay()->diffInDays($booking->check_out->copy()->startOfDay()))) . ').'
-            : '';
-        $this->toUser(
-            $guest,
-            'Checked In',
-            "Welcome! You have been checked into {$roomName}.{$dates}",
-            'check_in',
-            $referenceId
-        );
+        // $notifyGuest is false when the guest gets the combined "Checked In - Receipt 2" notification instead
+        // (see notifyCheckinReceipt()), so they receive one message for the step, not two.
+        if ($notifyGuest) {
+            $this->toUser(
+                $guest,
+                'Checked In',
+                "Welcome! You have been checked into {$roomName}." . $this->stayDatesText($booking),
+                'check_in',
+                $referenceId
+            );
+        }
 
         $this->toRole(
             'manager',
@@ -376,6 +375,15 @@ class NotificationService
             null,
             $referenceId
         );
+    }
+
+    /** " Your stay: Oct 5, 2026 to Oct 7, 2026 (2 nights)." - both ends of the stay, or '' without a booking. */
+    private function stayDatesText(?Booking $booking): string
+    {
+        return $booking
+            ? ' Your stay: ' . $booking->check_in->format('M j, Y') . ' to ' . $booking->check_out->format('M j, Y')
+                . ' (' . StayBill::nightsLabel(max(1, (int) $booking->check_in->copy()->startOfDay()->diffInDays($booking->check_out->copy()->startOfDay()))) . ').'
+            : '';
     }
 
     /** The remaining balance frozen on a stored receipt, or null when that receipt is not in the receipts table. */
@@ -389,13 +397,16 @@ class NotificationService
     /**
      * Receipt 2 is ready: the remaining balance was settled (or a full payment confirmed) at check-in.
      */
-    public function notifyCheckinReceipt(User $guest, string $receiptNumber, ?int $referenceId = null): void
+    public function notifyCheckinReceipt(User $guest, string $receiptNumber, ?int $referenceId = null, ?string $roomName = null, ?Booking $booking = null): void
     {
+        $remaining = number_format($this->storedRemaining($receiptNumber) ?? 0.0, 2);
+        // One notification for the check-in step: that they are checked in, the receipt, and what is left to pay.
+        $combined = $roomName !== null;
         $this->toUser(
             $guest,
-            'Check-In Receipt Ready',
-            'Your check-in payment was verified. Receipt 2 ('.$receiptNumber.') is ready. Remaining balance: ₱'
-                .number_format($this->storedRemaining($receiptNumber) ?? 0.0, 2).'.',
+            $combined ? 'Checked In - Receipt 2 Ready' : 'Check-In Receipt Ready',
+            ($combined ? "Welcome! You are checked in to {$roomName}." . $this->stayDatesText($booking) . ' ' : '')
+                . 'Your check-in payment was verified. Receipt 2 (' . $receiptNumber . ') is ready. Remaining balance: ₱' . $remaining . '.',
             'booking',
             $referenceId,
             null,
@@ -445,15 +456,18 @@ class NotificationService
     /**
      * Notify about check-out.
      */
-    public function notifyCheckOut(User $guest, string $roomName, ?int $referenceId = null): void
+    public function notifyCheckOut(User $guest, string $roomName, ?int $referenceId = null, bool $notifyGuest = true): void
     {
-        $this->toUser(
-            $guest,
-            'Checked Out',
-            'Thank you for staying with us! Your bill is ready for review.',
-            'check_out',
-            $referenceId
-        );
+        // $notifyGuest is false when the guest gets the combined "Checked Out - Receipt 3" notification instead.
+        if ($notifyGuest) {
+            $this->toUser(
+                $guest,
+                'Checked Out',
+                'Thank you for staying with us! Your bill is ready for review.',
+                'check_out',
+                $referenceId
+            );
+        }
 
         $this->toRole(
             'manager',
@@ -520,18 +534,18 @@ class NotificationService
      * branch, right after Billing::ensureOfficialReceiptNumber() mints it, so
      * there is no other receipt type this call site could ever mean.
      */
-    public function notifyPaymentComplete(User $guest, ?int $referenceId = null, ?string $receiptNumber = null): void
+    public function notifyPaymentComplete(User $guest, ?int $referenceId = null, ?string $receiptNumber = null, ?string $roomName = null): void
     {
         $stored = $receiptNumber ? \App\Models\Receipt::where('receipt_no', $receiptNumber)->first() : null;
         $message = $stored
             // Receipt 3: the step, the receipt, the grand total and what is still to pay (from the stored receipt).
-            ? 'You are checked out. Receipt 3 (' . $receiptNumber . ') is ready. Grand total: ₱' . number_format((float) $stored->total_amount, 2)
+            ? 'You are checked out' . ($roomName !== null ? " of {$roomName}" : '') . '. Receipt 3 (' . $receiptNumber . ') is ready. Grand total: ₱' . number_format((float) $stored->total_amount, 2)
                 . '. Remaining balance: ₱' . number_format((float) $stored->remaining_balance, 2) . '.'
             : 'Your payment is complete. Thank you for staying with us! Your Official Payment Receipt'
                 . ($receiptNumber ? " ({$receiptNumber})" : '')
                 . ' is now available.';
 
-        $this->toUser($guest, 'Payment Complete', $message, 'payment', $referenceId, null,
+        $this->toUser($guest, $stored && $roomName !== null ? 'Checked Out - Receipt 3 Ready' : 'Payment Complete', $message, 'payment', $referenceId, null,
             $receiptNumber, $receiptNumber ? 'OFFICIAL_RECEIPT' : null);
 
         $this->toRole(

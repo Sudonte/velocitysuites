@@ -459,7 +459,8 @@ class CheckOutController extends Controller
             $roomName = $rooms->pluck('room_name')->implode(', ');
 
             if ($amountPaid > 0) {
-                if ($guest) {
+                // When this payment completes the check-out the guest gets the one combined Receipt 3 notification below.
+                if ($guest && ! $completed) {
                     $this->notificationService->notifyPaymentReceived(
                         $guest,
                         $amountPaid,
@@ -520,8 +521,9 @@ class CheckOutController extends Controller
                     if ($stay['extra_nights'] > 0 || $stay['is_early_checkout']) {
                         $this->notificationService->notifyStayUpdated($guest, $roomName, $stay, $lockedBooking->reservation_id ?? $lockedBooking->id);
                     }
-                    $this->notificationService->notifyCheckOut($guest, $roomName, $lockedBooking->reservation_id ?? $lockedBooking->id);
-                    $this->notificationService->notifyPaymentComplete($guest, $lockedBooking->reservation_id ?? $lockedBooking->id, $officialReceiptNumber);
+                    // One notification for the step: checked out + Receipt 3 + grand total and balance (managers still get theirs).
+                    $this->notificationService->notifyCheckOut($guest, $roomName, $lockedBooking->reservation_id ?? $lockedBooking->id, notifyGuest: false);
+                    $this->notificationService->notifyPaymentComplete($guest, $lockedBooking->reservation_id ?? $lockedBooking->id, $officialReceiptNumber, $roomName);
                 }
 
                 Activity::log(

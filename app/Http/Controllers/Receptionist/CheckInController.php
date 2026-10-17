@@ -324,12 +324,13 @@ class CheckInController extends Controller
         Activity::log('Walk-in check-in', "Booking #{$booking->id} - {$booking->guest_display_name} to {$roomNumbers} - paid ₱" . number_format($settled['paid_now'], 2), $booking);
 
         if ($accountUser = $booking->account_guest?->user) {
-            if ($settled['paid_now'] > 0) {
+            // One notification for the step: checked in + Receipt 2 + the balance (it also covers the payment taken now).
+            $hasReceipt = ! empty($settled['receipt_number']);
+            $this->notificationService->notifyCheckIn($accountUser, $rooms->pluck('room_name')->implode(', '), $booking->id, $booking, notifyGuest: ! $hasReceipt);
+            if ($hasReceipt) {
+                $this->notificationService->notifyCheckinReceipt($accountUser, $settled['receipt_number'], $booking->id, $rooms->pluck('room_name')->implode(', '), $booking);
+            } elseif ($settled['paid_now'] > 0) {
                 $this->notificationService->notifyPaymentReceived($accountUser, $settled['paid_now'], $rooms->pluck('room_name')->implode(', '), $booking->id);
-            }
-            $this->notificationService->notifyCheckIn($accountUser, $rooms->pluck('room_name')->implode(', '), $booking->id, $booking);
-            if (! empty($settled['receipt_number'])) {
-                $this->notificationService->notifyCheckinReceipt($accountUser, $settled['receipt_number'], $booking->id);
             }
             $this->notificationService->notifyAmenitiesUnlocked($accountUser, $booking->id);
         }
@@ -513,18 +514,20 @@ class CheckInController extends Controller
         }
 
         $accountGuest = $booking->account_guest?->user;
-        if ($accountGuest && ($settled['paid_now'] ?? 0) > 0) {
-            $this->notificationService->notifyPaymentReceived($accountGuest, $settled['paid_now'], $booking->roomType->name ?? null, $booking->reservation_id ?? $booking->id);
-        }
         if ($accountGuest) {
+            // One notification for the step: checked in + Receipt 2 + the balance (it also covers the payment taken now).
+            $hasReceipt = ! empty($settled['receipt_number']);
             $this->notificationService->notifyCheckIn(
                 $accountGuest,
                 $rooms->pluck('room_name')->implode(', '),
                 $booking->reservation_id ?? $booking->id,
-                $booking
+                $booking,
+                notifyGuest: ! $hasReceipt
             );
-            if (! empty($settled['receipt_number'])) {
-                $this->notificationService->notifyCheckinReceipt($accountGuest, $settled['receipt_number'], $booking->reservation_id ?? $booking->id);
+            if ($hasReceipt) {
+                $this->notificationService->notifyCheckinReceipt($accountGuest, $settled['receipt_number'], $booking->reservation_id ?? $booking->id, $rooms->pluck('room_name')->implode(', '), $booking);
+            } elseif (($settled['paid_now'] ?? 0) > 0) {
+                $this->notificationService->notifyPaymentReceived($accountGuest, $settled['paid_now'], $booking->roomType->name ?? null, $booking->reservation_id ?? $booking->id);
             }
             $this->notificationService->notifyAmenitiesUnlocked($accountGuest, $booking->reservation_id ?? $booking->id);
         }

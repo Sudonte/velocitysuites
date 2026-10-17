@@ -100,7 +100,7 @@ class FullStayFlowTest extends ApiFlowTestCase
         $this->assertStringStartsWith('SR-', $billing->checkin_receipt_number, 'Receipt 2');
         $this->assertSame('partial_to_full', $billing->checkin_receipt_snapshot['settlement_type']);
         $this->assertEquals(0.0, $this->balance($user, $booking), 'balance after Receipt 2');
-        $this->assertTrue($this->guestNotes($user, 'Check-In Receipt Ready'), 'guest told at Receipt 2');
+        $this->assertTrue($this->guestNotes($user, 'Checked In - Receipt 2 Ready'), 'guest told at Receipt 2, in one notification');
         $this->assertTrue($this->guestNotes($user, 'You Can Now Request Additional Amenities'), 'amenity unlock notification');
 
         // ---- different amenities for different rooms, in one submission

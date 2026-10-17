@@ -62,7 +62,7 @@
                  assignment, since who's actually at the counter (and how many of
                  them there are) can differ from what was booked. --}}
             <div id="checkInStepDetails" class="d-none">
-                <h6 class="mb-3"><i class="fas fa-id-card"></i> 1. Guest &amp; Booking Info</h6>
+                <h6 class="mb-3"><i class="fas fa-id-card"></i> 3. Guest &amp; Booking Info</h6>
 
                 <div class="row g-2 mb-2">
                     <div class="col-md-4">
@@ -132,7 +132,7 @@
                  booking, or a single group for the legacy single-room-type case -
                  see RoomAvailabilityService::assignableRoomsByLine()'s own doc). --}}
             <div id="checkInStepRooms" class="d-none">
-                <h6 class="mb-3"><i class="fas fa-door-open"></i> 2. Charges - Assign Rooms</h6>
+                <h6 class="mb-3"><i class="fas fa-door-open"></i> 4. Room Assignment</h6>
                 @if(!empty($assignedRoomIds))
                     <div class="alert alert-info py-2 mb-2">
                         <i class="fas fa-circle-info"></i> Already assigned ahead of arrival - confirm below, or change the selection if needed.

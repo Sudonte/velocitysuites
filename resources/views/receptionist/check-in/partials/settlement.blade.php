@@ -6,7 +6,7 @@
 --}}
 @php $peso = fn ($v) => '₱' . number_format((float) $v, 2); @endphp
 <div id="checkInStepBill">
-    <h6 class="mb-2"><i class="fas fa-percent"></i> 2. Charges - Discount or Promotion</h6>
+    <h6 class="mb-2"><i class="fas fa-percent"></i> 1. Charges - Discount or Promotion</h6>
     <div class="border rounded p-2 mb-3" id="checkInOfferBox"
          data-approve-url="{{ route('receptionist.check-in.discount.approve', $booking) }}"
          data-reject-url="{{ route('receptionist.check-in.discount.reject', $booking) }}"
@@ -90,7 +90,7 @@
         @endif
     </div>
 
-    <h6 class="mb-2"><i class="fas fa-file-invoice"></i> 4. Payment Summary</h6>
+    <h6 class="mb-2"><i class="fas fa-file-invoice"></i> 2. Payment Summary</h6>
     <div class="border rounded p-2 mb-2 small">
         @foreach($stay['rooms'] as $line)
             <div class="d-flex justify-content-between"><span>{{ $line['room_type'] ?? 'Room' }} &middot; {{ $peso($line['rate']) }} &times; {{ \App\Support\StayBill::nightsLabel($line['nights']) }}</span><span>{{ $peso($line['subtotal']) }}</span></div>
