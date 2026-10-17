@@ -27,4 +27,11 @@ return Application::configure(basePath: dirname(__DIR__))
             [$message, $context] = \App\Support\SafeExceptionLog::forQueryException($e);
             \Illuminate\Support\Facades\Log::error($message, $context);
         })->stop();
+
+        // A missing record on the API says plainly that it was not found - not which internal model class was looked up.
+        $exceptions->render(function (\Symfony\Component\HttpKernel\Exception\NotFoundHttpException $e, \Illuminate\Http\Request $request) {
+            if ($request->is('api/*') && $e->getPrevious() instanceof \Illuminate\Database\Eloquent\ModelNotFoundException) {
+                return response()->json(['message' => 'Not found.'], 404);
+            }
+        });
     })->create();
