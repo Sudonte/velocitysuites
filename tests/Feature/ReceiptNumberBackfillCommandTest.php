@@ -58,6 +58,7 @@ class ReceiptNumberBackfillCommandTest extends TestCase
             $table->string('payment_status')->default('pending');
             $table->string('payment_stage')->default('deposit');
             $table->timestamp('verified_at')->nullable();
+            $table->timestamp('payment_date')->nullable();
             $table->string('receipt_number')->nullable()->unique();
             $table->timestamps();
         });

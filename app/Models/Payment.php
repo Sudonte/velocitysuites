@@ -58,6 +58,19 @@ class Payment extends Model
         'verification_status',
     ];
 
+    /**
+     * A payment always carries the moment it happened: receipts show Payment Date / Payment Time from this column, and
+     * a NULL left them blank. Every create path sets it already; this makes it impossible to forget one.
+     */
+    protected static function booted(): void
+    {
+        static::creating(function (Payment $payment) {
+            if ($payment->payment_date === null) {
+                $payment->payment_date = now();
+            }
+        });
+    }
+
     public function getReceiptUrlAttribute(): ?string
     {
         return $this->receipt_path ? Storage::disk('public')->url($this->receipt_path) : null;

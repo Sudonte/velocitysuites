@@ -127,7 +127,8 @@ class ReceiptService
                 'verified_by' => $payment->verifierName(),
                 'verified_at' => $payment->verified_at?->toIso8601String(),
                 'rejection_reason' => $payment->rejection_reason,
-                'payment_date' => $payment->payment_date?->toIso8601String(),
+                // A legacy row can have no payment_date; fall back to when it was verified / recorded so a receipt never shows a blank.
+                'payment_date' => ($payment->payment_date ?? $payment->verified_at ?? $payment->created_at)?->toIso8601String(),
                 'total_paid_after_transaction' => $runningTotal,
                 'remaining_balance_after_transaction' => PaymentMath::remainingBalance($grandTotal, $runningTotal),
                 // Pure reads - receiptType()/receipt_number reflect only
