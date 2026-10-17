@@ -283,4 +283,30 @@ class ThreeReceiptsTest extends ApiFlowTestCase
             $last = $at;
         }
     }
+
+    public function test_the_booking_and_check_in_forms_use_the_same_numbered_sections_and_highlight_what_is_left(): void
+    {
+        [, $rt, $room, $booking] = $this->arriving();
+        $desk = $this->desk();
+        $deposit = Payment::create(['booking_id' => $booking->id, 'payment_method' => 'cash', 'amount_paid' => 500, 'payment_stage' => 'deposit', 'payment_status' => 'pending', 'payment_date' => now()]);
+        $this->actingAs($desk)->put(route('receptionist.payments.verify', $deposit))->assertSessionHasNoErrors();
+
+        $show = $this->actingAs($desk)->get(route('receptionist.bookings.show', $booking->fresh()))->assertOk()->getContent();
+        $panel = $this->actingAs($desk)->get(route('receptionist.check-in.panel', $booking->fresh()))->assertOk()->getContent();
+
+        foreach (['Booking module' => $show, 'Check-in' => $panel] as $name => $html) {
+            $html = html_entity_decode($html);
+            $last = -1;
+            // The check-in wizard shows the bill (step 4) before the guest-details step, so its order differs.
+            $needles = $name === 'Check-in' ? ['4. Payment Summary', 'Remaining Balance', 'Amount to Pay', '1. Guest & Booking Info'] : ['1. Guest & Booking Info', '4. Payment Summary', 'Remaining Balance', 'Amount to Pay'];
+            foreach ($needles as $needle) {
+                $at = strpos($html, $needle);
+                $this->assertNotFalse($at, "{$name}: {$needle} is missing");
+                $this->assertGreaterThan($last, $at, "{$name}: {$needle} is out of order");
+                $last = $at;
+            }
+            $this->assertStringContainsString('₱1,500.00', $html, "{$name}: the amount still to pay is shown");
+        }
+        $this->assertStringContainsString('5. Payment Input', $panel);
+    }
 }

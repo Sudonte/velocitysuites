@@ -437,11 +437,17 @@ class AuthController extends Controller
             return $this->tooManyResetAttempts();
         }
 
+        // A code that already earned a token cannot earn another one.
+        if ($this->passwordReset->alreadyVerified($validated['email'], $validated['otp'])) {
+            return response()->json(['message' => 'Invalid or expired code.'], 422);
+        }
+
         if (! $this->passwordReset->verifyOtp($validated['email'], $validated['otp'])) {
             return $this->passwordReset->tooManyAttempts($validated['email'])
                 ? $this->tooManyResetAttempts()
                 : response()->json(['message' => 'Invalid or expired code.'], 422);
         }
+        $this->passwordReset->markVerified($validated['email'], $validated['otp']);
 
         return response()->json([
             'message' => 'OTP verified.',

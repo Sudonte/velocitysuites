@@ -112,6 +112,41 @@ class InAppPasswordChangeOtpTest extends TestCase
         $this->assertTrue(Hash::check('BrandNew123', $user->fresh()->password));
     }
 
+    public function test_a_wrong_code_is_refused_and_issues_no_token(): void
+    {
+        $user = $this->guest();
+        $this->seedOtp($user->email, '123456');
+
+        $response = $this->verify($user->email, '654321');
+
+        $this->assertSame(422, $response->getStatusCode());
+        $this->assertArrayNotHasKey('reset_token', $response->getData(true));
+        $this->assertTrue(Hash::check('OldPassword1', $user->fresh()->password));
+    }
+
+    public function test_a_code_that_was_already_used_cannot_be_used_again(): void
+    {
+        $user = $this->guest();
+        $this->verifiedToken($user, '123456'); // verifying consumes the code
+
+        $again = $this->verify($user->email, '123456');
+
+        $this->assertSame(422, $again->getStatusCode(), 'the same code does not verify twice');
+        $this->assertArrayNotHasKey('reset_token', $again->getData(true));
+    }
+
+    public function test_an_expired_code_is_refused_and_issues_no_token(): void
+    {
+        $user = $this->guest();
+        $this->seedOtp($user->email, '123456');
+        Carbon::setTestNow(now()->addMinutes(16));
+
+        $response = $this->verify($user->email, '123456');
+
+        $this->assertSame(422, $response->getStatusCode());
+        $this->assertArrayNotHasKey('reset_token', $response->getData(true));
+    }
+
     public function test_the_password_cannot_be_changed_without_a_verified_otp(): void
     {
         $user = $this->guest();

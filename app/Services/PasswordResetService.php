@@ -64,6 +64,25 @@ class PasswordResetService
         return $plain;
     }
 
+    /** Cache key remembering which code was already traded for a reset token. */
+    private function verifiedKey(string $email): string
+    {
+        return 'pw_otp_verified:'.hash('sha256', strtolower($email));
+    }
+
+    /** True when this exact code was already verified (and so already issued a token) - a code is good for one verification. */
+    public function alreadyVerified(string $email, string $otp): bool
+    {
+        $seen = Cache::get($this->verifiedKey($email));
+
+        return is_string($seen) && hash_equals($seen, hash('sha256', $otp));
+    }
+
+    public function markVerified(string $email, string $otp): void
+    {
+        Cache::put($this->verifiedKey($email), hash('sha256', $otp), now()->addMinutes(15));
+    }
+
     /** Consumes the token (it works exactly once) and checks it was issued for this email. */
     public function consumeResetToken(string $plainToken, string $email): bool
     {
@@ -84,6 +103,7 @@ class PasswordResetService
     {
         $otp = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
         Cache::forget($this->attemptsKey($user->email)); // a fresh code starts with a fresh attempt budget
+        Cache::forget($this->verifiedKey($user->email));
 
         DB::table('password_reset_tokens')->updateOrInsert(
             ['email' => $user->email],

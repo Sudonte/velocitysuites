@@ -378,6 +378,14 @@ class NotificationService
         );
     }
 
+    /** The remaining balance frozen on a stored receipt, or null when that receipt is not in the receipts table. */
+    private function storedRemaining(string $receiptNumber): ?float
+    {
+        $value = \App\Models\Receipt::where('receipt_no', $receiptNumber)->value('remaining_balance');
+
+        return $value === null ? null : (float) $value;
+    }
+
     /**
      * Receipt 2 is ready: the remaining balance was settled (or a full payment confirmed) at check-in.
      */
@@ -386,7 +394,8 @@ class NotificationService
         $this->toUser(
             $guest,
             'Check-In Receipt Ready',
-            "Your balance is settled and your Check-In Settlement Receipt ({$receiptNumber}) is ready in your Booking Details.",
+            'Your check-in payment was verified. Receipt 2 ('.$receiptNumber.') is ready. Remaining balance: ₱'
+                .number_format($this->storedRemaining($receiptNumber) ?? 0.0, 2).'.',
             'booking',
             $referenceId,
             null,
@@ -513,9 +522,14 @@ class NotificationService
      */
     public function notifyPaymentComplete(User $guest, ?int $referenceId = null, ?string $receiptNumber = null): void
     {
-        $message = 'Your payment is complete. Thank you for staying with us! Your Official Payment Receipt'
-            . ($receiptNumber ? " ({$receiptNumber})" : '')
-            . ' is now available.';
+        $stored = $receiptNumber ? \App\Models\Receipt::where('receipt_no', $receiptNumber)->first() : null;
+        $message = $stored
+            // Receipt 3: the step, the receipt, the grand total and what is still to pay (from the stored receipt).
+            ? 'You are checked out. Receipt 3 (' . $receiptNumber . ') is ready. Grand total: ₱' . number_format((float) $stored->total_amount, 2)
+                . '. Remaining balance: ₱' . number_format((float) $stored->remaining_balance, 2) . '.'
+            : 'Your payment is complete. Thank you for staying with us! Your Official Payment Receipt'
+                . ($receiptNumber ? " ({$receiptNumber})" : '')
+                . ' is now available.';
 
         $this->toUser($guest, 'Payment Complete', $message, 'payment', $referenceId, null,
             $receiptNumber, $receiptNumber ? 'OFFICIAL_RECEIPT' : null);
@@ -564,6 +578,7 @@ class NotificationService
     public function notifyPaymentVerified(User $guest, float $amount, string $roomName, ?int $referenceId = null, ?string $receiptNumber = null, string $receiptLabel = 'Partial Payment Receipt', ?string $receiptType = null): void
     {
         $message = 'Your GCash payment of ₱' . number_format($amount, 2) . " for {$roomName} has been verified. Thank you!";
+        $remaining = $receiptNumber ? $this->storedRemaining($receiptNumber) : null;
         // $receiptNumber is optional/backward-compatible - stays plain
         // wording if this payment somehow wasn't eligible for a receipt at
         // all (e.g. a ₱0 payment) - see Payment::ensureReceiptNumber().
@@ -576,7 +591,11 @@ class NotificationService
         // (Payment::receiptType() - 'PARTIAL_RECEIPT'/'FULL_PAYMENT_RECEIPT'),
         // computed by the caller from the same already-minted receipt_number -
         // never re-derived here from $receiptLabel's free text.
-        if ($receiptNumber) {
+        if ($receiptNumber && $remaining !== null) {
+            // Receipt 1: the step, the receipt, and what is still to pay - the numbers come from the stored receipt.
+            $message = 'Your booking has been verified. Receipt 1 (' . $receiptNumber . ') is ready. Amount paid: ₱'
+                . number_format($amount, 2) . '. Remaining balance: ₱' . number_format($remaining, 2) . '.';
+        } elseif ($receiptNumber) {
             $message .= " Your {$receiptLabel} ({$receiptNumber}) is now available.";
         }
 

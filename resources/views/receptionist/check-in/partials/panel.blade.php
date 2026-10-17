@@ -62,7 +62,7 @@
                  assignment, since who's actually at the counter (and how many of
                  them there are) can differ from what was booked. --}}
             <div id="checkInStepDetails" class="d-none">
-                <h6 class="mb-3"><i class="fas fa-id-card"></i> Guest Details</h6>
+                <h6 class="mb-3"><i class="fas fa-id-card"></i> 1. Guest &amp; Booking Info</h6>
 
                 <div class="row g-2 mb-2">
                     <div class="col-md-4">
@@ -132,7 +132,7 @@
                  booking, or a single group for the legacy single-room-type case -
                  see RoomAvailabilityService::assignableRoomsByLine()'s own doc). --}}
             <div id="checkInStepRooms" class="d-none">
-                <h6 class="mb-3"><i class="fas fa-door-open"></i> Assign Rooms</h6>
+                <h6 class="mb-3"><i class="fas fa-door-open"></i> 2. Charges - Assign Rooms</h6>
                 @if(!empty($assignedRoomIds))
                     <div class="alert alert-info py-2 mb-2">
                         <i class="fas fa-circle-info"></i> Already assigned ahead of arrival - confirm below, or change the selection if needed.
@@ -178,7 +178,7 @@
                     <i class="fas fa-info-circle"></i> Only rooms of the matching type, free for the full stay, are listed in each dropdown. Each room can only be picked once.
                 </p>
 
-                <h6 class="mt-3 mb-2"><i class="fas fa-money-bill-wave"></i> Payment Input</h6>
+                <h6 class="mt-3 mb-2"><i class="fas fa-money-bill-wave"></i> 5. Payment Input</h6>
                 @if($balanceDue > 0)
                     {{-- Full payment only - the server refuses anything less. Disabled until this step shows. --}}
                     @include('receptionist.partials.desk-payment-fields', ['due' => $balanceDue, 'mode' => 'full', 'disabled' => true, 'containerId' => 'checkInPayment'])

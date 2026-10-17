@@ -238,7 +238,7 @@ class PaymentController extends Controller
         // for the rare not-yet-converted case. notifications.reference_id
         // has no FK constraint (relax_notifications_reference_id_constraint
         // migration) precisely so it can hold either.
-        $referenceId = $booking?->id ?? $reservation?->id;
+        $referenceId = $booking ? ($booking->reservation_id ?? $booking->id) : $reservation?->id;
 
         // Logged against the Booking when one exists (the receptionist
         // reviews/acts on this from the Bookings module in practice) so

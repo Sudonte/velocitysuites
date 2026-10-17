@@ -6,7 +6,7 @@
 --}}
 @php $peso = fn ($v) => '₱' . number_format((float) $v, 2); @endphp
 <div id="checkInStepBill">
-    <h6 class="mb-2"><i class="fas fa-percent"></i> Discount or Promotion</h6>
+    <h6 class="mb-2"><i class="fas fa-percent"></i> 2. Charges - Discount or Promotion</h6>
     <div class="border rounded p-2 mb-3" id="checkInOfferBox"
          data-approve-url="{{ route('receptionist.check-in.discount.approve', $booking) }}"
          data-reject-url="{{ route('receptionist.check-in.discount.reject', $booking) }}"
@@ -90,7 +90,7 @@
         @endif
     </div>
 
-    <h6 class="mb-2"><i class="fas fa-file-invoice"></i> Payment Summary</h6>
+    <h6 class="mb-2"><i class="fas fa-file-invoice"></i> 4. Payment Summary</h6>
     <div class="border rounded p-2 mb-2 small">
         @foreach($stay['rooms'] as $line)
             <div class="d-flex justify-content-between"><span>{{ $line['room_type'] ?? 'Room' }} &middot; {{ $peso($line['rate']) }} &times; {{ \App\Support\StayBill::nightsLabel($line['nights']) }}</span><span>{{ $peso($line['subtotal']) }}</span></div>
@@ -112,6 +112,16 @@
         @else
             <div class="d-flex justify-content-between fw-bold text-success"><span>Paid in full</span><span><i class="fas fa-check"></i></span></div>
         @endif
+    </div>
+    <div class="rounded p-3 mb-2 border {{ $balanceDue > 0 ? 'border-danger' : 'border-success' }}" id="checkinPaymentHighlight">
+        <div class="d-flex justify-content-between align-items-center">
+            <span class="fw-semibold text-uppercase small">Remaining Balance</span>
+            <span class="fs-5 fw-bold {{ $balanceDue > 0 ? 'text-danger' : 'text-success' }}">{{ $peso($balanceDue) }}</span>
+        </div>
+        <div class="d-flex justify-content-between align-items-center mt-1">
+            <span class="fw-semibold text-uppercase small">Amount to Pay</span>
+            <span class="fs-4 fw-bold text-brand">{{ $peso($balanceDue) }}</span>
+        </div>
     </div>
     <p class="text-muted small mb-0"><i class="fas fa-info-circle"></i> The full balance is paid at check-in. Anything added during the stay is paid at check-out.</p>
 </div>

@@ -53,7 +53,7 @@
             <div class="row">
                 <!-- ===================== GUEST INFORMATION ===================== -->
                 <div class="col-md-6">
-                    <x-card title="Guest Information" icon="fas fa-user" bodyClass="card-body" class="mb-4 h-100">
+                    <x-card title="1. Guest & Booking Info" icon="fas fa-user" bodyClass="card-body" class="mb-4 h-100">
                         <dl class="detail-list mb-0">
                             <div><dt>Account Holder</dt><dd>{{ $booking->account_guest_full_name ?? 'N/A' }}</dd></div>
                             <div><dt>Representative Name</dt><dd>{{ $booking->guest_display_name }}</dd></div>
@@ -68,7 +68,7 @@
 
                 <!-- ===================== STAY INFORMATION ===================== -->
                 <div class="col-md-6">
-                    <x-card title="Stay Information" icon="fas fa-calendar-days" bodyClass="card-body" class="mb-4 h-100">
+                    <x-card title="1. Stay Details" icon="fas fa-calendar-days" bodyClass="card-body" class="mb-4 h-100">
                         <dl class="detail-list mb-0">
                             <div><dt>Check-In</dt><dd>{{ $booking->check_in->format('F d, Y') }}</dd></div>
                             <div><dt>Check-Out</dt><dd>{{ $booking->check_out->format('F d, Y') }}</dd></div>
@@ -86,7 +86,7 @@
                  etc.) must show every line, never just the first, and each
                  line's own image must never be a broken-image icon when
                  image_url is missing/null (falls back to a plain icon tile). -->
-            <x-card title="Room Information" icon="fas fa-bed" bodyClass="card-body" class="mb-4">
+            <x-card title="2. Charges - Rooms" icon="fas fa-bed" bodyClass="card-body" class="mb-4">
                 <div class="room-type-card-list">
                     @foreach($roomLines as $line)
                         @php
@@ -134,7 +134,7 @@
             </x-card>
 
             <!-- ===================== AMENITIES ===================== -->
-            <x-card title="Amenities" icon="fas fa-spa" bodyClass="card-body" class="mb-4">
+            <x-card title="2. Charges - Amenities" icon="fas fa-spa" bodyClass="card-body" class="mb-4">
                 @if($amenityRows->isEmpty())
                     <x-empty-state icon="fas fa-spa" message="No amenities selected for this booking." />
                 @else
@@ -171,7 +171,7 @@
 
             @if($gcashPayment)
                 <!-- ===================== GCASH PAYMENT INFORMATION ===================== -->
-                <x-card title="GCash Payment Information" icon="fas fa-qrcode" bodyClass="card-body" class="mb-4" id="gcashPayment">
+                <x-card title="3. Payments Already Made - GCash Payment" icon="fas fa-qrcode" bodyClass="card-body" class="mb-4" id="gcashPayment">
                     <div class="row">
                         <div class="col-md-6">
                             <dl class="detail-list mb-0">
@@ -270,7 +270,7 @@
             @endif
 
             <!-- ===================== PAYMENT SUMMARY ===================== -->
-            <x-card title="Payment Summary" icon="fas fa-wallet" bodyClass="card-body" class="mb-4">
+            <x-card title="4. Payment Summary" icon="fas fa-wallet" bodyClass="card-body" class="mb-4">
                 <dl class="detail-list mb-3">
                     <div><dt>Room Total</dt><dd>₱{{ number_format($roomTotal, 2) }}</dd></div>
                     <div><dt>Amenities Total</dt><dd>₱{{ number_format($amenitiesTotal, 2) }}</dd></div>
@@ -291,6 +291,19 @@
                     </div>
                 </dl>
 
+                {{-- The two figures the receptionist acts on, highlighted like the guest's receipt: what is left and what is due. --}}
+                <div class="rounded p-3 mb-3 border {{ $remainingBalance > 0.009 ? 'border-danger' : 'border-success' }}" id="paymentHighlight">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <span class="fw-semibold text-uppercase small">Remaining Balance</span>
+                        <span class="fs-5 fw-bold {{ $remainingBalance > 0.009 ? 'text-danger' : 'text-success' }}">₱{{ number_format($remainingBalance, 2) }}</span>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center mt-1">
+                        <span class="fw-semibold text-uppercase small">Amount to Pay</span>
+                        <span class="fs-4 fw-bold text-brand">₱{{ number_format($remainingBalance, 2) }}</span>
+                    </div>
+                    <div class="small text-muted text-end">{{ $remainingBalance > 0.009 ? 'Due at check-in' : 'Fully paid' }}</div>
+                </div>
+
                 @if($stayPayment['state'] === 'overpaid' && in_array($booking->booking_status, [\App\Models\Booking::STATUS_ACTIVE, \App\Models\Booking::STATUS_CHECKED_IN]))
                     {{-- Paid more than the stay now costs (e.g. paid in full, then the discount was approved). --}}
                     <div class="alert alert-primary">
@@ -310,7 +323,7 @@
 
                 @if($booking->payment_method === 'cash' && in_array($booking->booking_status, [\App\Models\Booking::STATUS_ACTIVE, \App\Models\Booking::STATUS_CHECKED_IN]) && $remainingBalance > 0.009)
                     <hr>
-                    <h6 class="text-brand"><i class="fas fa-hand-holding-dollar"></i> Record Walk-In Payment</h6>
+                    <h6 class="text-brand"><i class="fas fa-hand-holding-dollar"></i> 5. Payment Input - Record Walk-In Payment</h6>
                     <p class="text-muted small">Any remaining balance is settled through a walk-in cash payment at the hotel - record it here as it's received.</p>
                     <form action="{{ route('receptionist.bookings.record-payment', $booking) }}" method="POST" class="row g-2 align-items-start" id="walkInForm"
                           data-confirm="Record this cash payment against the booking's remaining balance?" data-confirm-title="Record this cash payment against the booking's remaining balance?" data-confirm-button="Record Payment" data-confirm-variant="success">
@@ -439,7 +452,7 @@
                     </div>
                 </x-card>
             @elseif(!$booking->verified_at)
-                <x-card title="Booking Verification" icon="fas fa-clipboard-check" bodyClass="card-body">
+                <x-card title="5. Payment Input - Confirm Verification" icon="fas fa-clipboard-check" bodyClass="card-body">
                     @if($booking->gcashPaymentNeedsVerification())
                         <div class="alert alert-warning mb-0">
                             <i class="fas fa-exclamation-triangle"></i>
