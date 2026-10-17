@@ -638,6 +638,10 @@ class CheckInController extends Controller
                 'amount' => round((float) $billing->discount, 2),
                 'rejection_reason' => $discountStatus === 'rejected' ? $locked->discount_rejection_reason : null,
             ],
+            // The bill's make-up at this moment, frozen: check-out never re-prices (or re-discounts) any of it.
+            'room_charge' => round((float) $billing->room_charge, 2),
+            'amenity_charge' => round((float) $billing->amenity_charge, 2),
+            'amenity_ids' => $locked->billedAmenityRequests()->pluck('id')->map(fn ($id) => (int) $id)->all(),
             'settled_at' => now()->toIso8601String(),
             'verified_by' => auth()->user()?->full_name,
         ]);

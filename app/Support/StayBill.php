@@ -151,12 +151,18 @@ final class StayBill
         $amenityRows = $booking->preloadedAmenityRequests !== null
             ? ($billing ? $booking->preloadedBilledAmenityRequests : $booking->preloadedAmenityRequests)
             : ($billing ? $booking->billedAmenityRequests()->get() : $booking->billableAmenityRequests()->get());
+        // The amenity rows frozen on the bill at check-in (listed in its receipt snapshot); older stays fall back to timestamps.
+        $checkinAmenityIds = isset($billing?->checkin_receipt_snapshot['amenity_ids']) ? array_map('intval', $billing->checkin_receipt_snapshot['amenity_ids']) : null;
         $amenityLines = $amenityRows->map(fn ($r) => [
             'amenity_name' => $r->amenity_name,
             'quantity' => (int) $r->quantity,
             'unit_price' => round((float) $r->charge, 2),
             'subtotal' => round((float) $r->charge * (int) $r->quantity, 2),
             'additional' => $r->origin !== AmenityRequest::ORIGIN_BOOKING,
+            // Was it already on the bill the guest paid at check-in? (only meaningful once the stay was settled there)
+            'on_checkin_bill' => $checkinAmenityIds !== null
+                ? in_array((int) $r->id, $checkinAmenityIds, true)
+                : CheckInSettlement::wasOnCheckInBill($billing, self::onBillSince($r)),
         ])->values()->all();
         $additionalAmenities = array_values(array_filter($amenityLines, fn ($l) => $l['additional']));
         $additionalAmenitiesTotal = round(array_sum(array_column($additionalAmenities, 'subtotal')), 2);
@@ -175,6 +181,28 @@ final class StayBill
         $idStatus = self::discountIdStatus($booking);
         $discount = $idStatus === 'approved' ? self::approvedDiscount($booking, $billing) : null;
         $discountAmount = round(BillDiscount::amount($discount, $roomCharge, $addOns), 2);
+
+        // Paid in full at check-in => the discount was taken off THEN, once. It is never recalculated afterwards, so
+        // an amenity or desk charge added during the stay is billed at full price and not discounted a second time.
+        $settledAtCheckIn = CheckInSettlement::settledAt($billing) !== null;
+        $snapshot = $settledAtCheckIn ? (array) ($billing->checkin_receipt_snapshot ?? []) : [];
+        $amenityAtCheckIn = 0.0;
+        $roomAtCheckIn = $scheduledRoomCharge;
+        $discountAtCheckIn = 0.0;
+        if ($settledAtCheckIn) {
+            $amenityAtCheckIn = isset($snapshot['amenity_charge'])
+                ? round((float) $snapshot['amenity_charge'], 2)
+                : round(array_sum(array_map(fn ($l) => $l['on_checkin_bill'] ? $l['subtotal'] : 0.0, $amenityLines)), 2);
+            $roomAtCheckIn = isset($snapshot['room_charge']) ? round((float) $snapshot['room_charge'], 2) : $scheduledRoomCharge;
+            $discountAtCheckIn = round((float) ($snapshot['discount']['amount'] ?? $billing->discount), 2);
+            $discountAmount = $discountAtCheckIn;
+            if ($discount !== null && $roomCharge < $roomAtCheckIn - 0.004) {
+                // A shortened stay (early check-out) never keeps more discount than the nights stayed would earn.
+                $discountAmount = min($discountAmount, round(BillDiscount::amount($discount, $roomCharge, $amenityAtCheckIn), 2));
+            }
+            $discountAmount = min($discountAmount, $subtotal);
+            $discount ??= $billing->discountApplied;
+        }
         if ($stayEnded && $billing) {
             // Settled: the discount is the amount that was actually taken off, whatever the Discount module says today.
             $discountAmount = round((float) $billing->discount, 2);
@@ -183,6 +211,10 @@ final class StayBill
 
         $total = round(max(0.0, $subtotal - $discountAmount), 2);
         $paid = round((float) $booking->allPayments()->where('payment_status', 'completed')->sum('amount_paid'), 2);
+
+        $breakdown = $settledAtCheckIn
+            ? self::receiptBreakdown($billing, $snapshot, $discount, $roomAtCheckIn, $amenityAtCheckIn, $discountAtCheckIn, $roomCharge, $amenityCharge, $amenityLines, $guestFee, $extraCharges, $extraChargesTotal, $discountAmount, $total, $paid)
+            : null;
 
         return [
             'mode' => $mode,
@@ -214,7 +246,67 @@ final class StayBill
             'total' => $total,
             'total_paid' => $paid,
             'balance' => round(max(0.0, $total - $paid), 2),
+            'receipt_breakdown' => $breakdown,
         ];
+    }
+
+    /**
+     * The 3rd receipt's balance breakdown, shared word for word by the receptionist's web view and the guest app:
+     * CHECK-IN SUMMARY (frozen when the guest paid; room x nights, the one-time discount, grand total, amount paid),
+     * then what was added since (amenities + the desk's additional charges), the REMAINING BALANCE, and the
+     * FINAL GRAND TOTAL = check-in grand total + everything added since. null for a stay not settled at check-in.
+     *
+     * @return array<string,mixed>
+     */
+    private static function receiptBreakdown(
+        Billing $billing, array $snapshot, ?Discount $discount, float $roomAtCheckIn, float $amenityAtCheckIn, float $discountAtCheckIn,
+        float $roomCharge, float $amenityCharge, array $amenityLines, float $guestFee, array $extraCharges, float $extraChargesTotal,
+        float $discountAmount, float $total, float $paid,
+    ): array {
+        $checkinSubtotal = round($roomAtCheckIn + $amenityAtCheckIn, 2);
+        $checkinTotal = round(max(0.0, $checkinSubtotal - $discountAtCheckIn), 2);
+        $paidAtCheckIn = round((float) ($snapshot['total_paid'] ?? $billing->checkin_settled_total ?? $checkinTotal), 2);
+
+        $newAmenities = array_values(array_map(fn ($l) => [
+            'name' => $l['amenity_name'], 'quantity' => $l['quantity'], 'unit_price' => $l['unit_price'], 'subtotal' => $l['subtotal'],
+        ], array_filter($amenityLines, fn ($l) => ! $l['on_checkin_bill'])));
+        $newAmenitiesTotal = round($amenityCharge - $amenityAtCheckIn, 2);
+        // A stay that ran longer / shorter than scheduled (and the discount that follows it) - 0 for an ordinary stay.
+        $stayAdjustment = round(($roomCharge - $roomAtCheckIn) - ($discountAmount - $discountAtCheckIn) + $guestFee, 2);
+        $afterSubtotal = round($newAmenitiesTotal + $extraChargesTotal + $stayAdjustment, 2);
+        $percent = $discount && $discount->discount_type === 'percentage' ? (float) $discount->value : null;
+
+        return [
+            'checkin' => [
+                'room_charge' => $roomAtCheckIn,
+                'booked_amenities' => $amenityAtCheckIn,
+                'discount_name' => $discountAtCheckIn > 0 ? $discount?->name : null,
+                'discount_percent' => $discountAtCheckIn > 0 ? $percent : null,
+                'discount' => $discountAtCheckIn,
+                'grand_total' => $checkinTotal,
+                'amount_paid' => $paidAtCheckIn,
+                'paid_in_full' => $paidAtCheckIn + 0.004 >= $checkinTotal,
+                'status' => $paidAtCheckIn + 0.004 >= $checkinTotal ? 'PAID IN FULL' : 'PARTIALLY PAID',
+            ],
+            'after_checkin' => [
+                'amenities' => $newAmenities,
+                'amenities_total' => $newAmenitiesTotal,
+                'charges' => array_map(fn ($c) => ['name' => $c['description'], 'quantity' => 1, 'unit_price' => $c['amount'], 'subtotal' => $c['amount']], $extraCharges),
+                'charges_total' => $extraChargesTotal,
+                'stay_adjustment' => $stayAdjustment,
+                'subtotal' => $afterSubtotal,
+            ],
+            'remaining_balance' => round(max(0.0, $afterSubtotal), 2),
+            'final_grand_total' => $total,
+            'total_paid' => $paid,
+            'balance_due' => round(max(0.0, $total - $paid), 2),
+        ];
+    }
+
+    /** When an amenity line landed on the bill: a guest request counts from its approval, anything else from its creation. */
+    private static function onBillSince(AmenityRequest $r)
+    {
+        return $r->origin === AmenityRequest::ORIGIN_GUEST_REQUEST && $r->decided_at ? $r->decided_at : $r->created_at;
     }
 
     /**
