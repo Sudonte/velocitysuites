@@ -81,6 +81,38 @@ class RoomAvailabilityService
         return max(0, $this->totalInventory($roomType) - $maintenanceCount - $bookedCount);
     }
 
+    /**
+     * availableCount() for many room types at once: three grouped queries in total instead of four per type. Returns
+     * [room_type_id => available count]; every given type is present. Same rules as availableCount().
+     *
+     * @param  iterable<RoomType>  $roomTypes
+     * @return array<int,int>
+     */
+    public function availableCounts(iterable $roomTypes, Carbon $checkIn, Carbon $checkOut): array
+    {
+        $ids = collect($roomTypes)->pluck('id')->filter()->unique()->values();
+        if ($ids->isEmpty()) {
+            return [];
+        }
+
+        $inventory = Room::notArchived()->whereIn('room_type_id', $ids)
+            ->selectRaw('room_type_id, COUNT(*) AS n')->groupBy('room_type_id')->pluck('n', 'room_type_id');
+        $maintenance = Room::notArchived()->whereIn('room_type_id', $ids)->where('status', 'maintenance')
+            ->selectRaw('room_type_id, COUNT(*) AS n')->groupBy('room_type_id')->pluck('n', 'room_type_id');
+
+        $booked = Booking::whereIn('room_type_id', $ids)
+            ->whereIn('booking_status', [Booking::STATUS_ACTIVE, Booking::STATUS_CHECKED_IN]);
+        $this->occupiesRoom($booked, $checkIn, $checkOut);
+        $booked = $booked->selectRaw('room_type_id, SUM(rooms_requested) AS n')->groupBy('room_type_id')->pluck('n', 'room_type_id');
+
+        $out = [];
+        foreach ($ids as $id) {
+            $out[(int) $id] = max(0, (int) ($inventory[$id] ?? 0) - (int) ($maintenance[$id] ?? 0) - (int) ($booked[$id] ?? 0));
+        }
+
+        return $out;
+    }
+
     public function isFullyBooked(RoomType $roomType, Carbon $checkIn, Carbon $checkOut): bool
     {
         return $this->availableCount($roomType, $checkIn, $checkOut) <= 0;

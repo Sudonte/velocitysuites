@@ -43,8 +43,9 @@ class RoomController extends Controller
 
         $roomTypes = $query->orderBy('name')->paginate(12)->withQueryString();
 
-        $roomTypes->getCollection()->transform(function (RoomType $roomType) use ($checkIn, $checkOut) {
-            $roomType->available_count = $this->availability->availableCount($roomType, $checkIn, $checkOut);
+        $counts = $this->availability->availableCounts($roomTypes->getCollection(), $checkIn, $checkOut);
+        $roomTypes->getCollection()->transform(function (RoomType $roomType) use ($counts) {
+            $roomType->available_count = $counts[$roomType->id] ?? 0;
             $roomType->is_fully_booked = $roomType->available_count <= 0;
 
             return $roomType;
@@ -73,9 +74,11 @@ class RoomController extends Controller
         $otherTypes = RoomType::where('status', 'active')
             ->where('id', '!=', $roomType->id)
             ->take(3)
-            ->get()
-            ->map(function (RoomType $type) use ($checkIn, $checkOut) {
-                $type->available_count = $this->availability->availableCount($type, $checkIn, $checkOut);
+            ->get();
+        $otherCounts = $this->availability->availableCounts($otherTypes, $checkIn, $checkOut);
+        $otherTypes = $otherTypes
+            ->map(function (RoomType $type) use ($otherCounts) {
+                $type->available_count = $otherCounts[$type->id] ?? 0;
                 $type->is_fully_booked = $type->available_count <= 0;
 
                 return $type;
