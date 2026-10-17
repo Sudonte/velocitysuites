@@ -63,13 +63,24 @@ class BalanceSingleSourceTest extends ApiFlowTestCase
             'payment_method' => 'cash', 'amount_received' => 500,
         ])->assertOk();
 
-        $show = $this->asGuest($user)->getJson('/api/guest/bookings/'.$booking->id)->assertOk()->json('payment_summary');
+        \App\Models\BookingRoomLine::create(['booking_id' => $booking->id, 'room_type_id' => $rt->id, 'room_type_name' => $rt->name, 'quantity' => 2, 'price_per_night' => 1000, 'number_of_nights' => 1, 'subtotal' => 2000]);
+        $detail = $this->asGuest($user)->getJson('/api/guest/bookings/'.$booking->id)->assertOk()->json();
+        $show = $detail['payment_summary'];
         $row = collect($this->asGuest($user)->getJson('/api/guest/bookings?per_page=50')->assertOk()->json('data'))->firstWhere('id', $booking->id);
 
         $this->assertNotNull($row, 'the booking is in the list');
+        $this->assertSame('Exec', substr((string) ($row['room_lines'][0]['room_type'] ?? ''), 0, 4), 'room_lines keeps its mapped shape in the list');
+        foreach (['billing', 'room_lines_relation'] as $leak) {
+            $this->assertArrayNotHasKey($leak, $row);
+        }
         $this->assertArrayHasKey('payment_summary', $row, 'the list carries the same authoritative summary');
         foreach (['grand_total', 'total_amount_paid', 'remaining_balance', 'payment_status'] as $key) {
             $this->assertEquals($show[$key], $row['payment_summary'][$key], "list and details agree on {$key}");
+        }
+        // The preloaded list path must also produce the same computed fields as the single-booking path.
+        $this->assertNotNull($detail['stay_bill'], 'a checked-in stay has a stay bill');
+        foreach (['stay_bill', 'amenities', 'room_lines', 'total_amount_due'] as $field) {
+            $this->assertEquals($detail[$field] ?? null, $row[$field] ?? null, "list and details agree on {$field}");
         }
         $this->assertEquals(2000, $show['grand_total'], 'both rooms, one night');
         $this->assertEquals(2000, $show['total_amount_paid'], 'both payments count, including the one taken at check-in');

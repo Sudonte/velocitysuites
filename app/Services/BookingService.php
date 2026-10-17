@@ -31,6 +31,35 @@ class BookingService
     ) {
     }
 
+    /** Per-request memo, active only inside memoized() - null otherwise, so nothing is ever cached across requests. */
+    private static ?array $memo = null;
+
+    /**
+     * Run $callback with a per-call memo for the room-type / promotion lookups quoteRoomCharge() makes, so a LIST of
+     * reservations does one lookup per distinct room type, not one per row. Nothing is cached outside the callback.
+     */
+    public static function memoized(callable $callback)
+    {
+        self::$memo = [];
+        try {
+            return $callback();
+        } finally {
+            self::$memo = null;
+        }
+    }
+
+    private function remember(string $key, callable $load)
+    {
+        if (self::$memo === null) {
+            return $load();
+        }
+        if (! array_key_exists($key, self::$memo)) {
+            self::$memo[$key] = $load();
+        }
+
+        return self::$memo[$key];
+    }
+
     /**
      * Room charge for the full stay (room type rate x nights x
      * rooms_requested) minus the best applicable active discount promotion, minus the senior-
@@ -85,12 +114,12 @@ class BookingService
         $promoDiscount = 0;
         $appliedFixedPromoIds = [];
         foreach ($lines as $line) {
-            $lineRoomType = RoomType::find($line['room_type_id']);
+            $lineRoomType = $this->remember('rt:'.$line['room_type_id'], fn () => RoomType::find($line['room_type_id']));
             if (! $lineRoomType) {
                 continue;
             }
 
-            $promo = Promotion::where('status', 'active')
+            $promo = $this->remember('promo:'.$lineRoomType->id.':'.\App\Support\CheckInWindow::date()->toDateString(), fn () => Promotion::where('status', 'active')
                 ->where('promo_type', 'discount')
                 ->whereDate('start_date', '<=', \App\Support\CheckInWindow::date())
                 ->whereDate('end_date', '>=', \App\Support\CheckInWindow::date())
@@ -99,7 +128,7 @@ class BookingService
                       ->orWhere('room_type_id', $lineRoomType->id);
                 })
                 ->orderByDesc('discount_value')
-                ->first();
+                ->first());
 
             if (! $promo) {
                 continue;

@@ -55,7 +55,7 @@ class BookingController extends Controller
             ->where('guest_id', $guest->id)
             ->whereNull('reservation_id')
             ->when(! $includeHidden, fn ($q) => $q->whereNull('hidden_at'))
-            ->with(['roomType', 'payments', 'billing.payments', 'rooms']);
+            ->with(['roomType', 'payments']);
 
         if ($request->filled('status')) {
             $query->where('booking_status', $request->status);
@@ -81,6 +81,7 @@ class BookingController extends Controller
         // payment_summary: the ONE grand total / total paid / remaining balance / status calculation (ReceiptService), the
         // same one show() returns. Without it the app had to rebuild the balance from this row's own `payments`, which leaves
         // out money recorded on the Billing (e.g. paid at check-in), so the Dashboard disagreed with Booking Details.
+        Booking::preloadForList($paginated->getCollection());
         $paginated->getCollection()->each(function (Booking $b) {
             $b->append(['total_amount_due', 'amenities', 'timeline', 'stay_bill']);
             $b->setAttribute('payment_summary', $b->paymentSummary());

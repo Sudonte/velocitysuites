@@ -88,9 +88,12 @@ class RoomType extends Model
      */
     public function getAmenitiesAttribute(): array
     {
-        return $this->assignedAmenities()
-            ->where('status', 'active')
-            ->get()
+        // A list that eager-loaded assignedAmenities (guest booking lists) reads them; anyone else queries as before.
+        $amenities = $this->relationLoaded('assignedAmenities')
+            ? $this->assignedAmenities->where('status', 'active')
+            : $this->assignedAmenities()->where('status', 'active')->get();
+
+        return $amenities
             ->map(function (Amenity $amenity) {
                 return [
                     'name' => $amenity->amenity_name,

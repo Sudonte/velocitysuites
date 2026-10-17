@@ -57,7 +57,7 @@ class ReservationController extends Controller
         $query = $guest->reservations()->with([
             'roomType',
             'booking' => fn ($q) => $q->withTrashed(),
-            'booking.room', 'booking.rooms', 'booking.payments', 'booking.billing.payments', 'payments', 'bookingAmenities',
+            'booking.room', 'booking.payments', 'payments', 'bookingAmenities', 'roomLines', 'roomType.assignedAmenities',
         ])->when(! $includeHidden, fn ($q) => $q->whereNull('hidden_at'));
 
         if ($request->filled('status')) {
@@ -86,6 +86,11 @@ class ReservationController extends Controller
         // call unconditionally on every page load, same pattern
         // Receptionist\BookingController::reconcileStuckGcashBookings()
         // already uses for its own lazy sweep.
+        // One batch of queries for every converted booking on the page (not one set per row). The booking already has its
+        // reservation (this row), so hand it over - hidden from serialization, which would otherwise loop booking <-> reservation.
+        $reservations->getCollection()->each(fn (Reservation $r) => $r->booking?->setRelation('reservation', $r)->makeHidden('reservation'));
+        \App\Models\Booking::preloadForList($reservations->getCollection()->pluck('booking')->filter()->values());
+
         $reservations->getCollection()->each(function (Reservation $r) {
             $this->workflow->expireUnpaid($r);
             // total_amount_due/amenities are computed accessors,
@@ -98,7 +103,8 @@ class ReservationController extends Controller
             $r->setAttribute('payment_summary', $r->paymentSummary());
         });
 
-        return response()->json($reservations);
+        // Serialization (the appended totals, discount preview...) runs inside json(); memoize its room-type/promotion lookups.
+        return \App\Services\BookingService::memoized(fn () => response()->json($reservations));
     }
 
     /**

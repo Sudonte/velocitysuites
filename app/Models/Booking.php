@@ -130,7 +130,7 @@ class Booking extends Model
         if (! in_array($this->booking_status, [self::STATUS_CHECKED_IN, self::STATUS_COMPLETED], true)) {
             return null;
         }
-        $billing = $this->billing()->with('additionalCharges')->first();
+        $billing = $this->listPreloaded ? $this->billing : $this->billing()->with('additionalCharges')->first();
 
         return $billing ? \App\Support\StayBill::forBooking($this, \App\Support\StayBill::modeFor($this), null, $billing) : null;
     }
@@ -340,7 +340,7 @@ class Booking extends Model
      */
     public function getRoomLinesAttribute(): array
     {
-        $lines = $this->roomLines()->get();
+        $lines = $this->listPreloaded ? $this->getRelationValue('roomLines') : $this->roomLines()->get();
         if ($lines->isEmpty()) {
             return [];
         }
@@ -413,9 +413,69 @@ class Booking extends Model
     /** Every billable (not rejected) amenity request's charge x quantity - the amenity half of total_amount_due. */
     public function billableAmenityTotal(): float
     {
+        if ($this->preloadedAmenityRequests !== null) {
+            return round((float) $this->preloadedAmenityRequests->sum(fn (AmenityRequest $a) => (float) $a->charge * (int) $a->quantity), 2);
+        }
+
         return round((float) $this->billableAmenityRequests()
             ->selectRaw('COALESCE(SUM(charge * quantity), 0) as total')
             ->value('total'), 2);
+    }
+
+    /**
+     * True only for the rows of a guest LIST page, after preloadForList(): the relations those accessors need (billing +
+     * additional charges, room lines) and the billable amenity rows were fetched for the whole page in a handful of
+     * queries, so the accessors below read them instead of querying once per booking. Every other caller is unaffected.
+     */
+    public bool $listPreloaded = false;
+
+    /** @var \Illuminate\Support\Collection|null this booking's billable amenity requests, set by preloadForList() */
+    public $preloadedAmenityRequests = null;
+
+    /** @var \Illuminate\Support\Collection|null the subset that is on the check-out bill (approved / in progress / completed) */
+    public $preloadedBilledAmenityRequests = null;
+
+    /**
+     * Fetch, for a whole page of bookings at once, everything the guest list's computed fields read per row - a constant
+     * number of queries however many bookings are on the page (see GuestListQueryCountTest).
+     *
+     * @param  \Illuminate\Support\Collection<int, Booking>  $bookings
+     */
+    public static function preloadForList($bookings): void
+    {
+        $bookings = new \Illuminate\Database\Eloquent\Collection($bookings->all()); // a plain collection has no load()
+        if ($bookings->isEmpty()) {
+            return;
+        }
+        // Eloquent serializes every loaded relation: a loaded `roomLines` would overwrite the mapped `room_lines` field, and the
+        // others were never part of this response. Hide whatever this method itself loads, so the JSON only gains fields.
+        $hide = ['billing', 'roomLines', 'rooms', 'room', 'reservation'];
+        $hidePerBooking = $bookings->mapWithKeys(fn (Booking $b) => [spl_object_id($b) => array_values(array_filter($hide, fn ($r) => ! $b->relationLoaded($r)))]);
+        // StayBill::forBooking() loadMissing()es rooms.roomType / room.roomType / reservation per booking - have them already.
+        $bookings->loadMissing(['billing.payments', 'billing.additionalCharges', 'roomLines', 'rooms.roomType', 'room.roomType', 'reservation', 'roomType.assignedAmenities']);
+
+        // The same rows billableAmenityRequests() selects, for every booking on the page in one query: a reservation-derived
+        // booking's amenities are keyed by reservation_id, a direct booking's by booking_id.
+        $reservationIds = $bookings->pluck('reservation_id')->filter()->unique()->values();
+        $directIds = $bookings->filter(fn (Booking $b) => ! $b->reservation_id)->pluck('id')->values();
+        $rows = AmenityRequest::query()
+            ->where(function ($q) use ($reservationIds, $directIds) {
+                $q->whereIn('reservation_id', $reservationIds)->orWhereIn('booking_id', $directIds);
+            })
+            ->where('status', '!=', 'rejected')
+            ->get();
+
+        foreach ($bookings as $booking) {
+            $booking->makeHidden($hidePerBooking[spl_object_id($booking)] ?? []);
+            $mine = $booking->reservation_id
+                ? $rows->where('reservation_id', $booking->reservation_id)->values()
+                : $rows->where('booking_id', $booking->id)->whereNull('reservation_id')->values();
+            // billableAmenityRequests(): a request made after booking is billable only once approved.
+            $booking->preloadedAmenityRequests = $mine->filter(fn (AmenityRequest $a) => $a->origin !== AmenityRequest::ORIGIN_GUEST_REQUEST || $a->status === 'approved')->values();
+            // billedAmenityRequests(): what the check-out bill itemizes.
+            $booking->preloadedBilledAmenityRequests = $mine->filter(fn (AmenityRequest $a) => in_array($a->status, AmenityRequest::BILLED_STATUSES, true))->values();
+            $booking->listPreloaded = true;
+        }
     }
 
     /** Completed payments received against this booking so far (reservation-level and booking-level alike). */
@@ -432,7 +492,7 @@ class Booking extends Model
      */
     public function payableTotal(): float
     {
-        $billing = $this->billing()->first();
+        $billing = $this->listPreloaded ? $this->billing : $this->billing()->first();
         if ($billing) {
             return round((float) $billing->total_amount, 2);
         }
@@ -524,7 +584,9 @@ class Booking extends Model
      */
     public function getAmenitiesAttribute(): array
     {
-        return $this->billableAmenityRequests()->get()->map(fn (AmenityRequest $a) => [
+        $requests = $this->preloadedAmenityRequests ?? $this->billableAmenityRequests()->get();
+
+        return $requests->map(fn (AmenityRequest $a) => [
             'amenity_id' => (string) $a->amenity_id,
             'amenity_name' => $a->amenity_name,
             'quantity' => $a->quantity,

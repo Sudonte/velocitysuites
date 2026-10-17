@@ -50,7 +50,7 @@ final class StayBill
     public static function forBooking(Booking $booking, string $mode = self::FINAL, ?CarbonInterface $asOf = null, ?Billing $billing = null): array
     {
         $booking->loadMissing(['rooms.roomType', 'room.roomType', 'reservation']);
-        $billing ??= $booking->billing()->with('additionalCharges')->first();
+        $billing ??= $booking->listPreloaded ? $booking->billing : $booking->billing()->with('additionalCharges')->first();
 
         $today = self::day($asOf ?? Carbon::now());
         $checkIn = self::calendarDate($booking->check_in);
@@ -148,7 +148,9 @@ final class StayBill
         $amenityCharge = $billing ? round((float) $billing->amenity_charge, 2) : self::amenityCharge($booking);
         // Itemized amenities: what is on the bill (approved only for a guest request), and the "Additional amenities" among
         // them - those the guest requested after booking or the desk added - as their own lines.
-        $amenityRows = $billing ? $booking->billedAmenityRequests()->get() : $booking->billableAmenityRequests()->get();
+        $amenityRows = $booking->preloadedAmenityRequests !== null
+            ? ($billing ? $booking->preloadedBilledAmenityRequests : $booking->preloadedAmenityRequests)
+            : ($billing ? $booking->billedAmenityRequests()->get() : $booking->billableAmenityRequests()->get());
         $amenityLines = $amenityRows->map(fn ($r) => [
             'amenity_name' => $r->amenity_name,
             'quantity' => (int) $r->quantity,

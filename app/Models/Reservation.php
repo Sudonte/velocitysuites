@@ -248,7 +248,8 @@ class Reservation extends Model
      */
     public function getRoomLinesAttribute(): array
     {
-        $lines = $this->roomLines()->get();
+        // A guest list eager-loads roomLines for the whole page; anyone else queries as before.
+        $lines = $this->relationLoaded('roomLines') ? $this->getRelationValue('roomLines') : $this->roomLines()->get();
         if ($lines->isEmpty()) {
             return [];
         }
