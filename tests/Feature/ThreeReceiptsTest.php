@@ -193,7 +193,7 @@ class ThreeReceiptsTest extends ApiFlowTestCase
 
         $html = $this->actingAs($desk)->get(route('receptionist.check-out.payment', $billing->fresh()))->assertOk()->getContent();
 
-        $order = ['Payment Summary', 'Room Charges', 'Discounts', 'Amount Previously Paid', 'Additional Charges', 'Extra Towel x2 (requested)', 'Broken lamp', 'Total Due'];
+        $order = ['Payment Summary', 'Check-in Grand Total', 'Amount Paid at Check-in', 'Additional charges', 'Extra Towel', 'Broken lamp', 'Subtotal of Additional', 'REMAINING BALANCE', 'FINAL GRAND TOTAL', 'Total Paid', 'BALANCE DUE', 'Total Due'];
         $last = -1;
         foreach ($order as $label) {
             $at = strpos($html, $label);

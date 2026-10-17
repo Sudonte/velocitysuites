@@ -22,6 +22,18 @@
         $previouslyPaid = (float) $paymentSummary['total_amount_paid'];
     @endphp
     <h6 class="mb-2">6. Payment Summary</h6>
+    @if(! empty($stay['receipt_breakdown']))
+        {{-- Paid in full at check-in (discount taken once, then): check-out collects only what was added since. --}}
+        <div class="table-responsive mb-3">
+            @include('partials.receipt-breakdown', ['breakdown' => $stay['receipt_breakdown'], 'nights' => $stay['scheduled_nights'] ?? null])
+        </div>
+        <table class="table table-sm table-borderless align-middle mb-3" id="paymentSummaryTable">
+            <tr class="fw-bold fs-5 border-top">
+                <th>Total Due</th>
+                <td class="text-end text-brand" id="balanceDueDisplay">₱{{ number_format($balance, 2) }}</td>
+            </tr>
+        </table>
+    @else
     <div class="table-responsive">
     <table class="table table-sm table-borderless align-middle mb-3" id="paymentSummaryTable">
         <colgroup><col><col style="width: 9rem;"></colgroup>
@@ -79,6 +91,7 @@
         </tr>
     </table>
     </div>
+    @endif
 
     {{-- Full Payment Transaction History - reservation-originated,
          direct-booking, and checkout-collected payments alike, whatever

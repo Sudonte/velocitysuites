@@ -42,6 +42,17 @@
                 <x-slot:actions>
                     <x-status-badge :status="$billing->billing_status" domain="billing" class="fs-6" />
                 </x-slot:actions>
+                @php $stayBill = $billing->stay_bill; @endphp
+                @if(! empty($stayBill['receipt_breakdown']))
+                    @include('partials.receipt-breakdown', ['breakdown' => $stayBill['receipt_breakdown'], 'nights' => $stayBill['scheduled_nights'] ?? null])
+                    @php $settlementTotals = \App\Support\CheckInSettlement::totals($billing, $paymentTransactions); @endphp
+                    @if($settlementTotals)
+                        <table class="table table-sm table-borderless mb-0 mt-2">
+                            <tr><td>Paid at check-in</td><td class="text-end">₱{{ number_format($settlementTotals['at_check_in'], 2) }}</td></tr>
+                            <tr><td>Paid at check-out</td><td class="text-end">₱{{ number_format($settlementTotals['at_check_out'], 2) }}</td></tr>
+                        </table>
+                    @endif
+                @else
                 <table class="table table-borderless mb-0">
                     <tr>
                         <td>Room Charge</td>
@@ -87,6 +98,7 @@
                         </tr>
                     @endif
                 </table>
+                @endif
             </x-card>
 
             {{-- Shared with the Receptionist checkout Payment Panel - see
