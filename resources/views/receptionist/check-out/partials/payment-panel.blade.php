@@ -21,7 +21,7 @@
         $extrasTotal = round(array_sum(array_column($extraLines, 'amount')) + $guestFee, 2);
         $previouslyPaid = (float) $paymentSummary['total_amount_paid'];
     @endphp
-    <h6 class="mb-2">6. Payment Summary</h6>
+    <h6 class="mb-2"><i class="fas fa-calculator"></i> 1. Payment Summary</h6>
     @if(! empty($stay['receipt_breakdown']))
         {{-- Paid in full at check-in (discount taken once, then): check-out collects only what was added since. --}}
         <div class="table-responsive mb-3">
@@ -106,7 +106,13 @@
 
     <div class="alert alert-danger d-none mt-3" id="paymentErrorAlert"></div>
 
-    <h6 class="mt-3">7. Payment Input</h6>
+    {{-- The figure the desk collects now - the same one the Payment Summary ends on. --}}
+    <div class="d-flex justify-content-between align-items-center rounded px-3 py-2 mt-3 mb-3" style="background: rgba(139, 0, 0, .08);" role="status">
+        <span class="fw-bold text-uppercase">Amount Due</span>
+        <span class="fw-bold fs-3 text-brand" id="amountDueBanner">₱{{ number_format($balance, 2) }}</span>
+    </div>
+
+    <h6 class="mt-3"><i class="fas fa-money-bill-wave"></i> 3. Payment Input</h6>
     <form id="paymentForm">
         @if($balance > 0.009)
             {{-- The form continues the Payment Summary above: the same label-left / field-right rows, in the order the
@@ -182,6 +188,6 @@
         <i class="fas fa-arrow-left"></i> Back to Billing
     </button>
     <button type="submit" form="paymentForm" class="btn btn-success" id="completePaymentBtn">
-        <i class="fas fa-check"></i> 8. {{ $balance > 0.009 ? 'Confirm Payment & Check-out' : 'Confirm Check-out' }}
+        <i class="fas fa-check"></i> {{ $balance > 0.009 ? 'Confirm Payment & Check-out' : 'Confirm Check-out' }}
     </button>
 </div>

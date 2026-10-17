@@ -542,7 +542,7 @@ document.addEventListener('DOMContentLoaded', function () {
         if (!due) return;
         const diff = Number(total) - Number(due.dataset.paid);
         const label = document.getElementById('dueAtCheckOutLabel');
-        if (label) label.textContent = diff < 0 ? 'Return to the guest' : 'Due at check-out';
+        if (label) label.textContent = diff < 0 ? 'Return to the guest' : 'AMOUNT DUE';
         due.textContent = '₱' + Math.abs(diff).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     }
 

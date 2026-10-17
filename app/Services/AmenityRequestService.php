@@ -225,10 +225,12 @@ class AmenityRequestService
     {
         $booking = $request->booking_id ? Booking::find($request->booking_id) : Booking::where('reservation_id', $request->reservation_id)->first();
         $billing = $booking?->billing()->first();
-        if (! $booking || ! $billing || $billing->billing_status === 'paid') {
+        if (! $booking || ! $billing || $billing->isClosed()) {
             return;
         }
 
+        // Also when the stay was paid in full at check-in: the approved amenity is now owed, so the bill (and what the
+        // guest's app shows) must say so at once - not only after the desk next opens the check-out panel.
         $billing->update(['amenity_charge' => $booking->billedAmenityTotal()]);
         $billing->syncFromStayBill($booking);
     }

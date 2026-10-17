@@ -32,41 +32,84 @@
         </div>
     @endif
 
-    <h6><i class="fas fa-bed"></i> 2. Room Charges</h6>
-    <p class="small text-muted mb-2">
-        Booked {{ \Carbon\Carbon::parse($stay['check_in'])->format('M j, Y') }} to {{ \Carbon\Carbon::parse($stay['scheduled_check_out'])->format('M j, Y') }}
-        ({{ $stay['scheduled_nights'] }} night{{ $stay['scheduled_nights'] === 1 ? '' : 's' }}).
-        @if($stay['extra_nights'] > 0)
-            Actual stay: <strong>{{ $stay['actual_nights'] }} nights</strong> - {{ $stay['extra_nights'] }} extra night{{ $stay['extra_nights'] === 1 ? '' : 's' }} billed (₱{{ number_format($stay['extra_nights_charge'], 2) }}).
-        @elseif($isEarlyCheckout)
-            Actual stay: <strong>{{ $stay['actual_nights'] }} night{{ $stay['actual_nights'] === 1 ? '' : 's' }}</strong> - billed for the nights stayed.
-        @endif
-    </p>
-    <div class="table-responsive">
-    <table class="table table-sm table-borderless mb-3">
-        @foreach($stay['rooms'] as $line)
-            <tr>
-                <td>
-                    Room {{ $line['room_number'] }}@if($line['room_type']) <span class="text-muted">({{ $line['room_type'] }})</span>@endif
-                    - ₱{{ number_format($line['rate'], 2) }} x {{ $line['nights'] }} night{{ $line['nights'] === 1 ? '' : 's' }}
-                    @if($line['extra_nights'] > 0)<span class="badge bg-warning text-dark">+{{ $line['extra_nights'] }} extra</span>@endif
-                    @if($settledAtCheckIn && $line['extra_nights'] <= 0)<span class="badge bg-success">Paid at check-in</span>@endif
-                    @if($line['status'] === 'checked_out')<span class="badge bg-secondary">out {{ \Carbon\Carbon::parse($line['checked_out_on'])->format('M j') }}</span>@endif
-                </td>
-                <td class="text-end">₱{{ number_format($line['subtotal'], 2) }}</td>
-            </tr>
-        @endforeach
-        <tr class="fw-semibold">
-            <td>Room Charge</td>
-            <td class="text-end">₱{{ number_format($billing->room_charge, 2) }}</td>
-        </tr>
-        @if($billing->additional_guest_fee > 0)
-            <tr>
-                <td>Additional Guest Fee</td>
-                <td class="text-end">₱{{ number_format($billing->additional_guest_fee, 2) }}</td>
-            </tr>
-        @endif
-    </table>
+    @php
+        $peso = fn ($v) => '₱'.number_format((float) $v, 2);
+        $rb = $stay['receipt_breakdown'] ?? null;
+        $bookedAmenities = $settledAtCheckIn ? $amenityRequests->filter(fn ($r) => \App\Support\CheckInSettlement::wasOnCheckInBill($billing, $r->created_at)) : $amenityRequests;
+        $addedAmenities = $settledAtCheckIn ? $amenityRequests->reject(fn ($r) => \App\Support\CheckInSettlement::wasOnCheckInBill($billing, $r->created_at)) : collect();
+    @endphp
+
+    {{-- SECTION 1 - the bill as it stood at check-in: read-only, the discount is already taken off and is never touched again. --}}
+    <div class="card mb-3 border-secondary">
+        <div class="card-header bg-light d-flex justify-content-between align-items-center">
+            <strong><i class="fas fa-lock"></i> 2. Check-in Billing</strong>
+            <span class="badge bg-secondary">Read-only{{ $settledAtCheckIn ? ' - discounted' : '' }}</span>
+        </div>
+        <div class="card-body py-2">
+            <p class="small text-muted mb-2">
+                Booked {{ \Carbon\Carbon::parse($stay['check_in'])->format('M j, Y') }} to {{ \Carbon\Carbon::parse($stay['scheduled_check_out'])->format('M j, Y') }}
+                ({{ $stay['scheduled_nights'] }} night{{ $stay['scheduled_nights'] === 1 ? '' : 's' }}).
+                @if($stay['extra_nights'] > 0)
+                    Actual stay: <strong>{{ $stay['actual_nights'] }} nights</strong> - {{ $stay['extra_nights'] }} extra night{{ $stay['extra_nights'] === 1 ? '' : 's' }} billed ({{ $peso($stay['extra_nights_charge']) }}).
+                @elseif($isEarlyCheckout)
+                    Actual stay: <strong>{{ $stay['actual_nights'] }} night{{ $stay['actual_nights'] === 1 ? '' : 's' }}</strong> - billed for the nights stayed.
+                @endif
+            </p>
+            <div class="table-responsive">
+            <table class="table table-sm table-borderless align-middle mb-2">
+                <colgroup><col><col style="width: 9rem;"></colgroup>
+                @foreach($stay['rooms'] as $line)
+                    <tr>
+                        <td>
+                            Room {{ $line['room_number'] }}@if($line['room_type']) <span class="text-muted">({{ $line['room_type'] }})</span>@endif
+                            - {{ $peso($line['rate']) }} x {{ $line['nights'] }} night{{ $line['nights'] === 1 ? '' : 's' }}
+                            @if($line['extra_nights'] > 0)<span class="badge bg-warning text-dark">+{{ $line['extra_nights'] }} extra</span>@endif
+                            @if($line['status'] === 'checked_out')<span class="badge bg-secondary">out {{ \Carbon\Carbon::parse($line['checked_out_on'])->format('M j') }}</span>@endif
+                        </td>
+                        <td class="text-end">{{ $peso($line['subtotal']) }}</td>
+                    </tr>
+                @endforeach
+                <tr class="fw-semibold border-top">
+                    <td>Room Charge</td>
+                    <td class="text-end">{{ $peso($billing->room_charge) }}</td>
+                </tr>
+                @if($billing->additional_guest_fee > 0)
+                    <tr>
+                        <td>Additional Guest Fee</td>
+                        <td class="text-end">{{ $peso($billing->additional_guest_fee) }}</td>
+                    </tr>
+                @endif
+                @foreach($bookedAmenities as $req)
+                    <tr>
+                        <td>{{ $req->amenity->amenity_name ?? $req->amenity_name ?? 'N/A' }} <span class="text-muted">x{{ $req->quantity }}</span></td>
+                        <td class="text-end">{{ $peso($req->charge * $req->quantity) }}</td>
+                    </tr>
+                @endforeach
+                @if($rb)
+                    @if($rb['checkin']['discount'] > 0)
+                        <tr>
+                            <td>Less: Discount{{ $rb['checkin']['discount_name'] ? ' ('.$rb['checkin']['discount_name'].')' : '' }}</td>
+                            <td class="text-end text-success">-{{ $peso($rb['checkin']['discount']) }}</td>
+                        </tr>
+                    @endif
+                    <tr class="fw-bold border-top">
+                        <td>Check-in Grand Total</td>
+                        <td class="text-end">{{ $peso($rb['checkin']['grand_total']) }}</td>
+                    </tr>
+                    <tr>
+                        <td>Paid at Check-in <span class="badge {{ $rb['checkin']['paid_in_full'] ? 'bg-success' : 'bg-warning text-dark' }}">{{ $rb['checkin']['status'] }}</span></td>
+                        <td class="text-end">{{ $peso($rb['checkin']['amount_paid']) }}</td>
+                    </tr>
+                @elseif($billing->discount > 0)
+                    <tr>
+                        <td>Less: Discount{{ $billing->discountApplied ? ' ('.$billing->discountApplied->name.')' : '' }}</td>
+                        <td class="text-end text-success">-{{ $peso($billing->discount) }}</td>
+                    </tr>
+                @endif
+            </table>
+            </div>
+            <p class="small text-muted mb-0"><i class="fas fa-percentage"></i> The discount applies to the check-in bill only. Check-out charges below are never discounted.</p>
+        </div>
     </div>
 
     @if($pendingAmenityCount > 0)
@@ -80,113 +123,95 @@
         </div>
     @endif
 
-    <h6><i class="fas fa-spa"></i> 3. Amenities</h6>
-    <div class="table-responsive">
-    <table class="table table-sm mb-3">
-        <thead>
-            <tr>
-                <th>Item</th>
-                <th>Qty</th>
-                <th class="text-end">Amount</th>
-            </tr>
-        </thead>
-        <tbody>
-            @forelse($amenityRequests as $req)
-                <tr>
-                    <td>
-                        {{ $req->amenity->amenity_name ?? $req->amenity_name ?? 'N/A' }}
-                        @if(\App\Support\CheckInSettlement::wasOnCheckInBill($billing, $req->created_at))
-                            <span class="badge bg-success">Paid at check-in</span>
-                        @elseif($settledAtCheckIn)
-                            <span class="badge bg-warning text-dark">Added during stay</span>
-                        @endif
-                    </td>
-                    <td>{{ $req->quantity }}</td>
-                    <td class="text-end">₱{{ number_format($req->charge * $req->quantity, 2) }}</td>
-                </tr>
-            @empty
-                <tr><td colspan="3" class="text-center text-muted py-2">No amenities requested during this stay.</td></tr>
-            @endforelse
-        </tbody>
-    </table>
-    </div>
-
-    @if(! empty($stay['additional_amenities']))
-        <h6><i class="fas fa-plus-circle"></i> Additional amenities</h6>
-        <div class="table-responsive">
-        <table class="table table-sm mb-3">
-            <tbody>
-                @foreach($stay['additional_amenities'] as $line)
-                    <tr>
-                        <td>{{ $line['amenity_name'] }} <span class="text-muted">x{{ $line['quantity'] }} @ ₱{{ number_format($line['unit_price'], 2) }}</span></td>
-                        <td class="text-end">₱{{ number_format($line['subtotal'], 2) }}</td>
-                    </tr>
-                @endforeach
-                <tr class="fw-semibold">
-                    <td>Additional amenities total</td>
-                    <td class="text-end">₱{{ number_format($stay['additional_amenities_total'], 2) }}</td>
-                </tr>
-            </tbody>
-        </table>
+    {{-- SECTION 2 - what is charged now (the remaining balance): approved amenities added since check-in + the desk's charges. No discount. --}}
+    <div class="card mb-3 border-primary">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <strong><i class="fas fa-pen-to-square"></i> 3. Check-out Charges</strong>
+            <span class="badge bg-primary">Editable - no discount</span>
         </div>
-    @endif
+        <div class="card-body py-2">
+            <h6 class="small text-uppercase text-muted"><i class="fas fa-spa"></i> Approved amenities{{ $settledAtCheckIn ? ' added during the stay' : '' }}</h6>
+            <div class="table-responsive">
+            <table class="table table-sm table-borderless align-middle mb-3">
+                <colgroup><col><col style="width: 5rem;"><col style="width: 9rem;"></colgroup>
+                <tbody>
+                    @forelse($addedAmenities as $req)
+                        <tr>
+                            <td>{{ $req->amenity->amenity_name ?? $req->amenity_name ?? 'N/A' }}</td>
+                            <td class="text-end">x{{ $req->quantity }}</td>
+                            <td class="text-end">{{ $peso($req->charge * $req->quantity) }}</td>
+                        </tr>
+                    @empty
+                        <tr><td colspan="3" class="text-muted py-1">No amenities approved after check-in.</td></tr>
+                    @endforelse
+                    @if($addedAmenities->isNotEmpty())
+                        <tr class="fw-semibold border-top">
+                            <td colspan="2">Amenities total</td>
+                            <td class="text-end">{{ $peso($addedAmenities->sum(fn ($r) => $r->charge * $r->quantity)) }}</td>
+                        </tr>
+                    @endif
+                </tbody>
+            </table>
+            </div>
 
-    <div id="chargesTableContainer">
-        @include('receptionist.check-out.partials.charges-table', ['billing' => $billing])
+            <div id="chargesTableContainer">
+                @include('receptionist.check-out.partials.charges-table', ['billing' => $billing])
+            </div>
+        </div>
     </div>
 
-    {{-- 5. Payments already made: the receipts issued before check-out (stored, frozen), then what is still owed. --}}
+    {{-- Payments already made: the receipts issued before check-out (stored, frozen). --}}
     @php
         $storedReceipts = \App\Models\Receipt::where('booking_id', $booking->id)->orderBy('receipt_type')->get();
         $receiptNames = [1 => 'Receipt 1 - Booking verification', 2 => 'Receipt 2 - Check-in payment'];
         $paidBeforeCheckout = round((float) $booking->paidTotal(), 2);
     @endphp
-    <h6 class="mt-3"><i class="fas fa-receipt"></i> 5. Payments Already Made</h6>
-    <div class="table-responsive">
-    <table class="table table-sm table-borderless mb-2">
-        @foreach($storedReceipts->whereIn('receipt_type', [1, 2]) as $r)
-            <tr>
-                <td>{{ $receiptNames[$r->receipt_type] }} <span class="text-muted small">{{ $r->receipt_no }}</span></td>
-                <td class="text-end">₱{{ number_format((float) ($r->snapshot['highlight']['amount_paid_now'] ?? 0), 2) }}</td>
-            </tr>
-        @endforeach
-        <tr class="fw-semibold">
-            <td>Total paid so far</td>
-            <td class="text-end">₱{{ number_format($paidBeforeCheckout, 2) }}</td>
-        </tr>
-    </table>
+    <div class="card mb-3">
+        <div class="card-header bg-light"><strong><i class="fas fa-receipt"></i> 4. Payments Already Made</strong></div>
+        <div class="card-body py-2">
+            <div class="table-responsive">
+            <table class="table table-sm table-borderless align-middle mb-0">
+                <colgroup><col><col style="width: 9rem;"></colgroup>
+                @foreach($storedReceipts->whereIn('receipt_type', [1, 2]) as $r)
+                    <tr>
+                        <td>{{ $receiptNames[$r->receipt_type] }} <span class="text-muted small">{{ $r->receipt_no }}</span></td>
+                        <td class="text-end">{{ $peso((float) ($r->snapshot['highlight']['amount_paid_now'] ?? 0)) }}</td>
+                    </tr>
+                @endforeach
+                <tr class="fw-semibold border-top">
+                    <td>Total paid so far</td>
+                    <td class="text-end">{{ $peso($paidBeforeCheckout) }}</td>
+                </tr>
+            </table>
+            </div>
+        </div>
     </div>
 
-    <h6 class="mt-3"><i class="fas fa-calculator"></i> 6. Payment Summary</h6>
-    {{-- Discounts and promotions are decided at check-in only - none can be added or changed at check-out. --}}
-    @if($billing->discount > 0)
-        <p class="small text-muted mb-0"><i class="fas fa-percentage"></i> Discount applied at check-in{{ $billing->discountApplied ? ' (' . $billing->discountApplied->name . ')' : '' }}.</p>
-    @endif
-
-    <div class="table-responsive">
-    <table class="table table-sm mb-0 mt-3">
-        @if($billing->discount > 0)
-            <tr>
-                <td>Discount{{ $billing->discountApplied ? ' (' . $billing->discountApplied->name . ')' : '' }}</td>
-                <td class="text-end text-success">-₱{{ number_format($billing->discount, 2) }}</td>
-            </tr>
-        @endif
-        <tr class="{{ $settledAtCheckIn ? 'fw-semibold' : 'fw-bold fs-5' }}">
-            <td>{{ $settledAtCheckIn ? 'Stay Total' : 'Running Total' }}</td>
-            <td class="text-end {{ $settledAtCheckIn ? '' : 'text-brand' }}" id="runningTotalDisplay">₱{{ number_format($billing->running_total, 2) }}</td>
-        </tr>
-        @if($settledAtCheckIn)
-            <tr>
-                <td>Already paid (at check-in)</td>
-                <td class="text-end text-success">-₱{{ number_format($alreadyPaid, 2) }}</td>
-            </tr>
-            @php $toReturn = round(max(0, $alreadyPaid - (float) $billing->running_total), 2); @endphp
-            <tr class="fw-bold fs-5">
-                <td id="dueAtCheckOutLabel">{{ $toReturn > 0 ? 'Return to the guest' : 'Due at check-out' }}</td>
-                <td class="text-end text-brand" id="dueAtCheckOutDisplay" data-paid="{{ $alreadyPaid }}">₱{{ number_format($toReturn > 0 ? $toReturn : $dueNow, 2) }}</td>
-            </tr>
-        @endif
-    </table>
+    {{-- The one figure the desk collects (or hands back) - prominent and right-aligned. --}}
+    <div class="card border-0 mb-0" style="background: rgba(139, 0, 0, .06);">
+        <div class="card-body py-2">
+            <h6 class="mb-2"><i class="fas fa-calculator"></i> 5. Payment Summary</h6>
+            <div class="table-responsive">
+            <table class="table table-sm table-borderless align-middle mb-0">
+                <colgroup><col><col style="width: 9rem;"></colgroup>
+                <tr class="{{ $settledAtCheckIn ? 'fw-semibold' : 'fw-bold fs-5' }}">
+                    <td>{{ $settledAtCheckIn ? 'Final Grand Total' : 'Running Total' }}</td>
+                    <td class="text-end {{ $settledAtCheckIn ? '' : 'text-brand' }}" id="runningTotalDisplay">{{ $peso($billing->running_total) }}</td>
+                </tr>
+                @if($settledAtCheckIn)
+                    <tr>
+                        <td>Total paid so far</td>
+                        <td class="text-end text-success">-{{ $peso($alreadyPaid) }}</td>
+                    </tr>
+                    @php $toReturn = round(max(0, $alreadyPaid - (float) $billing->running_total), 2); @endphp
+                    <tr class="fw-bold fs-4 border-top">
+                        <td id="dueAtCheckOutLabel">{{ $toReturn > 0 ? 'Return to the guest' : 'AMOUNT DUE' }}</td>
+                        <td class="text-end text-brand" id="dueAtCheckOutDisplay" data-paid="{{ $alreadyPaid }}">{{ $peso($toReturn > 0 ? $toReturn : $dueNow) }}</td>
+                    </tr>
+                @endif
+            </table>
+            </div>
+        </div>
     </div>
 </div>
 <div class="modal-footer">

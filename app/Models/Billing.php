@@ -232,6 +232,33 @@ class Billing extends Model
 
         $this->total_amount = max(0, $baseTotal - (float) $this->discount);
         $this->save();
+        $this->syncStatus();
+    }
+
+    /**
+     * The stay is over (checked out): nothing on this bill may change any more. This - not `billing_status = paid` - is
+     * the lock, because a stay paid in full AT CHECK-IN is already "paid" while the guest is still in the room and the
+     * desk must still be able to add what happens next (an approved amenity, a damage charge).
+     */
+    public function isClosed(): bool
+    {
+        // Read from the database, not the cached `booking` relation: check-out completes the stay through another
+        // instance, and loading the relation here would leave this billing holding a stale, checked-in booking.
+        return Booking::whereKey($this->booking_id)->value('booking_status') === Booking::STATUS_COMPLETED;
+    }
+
+    /** pending / partial / paid from what has been paid against the CURRENT total, so a charge added to a paid bill reopens it. */
+    public function syncStatus(): void
+    {
+        if ($this->isClosed()) {
+            return;
+        }
+        $paid = (float) $this->payments()->where('payment_status', 'completed')->sum('amount_paid');
+        $status = $paid <= 0 ? 'pending' : ($paid + 0.004 >= (float) $this->total_amount ? 'paid' : 'partial');
+        if ($status !== $this->billing_status) {
+            $this->billing_status = $status;
+            $this->save();
+        }
     }
 
     /**

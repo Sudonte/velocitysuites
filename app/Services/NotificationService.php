@@ -652,6 +652,18 @@ class NotificationService
     }
 
     /**
+     * Tell the guest an additional charge on their bill was changed or removed, with the balance that is now due -
+     * so the app (which refreshes on every notification) never keeps showing the old figure.
+     */
+    public function notifyAdditionalChargeChanged(User $guest, string $action, string $description, float $balanceDue, ?int $referenceId = null): void
+    {
+        $message = "The charge \"{$description}\" on your bill was {$action}.";
+        $message .= $balanceDue > 0.009 ? ' Outstanding balance: ₱' . number_format($balanceDue, 2) . '.' : ' Your bill has no outstanding balance.';
+
+        $this->toUser($guest, 'Bill Updated', $message, 'payment', $referenceId);
+    }
+
+    /**
      * Notify manager about payment.
      */
     public function notifyManagerPayment(User $guest, float $amount, string $billStatus, ?string $roomName = null, ?int $referenceId = null): void

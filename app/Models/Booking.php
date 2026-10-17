@@ -432,6 +432,9 @@ class Booking extends Model
     /** @var \Illuminate\Support\Collection|null this booking's billable amenity requests, set by preloadForList() */
     public $preloadedAmenityRequests = null;
 
+    /** @var \Illuminate\Support\Collection|null the guest's pending / rejected requests (not billed), set by preloadForList() */
+    public $preloadedUndecidedAmenityRequests = null;
+
     /** @var \Illuminate\Support\Collection|null the subset that is on the check-out bill (approved / in progress / completed) */
     public $preloadedBilledAmenityRequests = null;
 
@@ -462,14 +465,16 @@ class Booking extends Model
             ->where(function ($q) use ($reservationIds, $directIds) {
                 $q->whereIn('reservation_id', $reservationIds)->orWhereIn('booking_id', $directIds);
             })
-            ->where('status', '!=', 'rejected')
             ->get();
 
         foreach ($bookings as $booking) {
             $booking->makeHidden($hidePerBooking[spl_object_id($booking)] ?? []);
-            $mine = $booking->reservation_id
+            $all = $booking->reservation_id
                 ? $rows->where('reservation_id', $booking->reservation_id)->values()
                 : $rows->where('booking_id', $booking->id)->whereNull('reservation_id')->values();
+            // Guest requests still waiting / turned down: shown to the guest apart from the bill (never counted in it).
+            $booking->preloadedUndecidedAmenityRequests = $all->filter(fn (AmenityRequest $a) => $a->origin === AmenityRequest::ORIGIN_GUEST_REQUEST && in_array($a->status, ['pending', 'rejected'], true))->values();
+            $mine = $all->where('status', '!=', 'rejected')->values();
             // billableAmenityRequests(): a request made after booking is billable only once approved.
             $booking->preloadedAmenityRequests = $mine->filter(fn (AmenityRequest $a) => $a->origin !== AmenityRequest::ORIGIN_GUEST_REQUEST || $a->status === 'approved')->values();
             // billedAmenityRequests(): what the check-out bill itemizes.

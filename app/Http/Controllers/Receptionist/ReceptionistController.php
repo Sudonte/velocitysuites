@@ -478,6 +478,24 @@ class ReceptionistController extends Controller
             }
         });
 
+        // The amenities are owed from now on: re-price the open bill (also one paid in full at check-in) and tell the guest,
+        // so their app shows the new remaining balance without waiting for the check-out panel to be opened.
+        $billing = $booking->billing()->first();
+        if ($billing && ! $billing->isClosed()) {
+            $billing->update(['amenity_charge' => $booking->billedAmenityTotal()]);
+            $billing->syncFromStayBill($booking);
+        }
+        $booking->loadMissing(['reservation.guest.user', 'guest.user']);
+        if ($guestUser = $booking->account_guest?->user) {
+            app(\App\Services\NotificationService::class)->toUser(
+                $guestUser,
+                'Amenity Added to Your Bill',
+                'The front desk added ' . collect($validated['items'])->sum('quantity') . ' amenity item(s) to your stay. Check your booking details for the updated balance.',
+                'booking',
+                $booking->reservation_id ?? $booking->id
+            );
+        }
+
         $count = count($validated['items']);
 
         return response()->json(['message' => $count . ' amenity request' . ($count === 1 ? '' : 's') . ' added.']);

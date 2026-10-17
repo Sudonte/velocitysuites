@@ -609,8 +609,8 @@ class CheckOutController extends Controller
         ]);
         $validated = $this->priceChargeLine($validated);
 
-        if ($billing->billing_status === 'paid') {
-            return response()->json(['message' => 'Cannot add charges to a paid bill.'], 422);
+        if ($billing->isClosed()) {
+            return response()->json(['message' => 'Cannot add charges to a bill that is already checked out.'], 422);
         }
 
         $charge = DB::transaction(function () use ($billing, $validated) {
@@ -644,7 +644,7 @@ class CheckOutController extends Controller
                 $charge->label,
                 (float) $validated['amount'],
                 $billing->balance,
-                $billing->booking->id
+                $billing->booking->reservation_id ?? $billing->booking->id
             );
         }
 
@@ -689,8 +689,8 @@ class CheckOutController extends Controller
 
         $billing = $additionalCharge->billing;
 
-        if ($billing->billing_status === 'paid') {
-            return response()->json(['message' => 'Cannot edit charges on a paid bill.'], 422);
+        if ($billing->isClosed()) {
+            return response()->json(['message' => 'Cannot edit charges on a bill that is already checked out.'], 422);
         }
 
         DB::transaction(function () use ($additionalCharge, $validated, $billing) {
@@ -711,8 +711,24 @@ class CheckOutController extends Controller
             "Billing #{$billing->id} - {$additionalCharge->label} (₱" . number_format((float) $validated['amount'], 2) . ')',
             $billing->booking ?? $billing
         );
+        $this->notifyChargeChange($billing, 'updated', $additionalCharge->label);
 
         return $this->chargesTableResponse($billing);
+    }
+
+    /** The guest is told when a charge on their bill is edited or removed (a new one has its own notification). */
+    private function notifyChargeChange(Billing $billing, string $action, string $description): void
+    {
+        $billing->refresh()->loadMissing(['booking.reservation.guest.user', 'booking.guest.user']);
+        if ($guest = $billing->booking?->account_guest?->user) {
+            $this->notificationService->notifyAdditionalChargeChanged(
+                $guest,
+                $action,
+                $description,
+                (float) $billing->balance,
+                $billing->booking->reservation_id ?? $billing->booking->id
+            );
+        }
     }
 
     /**
@@ -722,8 +738,8 @@ class CheckOutController extends Controller
     {
         $billing = $additionalCharge->billing;
 
-        if ($billing->billing_status === 'paid') {
-            return response()->json(['message' => 'Cannot remove charges from a paid bill.'], 422);
+        if ($billing->isClosed()) {
+            return response()->json(['message' => 'Cannot remove charges from a bill that is already checked out.'], 422);
         }
 
         $description = $additionalCharge->label;
@@ -740,6 +756,7 @@ class CheckOutController extends Controller
             "Billing #{$billing->id} - {$description} (₱" . number_format($amount, 2) . ')',
             $billing->booking ?? $billing
         );
+        $this->notifyChargeChange($billing, 'removed', $description);
 
         return $this->chargesTableResponse($billing);
     }

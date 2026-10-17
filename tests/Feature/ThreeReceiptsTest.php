@@ -276,7 +276,7 @@ class ThreeReceiptsTest extends ApiFlowTestCase
 
         $html = $this->actingAs($desk)->get(route('receptionist.check-out.billing', $booking->fresh()))->assertOk()->getContent();
         $last = -1;
-        foreach (['1. Guest', '2. Room Charges', '3. Amenities', '4. Additional / Other / Damage Charges', '5. Payments Already Made', 'Receipt 1 - Booking verification', 'Receipt 2 - Check-in payment', '6. Payment Summary'] as $needle) {
+        foreach (['1. Guest', '2. Check-in Billing', '3. Check-out Charges', 'Additional / Other / Damage Charges', '4. Payments Already Made', 'Receipt 1 - Booking verification', 'Receipt 2 - Check-in payment', '5. Payment Summary'] as $needle) {
             $at = strpos($html, $needle);
             $this->assertNotFalse($at, "{$needle} is missing");
             $this->assertGreaterThan($last, $at, "{$needle} is out of order");

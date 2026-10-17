@@ -164,6 +164,19 @@ final class StayBill
                 ? in_array((int) $r->id, $checkinAmenityIds, true)
                 : CheckInSettlement::wasOnCheckInBill($billing, self::onBillSince($r)),
         ])->values()->all();
+        // The guest's requests the desk has not approved: listed apart from the bill, never part of any total.
+        $undecided = $booking->preloadedUndecidedAmenityRequests ?? AmenityRequest::query()
+            ->where($booking->reservation_id ? 'reservation_id' : 'booking_id', $booking->reservation_id ?? $booking->id)
+            ->where('origin', AmenityRequest::ORIGIN_GUEST_REQUEST)
+            ->whereIn('status', ['pending', 'rejected'])
+            ->get();
+        $requestedAmenities = $undecided->map(fn ($r) => [
+            'amenity_name' => $r->amenity_name,
+            'quantity' => (int) $r->quantity,
+            'subtotal' => round((float) $r->charge * (int) $r->quantity, 2),
+            'status' => $r->status,
+            'reason' => $r->status === 'rejected' ? $r->rejection_reason : null,
+        ])->values()->all();
         $additionalAmenities = array_values(array_filter($amenityLines, fn ($l) => $l['additional']));
         $additionalAmenitiesTotal = round(array_sum(array_column($additionalAmenities, 'subtotal')), 2);
         $guestFee = $billing ? round((float) $billing->additional_guest_fee, 2) : 0.0;
@@ -234,6 +247,7 @@ final class StayBill
             'amenity_lines' => $amenityLines,
             'additional_amenities' => $additionalAmenities,
             'additional_amenities_total' => $additionalAmenitiesTotal,
+            'requested_amenities' => $requestedAmenities,
             'additional_guest_fee' => $guestFee,
             'additional_charges' => $extraCharges,
             'additional_charges_total' => $extraChargesTotal,

@@ -1,6 +1,6 @@
-@php $editable = $billing->billing_status !== 'paid'; @endphp
+@php $editable = ! $billing->isClosed(); @endphp
 <div class="d-flex justify-content-between align-items-center mb-2">
-    <h6 class="mb-0"><i class="fas fa-plus-circle"></i> 4. Additional / Other / Damage Charges</h6>
+    <h6 class="mb-0"><i class="fas fa-plus-circle"></i> Additional / Other / Damage Charges</h6>
     @if($editable)
         <button type="button" class="btn btn-outline-primary btn-sm" id="showAddChargeFormBtn">
             <i class="fas fa-plus"></i> Add Charge

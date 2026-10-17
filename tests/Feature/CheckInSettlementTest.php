@@ -165,7 +165,7 @@ class CheckInSettlementTest extends ApiFlowTestCase
             'category' => 'Food', 'quantity' => 1, 'charge' => 250, 'status' => 'approved', 'origin' => AmenityRequest::ORIGIN_STAFF]);
 
         $this->actingAs($desk)->get(route('receptionist.check-out.billing', $booking))->assertOk()
-            ->assertSee('Paid at check-in')->assertSee('Added during stay')->assertSee('Due at check-out')
+            ->assertSee('Paid at check-in')->assertSee('added during the stay')->assertSee('AMOUNT DUE')
             ->assertSee('₱250.00', false)->assertDontSee('cancelBillingBtn', false);
 
         $billing = $booking->billing()->first();
