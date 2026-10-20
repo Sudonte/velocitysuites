@@ -104,6 +104,20 @@ class AppDownloadTest extends ApiFlowTestCase
         $this->assertStringContainsString('rel="preload" as="image"', $html);
     }
 
+    public function test_the_phone_mockup_shows_the_real_app_screen(): void
+    {
+        $this->assertFileExists(public_path('images/app-landing.png'));
+        $this->assertFileExists(public_path('images/app-landing.webp'));
+        $this->assertLessThan(200 * 1024, filesize(public_path('images/app-landing.webp')));
+        $this->assertSame([1080, 2172], array_slice(getimagesize(public_path('images/app-landing.png')), 0, 2));
+
+        $html = $this->get(route('home'))->assertOk()->getContent();
+        $this->assertStringContainsString('type="image/webp" srcset="', $html);
+        $this->assertStringContainsString('app-landing.webp', $html);
+        $this->assertStringContainsString('app-landing.png" width="1080" height="2172" alt="Velocity Suites Android app home screen"', $html);
+        $this->assertStringNotContainsString('app-dashboard', $html);
+    }
+
     public function test_the_page_keeps_its_main_actions(): void
     {
         $this->get(route('home'))->assertOk()

@@ -69,17 +69,6 @@ class LandingPageController extends Controller
             'appDownloadName' => MobileApp::downloadName(),
             'appInfoLine' => MobileApp::infoLine(),
             'appMinAndroid' => MobileApp::minAndroid(),
-            // [width, height] of the phone screenshot when it exists (set on the <img> so the page doesn't shift while it loads)
-            'appScreenshot' => self::screenshotSize(),
         ]);
-    }
-
-    /** [width, height] of public/images/app-dashboard.png, or null when it is missing or not an image. */
-    private static function screenshotSize(): ?array
-    {
-        $path = public_path('images/app-dashboard.png');
-        $size = is_file($path) ? @getimagesize($path) : false;
-
-        return $size ? [$size[0], $size[1]] : null;
     }
 }

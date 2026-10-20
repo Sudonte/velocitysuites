@@ -309,41 +309,56 @@
         margin-right: 4px;
     }
 
-    /* Phone frame */
+    /* Phone frame, CSS only: thin dark bezel, rounded corners, a punch-hole camera and a soft shadow. The screen is exactly
+       the screenshot's own shape (1080 x 2172), so it fills the screen with no stretching and no gaps. */
     .hero-phone {
-        width: min(200px, 56vw);
-        aspect-ratio: 9 / 19;
-        padding: 10px;
-        border-radius: 34px;
-        background: #15171c;
-        border: 2px solid #3a3d45;
-        box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+        position: relative;
+        width: min(70vw, 280px);
+        padding: 7px;
+        border-radius: 38px;
+        background: #0e1014;
+        border: 1px solid #343842;
+        box-shadow: 0 30px 70px rgba(0, 0, 0, 0.55), 0 8px 20px rgba(0, 0, 0, 0.35);
+        animation: heroPhoneFloat 7s ease-in-out infinite;
     }
 
     .hero-phone-screen {
+        position: relative;
+        width: 100%;
+        aspect-ratio: 1080 / 2172;
+        border-radius: 31px;
+        overflow: hidden;
+        background: #3a0d12;
+    }
+
+    .hero-phone-screen picture,
+    .hero-phone-screen img {
+        display: block;
         width: 100%;
         height: 100%;
-        border-radius: 25px;
-        overflow: hidden;
-        background: #f1f2f4;
     }
 
     .hero-phone-screen img {
-        width: 100%;
-        height: 100%;
         object-fit: cover;
-        object-position: top;
-        display: block;
+        object-position: top center;
     }
 
-    .hero-phone-placeholder {
-        width: 100%;
-        height: 100%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 3rem;
-        color: #b9bcc4;
+    .hero-phone-screen::after {
+        content: "";
+        position: absolute;
+        top: 6px;
+        left: 50%;
+        width: 8px;
+        height: 8px;
+        margin-left: -4px;
+        border-radius: 50%;
+        background: #05060a;
+        box-shadow: 0 0 0 1.5px rgba(255, 255, 255, 0.12);
+    }
+
+    @keyframes heroPhoneFloat {
+        0%, 100% { transform: translateY(0); }
+        50% { transform: translateY(-8px); }
     }
 
     .hero-app-qr {
@@ -370,7 +385,7 @@
         }
 
         .hero-phone {
-            width: 240px;
+            width: 230px;
         }
     }
 
@@ -416,7 +431,7 @@
         }
 
         .hero-phone {
-            width: 260px;
+            width: 250px;
         }
     }
 
@@ -565,15 +580,15 @@
             gap: clamp(16px, 1.5vw, 24px);
         }
 
-        /* about 280px wide at 1366, 360px at 1920 and up to 380px; never taller than the space under the navbar */
+        /* about 280px wide at 1366, 360px at 1920 and up; never taller than the space under the navbar */
         .hero-phone {
             flex: 0 0 auto;
-            width: min(clamp(250px, 82.8px + 14.44vw, 380px), calc((100vh - var(--hero-nav) - 96px) * 9 / 19));
+            width: min(clamp(250px, 82.8px + 14.44vw, 360px), calc((100vh - var(--hero-nav) - 96px) * 0.49));
         }
 
         @supports (height: 100svh) {
             .hero-phone {
-                width: min(clamp(250px, 82.8px + 14.44vw, 380px), calc((100svh - var(--hero-nav) - 96px) * 9 / 19));
+                width: min(clamp(250px, 82.8px + 14.44vw, 360px), calc((100svh - var(--hero-nav) - 96px) * 0.49));
             }
         }
 
@@ -627,7 +642,8 @@
 
     @media (prefers-reduced-motion: reduce) {
         .hero-app-copy,
-        .hero-app-visual {
+        .hero-app-visual,
+        .hero-phone {
             animation: none;
         }
 
@@ -909,11 +925,10 @@
                 @endif
                 <div class="hero-phone">
                     <div class="hero-phone-screen">
-                        @if($appScreenshot)
-                            <img src="{{ asset('images/app-dashboard.png') }}" width="{{ $appScreenshot[0] }}" height="{{ $appScreenshot[1] }}" alt="The Velocity Suites app dashboard on an Android phone" loading="lazy" decoding="async">
-                        @else
-                            <div class="hero-phone-placeholder" role="img" aria-label="Velocity Suites app preview"><i class="fas fa-mobile-screen" aria-hidden="true"></i></div>
-                        @endif
+                        <picture>
+                            <source type="image/webp" srcset="{{ asset('images/app-landing.webp') }}">
+                            <img src="{{ asset('images/app-landing.png') }}" width="1080" height="2172" alt="Velocity Suites Android app home screen" loading="lazy" decoding="async">
+                        </picture>
                     </div>
                 </div>
             </div>
