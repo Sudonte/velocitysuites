@@ -36,13 +36,18 @@ class CheckoutBalanceBreakdownTest extends ApiFlowTestCase
         ]);
     }
 
-    /** Checked in today for 2 nights x 1000, fully paid at check-in (with a 20% Senior Citizen discount when asked). */
-    private function checkedIn(bool $discount): Booking
+    /**
+     * Checked in today (the HOTEL's day, Manila - the app clock is UTC, so today() is still yesterday between midnight and 8 AM
+     * in Manila and the stay would count an extra night) for 2 nights x the rate, fully paid at check-in
+     * (with a 20% Senior Citizen discount when asked).
+     */
+    private function checkedIn(bool $discount, float $rate = 1000): Booking
     {
-        $rt = $this->makeRoomTypeWithRooms('Deluxe'.uniqid(), 1000, 2, 1);
+        $hotelToday = now('Asia/Manila')->startOfDay();
+        $rt = $this->makeRoomTypeWithRooms('Deluxe'.uniqid(), $rate, 2, 1);
         $booking = Booking::create([
             'room_type_id' => $rt->id, 'rooms_requested' => 1, 'guest_first_name' => 'Ana', 'guest_last_name' => 'Cruz',
-            'check_in' => today()->toDateString(), 'check_out' => today()->addDays(2)->toDateString(),
+            'check_in' => $hotelToday->toDateString(), 'check_out' => $hotelToday->copy()->addDays(2)->toDateString(),
             'adults' => 1, 'children' => 0, 'number_of_guests' => 1,
             'booking_status' => Booking::STATUS_ACTIVE, 'confirmed_at' => now(), 'verified_at' => now(),
         ]);
@@ -136,6 +141,19 @@ class CheckoutBalanceBreakdownTest extends ApiFlowTestCase
         $this->assertEquals(2000.0, $r['final_grand_total']);
         $this->assertEqualsWithDelta($r['checkin']['grand_total'] + $r['remaining_balance'], $r['final_grand_total'], 0.001);
         $this->assertEqualsWithDelta($r['final_grand_total'] - $r['total_paid'], $r['balance_due'], 0.001);
+    }
+
+    public function test_total_is_always_paid_plus_balance(): void
+    {
+        // 2 nights x 1,400 = 2,800 paid at check-in, then 3 x 50 of amenities: total 2,950, paid 2,800, balance 150
+        $b = $this->checkedIn(false, 1400);
+        $this->amenity($b, 'Extra Towel', 3, 50);
+        $bill = $this->bill($b);
+
+        $this->assertEquals(2950.0, $bill['total']);
+        $this->assertEquals(2800.0, $bill['total_paid']);
+        $this->assertEquals(150.0, $bill['balance']);
+        $this->assertEqualsWithDelta($bill['total'], $bill['total_paid'] + $bill['balance'], 0.001);
     }
 
     public function test_without_a_discount_the_same_rules_apply(): void
