@@ -33,7 +33,7 @@ class AppDownloadTest extends ApiFlowTestCase
         $this->assertFileExists(MobileApp::path(), 'the APK must be committed at the configured path');
 
         $this->get(route('home'))->assertOk()
-            ->assertSee('Velocity Suites mobile app')
+            ->assertSee('Your comfort is our service')
             ->assertSee('Your stay, in your pocket')
             ->assertSee('Download for Android')
             ->assertSee('href="' . route('app.download') . '"', false)
@@ -76,6 +76,32 @@ class AppDownloadTest extends ApiFlowTestCase
             ->assertDontSee('How to install');
         $this->get(route('app.download'))->assertNotFound();
         $this->assertSame('21.6 MB', MobileApp::sizeLabel());
+    }
+
+    public function test_hero_shows_the_six_app_features_the_version_line_and_the_trust_row(): void
+    {
+        $html = $this->get(route('home'))->assertOk()->getContent();
+
+        foreach ([
+            'Book or reserve' => 'Pick your dates and rooms, then book now or reserve and pay later.',
+            'Pay with GCash' => 'Pay in the app and upload your receipt for quick verification.',
+            'Track every step' => 'See your booking timeline from payment to check-out, updated live.',
+            'Request amenities' => 'Ask for extra pillows, towels and more for each of your rooms.',
+            'Stay calendar' => 'View your stays by day, week or month at a glance.',
+            'Instant updates' => 'Get notified about payments, approvals, promotions and announcements.',
+        ] as $title => $line) {
+            $this->assertStringContainsString('<strong>' . $title . '</strong><span>' . $line . '</span>', $html);
+        }
+        $this->assertSame(6, substr_count($html, 'class="hero-feature-icon"'));
+        $this->assertStringContainsString('Version 1.51.1 · 21.6 MB · Android 10 or newer', $html);
+        foreach (['Free to download', 'Secure GCash payments', 'Android 10 or newer'] as $fact) {
+            $this->assertStringContainsString($fact, $html);
+        }
+        $this->assertSame(1, substr_count($html, '<h1'));
+        $this->assertStringContainsString('Explore rooms', $html);
+        $this->assertStringContainsString('Sign in', $html);
+        $this->assertStringContainsString('hero-building.webp', $html, 'the hero photo is offered as WebP');
+        $this->assertStringContainsString('rel="preload" as="image"', $html);
     }
 
     public function test_the_page_keeps_its_main_actions(): void

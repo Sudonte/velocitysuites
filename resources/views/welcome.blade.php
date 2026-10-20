@@ -2,38 +2,24 @@
 
 @section('title', 'Velocity Suites - Home')
 
+@push('head')
+<link rel="preload" as="image" type="image/webp" href="{{ asset('images/hero-building.webp') }}"
+      imagesrcset="{{ asset('images/hero-building-640.webp') }} 640w, {{ asset('images/hero-building.webp') }} 960w" imagesizes="100vw" fetchpriority="high">
+@endpush
+
 @push('styles')
 <style>
-    /* Landing-page-only hero: one full-bleed-photo composition, but with a
-       deliberately DIFFERENT alignment scheme by breakpoint (not the fully
-       unified one used elsewhere on this page) - desktop/laptop (>=992px)
-       is left-aligned, no logo (matches the navbar's own branding instead
-       of repeating it); mobile/tablet (<992px) is centered with the logo
-       shown above the eyebrow. Base rules below are the desktop version;
-       the `max-width: 991.98px` block further down flips every centering
-       property to its mobile equivalent and reveals the logo - kept as
-       overrides on the same classes rather than truly separate markup, so
-       there's still only one DOM structure to maintain. The hero is a
-       deliberate "first page" - min-height: 100vh (100dvh where supported,
-       so mobile browser chrome showing/hiding doesn't leave a sliver of
-       the next section peeking in) so the highlight strip below it never
-       bleeds into the initial view on tall screens. .hero-media stays
-       absolutely positioned so it's out of flow and doesn't participate
-       in the alignment/centering rules either version uses.
-       The two height-tier media queries below (matching real available
-       viewport height, not assumed device/zoom numbers) keep the content
-       itself from ever needing more room than a short 100vh can offer -
-       they're what makes this safe across zoom levels and devices, since
-       min-height alone doesn't prevent content overflow on a short screen. */
+    /* Hero: the Android app download, one full-bleed photo with a dark overlay (so the text is
+       light-on-dark in both site themes). One grid: content is at most 1200px wide and centred, with
+       16px side padding on phones, 24px on tablets, 32px on desktop. Under 992px it is a single
+       column (brand, headline, description, download, features, phone); from 992px two columns, with
+       the features before the download block; the QR code from 1200px. Spacing uses an 8px scale. */
     .hero-section {
         position: relative;
         background-color: #0a0a0a;
         overflow: hidden;
-        min-height: 100vh;
-        min-height: 100dvh;
         display: flex;
         align-items: center;
-        justify-content: flex-start;
         text-align: left;
     }
 
@@ -43,329 +29,480 @@
         z-index: 0;
     }
 
+    .hero-media picture,
     .hero-media img {
+        display: block;
         width: 100%;
         height: 100%;
-        object-fit: cover;
-        display: block;
     }
 
-    /* Now that the hero content is centered (not left-aligned), a
-       directional dark-to-light gradient would leave the right half of
-       the centered text sitting on the brighter, low-contrast part of the
-       photo. A fairly uniform dark tint keeps every line readable
-       regardless of where it falls horizontally, with a touch more depth
-       at the top/bottom edges. */
+    .hero-media img {
+        object-fit: cover;
+    }
+
+    /* Uniformly dark behind the text (body text stays well above WCAG AA 4.5:1), a little lighter on the photo side */
     .hero-media::after {
         content: '';
         position: absolute;
         inset: 0;
-        background: linear-gradient(180deg, rgba(8, 8, 8, 0.72) 0%, rgba(8, 8, 8, 0.58) 45%, rgba(8, 8, 8, 0.75) 100%);
+        background: linear-gradient(180deg, rgba(6, 6, 8, 0.86) 0%, rgba(6, 6, 8, 0.82) 50%, rgba(6, 6, 8, 0.9) 100%);
         pointer-events: none;
     }
 
-    .hero-content {
+    .hero-app {
         position: relative;
         z-index: 2;
-        max-width: 680px;
-        margin: 0;
-        padding: 3rem clamp(1.5rem, 6vw, 5rem) 3.5rem;
+        width: 100%;
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 32px 16px 40px;
         color: #fff;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        gap: 32px;
+        align-items: center;
     }
 
-    /* Desktop: hidden - the navbar already carries the logo, and the
-       reference direction for the left-aligned layout doesn't repeat it.
-       Shown only on mobile/tablet via the max-width: 991.98px block below. */
-    .hero-logo-wrap {
-        display: none;
+    .hero-app-copy {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        min-width: 0;
+        animation: heroAppFade 0.6s ease both;
+    }
+
+    .hero-app-visual {
+        display: flex;
         justify-content: center;
-        margin-bottom: 1.25rem;
+        align-items: center;
+        gap: 24px;
+        animation: heroAppFade 0.6s ease 0.15s both;
     }
 
-    .hero-logo-badge {
-        width: 76px;
-        height: 66px;
-        box-shadow: var(--shadow-md);
+    @keyframes heroAppFade {
+        from { opacity: 0; transform: translateY(12px); }
+        to { opacity: 1; transform: none; }
     }
 
-    .hero-eyebrow {
-        display: block;
-        font-size: 0.9rem;
+    /* Brand line: "Velocity Suites" in red (a lighter tint of the brand red so small text keeps 4.5:1 on the dark photo) over the tagline */
+    .hero-brand {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        margin: 0 0 16px;
+    }
+
+    .hero-brand-name {
+        font-size: 1rem;
         font-weight: 700;
-        letter-spacing: 0.1em;
-        text-transform: uppercase;
-        color: rgba(255, 255, 255, 0.85);
-        margin-bottom: 0.5rem;
+        color: #f2767e;
+        letter-spacing: 0.02em;
     }
 
-    .hero-eyebrow-underline {
-        display: block;
-        width: 40px;
-        height: 3px;
-        margin-left: 0;
-        margin-right: auto;
-        background-color: var(--primary-color);
-        border-radius: var(--radius-pill);
-        margin-bottom: 1.25rem;
+    .hero-brand-tagline {
+        font-size: 0.85rem;
+        color: rgba(255, 255, 255, 0.78);
     }
 
-    .hero-heading {
-        font-size: clamp(3.25rem, 6vw, 5.5rem);
+    .hero-app-title {
+        font-size: clamp(2rem, 1.35rem + 2.8vw, 3.5rem);
         font-weight: 800;
         line-height: 1.1;
-        margin-bottom: 1.25rem;
         color: #fff;
+        margin: 0 0 16px;
     }
 
-    /* Moved closer to the tagline it decorates (smaller margin-bottom
-       below it than the heading's margin-above), rather than sitting
-       exactly midway between the heading and the tagline - reads as an
-       accent belonging to "Your Comfort is our Service" instead of a
-       neutral divider between two unrelated blocks. */
-    .hero-divider {
-        width: 56px;
-        height: 4px;
-        margin-left: 0;
-        margin-right: auto;
-        background-color: var(--primary-color);
-        border-radius: var(--radius-pill);
-        margin-bottom: 0.4rem;
-    }
-
-    .hero-tagline {
-        font-weight: 700;
-        font-size: clamp(1.15rem, 1.9vw, 1.55rem);
-        margin-bottom: 0.5rem;
-        color: #fff;
-    }
-
-    .hero-desc {
-        color: rgba(255, 255, 255, 0.82);
-        font-size: 1.1rem;
-        line-height: 1.65;
+    .hero-app-desc {
+        color: rgba(255, 255, 255, 0.88);
+        font-size: clamp(1rem, 0.95rem + 0.25vw, 1.125rem);
+        line-height: 1.6;
         max-width: 560px;
-        margin-left: 0;
-        margin-right: auto;
-        margin-bottom: 1.5rem;
+        margin: 0 0 24px;
     }
 
-    .hero-actions {
+    /* Features: 6 items, 2 columns (1 under 400px) */
+    .hero-app-features {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        gap: 16px 24px;
+        width: 100%;
+    }
+
+    .hero-app-features li {
         display: flex;
-        flex-wrap: wrap;
-        justify-content: flex-start;
-        gap: 1rem;
+        align-items: flex-start;
+        gap: 12px;
+        min-width: 0;
     }
 
-    .btn-hero {
+    .hero-feature-icon {
+        flex: 0 0 auto;
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
         display: inline-flex;
         align-items: center;
-        gap: 0.6rem;
-        padding: 0.9rem 2.1rem;
-        font-size: 1.1rem;
-        font-weight: 600;
-        transition: transform 0.2s ease, box-shadow 0.2s ease;
+        justify-content: center;
+        font-size: 0.95rem;
+        background: rgba(214, 65, 75, 0.2);
+        border: 1px solid rgba(214, 65, 75, 0.5);
+        color: #ff9097;
     }
 
-    .btn-hero:hover {
-        transform: translateY(-2px);
+    .hero-feature-text {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        min-width: 0;
+        font-size: 0.875rem;
+        line-height: 1.4;
+        color: rgba(255, 255, 255, 0.8);
     }
 
-    .btn-hero.btn-velocity:hover {
-        box-shadow: 0 8px 20px rgba(193, 18, 31, 0.35);
-    }
-
-    .btn-hero:focus-visible {
-        outline: 2px solid #fff;
-        outline-offset: 3px;
-    }
-
-    .btn-hero-outline {
-        display: inline-flex;
-        align-items: center;
-        gap: 0.6rem;
-        padding: 0.9rem 2.1rem;
-        font-size: 1.1rem;
-        font-weight: 600;
-        border-radius: var(--radius-btn);
-        background-color: transparent;
+    .hero-feature-text strong {
+        font-size: 0.975rem;
+        font-weight: 700;
         color: #fff;
-        border: 2px solid rgba(255, 255, 255, 0.55);
-        transition: all 0.2s ease;
     }
 
-    .btn-hero-outline:hover,
-    .btn-hero-outline:focus-visible {
-        background-color: rgba(255, 255, 255, 0.12);
+    /* Download block. Phone order: download, version line, install help, Explore rooms / Sign in, trust row.
+       Desktop: the three buttons on one row, then the version line, install help and trust row. */
+    .hero-app-cta {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-areas: "dl" "info" "install" "sec" "trust";
+        width: 100%;
+        margin-top: 32px;
+    }
+
+    .hero-app-download,
+    .hero-app-soon { grid-area: dl; }
+    .hero-app-info { grid-area: info; }
+    .hero-app-install { grid-area: install; }
+    .hero-app-secondary { grid-area: sec; }
+    .hero-app-trust { grid-area: trust; }
+
+    .hero-app-download,
+    .hero-btn-outline {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        min-height: 52px;
+        padding: 8px 16px;
+        font-size: 1rem;
+        font-weight: 600;
+        line-height: 1.2;
+        white-space: nowrap;
+        border-radius: var(--radius-btn);
+        text-align: center;
+    }
+
+    .hero-app-download {
+        width: 100%;
+    }
+
+    .hero-btn-outline {
+        background: transparent;
+        color: #fff;
+        border: 2px solid rgba(255, 255, 255, 0.6);
+        transition: background-color 0.2s ease, border-color 0.2s ease;
+    }
+
+    .hero-btn-outline:hover {
+        background: rgba(255, 255, 255, 0.12);
         border-color: #fff;
         color: #fff;
-        transform: translateY(-2px);
     }
 
-    .btn-hero:focus-visible,
-    .btn-hero-outline:focus-visible {
+    .hero-app-download:focus-visible,
+    .hero-btn-outline:focus-visible,
+    .hero-app-install summary:focus-visible {
         outline: 2px solid #fff;
         outline-offset: 3px;
     }
 
-    /* Scroll-down affordance - desktop-only bonus flourish (hidden whenever
-       the compact height tier kicks in below), not load-bearing content. */
-    .hero-scroll-cue {
-        display: none;
-        align-items: center;
-        gap: 0.6rem;
-        margin-top: 1.75rem;
-        color: rgba(255, 255, 255, 0.65);
-        font-size: 0.8rem;
+    .hero-app-secondary {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+        margin-top: 16px;
+    }
+
+    .hero-app-info {
+        margin: 8px 0 0;
+        font-size: 0.85rem;
+        color: rgba(255, 255, 255, 0.82);
+    }
+
+    .hero-app-soon {
+        margin: 0;
+        padding: 12px 16px;
+        border-radius: var(--radius-btn);
+        background: rgba(255, 255, 255, 0.12);
         font-weight: 600;
-        letter-spacing: 0.03em;
     }
 
-    .hero-scroll-cue i {
-        animation: heroScrollBounce 1.6s ease-in-out infinite;
+    .hero-app-install {
+        margin-top: 8px;
+        font-size: 0.9rem;
+        color: rgba(255, 255, 255, 0.92);
     }
 
-    @keyframes heroScrollBounce {
-        0%, 100% { transform: translateY(0); }
-        50% { transform: translateY(5px); }
+    .hero-app-install summary {
+        cursor: pointer;
+        font-weight: 600;
+        min-height: 44px;
+        display: flex;
+        align-items: center;
+        width: fit-content;
+        list-style: none;
+    }
+
+    .hero-app-install summary::-webkit-details-marker {
+        display: none;
+    }
+
+    .hero-app-install summary::before {
+        content: "\f054";
+        font-family: "Font Awesome 6 Free";
+        font-weight: 900;
+        font-size: 0.7rem;
+        margin-right: 8px;
+        transition: transform 0.2s ease;
+    }
+
+    .hero-app-install[open] summary::before {
+        transform: rotate(90deg);
+    }
+
+    .hero-app-install ol {
+        margin: 0 0 8px;
+        padding-left: 20px;
+    }
+
+    .hero-app-install li {
+        margin-bottom: 8px;
+    }
+
+    .hero-app-install p {
+        margin: 0;
+        color: rgba(255, 255, 255, 0.78);
+    }
+
+    .hero-app-trust {
+        list-style: none;
+        padding: 0;
+        margin: 16px 0 0;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px 24px;
+        font-size: 0.85rem;
+        color: rgba(255, 255, 255, 0.85);
+    }
+
+    .hero-app-trust i {
+        color: #f2767e;
+        margin-right: 4px;
+    }
+
+    /* Phone frame */
+    .hero-phone {
+        width: min(200px, 56vw);
+        aspect-ratio: 9 / 19;
+        padding: 10px;
+        border-radius: 34px;
+        background: #15171c;
+        border: 2px solid #3a3d45;
+        box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+    }
+
+    .hero-phone-screen {
+        width: 100%;
+        height: 100%;
+        border-radius: 25px;
+        overflow: hidden;
+        background: #f1f2f4;
+    }
+
+    .hero-phone-screen img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        object-position: top;
+        display: block;
+    }
+
+    .hero-phone-placeholder {
+        width: 100%;
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 3rem;
+        color: #b9bcc4;
+    }
+
+    .hero-app-qr {
+        display: none;
+    }
+
+    @media (min-width: 400px) {
+        .hero-app-features {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+    }
+
+    @media (min-width: 576px) {
+        .hero-app {
+            padding-left: 24px;
+            padding-right: 24px;
+        }
+    }
+
+    @media (min-width: 768px) {
+        .hero-app-download {
+            width: auto;
+            min-width: 260px;
+        }
+
+        .hero-phone {
+            width: 240px;
+        }
     }
 
     @media (min-width: 992px) {
-        .hero-scroll-cue {
-            display: inline-flex;
-        }
-    }
-
-    /* Mobile/tablet: flip the desktop's left-aligned layout to centered,
-       and reveal the logo above the eyebrow tagline. Placed before the
-       height-tier queries below (same specificity throughout - .hero-*
-       single-class selectors - so source order decides ties) so that on a
-       short mobile viewport the height tier's own display:none for the
-       logo still wins over this block's display:flex. */
-    @media (max-width: 991.98px) {
-        /* Anchored to the top of the hero instead of vertically centered -
-           puts the (now larger) logo right under the sticky navbar rather
-           than floating in the middle of the photo, on any phone/tablet
-           tall enough that the content doesn't already fill the viewport. */
         .hero-section {
-            justify-content: center;
-            align-items: flex-start;
-            text-align: center;
+            min-height: min(100vh, 960px);
+            min-height: min(100dvh, 960px);
         }
 
-        .hero-content {
-            margin: 0 auto;
+        .hero-media::after {
+            background: linear-gradient(90deg, rgba(6, 6, 8, 0.92) 0%, rgba(6, 6, 8, 0.82) 55%, rgba(6, 6, 8, 0.62) 100%);
         }
 
-        .hero-logo-wrap {
+        .hero-app {
+            grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.8fr);
+            gap: 48px;
+            padding: 48px 32px 56px;
+        }
+
+        .hero-app-cta {
+            grid-template-columns: auto minmax(0, 1fr);
+            grid-template-areas: "dl sec" "info info" "install install" "trust trust";
+            column-gap: 12px;
+            align-items: center;
+        }
+
+        .hero-app-download {
+            width: auto;
+            min-width: 0;
+            padding-left: 24px;
+            padding-right: 24px;
+        }
+
+        .hero-app-secondary {
             display: flex;
-            margin-bottom: 1.75rem;
+            align-items: stretch;
+            margin-top: 0;
         }
 
-        /* Mobile/tablet logo is now sized independently of the (hidden)
-           desktop base value instead of inheriting it - bumped up further
-           so it reads as a real brand mark anchored at the top of the
-           hero, not an afterthought above the tagline. */
-        .hero-logo-badge {
-            width: 130px;
-            height: 114px;
+        .hero-btn-outline {
+            padding-left: 16px;
+            padding-right: 16px;
         }
 
-        .hero-eyebrow-underline,
-        .hero-divider,
-        .hero-desc {
-            margin-left: auto;
-            margin-right: auto;
-        }
-
-        .hero-actions {
-            justify-content: center;
+        .hero-phone {
+            width: 260px;
         }
     }
 
-    /* Height-based tiers (not width-based) - these respond directly to
-       whatever vertical space is actually available, which is the real
-       constraint behind "fits within 80-120% browser zoom" across
-       different screens, OS display-scaling, and browser-chrome heights.
-       Predicting available height from assumed device/zoom numbers proved
-       unreliable in practice; reacting to the real rendered height via
-       max-height media queries is correct by construction instead. */
-    @media (max-height: 820px) {
-        .hero-content {
-            padding-top: 2rem;
-            padding-bottom: 2.25rem;
+    /* Short desktop screens (laptops): tighter, so the download button is still in the first view */
+    @media (min-width: 992px) and (max-height: 820px) {
+        .hero-app {
+            padding-top: 24px;
+            padding-bottom: 32px;
         }
 
-        .hero-logo-wrap {
-            margin-bottom: 1rem;
+        .hero-brand {
+            margin-bottom: 8px;
         }
 
-        .hero-logo-badge {
-            width: 88px;
-            height: 77px;
+        .hero-app-title {
+            font-size: clamp(2rem, 1.1rem + 2.2vw, 2.75rem);
+            margin-bottom: 8px;
         }
 
-        .hero-eyebrow {
-            font-size: 0.78rem;
+        .hero-app-desc {
+            max-width: 640px;
+            margin-bottom: 16px;
         }
 
-        .hero-eyebrow-underline {
-            margin-bottom: 0.85rem;
+        .hero-app-features {
+            gap: 12px 24px;
         }
 
-        .hero-heading {
-            font-size: clamp(2rem, 3.8vw, 3rem);
-            margin-bottom: 0.6rem;
-        }
-
-        .hero-divider {
-            margin-bottom: 0.4rem;
-        }
-
-        .hero-tagline {
-            font-size: clamp(1.05rem, 1.6vw, 1.35rem);
-            margin-bottom: 0.4rem;
-        }
-
-        .hero-desc {
-            font-size: 1rem;
-            margin-bottom: 1rem;
-        }
-
-        .btn-hero,
-        .btn-hero-outline {
-            padding: 0.55rem 1.5rem;
-            font-size: 1rem;
-        }
-
-        .hero-scroll-cue {
-            display: none;
+        .hero-app-cta {
+            margin-top: 24px;
         }
     }
 
-    @media (max-height: 560px) {
-        .hero-desc {
-            display: none;
+    @media (min-width: 1200px) {
+        .hero-app-qr:not([hidden]) {
+            display: block;
+            width: 168px;
+            padding: 16px;
+            border-radius: var(--radius-card);
+            background: #fff;
+            color: #1a1a1a;
+            text-align: center;
+            box-shadow: var(--shadow-md);
         }
 
-        .hero-logo-wrap {
-            display: none;
-        }
-    }
-
-    @media (max-width: 575.98px) {
-        .hero-content {
-            padding-left: 1.25rem;
-            padding-right: 1.25rem;
-        }
-
-        .hero-actions {
-            flex-direction: column;
-        }
-
-        .btn-hero,
-        .btn-hero-outline {
+        .hero-app-qr-image svg {
             width: 100%;
-            justify-content: center;
+            height: auto;
+            display: block;
+        }
+
+        .hero-app-qr p {
+            margin: 8px 0 0;
+            font-size: 0.85rem;
+            font-weight: 600;
+            line-height: 1.3;
+        }
+    }
+
+    /* Below desktop the download comes before the features (desktop is the other way round) */
+    @media (max-width: 991.98px) {
+        .hero-app-label,
+        .hero-brand { order: 1; }
+        .hero-app-title { order: 2; }
+        .hero-app-desc { order: 3; }
+        .hero-app-cta { order: 4; margin-top: 0; }
+        .hero-app-features { order: 5; margin-top: 32px; }
+    }
+
+    @media (max-width: 359.98px) {
+        .hero-btn-outline {
+            padding-left: 8px;
+            padding-right: 8px;
+            font-size: 0.9rem;
+        }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        .hero-app-copy,
+        .hero-app-visual {
+            animation: none;
+        }
+
+        .hero-btn-outline,
+        .hero-app-install summary::before {
+            transition: none;
         }
     }
 
@@ -543,328 +680,6 @@
         max-height: 70%;
         object-fit: contain;
     }
-    /* Hero: the Android app download. Sits on the same dark photo as before,
-       so its colours are fixed light-on-dark in both site themes. Mobile is a
-       single column (copy, download, features, phone); from 992px two columns,
-       with the features before the download button; the QR code from 1200px. */
-    .hero-section {
-        align-items: center;
-        text-align: left;
-    }
-
-    .hero-app {
-        position: relative;
-        z-index: 2;
-        width: 100%;
-        max-width: 1400px;
-        margin: 0 auto;
-        padding: 2.5rem clamp(1.25rem, 6vw, 5rem) 3rem;
-        color: #fff;
-        display: grid;
-        grid-template-columns: minmax(0, 1fr);
-        gap: 2.5rem;
-        align-items: center;
-    }
-
-    .hero-app-copy {
-        display: flex;
-        flex-direction: column;
-        align-items: flex-start;
-        min-width: 0;
-        animation: heroAppFade 0.6s ease both;
-    }
-
-    .hero-app-visual {
-        display: flex;
-        justify-content: center;
-        align-items: flex-end;
-        gap: 1.5rem;
-        animation: heroAppFade 0.6s ease 0.15s both;
-    }
-
-    @keyframes heroAppFade {
-        from { opacity: 0; transform: translateY(12px); }
-        to { opacity: 1; transform: none; }
-    }
-
-    .hero-app-label {
-        display: inline-block;
-        font-size: 0.95rem;
-        font-weight: 600;
-        color: rgba(255, 255, 255, 0.85);
-        padding-left: 0.75rem;
-        border-left: 3px solid var(--primary-color);
-        margin-bottom: 1rem;
-    }
-
-    .hero-app-title {
-        font-size: clamp(2.1rem, 5vw, 3.6rem);
-        font-weight: 800;
-        line-height: 1.1;
-        color: #fff;
-        margin-bottom: 1rem;
-    }
-
-    .hero-app-desc {
-        color: rgba(255, 255, 255, 0.85);
-        font-size: 1.05rem;
-        line-height: 1.6;
-        max-width: 540px;
-        margin-bottom: 1.5rem;
-    }
-
-    .hero-app-features {
-        list-style: none;
-        padding: 0;
-        margin: 0 0 1.75rem;
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 0.85rem 1.5rem;
-        max-width: 540px;
-        width: 100%;
-    }
-
-    .hero-app-features li {
-        display: flex;
-        align-items: flex-start;
-        gap: 0.65rem;
-        font-size: 0.95rem;
-        line-height: 1.35;
-        color: #fff;
-    }
-
-    .hero-app-features i {
-        flex: 0 0 auto;
-        width: 2rem;
-        height: 2rem;
-        border-radius: 50%;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 0.85rem;
-        background: rgba(214, 65, 75, 0.9);
-        color: #fff;
-    }
-
-    .hero-app-cta {
-        width: 100%;
-        max-width: 540px;
-    }
-
-    .hero-app-download {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 0.65rem;
-        width: 100%;
-        min-height: 52px;
-        padding: 0.75rem 1.75rem;
-        font-size: 1.1rem;
-        font-weight: 600;
-    }
-
-    .hero-app-download:focus-visible,
-    .hero-app-install summary:focus-visible,
-    .hero-app-secondary a:focus-visible {
-        outline: 2px solid #fff;
-        outline-offset: 3px;
-    }
-
-    .hero-app-info {
-        margin: 0.6rem 0 0;
-        font-size: 0.85rem;
-        color: rgba(255, 255, 255, 0.8);
-    }
-
-    .hero-app-soon {
-        margin: 0;
-        padding: 0.85rem 1.1rem;
-        border-radius: var(--radius-btn);
-        background: rgba(255, 255, 255, 0.12);
-        font-weight: 600;
-    }
-
-    .hero-app-install {
-        margin-top: 0.75rem;
-        font-size: 0.9rem;
-        color: rgba(255, 255, 255, 0.9);
-    }
-
-    .hero-app-install summary {
-        cursor: pointer;
-        font-weight: 600;
-        min-height: 44px;
-        display: flex;
-        align-items: center;
-        width: fit-content;
-    }
-
-    .hero-app-install summary::before {
-        content: "054";
-        font-family: "Font Awesome 6 Free";
-        font-weight: 900;
-        font-size: 0.7rem;
-        margin-right: 0.55rem;
-        transition: transform 0.2s ease;
-    }
-
-    .hero-app-install[open] summary::before {
-        transform: rotate(90deg);
-    }
-
-    .hero-app-install summary::-webkit-details-marker {
-        display: none;
-    }
-
-    .hero-app-install ol {
-        margin: 0.25rem 0 0.75rem;
-        padding-left: 1.25rem;
-    }
-
-    .hero-app-install li {
-        margin-bottom: 0.35rem;
-    }
-
-    .hero-app-install p {
-        margin: 0;
-        color: rgba(255, 255, 255, 0.75);
-    }
-
-    .hero-app-secondary {
-        margin-top: 1rem;
-        gap: 0.75rem;
-    }
-
-    .hero-app-secondary .btn-hero-outline {
-        flex: 1 1 0;
-        justify-content: center;
-        min-height: 48px;
-        padding: 0.65rem 1.25rem;
-        font-size: 1rem;
-    }
-
-    /* Phone frame */
-    .hero-phone {
-        width: min(250px, 62vw);
-        aspect-ratio: 9 / 19;
-        padding: 10px;
-        border-radius: 34px;
-        background: #15171c;
-        border: 2px solid #3a3d45;
-        box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
-    }
-
-    .hero-phone-screen {
-        width: 100%;
-        height: 100%;
-        border-radius: 25px;
-        overflow: hidden;
-        background: #f1f2f4;
-    }
-
-    .hero-phone-screen img {
-        width: 100%;
-        height: 100%;
-        object-fit: cover;
-        object-position: top;
-        display: block;
-    }
-
-    .hero-phone-placeholder {
-        width: 100%;
-        height: 100%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 3rem;
-        color: #b9bcc4;
-    }
-
-    .hero-app-qr {
-        display: none;
-    }
-
-    @media (min-width: 992px) {
-        .hero-app {
-            grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
-            gap: 3rem;
-        }
-
-        .hero-app-download {
-            display: inline-flex;
-            width: auto;
-            min-width: 280px;
-        }
-
-        .hero-app-secondary .btn-hero-outline {
-            flex: 0 0 auto;
-        }
-
-        .hero-phone {
-            width: 270px;
-        }
-    }
-
-    @media (min-width: 1200px) {
-        .hero-app-qr:not([hidden]) {
-            display: block;
-            width: 170px;
-            padding: 0.9rem;
-            border-radius: var(--radius-card);
-            background: #fff;
-            color: #1a1a1a;
-            text-align: center;
-            box-shadow: var(--shadow-md);
-            margin-bottom: 2rem;
-        }
-
-        .hero-app-qr-image svg {
-            width: 100%;
-            height: auto;
-            display: block;
-        }
-
-        .hero-app-qr p {
-            margin: 0.6rem 0 0;
-            font-size: 0.85rem;
-            font-weight: 600;
-            line-height: 1.3;
-        }
-    }
-
-    /* Below desktop the download comes before the features (desktop is the other way round) */
-    @media (max-width: 991.98px) {
-        .hero-section {
-            align-items: flex-start;
-        }
-
-        .hero-app-label { order: 1; }
-        .hero-app-title { order: 2; }
-        .hero-app-desc { order: 3; }
-        .hero-app-cta { order: 4; }
-        .hero-app-features { order: 5; margin-top: 1.5rem; margin-bottom: 0; }
-    }
-
-    @media (max-width: 575.98px) {
-        .hero-app-features {
-            grid-template-columns: minmax(0, 1fr);
-        }
-
-        .hero-app-secondary {
-            flex-direction: column;
-        }
-
-        .hero-app-secondary .btn-hero-outline {
-            width: 100%;
-        }
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-        .hero-app-copy,
-        .hero-app-visual {
-            animation: none;
-        }
-    }
 </style>
 @endpush
 
@@ -872,19 +687,47 @@
     <!-- Hero Section: the Android app download (facts come from config/services.php -> App\Support\MobileApp) -->
     <section class="hero-section" id="home">
         <div class="hero-media">
-            <img src="{{ asset('images/hero-building.jpg') }}" alt="Velocity Suites building">
+            <picture>
+                <source type="image/webp" srcset="{{ asset('images/hero-building-640.webp') }} 640w, {{ asset('images/hero-building.webp') }} 960w" sizes="100vw">
+                <img src="{{ asset('images/hero-building.jpg') }}"
+                     srcset="{{ asset('images/hero-building-640.jpg') }} 640w, {{ asset('images/hero-building.jpg') }} 960w" sizes="100vw"
+                     width="960" height="960" alt="Velocity Suites building" fetchpriority="high" decoding="async">
+            </picture>
         </div>
         <div class="hero-app">
             <div class="hero-app-copy">
-                <span class="hero-app-label">Velocity Suites mobile app</span>
+                <p class="hero-brand">
+                    <span class="hero-brand-name">Velocity Suites</span>
+                    <span class="hero-brand-tagline">Your comfort is our service</span>
+                </p>
                 <h1 class="hero-app-title">Your stay, in your pocket</h1>
-                <p class="hero-app-desc">Book or reserve rooms, pay with GCash, track every booking and payment, and request amenities during your stay &mdash; all from your Android phone.</p>
+                <p class="hero-app-desc">Book or reserve rooms, pay with GCash, and follow every step of your stay &mdash; from booking to check-out &mdash; in the Velocity Suites app for Android.</p>
 
                 <ul class="hero-app-features">
-                    <li><i class="fas fa-calendar-check" aria-hidden="true"></i> Book and reserve rooms</li>
-                    <li><i class="fas fa-wallet" aria-hidden="true"></i> Pay securely with GCash</li>
-                    <li><i class="fas fa-receipt" aria-hidden="true"></i> Track your transactions</li>
-                    <li><i class="fas fa-concierge-bell" aria-hidden="true"></i> Request amenities during your stay</li>
+                    <li>
+                        <span class="hero-feature-icon"><i class="fas fa-calendar-check" aria-hidden="true"></i></span>
+                        <span class="hero-feature-text"><strong>Book or reserve</strong><span>Pick your dates and rooms, then book now or reserve and pay later.</span></span>
+                    </li>
+                    <li>
+                        <span class="hero-feature-icon"><i class="fas fa-wallet" aria-hidden="true"></i></span>
+                        <span class="hero-feature-text"><strong>Pay with GCash</strong><span>Pay in the app and upload your receipt for quick verification.</span></span>
+                    </li>
+                    <li>
+                        <span class="hero-feature-icon"><i class="fas fa-route" aria-hidden="true"></i></span>
+                        <span class="hero-feature-text"><strong>Track every step</strong><span>See your booking timeline from payment to check-out, updated live.</span></span>
+                    </li>
+                    <li>
+                        <span class="hero-feature-icon"><i class="fas fa-concierge-bell" aria-hidden="true"></i></span>
+                        <span class="hero-feature-text"><strong>Request amenities</strong><span>Ask for extra pillows, towels and more for each of your rooms.</span></span>
+                    </li>
+                    <li>
+                        <span class="hero-feature-icon"><i class="fas fa-calendar-days" aria-hidden="true"></i></span>
+                        <span class="hero-feature-text"><strong>Stay calendar</strong><span>View your stays by day, week or month at a glance.</span></span>
+                    </li>
+                    <li>
+                        <span class="hero-feature-icon"><i class="fas fa-bell" aria-hidden="true"></i></span>
+                        <span class="hero-feature-text"><strong>Instant updates</strong><span>Get notified about payments, approvals, promotions and announcements.</span></span>
+                    </li>
                 </ul>
 
                 <div class="hero-app-cta">
@@ -907,14 +750,22 @@
                         <p class="hero-app-soon">The app download is coming soon.</p>
                     @endif
 
-                    <div class="hero-actions hero-app-secondary">
-                        <a href="{{ route('public.rooms.index') }}" class="btn-hero-outline">
-                            Explore Rooms <i class="fas fa-arrow-right" aria-hidden="true"></i>
+                    <div class="hero-app-secondary">
+                        <a href="{{ route('public.rooms.index') }}" class="hero-btn-outline">
+                            Explore rooms <i class="fas fa-arrow-right" aria-hidden="true"></i>
                         </a>
-                        <a href="{{ route('login') }}" class="btn-hero-outline">
-                            Sign In <i class="fas fa-arrow-right" aria-hidden="true"></i>
+                        <a href="{{ route('login') }}" class="hero-btn-outline">
+                            Sign in <i class="fas fa-arrow-right" aria-hidden="true"></i>
                         </a>
                     </div>
+
+                    @if($appAvailable)
+                        <ul class="hero-app-trust">
+                            <li><i class="fas fa-check" aria-hidden="true"></i> Free to download</li>
+                            <li><i class="fas fa-check" aria-hidden="true"></i> Secure GCash payments</li>
+                            <li><i class="fas fa-check" aria-hidden="true"></i> Android {{ $appMinAndroid }} or newer</li>
+                        </ul>
+                    @endif
                 </div>
             </div>
 
@@ -928,7 +779,7 @@
                 <div class="hero-phone">
                     <div class="hero-phone-screen">
                         @if($appScreenshot)
-                            <img src="{{ asset('images/app-dashboard.png') }}" alt="The Velocity Suites app dashboard on an Android phone" loading="eager">
+                            <img src="{{ asset('images/app-dashboard.png') }}" width="{{ $appScreenshot[0] }}" height="{{ $appScreenshot[1] }}" alt="The Velocity Suites app dashboard on an Android phone" loading="lazy" decoding="async">
                         @else
                             <div class="hero-phone-placeholder" role="img" aria-label="Velocity Suites app preview"><i class="fas fa-mobile-screen" aria-hidden="true"></i></div>
                         @endif
@@ -1318,9 +1169,11 @@
     <x-amenity-detail-modal />
 @endsection
 
+@if($appAvailable)
 @push('scripts')
-    <script src="{{ asset('js/vendor/qrcode-generator-1.4.4.js') }}"></script>
-    <script src="{{ asset('js/app-download-qr.js') }}"></script>
+    <script src="{{ asset('js/vendor/qrcode-generator-1.4.4.js') }}" defer></script>
+    <script src="{{ asset('js/app-download-qr.js') }}" defer></script>
 @endpush
+@endif
 
 

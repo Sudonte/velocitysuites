@@ -328,6 +328,7 @@
             color: var(--primary-color);
         }
     </style>
+    @stack('head')
     @stack('styles')
 </head>
 <body>
