@@ -53,6 +53,18 @@ return [
     */
     'mobile_app' => [
         'download_url' => env('MOBILE_APP_DOWNLOAD_URL'),
+
+        /*
+        | The Android APK offered in the Home page hero (App\Support\MobileApp).
+        | ONE place to edit per release: drop the new APK into public/downloads/,
+        | then change 'version' and 'file' here (and 'size_mb' only if the file
+        | is ever missing - the real size is read from the file when it exists).
+        | 'file' is relative to public/.
+        */
+        'version' => '1.51.1',
+        'file' => 'downloads/velocity-suites-v1.51.1.apk',
+        'size_mb' => 21.6,
+        'min_android' => 10,
     ],
 
 ];

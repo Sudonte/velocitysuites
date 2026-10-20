@@ -7,6 +7,7 @@ use App\Models\Announcement;
 use App\Models\Discount;
 use App\Models\Promotion;
 use App\Models\RoomType;
+use App\Support\MobileApp;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\View\View;
 
@@ -63,6 +64,11 @@ class LandingPageController extends Controller
             'promotions' => $promotions,
             'discounts' => $discounts,
             'announcements' => $announcements,
+            // Hero: the Android app download - the button only exists when the APK is really there
+            'appAvailable' => MobileApp::isAvailable(),
+            'appDownloadName' => MobileApp::downloadName(),
+            'appInfoLine' => MobileApp::infoLine(),
+            'appScreenshot' => is_file(public_path('images/app-dashboard.png')),
         ]);
     }
 }

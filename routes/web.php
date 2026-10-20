@@ -24,6 +24,9 @@ use Illuminate\Support\Facades\Route;
 // Landing page - shown to all users (guests can browse, auth users can see featured rooms)
 Route::get('/', [\App\Http\Controllers\LandingPageController::class, 'index'])->name('home');
 
+// Android app download (Home page hero) - public, streams the APK as an attachment
+Route::get('/download/velocity-suites.apk', \App\Http\Controllers\AppDownloadController::class)->name('app.download');
+
 // Public Room Routes (accessible without login) - guests browse room TYPES,
 // not individual room numbers; room assignment happens at check-in.
 Route::get('/rooms', [\App\Http\Controllers\PublicRoomController::class, 'index'])->name('public.rooms.index');

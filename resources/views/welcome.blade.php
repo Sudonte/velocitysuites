@@ -543,36 +543,398 @@
         max-height: 70%;
         object-fit: contain;
     }
+    /* Hero: the Android app download. Sits on the same dark photo as before,
+       so its colours are fixed light-on-dark in both site themes. Mobile is a
+       single column (copy, download, features, phone); from 992px two columns,
+       with the features before the download button; the QR code from 1200px. */
+    .hero-section {
+        align-items: center;
+        text-align: left;
+    }
+
+    .hero-app {
+        position: relative;
+        z-index: 2;
+        width: 100%;
+        max-width: 1400px;
+        margin: 0 auto;
+        padding: 2.5rem clamp(1.25rem, 6vw, 5rem) 3rem;
+        color: #fff;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        gap: 2.5rem;
+        align-items: center;
+    }
+
+    .hero-app-copy {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        min-width: 0;
+        animation: heroAppFade 0.6s ease both;
+    }
+
+    .hero-app-visual {
+        display: flex;
+        justify-content: center;
+        align-items: flex-end;
+        gap: 1.5rem;
+        animation: heroAppFade 0.6s ease 0.15s both;
+    }
+
+    @keyframes heroAppFade {
+        from { opacity: 0; transform: translateY(12px); }
+        to { opacity: 1; transform: none; }
+    }
+
+    .hero-app-label {
+        display: inline-block;
+        font-size: 0.95rem;
+        font-weight: 600;
+        color: rgba(255, 255, 255, 0.85);
+        padding-left: 0.75rem;
+        border-left: 3px solid var(--primary-color);
+        margin-bottom: 1rem;
+    }
+
+    .hero-app-title {
+        font-size: clamp(2.1rem, 5vw, 3.6rem);
+        font-weight: 800;
+        line-height: 1.1;
+        color: #fff;
+        margin-bottom: 1rem;
+    }
+
+    .hero-app-desc {
+        color: rgba(255, 255, 255, 0.85);
+        font-size: 1.05rem;
+        line-height: 1.6;
+        max-width: 540px;
+        margin-bottom: 1.5rem;
+    }
+
+    .hero-app-features {
+        list-style: none;
+        padding: 0;
+        margin: 0 0 1.75rem;
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0.85rem 1.5rem;
+        max-width: 540px;
+        width: 100%;
+    }
+
+    .hero-app-features li {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.65rem;
+        font-size: 0.95rem;
+        line-height: 1.35;
+        color: #fff;
+    }
+
+    .hero-app-features i {
+        flex: 0 0 auto;
+        width: 2rem;
+        height: 2rem;
+        border-radius: 50%;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.85rem;
+        background: rgba(214, 65, 75, 0.9);
+        color: #fff;
+    }
+
+    .hero-app-cta {
+        width: 100%;
+        max-width: 540px;
+    }
+
+    .hero-app-download {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.65rem;
+        width: 100%;
+        min-height: 52px;
+        padding: 0.75rem 1.75rem;
+        font-size: 1.1rem;
+        font-weight: 600;
+    }
+
+    .hero-app-download:focus-visible,
+    .hero-app-install summary:focus-visible,
+    .hero-app-secondary a:focus-visible {
+        outline: 2px solid #fff;
+        outline-offset: 3px;
+    }
+
+    .hero-app-info {
+        margin: 0.6rem 0 0;
+        font-size: 0.85rem;
+        color: rgba(255, 255, 255, 0.8);
+    }
+
+    .hero-app-soon {
+        margin: 0;
+        padding: 0.85rem 1.1rem;
+        border-radius: var(--radius-btn);
+        background: rgba(255, 255, 255, 0.12);
+        font-weight: 600;
+    }
+
+    .hero-app-install {
+        margin-top: 0.75rem;
+        font-size: 0.9rem;
+        color: rgba(255, 255, 255, 0.9);
+    }
+
+    .hero-app-install summary {
+        cursor: pointer;
+        font-weight: 600;
+        min-height: 44px;
+        display: flex;
+        align-items: center;
+        width: fit-content;
+    }
+
+    .hero-app-install summary::before {
+        content: "054";
+        font-family: "Font Awesome 6 Free";
+        font-weight: 900;
+        font-size: 0.7rem;
+        margin-right: 0.55rem;
+        transition: transform 0.2s ease;
+    }
+
+    .hero-app-install[open] summary::before {
+        transform: rotate(90deg);
+    }
+
+    .hero-app-install summary::-webkit-details-marker {
+        display: none;
+    }
+
+    .hero-app-install ol {
+        margin: 0.25rem 0 0.75rem;
+        padding-left: 1.25rem;
+    }
+
+    .hero-app-install li {
+        margin-bottom: 0.35rem;
+    }
+
+    .hero-app-install p {
+        margin: 0;
+        color: rgba(255, 255, 255, 0.75);
+    }
+
+    .hero-app-secondary {
+        margin-top: 1rem;
+        gap: 0.75rem;
+    }
+
+    .hero-app-secondary .btn-hero-outline {
+        flex: 1 1 0;
+        justify-content: center;
+        min-height: 48px;
+        padding: 0.65rem 1.25rem;
+        font-size: 1rem;
+    }
+
+    /* Phone frame */
+    .hero-phone {
+        width: min(250px, 62vw);
+        aspect-ratio: 9 / 19;
+        padding: 10px;
+        border-radius: 34px;
+        background: #15171c;
+        border: 2px solid #3a3d45;
+        box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+    }
+
+    .hero-phone-screen {
+        width: 100%;
+        height: 100%;
+        border-radius: 25px;
+        overflow: hidden;
+        background: #f1f2f4;
+    }
+
+    .hero-phone-screen img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        object-position: top;
+        display: block;
+    }
+
+    .hero-phone-placeholder {
+        width: 100%;
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 3rem;
+        color: #b9bcc4;
+    }
+
+    .hero-app-qr {
+        display: none;
+    }
+
+    @media (min-width: 992px) {
+        .hero-app {
+            grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+            gap: 3rem;
+        }
+
+        .hero-app-download {
+            display: inline-flex;
+            width: auto;
+            min-width: 280px;
+        }
+
+        .hero-app-secondary .btn-hero-outline {
+            flex: 0 0 auto;
+        }
+
+        .hero-phone {
+            width: 270px;
+        }
+    }
+
+    @media (min-width: 1200px) {
+        .hero-app-qr:not([hidden]) {
+            display: block;
+            width: 170px;
+            padding: 0.9rem;
+            border-radius: var(--radius-card);
+            background: #fff;
+            color: #1a1a1a;
+            text-align: center;
+            box-shadow: var(--shadow-md);
+            margin-bottom: 2rem;
+        }
+
+        .hero-app-qr-image svg {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        .hero-app-qr p {
+            margin: 0.6rem 0 0;
+            font-size: 0.85rem;
+            font-weight: 600;
+            line-height: 1.3;
+        }
+    }
+
+    /* Below desktop the download comes before the features (desktop is the other way round) */
+    @media (max-width: 991.98px) {
+        .hero-section {
+            align-items: flex-start;
+        }
+
+        .hero-app-label { order: 1; }
+        .hero-app-title { order: 2; }
+        .hero-app-desc { order: 3; }
+        .hero-app-cta { order: 4; }
+        .hero-app-features { order: 5; margin-top: 1.5rem; margin-bottom: 0; }
+    }
+
+    @media (max-width: 575.98px) {
+        .hero-app-features {
+            grid-template-columns: minmax(0, 1fr);
+        }
+
+        .hero-app-secondary {
+            flex-direction: column;
+        }
+
+        .hero-app-secondary .btn-hero-outline {
+            width: 100%;
+        }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        .hero-app-copy,
+        .hero-app-visual {
+            animation: none;
+        }
+    }
 </style>
 @endpush
 
 @section('content')
-    <!-- Hero Section -->
+    <!-- Hero Section: the Android app download (facts come from config/services.php -> App\Support\MobileApp) -->
     <section class="hero-section" id="home">
         <div class="hero-media">
             <img src="{{ asset('images/hero-building.jpg') }}" alt="Velocity Suites building">
         </div>
-        <div class="hero-content">
-            <div class="hero-logo-wrap">
-                <span class="logo-badge hero-logo-badge">
-                    <img src="{{ asset('images/logo.jpg') }}" alt="Velocity Suites">
-                </span>
+        <div class="hero-app">
+            <div class="hero-app-copy">
+                <span class="hero-app-label">Velocity Suites mobile app</span>
+                <h1 class="hero-app-title">Your stay, in your pocket</h1>
+                <p class="hero-app-desc">Book or reserve rooms, pay with GCash, track every booking and payment, and request amenities during your stay &mdash; all from your Android phone.</p>
+
+                <ul class="hero-app-features">
+                    <li><i class="fas fa-calendar-check" aria-hidden="true"></i> Book and reserve rooms</li>
+                    <li><i class="fas fa-wallet" aria-hidden="true"></i> Pay securely with GCash</li>
+                    <li><i class="fas fa-receipt" aria-hidden="true"></i> Track your transactions</li>
+                    <li><i class="fas fa-concierge-bell" aria-hidden="true"></i> Request amenities during your stay</li>
+                </ul>
+
+                <div class="hero-app-cta">
+                    @if($appAvailable)
+                        <a href="{{ route('app.download') }}" download="{{ $appDownloadName }}" class="btn btn-velocity hero-app-download">
+                            <i class="fab fa-android" aria-hidden="true"></i> Download for Android
+                        </a>
+                        <p class="hero-app-info">{{ $appInfoLine }}</p>
+
+                        <details class="hero-app-install">
+                            <summary>How to install</summary>
+                            <ol>
+                                <li>Tap &ldquo;Download for Android&rdquo; and open the downloaded file.</li>
+                                <li>If asked, allow your browser to install unknown apps (Settings &rarr; Install unknown apps).</li>
+                                <li>Tap Install, then open Velocity Suites and sign in or create an account.</li>
+                            </ol>
+                            <p>Your phone may show a security warning because the app isn&rsquo;t from the Google Play Store. This is expected.</p>
+                        </details>
+                    @else
+                        <p class="hero-app-soon">The app download is coming soon.</p>
+                    @endif
+
+                    <div class="hero-actions hero-app-secondary">
+                        <a href="{{ route('public.rooms.index') }}" class="btn-hero-outline">
+                            Explore Rooms <i class="fas fa-arrow-right" aria-hidden="true"></i>
+                        </a>
+                        <a href="{{ route('login') }}" class="btn-hero-outline">
+                            Sign In <i class="fas fa-arrow-right" aria-hidden="true"></i>
+                        </a>
+                    </div>
+                </div>
             </div>
-            <span class="hero-eyebrow">Comfort &bull; Convenience &bull; Hospitality</span>
-            <span class="hero-eyebrow-underline"></span>
-            <h1 class="hero-heading">Welcome to<br><span class="text-brand">Velocity</span> Suites</h1>
-            <div class="hero-divider"></div>
-            <p class="hero-tagline mb-0">Your Comfort <span class="text-brand">is our Service</span></p>
-            <p class="hero-desc">Experience comfort, convenience, and exceptional hospitality. Whether you're here for business or leisure, we're dedicated to making your stay memorable.</p>
-            <div class="hero-actions">
-                <a href="{{ route('public.rooms.index') }}" class="btn btn-velocity btn-lg btn-hero">
-                    Explore Rooms <i class="fas fa-arrow-right"></i>
-                </a>
-                <a href="{{ route('login') }}" class="btn btn-hero-outline">
-                    Sign In <i class="fas fa-arrow-right"></i>
-                </a>
+
+            <div class="hero-app-visual">
+                @if($appAvailable)
+                    <div class="hero-app-qr" data-app-qr="{{ route('app.download') }}" hidden>
+                        <div class="hero-app-qr-image" data-app-qr-image></div>
+                        <p>Scan to download on your phone</p>
+                    </div>
+                @endif
+                <div class="hero-phone">
+                    <div class="hero-phone-screen">
+                        @if($appScreenshot)
+                            <img src="{{ asset('images/app-dashboard.png') }}" alt="The Velocity Suites app dashboard on an Android phone" loading="eager">
+                        @else
+                            <div class="hero-phone-placeholder" role="img" aria-label="Velocity Suites app preview"><i class="fas fa-mobile-screen" aria-hidden="true"></i></div>
+                        @endif
+                    </div>
+                </div>
             </div>
-            <span class="hero-scroll-cue"><i class="fas fa-computer-mouse"></i> Scroll Down</span>
         </div>
     </section>
 
@@ -955,4 +1317,10 @@
 
     <x-amenity-detail-modal />
 @endsection
+
+@push('scripts')
+    <script src="{{ asset('js/vendor/qrcode-generator-1.4.4.js') }}"></script>
+    <script src="{{ asset('js/app-download-qr.js') }}"></script>
+@endpush
+
 
