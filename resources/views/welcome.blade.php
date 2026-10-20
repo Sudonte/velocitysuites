@@ -421,7 +421,7 @@
     }
 
     /* Short desktop screens (laptops): tighter, so the download button is still in the first view */
-    @media (min-width: 992px) and (max-height: 820px) {
+    @media (min-width: 992px) and (max-width: 1199.98px) and (max-height: 820px) {
         .hero-app {
             padding-top: 24px;
             padding-bottom: 32px;
@@ -473,6 +473,137 @@
             font-size: 0.85rem;
             font-weight: 600;
             line-height: 1.3;
+        }
+    }
+
+    /* Laptops and desktops (1200px and up): the hero fills the window under the sticky navbar (100svh minus the
+       66px bar), on a wider 1400px grid (55% copy / 45% phone, both vertically centred). Sizes grow with the
+       screen: the headline about 40px at 1280 to 64px at 1920, the phone about 280px at 1366 to 360px at 1920 and
+       more, spacing follows the window height. Phones and tablets keep the layout above. */
+    @media (min-width: 1200px) {
+        .hero-section {
+            --hero-nav: 66px;
+            --hero-gap: clamp(16px, 2.2vh, 32px);
+            min-height: calc(100vh - var(--hero-nav));
+        }
+
+        @supports (height: 100svh) {
+            .hero-section {
+                min-height: calc(100svh - var(--hero-nav));
+            }
+        }
+
+        .hero-app {
+            max-width: 1440px;
+            grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+            gap: clamp(32px, 3.5vw, 64px);
+            padding: clamp(24px, 3.5vh, 48px) clamp(32px, 4vw, 64px);
+        }
+
+        .hero-brand {
+            margin-bottom: calc(var(--hero-gap) * 0.5);
+        }
+
+        .hero-brand-name {
+            font-size: clamp(1rem, 0.35vw + 0.75rem, 1.3rem);
+        }
+
+        .hero-brand-tagline {
+            font-size: clamp(0.85rem, 0.25vw + 0.7rem, 1.05rem);
+        }
+
+        .hero-app-title {
+            font-size: clamp(2.25rem, 3.75vw - 8px, 4rem);
+            margin-bottom: calc(var(--hero-gap) * 0.5);
+        }
+
+        .hero-app-desc {
+            font-size: clamp(1rem, 0.78vw + 7px, 1.375rem);
+            max-width: 40em;
+            margin-bottom: var(--hero-gap);
+        }
+
+        .hero-app-features {
+            gap: var(--hero-gap) clamp(24px, 2vw, 32px);
+            grid-auto-rows: 1fr; /* equal-size items */
+        }
+
+        .hero-feature-icon {
+            width: clamp(40px, 1vw + 28px, 52px);
+            height: clamp(40px, 1vw + 28px, 52px);
+            font-size: clamp(0.95rem, 0.3vw + 0.75rem, 1.2rem);
+        }
+
+        .hero-feature-text {
+            font-size: clamp(0.85rem, 0.64vw + 4.7px, 1.0625rem);
+        }
+
+        .hero-feature-text strong {
+            font-size: clamp(0.95rem, 0.78vw + 5px, 1.25rem);
+        }
+
+        .hero-app-cta {
+            margin-top: calc(var(--hero-gap) * 1.25);
+        }
+
+        .hero-app-download,
+        .hero-btn-outline {
+            min-height: clamp(48px, 2.5vw + 16px, 56px);
+            font-size: clamp(1rem, 0.3vw + 0.85rem, 1.125rem);
+        }
+
+        .hero-app-info,
+        .hero-app-trust {
+            font-size: clamp(0.85rem, 0.2vw + 0.7rem, 1rem);
+        }
+
+        .hero-app-trust {
+            margin-top: calc(var(--hero-gap) * 0.5);
+        }
+
+        .hero-app-visual {
+            gap: clamp(16px, 1.5vw, 24px);
+        }
+
+        /* about 280px wide at 1366, 360px at 1920 and up to 380px; never taller than the space under the navbar */
+        .hero-phone {
+            flex: 0 0 auto;
+            width: min(clamp(250px, 82.8px + 14.44vw, 380px), calc((100vh - var(--hero-nav) - 96px) * 9 / 19));
+        }
+
+        @supports (height: 100svh) {
+            .hero-phone {
+                width: min(clamp(250px, 82.8px + 14.44vw, 380px), calc((100svh - var(--hero-nav) - 96px) * 9 / 19));
+            }
+        }
+
+        .hero-app-qr:not([hidden]) {
+            flex: 0 0 auto;
+            width: clamp(140px, 3vw + 100px, 160px);
+        }
+    }
+
+    /* Short laptop screens (1366 x 768, 1280 x 720): tighter spacing so everything still fits without scrolling */
+    @media (min-width: 1200px) and (max-height: 800px) {
+        .hero-section {
+            --hero-gap: 14px;
+        }
+
+        .hero-app {
+            padding-top: 16px;
+            padding-bottom: 16px;
+        }
+
+        .hero-app-desc {
+            max-width: 46em;
+        }
+
+        .hero-app-install summary {
+            min-height: 36px;
+        }
+
+        .hero-app-cta {
+            margin-top: 20px;
         }
     }
 
