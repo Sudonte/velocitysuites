@@ -16,12 +16,13 @@
             <strong>Check-In:</strong> {{ $booking->check_in->format('M d, Y') }}<br>
             <strong>Check-Out:</strong> {{ $effectiveCheckOutDate->format('M d, Y') }}
             @if($isEarlyCheckout)
-                <span class="badge bg-info" title="Originally scheduled for {{ $booking->check_out->format('M d, Y') }} - billed for the shorter, actual stay only.">Early Checkout</span>
+                <span class="badge bg-info" title="Leaving before the booked check-out date. The booked nights are still charged.">Leaving early</span>
             @elseif($isLateCheckout)
-                <span class="badge bg-warning text-dark" title="Originally scheduled for {{ $booking->check_out->format('M d, Y') }} - billed for the extra night(s) actually stayed.">Late Checkout</span>
+                <span class="badge bg-warning text-dark" title="Leaving after the booked check-out date. Add a late check-out charge below if one applies.">Late check-out</span>
             @endif
             <br>
-            <strong>Nights:</strong> {{ $effectiveNights }}
+            <strong>Nights:</strong> {{ $effectiveNights }} (booked)
+            <br><span class="small text-muted"><i class="fas fa-info-circle"></i> {{ $stay['no_refund_note'] }}</span>
         </div>
     </div>
 
@@ -48,12 +49,7 @@
         <div class="card-body py-2">
             <p class="small text-muted mb-2">
                 Booked {{ \Carbon\Carbon::parse($stay['check_in'])->format('M j, Y') }} to {{ \Carbon\Carbon::parse($stay['scheduled_check_out'])->format('M j, Y') }}
-                ({{ $stay['scheduled_nights'] }} night{{ $stay['scheduled_nights'] === 1 ? '' : 's' }}).
-                @if($stay['extra_nights'] > 0)
-                    Actual stay: <strong>{{ $stay['actual_nights'] }} nights</strong> - {{ $stay['extra_nights'] }} extra night{{ $stay['extra_nights'] === 1 ? '' : 's' }} billed ({{ $peso($stay['extra_nights_charge']) }}).
-                @elseif($isEarlyCheckout)
-                    Actual stay: <strong>{{ $stay['actual_nights'] }} night{{ $stay['actual_nights'] === 1 ? '' : 's' }}</strong> - billed for the nights stayed.
-                @endif
+                ({{ $stay['scheduled_nights'] }} night{{ $stay['scheduled_nights'] === 1 ? '' : 's' }}). The booked nights are always charged.
             </p>
             <div class="table-responsive">
             <table class="table table-sm table-borderless align-middle mb-2">
@@ -63,7 +59,6 @@
                         <td>
                             Room {{ $line['room_number'] }}@if($line['room_type']) <span class="text-muted">({{ $line['room_type'] }})</span>@endif
                             - {{ $peso($line['rate']) }} x {{ $line['nights'] }} night{{ $line['nights'] === 1 ? '' : 's' }}
-                            @if($line['extra_nights'] > 0)<span class="badge bg-warning text-dark">+{{ $line['extra_nights'] }} extra</span>@endif
                             @if($line['status'] === 'checked_out')<span class="badge bg-secondary">out {{ \Carbon\Carbon::parse($line['checked_out_on'])->format('M j') }}</span>@endif
                         </td>
                         <td class="text-end">{{ $peso($line['subtotal']) }}</td>

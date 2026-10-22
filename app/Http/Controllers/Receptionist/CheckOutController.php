@@ -515,12 +515,6 @@ class CheckOutController extends Controller
                 }
 
                 if ($guest) {
-                    // Check-out came earlier or later than the dates the guest booked: tell them the dates, nights and
-                    // amount that now apply (the same StayBill their receipt shows).
-                    $stay = StayBill::forBooking($lockedBooking->unsetRelation('rooms')->unsetRelation('billing'), StayBill::FINAL);
-                    if ($stay['extra_nights'] > 0 || $stay['is_early_checkout']) {
-                        $this->notificationService->notifyStayUpdated($guest, $roomName, $stay, $lockedBooking->reservation_id ?? $lockedBooking->id);
-                    }
                     // One notification for the step: checked out + Receipt 3 + grand total and balance (managers still get theirs).
                     $this->notificationService->notifyCheckOut($guest, $roomName, $lockedBooking->reservation_id ?? $lockedBooking->id, notifyGuest: false);
                     $this->notificationService->notifyPaymentComplete($guest, $lockedBooking->reservation_id ?? $lockedBooking->id, $officialReceiptNumber, $roomName);

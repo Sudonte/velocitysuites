@@ -23,16 +23,19 @@ use Illuminate\Support\Facades\DB;
  *   4. = total;  - verified payments = balance
  * There is no tax/VAT/service fee anywhere in this hotel's billing.
  *
- * Nights are CALENDAR days in Asia/Manila, minimum 1: check-in Oct 5 -> check-out Oct 6 is 1 night, and a
- * guest actually checked out on Oct 10 is 5 nights, the 4 extra nights billed. A room that was checked out on
- * its own is billed up to its own check-out day; a room still occupied is billed up to today (FINAL), or - while
- * the stay is still running and nothing has been settled - up to the later of today and the scheduled check-out
- * (PROJECTED, so a guest mid-stay is never shown a smaller total than the one they booked).
- * Early check-out keeps its existing rule: the guest pays the nights actually stayed (at least 1).
+ * Nights are the BOOKED nights, CALENDAR days in Asia/Manila, minimum 1: check-in Oct 5 -> check-out Oct 6 is 1
+ * night. The hotel has NO REFUNDS: a guest who leaves early still owes every booked night, so there is no credit
+ * and no "stay length adjustment" anywhere - the room charge is the same on the day of booking, at check-in and
+ * at check-out. A late check-out (or anything else extra) is a charge the front desk adds (additional charges),
+ * never a recalculation of the nights. Total = room charge (booked nights) - discount + approved amenities +
+ * other charges added by the front desk; balance = total - verified payments.
  */
 final class StayBill
 {
     public const TIMEZONE = 'Asia/Manila';
+
+    /** Printed on the check-out bill and the final receipt. */
+    public const NO_REFUND_NOTE = 'No refunds for early check-out (hotel policy).';
 
     /** Active rooms billed up to today - what the receptionist's check-out bill and a completed stay use. */
     public const FINAL = 'final';
@@ -68,7 +71,7 @@ final class StayBill
         $endedAt = $booking->checked_out_at ?? $booking->completed_at;
         $endedOn = $endedAt ? self::day($endedAt) : null;
 
-        $build = function (?int $forcedNights) use ($rooms, $assigned, $checkIn, $scheduledNights, $scheduledOut, $stayEnded, $endedOn, $mode, $today): array {
+        $build = function (?int $forcedNights) use ($rooms, $assigned, $checkIn, $scheduledNights, $scheduledOut, $stayEnded, $endedOn): array {
             $lines = [];
             $roomCharge = 0.0;
             $scheduledRoomCharge = 0.0;
@@ -78,30 +81,21 @@ final class StayBill
                 $checkedOutAt = $room->pivot->checked_out_at ?? null;
                 $isCheckedOut = (bool) $checkedOutAt;
 
-                if (! $assigned) {
-                    $billedUntil = $scheduledOut;
-                } elseif ($forcedNights !== null) {
+                // Always the BOOKED nights (no refunds, no credit for nights not used). $forcedNights only exists to read an
+                // older, already settled bill that was once priced on the nights stayed (see the reconciliation below).
+                if ($forcedNights !== null) {
                     $billedUntil = $checkIn->copy()->addDays($forcedNights);
                     $isCheckedOut = true;
-                } elseif ($isCheckedOut) {
-                    $billedUntil = self::day(Carbon::parse($checkedOutAt));
-                } elseif ($stayEnded) {
-                    // Single-room stays never go through the room-by-room check-out, so their pivot row has no
-                    // timestamp: the stay's own check-out moment (else the scheduled day) closes the room - never
-                    // "today", or a finished bill would grow by a night every midnight.
-                    $billedUntil = $endedOn ?? $scheduledOut;
-                    $isCheckedOut = true;
-                } elseif ($mode === self::PROJECTED) {
-                    $billedUntil = $today->gt($scheduledOut) ? $today : $scheduledOut;
                 } else {
-                    $billedUntil = $today;
+                    $billedUntil = $scheduledOut;
+                    $isCheckedOut = $isCheckedOut || ($assigned && $stayEnded);
                 }
+                $leftOn = $checkedOutAt ? self::day(Carbon::parse($checkedOutAt)) : ($endedOn ?? $billedUntil);
 
                 $nights = max(1, self::daysBetween($checkIn, $billedUntil));
                 $rate = (float) $room->room_rate;
                 $subtotal = round($rate * $nights, 2);
                 $scheduledSubtotal = round($rate * $scheduledNights, 2);
-                $extraNights = max(0, $nights - $scheduledNights);
 
                 $roomCharge += $subtotal;
                 $scheduledRoomCharge += $scheduledSubtotal;
@@ -114,14 +108,12 @@ final class StayBill
                     'room_type' => $room->roomType?->name,
                     'rate' => round($rate, 2),
                     'status' => $isCheckedOut ? 'checked_out' : 'active',
-                    'checked_out_on' => $isCheckedOut ? $billedUntil->toDateString() : null,
+                    'checked_out_on' => $isCheckedOut ? $leftOn->toDateString() : null,
                     'billed_until' => $billedUntil->toDateString(),
                     'scheduled_nights' => $scheduledNights,
                     'nights' => $nights,
-                    'extra_nights' => $extraNights,
                     'scheduled_subtotal' => $scheduledSubtotal,
                     'subtotal' => $subtotal,
-                    'extra_nights_charge' => round($rate * $extraNights, 2),
                 ];
             }
 
@@ -144,6 +136,12 @@ final class StayBill
 
         $actualOut = $latestOut ?? $scheduledOut;
         $actualNights = max(1, self::daysBetween($checkIn, $actualOut));
+
+        // Information only, never a price: the day the guest actually leaves (a finished stay's check-out day; today while the
+        // desk is billing it) against the booked check-out. An early departure is shown with the no-refund note.
+        $departure = $stayEnded ? ($endedOn ?? $scheduledOut) : ($mode === self::FINAL ? $today : null);
+        $leftEarly = $departure !== null && $departure->lt($scheduledOut);
+        $leftLate = $departure !== null && $departure->gt($scheduledOut);
 
         $amenityCharge = $billing ? round((float) $billing->amenity_charge, 2) : self::amenityCharge($booking);
         // Itemized amenities: what is on the bill (approved only for a guest request), and the "Additional amenities" among
@@ -208,12 +206,7 @@ final class StayBill
                 : round(array_sum(array_map(fn ($l) => $l['on_checkin_bill'] ? $l['subtotal'] : 0.0, $amenityLines)), 2);
             $roomAtCheckIn = isset($snapshot['room_charge']) ? round((float) $snapshot['room_charge'], 2) : $scheduledRoomCharge;
             $discountAtCheckIn = round((float) ($snapshot['discount']['amount'] ?? $billing->discount), 2);
-            $discountAmount = $discountAtCheckIn;
-            if ($discount !== null && $roomCharge < $roomAtCheckIn - 0.004) {
-                // A shortened stay (early check-out) never keeps more discount than the nights stayed would earn.
-                $discountAmount = min($discountAmount, round(BillDiscount::amount($discount, $roomCharge, $amenityAtCheckIn), 2));
-            }
-            $discountAmount = min($discountAmount, $subtotal);
+            $discountAmount = min($discountAtCheckIn, $subtotal);
             $discount ??= $billing->discountApplied;
         }
         if ($stayEnded && $billing) {
@@ -236,13 +229,12 @@ final class StayBill
             'actual_check_out' => $actualOut->toDateString(),
             'scheduled_nights' => $scheduledNights,
             'actual_nights' => $actualNights,
-            'extra_nights' => max(0, $actualNights - $scheduledNights),
-            'is_late_checkout' => $actualOut->gt($scheduledOut),
-            'is_early_checkout' => $actualOut->lt($scheduledOut),
+            'is_late_checkout' => $leftLate,
+            'is_early_checkout' => $leftEarly,
+            'no_refund_note' => self::NO_REFUND_NOTE,
             'rooms' => $lines,
             'scheduled_room_charge' => $scheduledRoomCharge,
             'room_charge' => $roomCharge,
-            'extra_nights_charge' => round(array_sum(array_column($lines, 'extra_nights_charge')), 2),
             'amenity_charge' => $amenityCharge,
             'amenity_lines' => $amenityLines,
             'additional_amenities' => $additionalAmenities,
@@ -285,9 +277,16 @@ final class StayBill
             'name' => $l['amenity_name'], 'quantity' => $l['quantity'], 'unit_price' => $l['unit_price'], 'subtotal' => $l['subtotal'],
         ], array_filter($amenityLines, fn ($l) => ! $l['on_checkin_bill'])));
         $newAmenitiesTotal = round($amenityCharge - $amenityAtCheckIn, 2);
-        // A stay that ran longer / shorter than scheduled (and the discount that follows it) - 0 for an ordinary stay.
-        $stayAdjustment = round(($roomCharge - $roomAtCheckIn) - ($discountAmount - $discountAtCheckIn) + $guestFee, 2);
-        $afterSubtotal = round($newAmenitiesTotal + $extraChargesTotal + $stayAdjustment, 2);
+        // There is no stay-length adjustment any more (booked nights are always billed), so this is 0 for every new stay. It only
+        // catches an older settled bill that was once priced on the nights stayed: whatever its total holds beyond the check-in
+        // bill and the lines listed is shown as one plain "Adjustment" charge so the receipt still adds up.
+        $legacy = round(($roomCharge - $roomAtCheckIn) - ($discountAmount - $discountAtCheckIn) + $guestFee, 2);
+        $chargeLines = array_map(fn ($c) => ['name' => $c['description'], 'quantity' => 1, 'unit_price' => $c['amount'], 'subtotal' => $c['amount']], $extraCharges);
+        if (abs($legacy) >= 0.005) {
+            $chargeLines[] = ['name' => 'Adjustment', 'quantity' => 1, 'unit_price' => $legacy, 'subtotal' => $legacy];
+        }
+        $chargesTotal = round($extraChargesTotal + (abs($legacy) >= 0.005 ? $legacy : 0.0), 2);
+        $afterSubtotal = round($newAmenitiesTotal + $chargesTotal, 2);
         $percent = $discount && $discount->discount_type === 'percentage' ? (float) $discount->value : null;
 
         return [
@@ -305,9 +304,8 @@ final class StayBill
             'after_checkin' => [
                 'amenities' => $newAmenities,
                 'amenities_total' => $newAmenitiesTotal,
-                'charges' => array_map(fn ($c) => ['name' => $c['description'], 'quantity' => 1, 'unit_price' => $c['amount'], 'subtotal' => $c['amount']], $extraCharges),
-                'charges_total' => $extraChargesTotal,
-                'stay_adjustment' => $stayAdjustment,
+                'charges' => $chargeLines,
+                'charges_total' => $chargesTotal,
                 'subtotal' => $afterSubtotal,
             ],
             'remaining_balance' => round(max(0.0, $afterSubtotal), 2),

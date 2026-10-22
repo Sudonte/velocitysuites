@@ -15,8 +15,8 @@ use App\Support\StayBill;
 use Carbon\Carbon;
 
 /**
- * The one shared bill (App\Support\StayBill) and the receptionist flows built on it: nights counted in hotel-local
- * calendar days, extra nights billed, per-room (partial) check-out, the discount reaching the bill only while the ID is
+ * The one shared bill (App\Support\StayBill) and the receptionist flows built on it: the BOOKED nights counted in
+ * hotel-local calendar days (no refunds: early or late, the booked nights are what is charged), per-room (partial) check-out, the discount reaching the bill only while the ID is
  * approved, a transaction rejection rejecting the ID too, and a payment never exceeding the balance.
  */
 class StayBillCheckoutTest extends ApiFlowTestCase
@@ -88,46 +88,79 @@ class StayBillCheckoutTest extends ApiFlowTestCase
         $bill = StayBill::forBooking($booking);
         $this->assertSame(1, $bill['actual_nights']);
         $this->assertSame(1500.0, $bill['room_charge']);
-        $this->assertSame(0, $bill['extra_nights']);
 
         $this->at('2026-10-05 18:00'); // checked out the day they arrived: still at least one night
         $this->assertSame(1, StayBill::forBooking($booking->fresh())['actual_nights']);
     }
 
-    public function test_a_late_check_out_bills_the_actual_nights_and_names_the_extra_ones(): void
+    public function test_a_late_check_out_does_not_change_the_nights_the_desk_adds_a_charge_instead(): void
     {
         [$booking] = $this->stay([1000]);
         $this->at('2026-10-10 09:00'); // booked Oct 5 -> Oct 6, still here on Oct 10
         $bill = StayBill::forBooking($booking);
 
         $this->assertSame(1, $bill['scheduled_nights']);
-        $this->assertSame(5, $bill['actual_nights']);
-        $this->assertSame(4, $bill['extra_nights']);
-        $this->assertSame('2026-10-10', $bill['actual_check_out']);
-        $this->assertSame(5000.0, $bill['room_charge']);
-        $this->assertSame(4000.0, $bill['extra_nights_charge']);
+        $this->assertSame(1, $bill['actual_nights'], 'the booked nights are what is billed');
+        $this->assertSame('2026-10-06', $bill['actual_check_out']);
+        $this->assertSame(1000.0, $bill['room_charge']);
         $this->assertTrue($bill['is_late_checkout']);
-        $this->assertSame(5000.0, $bill['total']);
+        $this->assertSame(1000.0, $bill['total']);
+        $this->assertArrayNotHasKey('extra_nights', $bill);
+        $this->assertArrayNotHasKey('extra_nights_charge', $bill);
+
+        // a late check-out is a charge the front desk adds
+        $billing = Billing::create(['booking_id' => $booking->id, 'billing_status' => 'pending']);
+        $billing->additionalCharges()->create(['description' => 'Late check-out', 'amount' => 500]);
+        $withCharge = StayBill::forBooking($booking->fresh(), StayBill::FINAL, null, $billing->fresh());
+        $this->assertSame(1500.0, $withCharge['total']);
+        $this->assertSame(1000.0, $withCharge['room_charge']);
     }
 
-    public function test_early_check_out_keeps_the_existing_rule_the_nights_actually_stayed(): void
+    public function test_an_early_check_out_is_still_charged_every_booked_night_with_no_adjustment(): void
     {
-        [$booking] = $this->stay([1000], '2026-10-05', '2026-10-09');
-        $this->at('2026-10-07 10:00');
+        [$booking] = $this->stay([1000], '2026-10-23', '2026-10-25');
+        $this->at('2026-10-24 10:00'); // leaves on the 24th, a day early
         $bill = StayBill::forBooking($booking);
-        $this->assertSame(4, $bill['scheduled_nights']);
+
+        $this->assertSame(2, $bill['scheduled_nights']);
         $this->assertSame(2, $bill['actual_nights']);
         $this->assertSame(2000.0, $bill['room_charge']);
-        $this->assertTrue($bill['is_early_checkout']);
+        $this->assertSame(2000.0, $bill['total']);
+        $this->assertTrue($bill['is_early_checkout'], 'informational only - it never changes the price');
+        $this->assertSame('No refunds for early check-out (hotel policy).', $bill['no_refund_note']);
+        $this->assertArrayNotHasKey('stay_adjustment', (array) ($bill['receipt_breakdown']['after_checkin'] ?? []));
     }
 
-    public function test_nights_are_counted_in_manila_days_not_utc(): void
+    public function test_booked_oct_23_to_25_and_checked_out_on_oct_24_pays_two_nights_end_to_end(): void
     {
-        [$booking] = $this->stay([1000]);
-        // 17:00 UTC on Oct 9 is 01:00 on Oct 10 in Manila: the hotel's day is already the 10th.
-        Carbon::setTestNow(Carbon::parse('2026-10-09 17:00:00', 'UTC'));
-        $this->assertSame('2026-10-10', StayBill::forBooking($booking)['actual_check_out']);
-        $this->assertSame(5, StayBill::forBooking($booking)['actual_nights']);
+        [$booking] = $this->stay([1000], '2026-10-23', '2026-10-25');
+        $this->at('2026-10-24 10:00');
+        $billing = $this->openBilling($booking);
+
+        $this->assertSame(2000.0, (float) $billing->total_amount, 'the full booked amount is still owed');
+        $this->actingAs($this->receptionist())->get(route('receptionist.check-out.billing', $booking))->assertOk()
+            ->assertSee('No refunds for early check-out (hotel policy).')->assertDontSee('adjustment');
+
+        $this->actingAs($this->receptionist())->postJson(route('receptionist.billing.payment.store', $billing), ['payment_method' => 'cash', 'amount_paid' => 2000])
+            ->assertOk()->assertJson(['completed' => true]);
+
+        $bill = $billing->fresh()->stay_bill;
+        $this->assertSame(2, $bill['actual_nights']);
+        $this->assertSame(2000.0, $bill['total']);
+        $this->assertSame(2000.0, $bill['total_paid']);
+        $this->assertSame(0.0, $bill['balance']);
+    }
+
+    public function test_the_hotel_day_not_the_utc_day_decides_whether_a_guest_left_early(): void
+    {
+        [$booking] = $this->stay([1000]); // booked Oct 5 -> Oct 6
+        // 17:00 UTC on Oct 5 is 01:00 on Oct 6 in Manila: the hotel's day is already the check-out day.
+        Carbon::setTestNow(Carbon::parse('2026-10-05 17:00:00', 'UTC'));
+        $this->assertFalse(StayBill::forBooking($booking)['is_early_checkout']);
+        // 15:00 UTC on Oct 5 is 23:00 on Oct 5 in Manila: still a day early.
+        Carbon::setTestNow(Carbon::parse('2026-10-05 15:00:00', 'UTC'));
+        $this->assertTrue(StayBill::forBooking($booking)['is_early_checkout']);
+        $this->assertSame(1000.0, StayBill::forBooking($booking)['room_charge']);
     }
 
     public function test_multiple_rooms_are_each_rate_times_nights_rounded_per_room(): void
@@ -140,7 +173,7 @@ class StayBillCheckoutTest extends ApiFlowTestCase
         $this->assertSame(6001.5, $bill['room_charge']);
     }
 
-    public function test_a_room_that_left_early_is_billed_to_its_own_day_and_the_others_run_on(): void
+    public function test_a_room_that_left_early_is_still_billed_every_booked_night(): void
     {
         [$booking, $rooms] = $this->stay([1000, 2000], '2026-10-05', '2026-10-07');
         $this->checkOutRoomOn($booking, $rooms[0], '2026-10-07 10:00');
@@ -150,9 +183,9 @@ class StayBillCheckoutTest extends ApiFlowTestCase
         $byRoom = array_column($bill['rooms'], null, 'room_id');
         $this->assertSame(2, $byRoom[$rooms[0]->id]['nights']);
         $this->assertSame('checked_out', $byRoom[$rooms[0]->id]['status']);
-        $this->assertSame(5, $byRoom[$rooms[1]->id]['nights']);
+        $this->assertSame(2, $byRoom[$rooms[1]->id]['nights'], 'the booked nights, not the days it stayed on');
         $this->assertSame('active', $byRoom[$rooms[1]->id]['status']);
-        $this->assertSame(2 * 1000 + 5 * 2000.0, $bill['room_charge']);
+        $this->assertSame(2 * 1000 + 2 * 2000.0, $bill['room_charge']);
     }
 
     public function test_the_discount_comes_off_the_whole_bill_and_only_once_the_id_is_approved(): void
@@ -200,14 +233,13 @@ class StayBillCheckoutTest extends ApiFlowTestCase
         $this->actingAs($this->receptionist())->get(route('receptionist.check-out.billing', $booking))->assertOk();
 
         $billing = Billing::where('booking_id', $booking->id)->firstOrFail();
-        $this->assertSame(7500.0, (float) $billing->total_amount, '(1000 + 500) x 5 nights');
+        $this->assertSame(1500.0, (float) $billing->total_amount, '(1000 + 500) x the 1 booked night');
 
         $guestSees = $billing->fresh()->stay_bill;
         $this->assertNotNull($guestSees);
         $this->assertSame((float) $billing->total_amount, $guestSees['total']);
         $this->assertSame((float) $billing->room_charge, $guestSees['room_charge']);
-        $this->assertSame(5, $guestSees['actual_nights']);
-        $this->assertSame(4, $guestSees['extra_nights']);
+        $this->assertSame(1, $guestSees['actual_nights']);
         $this->assertSame((float) $billing->total_amount, app(ReceiptService::class)->grandTotal($booking->fresh()));
     }
 
@@ -295,29 +327,23 @@ class StayBillCheckoutTest extends ApiFlowTestCase
         $this->assertSame(2000.0, (float) Payment::where('billing_id', $billing->id)->sum('amount_paid'));
     }
 
-    public function test_settling_stamps_every_room_and_tells_the_guest_when_the_stay_ran_longer_than_booked(): void
+    public function test_settling_stamps_every_room_and_a_stay_that_ran_longer_than_booked_is_still_the_booked_nights(): void
     {
         [$booking, $rooms] = $this->stay([1000]);
         $this->at('2026-10-08 10:00');
         $billing = $this->openBilling($booking);
-        $this->assertSame(3000.0, (float) $billing->total_amount);
+        $this->assertSame(1000.0, (float) $billing->total_amount);
 
-        $this->actingAs($this->receptionist())->postJson(route('receptionist.billing.payment.store', $billing), ['payment_method' => 'cash', 'amount_paid' => 3000])->assertOk();
+        $this->actingAs($this->receptionist())->postJson(route('receptionist.billing.payment.store', $billing), ['payment_method' => 'cash', 'amount_paid' => 1000])->assertOk();
 
         $booking = $booking->fresh();
         $this->assertSame(Booking::STATUS_COMPLETED, $booking->booking_status);
         $this->assertNotNull($booking->rooms()->first()->pivot->checked_out_at);
         // later days never grow a finished bill
         $this->at('2026-12-31 10:00');
-        $this->assertSame(3, $billing->fresh()->stay_bill['actual_nights']);
-        $this->assertSame(3000.0, $billing->fresh()->stay_bill['total']);
-
-        $note = Notification::where('title', 'Your Stay Dates Changed')->first();
-        $this->assertNotNull($note, 'the guest is told the new dates, nights and amount');
-        $this->assertStringContainsString('Oct 5, 2026', $note->message);
-        $this->assertStringContainsString('Oct 8, 2026', $note->message);
-        $this->assertStringContainsString('3 nights', $note->message);
-        $this->assertStringContainsString('3,000.00', $note->message);
+        $this->assertSame(1, $billing->fresh()->stay_bill['actual_nights']);
+        $this->assertSame(1000.0, $billing->fresh()->stay_bill['total']);
+        $this->assertNull(Notification::where('title', 'Your Stay Dates Changed')->first(), 'no dates changed: nothing to announce');
     }
 
     public function test_the_guest_api_and_receipt_carry_the_same_stay_bill_the_receptionist_billed(): void
@@ -325,20 +351,20 @@ class StayBillCheckoutTest extends ApiFlowTestCase
         [$booking, $rooms] = $this->stay([1000]);
         $this->at('2026-10-08 10:00');
         $billing = $this->openBilling($booking);
-        $this->actingAs($this->receptionist())->postJson(route('receptionist.billing.payment.store', $billing), ['payment_method' => 'cash', 'amount_paid' => 3000])->assertOk();
+        $this->actingAs($this->receptionist())->postJson(route('receptionist.billing.payment.store', $billing), ['payment_method' => 'cash', 'amount_paid' => 1000])->assertOk();
 
         $user = User::find($booking->fresh()->guest->user_id);
         $this->actingAs($user);
         $payload = json_decode(app(\App\Http\Controllers\Api\BookingController::class)->show($booking->fresh())->getContent(), true);
 
-        $this->assertSame(3000.0, (float) $payload['stay_bill']['total']);
-        $this->assertSame(3, $payload['stay_bill']['actual_nights']);
+        $this->assertSame(1000.0, (float) $payload['stay_bill']['total']);
+        $this->assertSame(1, $payload['stay_bill']['actual_nights']);
         $this->assertSame(1, $payload['stay_bill']['scheduled_nights']);
         $this->assertSame((float) $billing->fresh()->total_amount, (float) $payload['stay_bill']['total']);
 
         $receipt = app(ReceiptService::class)->buildReceiptPayload($booking->fresh(), 'OFFICIAL_RECEIPT', null, $billing->fresh());
-        $this->assertSame(3000.0, $receipt['stay_bill']['total']);
-        $this->assertSame('2026-10-08', $receipt['stay_bill']['actual_check_out']);
+        $this->assertSame(1000.0, $receipt['stay_bill']['total']);
+        $this->assertSame('2026-10-06', $receipt['stay_bill']['actual_check_out']);
     }
 
     // ---------------------------------------------------------------- ID verification vs transaction verification

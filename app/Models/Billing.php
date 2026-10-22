@@ -206,8 +206,7 @@ class Billing extends Model
      */
     public function syncFromStayBill(Booking $booking, ?string $mode = null): void
     {
-        // Check-out passes FINAL (nights actually stayed); otherwise the stay is still running, so it is priced on
-        // the scheduled nights (the bill exists from check-in and must not shrink to "nights so far" mid-stay).
+        // The room charge is always the BOOKED nights (no refunds, no credit for nights not used), at check-in and at check-out.
         $bill = StayBill::forBooking($booking, $mode ?? StayBill::modeFor($booking), null, $this);
 
         $this->room_charge = $bill['room_charge'];

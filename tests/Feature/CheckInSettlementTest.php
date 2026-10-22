@@ -386,25 +386,26 @@ class CheckInSettlementTest extends ApiFlowTestCase
         $this->assertEqualsWithDelta(1600, $booking->fresh()->paidTotal(), 0.01);
     }
 
-    public function test_early_check_out_returns_the_excess_and_keeps_only_the_actual_total(): void
+    public function test_early_check_out_is_not_refunded_the_booked_nights_stay_paid(): void
     {
         [$rt, $room, $booking] = $this->arriving();
         $desk = $this->desk();
         // paid 2 nights at check-in
         $this->actingAs($desk)->postJson(route('receptionist.check-in.store', $booking), $this->checkInPayload($rt, $room, ['payment_method' => 'cash', 'amount_received' => 2000]))->assertOk();
 
-        // leaves after 1 night
+        // leaves after 1 night: hotel policy, no refunds - both booked nights stay charged and paid
         \Carbon\Carbon::setTestNow(now()->addDay()->setTime(10, 0));
-        $this->actingAs($desk)->get(route('receptionist.check-out.billing', $booking))->assertOk()->assertSee('Return to the guest');
+        $this->actingAs($desk)->get(route('receptionist.check-out.billing', $booking))->assertOk()
+            ->assertSee('No refunds for early check-out (hotel policy).')->assertDontSee('Return to the guest');
         $billing = $booking->billing()->first();
-        $this->actingAs($desk)->get(route('receptionist.check-out.payment', $billing))->assertOk()->assertSee('₱1,000.00 more', false);
+        $this->assertEqualsWithDelta(2000, (float) $billing->total_amount, 0.01);
 
         $url = route('receptionist.billing.payment.store', $billing);
-        $this->actingAs($desk)->postJson($url, ['payment_method' => 'cash', 'amount_paid' => 0])->assertStatus(422)->assertJsonPath('excess', 1000);
-        $this->actingAs($desk)->postJson($url, ['payment_method' => 'cash', 'amount_paid' => 0, 'change_returned' => 1])->assertOk()->assertJson(['completed' => true]);
+        $this->actingAs($desk)->postJson($url, ['payment_method' => 'cash', 'amount_paid' => 0])->assertOk()->assertJson(['completed' => true]);
 
         $this->assertSame(Booking::STATUS_COMPLETED, $booking->fresh()->booking_status);
-        $this->assertEqualsWithDelta(1000, $booking->fresh()->paidTotal(), 0.01);
+        $this->assertEqualsWithDelta(2000, $booking->fresh()->paidTotal(), 0.01, 'nothing was handed back');
+        $this->assertSame(0, Payment::where('booking_id', $booking->id)->where('amount_paid', '<', 0)->count());
         \Carbon\Carbon::setTestNow();
     }
 }

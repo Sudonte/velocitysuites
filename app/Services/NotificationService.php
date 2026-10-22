@@ -430,30 +430,6 @@ class NotificationService
     }
 
     /**
-     * The guest's stay ended on different dates than the ones they booked (a late check-out bills the extra
-     * nights, an early one only the nights stayed): tell them the dates, the nights and the amount that now apply.
-     * $stay is App\Support\StayBill - the same figures their Payment Receipt shows.
-     */
-    public function notifyStayUpdated(User $guest, string $roomName, array $stay, ?int $referenceId = null): void
-    {
-        $fmt = fn (string $d) => \Carbon\Carbon::parse($d)->format('M j, Y');
-        $nights = StayBill::nightsLabel($stay['actual_nights']);
-        $was = StayBill::nightsLabel($stay['scheduled_nights']);
-        $extra = $stay['extra_nights'] > 0
-            ? ' ' . StayBill::nightsLabel($stay['extra_nights']) . ' extra ' . ($stay['extra_nights'] === 1 ? 'was' : 'were') . ' added to your bill.'
-            : '';
-
-        $this->toUser(
-            $guest,
-            'Your Stay Dates Changed',
-            "Your stay in {$roomName} is now {$fmt($stay['check_in'])} to {$fmt($stay['actual_check_out'])} ({$nights}, booked as {$was})."
-                . "{$extra} Updated total: ₱" . number_format($stay['total'], 2) . '.',
-            'check_out',
-            $referenceId
-        );
-    }
-
-    /**
      * Notify about check-out.
      */
     public function notifyCheckOut(User $guest, string $roomName, ?int $referenceId = null, bool $notifyGuest = true): void

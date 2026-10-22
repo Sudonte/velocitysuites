@@ -47,9 +47,7 @@
             <td class="text-end">{{ $peso($line['subtotal']) }}</td>
         </tr>
     @empty
-        @if(abs($a['stay_adjustment']) < 0.005)
-            <tr><td colspan="2" class="text-muted">No additional charges</td></tr>
-        @endif
+        <tr><td colspan="2" class="text-muted">No additional charges</td></tr>
     @endforelse
     <tr class="small text-muted">
         <td class="ps-3">Amenity requests</td>
@@ -59,12 +57,6 @@
         <td class="ps-3">Additional charges</td>
         <td class="text-end">{{ $peso($a['charges_total']) }}</td>
     </tr>
-    @if(abs($a['stay_adjustment']) >= 0.005)
-        <tr class="small text-muted">
-            <td class="ps-3">Stay length adjustment (early / late check-out, incl. discount)</td>
-            <td class="text-end">{{ $a['stay_adjustment'] < 0 ? '-' : '' }}{{ $peso(abs($a['stay_adjustment'])) }}</td>
-        </tr>
-    @endif
     <tr class="fw-semibold border-top">
         <td>Subtotal of Additional</td>
         <td class="text-end">{{ $peso($a['subtotal']) }}</td>
@@ -86,5 +78,8 @@
     <tr class="fw-bold fs-5">
         <td>BALANCE DUE</td>
         <td class="text-end" id="breakdownBalanceDue">{{ $peso($breakdown['balance_due']) }}</td>
+    </tr>
+    <tr>
+        <td colspan="2" class="small text-muted pt-2"><i class="fas fa-info-circle"></i> {{ \App\Support\StayBill::NO_REFUND_NOTE }}</td>
     </tr>
 </table>

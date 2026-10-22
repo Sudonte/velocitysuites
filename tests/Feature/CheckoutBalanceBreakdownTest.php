@@ -180,18 +180,19 @@ class CheckoutBalanceBreakdownTest extends ApiFlowTestCase
         $this->assertEquals(0.0, $r['after_checkin']['subtotal']);
     }
 
-    public function test_an_early_check_out_keeps_the_numbers_adding_up_and_never_over_discounts(): void
+    public function test_an_early_check_out_changes_nothing_the_booked_nights_and_the_check_in_discount_stand(): void
     {
         $b = $this->checkedIn(true);
-        \Carbon\Carbon::setTestNow(now('Asia/Manila')->addDay()->setTime(11, 0)); // left after 1 of the 2 nights
+        \Carbon\Carbon::setTestNow(now('Asia/Manila')->addDay()->setTime(11, 0)); // left after 1 of the 2 booked nights
         $booking = Booking::find($b->id);
         $billing = $booking->billing()->first();
         app(StayBillingService::class)->refresh($booking, $billing, StayBill::FINAL);
         $bill = StayBill::forBooking($booking->fresh(), StayBill::FINAL, null, $billing->fresh());
 
-        $this->assertEquals(200.0, $bill['discount'], '20% of the one night actually stayed');
+        $this->assertEquals(400.0, $bill['discount'], 'the discount taken at check-in is never recalculated');
+        $this->assertTrue($bill['is_early_checkout']);
         $r = $bill['receipt_breakdown'];
-        $this->assertEquals(800.0, $r['final_grand_total']);
+        $this->assertEquals(1600.0, $r['final_grand_total'], 'both booked nights, less the discount');
         $this->assertEqualsWithDelta($r['checkin']['grand_total'] + $r['after_checkin']['subtotal'], $r['final_grand_total'], 0.001);
         $this->assertEquals(0.0, $r['balance_due']);
     }

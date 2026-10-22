@@ -47,6 +47,6 @@
         @endif
     @endif
     @if($stay['mode'] !== \App\Support\StayBill::FINAL)
-        <small class="text-muted d-block mt-2"><i class="fas fa-info-circle"></i> Estimate until check-out - extra charges or a late check-out are added then.</small>
+        <small class="text-muted d-block mt-2"><i class="fas fa-info-circle"></i> Estimate until check-out - anything extra, such as a late check-out charge, is added then. No refunds for early check-out (hotel policy).</small>
     @endif
 </x-card>
