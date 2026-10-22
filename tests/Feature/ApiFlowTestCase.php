@@ -73,8 +73,14 @@ abstract class ApiFlowTestCase extends TestCase
             $table->timestamps();
         });
 
+        Schema::create('booking_groups', function (Blueprint $table) {
+            $table->id();
+            $table->unsignedBigInteger('guest_id');
+            $table->timestamps();
+        });
         Schema::create('reservations', function (Blueprint $table) {
             $table->id();
+            $table->unsignedBigInteger('group_id')->nullable();
             $table->unsignedBigInteger('promotion_id')->nullable();
             $table->string('idempotency_key')->nullable()->unique();
             $table->unsignedBigInteger('guest_id')->nullable();
@@ -155,6 +161,7 @@ abstract class ApiFlowTestCase extends TestCase
 
         Schema::create('bookings', function (Blueprint $table) {
             $table->id();
+            $table->unsignedBigInteger('group_id')->nullable();
             $table->unsignedBigInteger('promotion_id')->nullable();
             $table->string('idempotency_key')->nullable()->unique();
             $table->unsignedBigInteger('reservation_id')->nullable()->unique();

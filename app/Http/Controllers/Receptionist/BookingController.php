@@ -99,13 +99,16 @@ class BookingController extends Controller
         // render broken/oversized here for reasons that don't trace back
         // to anything in this app's own CSS.
         $bookings = $query->orderByRaw('viewed_at IS NULL DESC')->orderBy('check_in')->simplePaginate(15)->withQueryString();
+        // "Group of N stays": how many bookings each group on this page has (any status, so a cancelled stay still counts).
+        $groupSizes = Booking::withTrashed()->whereIn('group_id', $bookings->pluck('group_id')->filter()->unique())
+            ->selectRaw('group_id, COUNT(*) AS n')->groupBy('group_id')->pluck('n', 'group_id')->all();
 
         $pendingCount = Booking::where('booking_status', Booking::STATUS_ACTIVE)->whereNull('verified_at')->count();
         $verifiedCount = Booking::where('booking_status', Booking::STATUS_ACTIVE)->whereNotNull('verified_at')->whereNull('hidden_at')->count();
         $rejectedCount = Booking::whereIn('booking_status', [Booking::STATUS_CANCELLED, Booking::STATUS_NO_SHOW])->whereNull('hidden_at')->count();
 
         return view('receptionist.bookings.index', compact(
-            'bookings', 'tab', 'pendingCount', 'verifiedCount', 'rejectedCount'
+            'bookings', 'tab', 'pendingCount', 'verifiedCount', 'rejectedCount', 'groupSizes'
         ));
     }
 

@@ -75,6 +75,10 @@ Route::middleware(['auth.api', 'role:guest'])->group(function () {
     // reservations have.
     Route::get('/guest/bookings', [BookingController::class, 'index']);
     Route::post('/guest/bookings', [BookingController::class, 'store']);
+    // Several stays in one request (each its own booking or reservation, tied by a group): create, view, cancel all.
+    Route::post('/guest/booking-groups', [\App\Http\Controllers\Api\BookingGroupController::class, 'store']);
+    Route::get('/guest/booking-groups/{group}', [\App\Http\Controllers\Api\BookingGroupController::class, 'show']);
+    Route::put('/guest/booking-groups/{group}/cancel', [\App\Http\Controllers\Api\BookingGroupController::class, 'cancel']);
     Route::get('/guest/bookings/{booking}', [BookingController::class, 'show']);
     Route::put('/guest/bookings/{booking}/cancel', [BookingController::class, 'cancel']);
     Route::get('/guest/bookings/{booking}/id-card', [BookingController::class, 'showIdCard']);

@@ -214,7 +214,7 @@ class ReservationController extends Controller
             'reference_number' => [
                 'nullable', 'string', 'max:100',
                 'required_with:gcash_number,receipt,amount_paid',
-                Rule::unique('payments', 'reference_number')
+                $request->attributes->get('group_member') ? 'string' : Rule::unique('payments', 'reference_number')
                     ->where(fn ($q) => $q->where('payment_method', 'gcash')->where('payment_status', '!=', 'failed')),
             ],
             'gcash_number' => 'nullable|regex:/^9\d{9}$/|required_with:reference_number,receipt,amount_paid',
@@ -492,6 +492,9 @@ class ReservationController extends Controller
             $reservation
         );
 
+        if ($groupId = $request->attributes->get('group_id')) {
+            $reservation->update(['group_id' => $groupId]);
+        }
         $reservation->load(['roomType', 'booking.room', 'bookingAmenities', 'payments']);
 
         return response()->json($reservation->append(['total_amount_due', 'amenities', 'timeline']), 201);

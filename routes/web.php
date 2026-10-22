@@ -305,6 +305,8 @@ Route::middleware(['auth', 'account.status', 'log.activity', 'no.cache'])->group
         // (see ReceptionistBookingController::idCard()).
         Route::get('/bookings/{booking}/id-card', [ReceptionistBookingController::class, 'idCard'])->name('bookings.id-card');
         Route::put('/bookings/{booking}/verify', [ReceptionistBookingController::class, 'verify'])->name('bookings.verify');
+        // Several stays booked together: verify the whole group in one action (each stay is still its own booking).
+        Route::put('/booking-groups/{group}/verify', [\App\Http\Controllers\Receptionist\BookingGroupController::class, 'verify'])->name('booking-groups.verify');
         Route::put('/bookings/{booking}/reject', [ReceptionistBookingController::class, 'reject'])->name('bookings.reject');
         // Discount IDs are VIEW-ONLY in the Bookings and Reservations modules; they are approved or rejected only in
         // the Check In module (check-in.discount.approve / reject below).

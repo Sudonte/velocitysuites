@@ -245,7 +245,8 @@ class BookingController extends Controller
                 'nullable',
                 'string',
                 'max:100',
-                Rule::unique('payments', 'reference_number')
+                // A stay of a group shares the group's one payment reference with its siblings (see BookingGroupController).
+                $request->attributes->get('group_member') ? 'string' : Rule::unique('payments', 'reference_number')
                     ->where(fn ($q) => $q->where('payment_method', 'gcash')->where('payment_status', '!=', 'failed')),
             ],
             'gcash_number' => 'required_if:payment_method,gcash|regex:/^9\d{9}$/',
@@ -425,6 +426,7 @@ class BookingController extends Controller
         // (a direct Booking has no later "Pay Now against remaining
         // balance" endpoint the way a Reservation's does).
         $booking->update([
+            'group_id' => $request->attributes->get('group_id'),
             'selected_payment_percentage' => $validated['selected_payment_percentage'] ?? null,
             'required_payment_amount' => (float) $validated['amount_paid'],
         ]);

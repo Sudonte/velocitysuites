@@ -45,6 +45,7 @@ class Reservation extends Model
 
     protected $fillable = [
         'guest_id',
+        'group_id',
         'guest_first_name',
         'guest_middle_name',
         'guest_last_name',
@@ -121,7 +122,17 @@ class Reservation extends Model
      * payment_deadline is the 48-hour Pay Later/Pay Now cutoff (see
      * getPaymentDeadlineAttribute()) - also always derived, never stored.
      */
-    protected $appends = ['discount_preview', 'payment_deadline', 'room_lines', 'deposit_cap', 'hidden_by_guest', 'discount_rejection_reason'];
+    protected $appends = ['discount_preview', 'payment_deadline', 'room_lines', 'deposit_cap', 'hidden_by_guest', 'discount_rejection_reason', 'group_reservation_ids'];
+
+    /** The other stays booked together with this one (their reservation ids, by check-in), or [] when it is not part of a group. */
+    public function getGroupReservationIdsAttribute(): array
+    {
+        if (! $this->group_id) {
+            return [];
+        }
+
+        return static::where('group_id', $this->group_id)->where('id', '!=', $this->id)->orderBy('check_in')->orderBy('id')->pluck('id')->all();
+    }
 
     /**
      * The staff member who verified/converted this reservation.
