@@ -113,6 +113,11 @@ class ReservationWorkflowService
             $capLeft = max(0.0, round($depositCap - $paid, 2));
         }
         $max = min($range['max'], $remaining, $capLeft);
+        // Online payment is a partial (down) payment only: it may never settle the whole bill. The rest is paid at the hotel
+        // (check-in and/or check-out). A payment equal to what is still owed is therefore not available online.
+        if ($max >= $remaining - 0.009) {
+            $max = 0.0;
+        }
 
         return [
             'total' => round($total, 2),
@@ -185,6 +190,30 @@ class ReservationWorkflowService
         return min($cap, round($discounted, 2));
     }
 
+    /** Why a guest cannot pay a whole bill online - one wording for every payment entry point (mobile API and website). */
+    public function partialOnlyMessage(): string
+    {
+        return 'Online payment is a partial payment only. Pay a down payment now and the rest at the hotel.';
+    }
+
+    /**
+     * The 422 body when an online payment made together with a NEW booking (or reservation) is not a partial payment:
+     * never the whole bill, and 20%-50% of the total. null when the amount is fine. The rest is paid at the hotel.
+     */
+    public function newTransactionAmountError(float $total, float $amount): ?array
+    {
+        $range = $this->depositRangeForTotal($total);
+        $message = null;
+        if ($amount >= $total - 0.01) {
+            $message = $this->partialOnlyMessage();
+        } elseif ($amount < $range['min'] - 0.005 || $amount > $range['max'] + 0.005) {
+            $message = 'The payment must be between ' . $this->peso($range['min']) . ' and ' . $this->peso($range['max'])
+                . ' (20%-50% of the ' . $this->peso($total) . ' total). The rest is paid at the hotel.';
+        }
+
+        return $message === null ? null : ['message' => $message, 'errors' => ['amount_paid' => [$message]]];
+    }
+
     /** Why Full payment is unavailable while a discount is being verified - one wording for every payment entry point. */
     public function pendingDiscountFullPaymentMessage(?array $depositRange = null): string
     {
@@ -221,19 +250,14 @@ class ReservationWorkflowService
         } elseif ($range['discount_pending'] && ! $range['can_partial'] && $range['cap_reached']) {
             $message = $this->maxDepositReachedMessage();
         } elseif ($paymentType === 'full') {
-            if ($range['discount_pending']) {
-                // A discount waiting for the ID check: deposits only, whatever the amount (see hasPendingDiscount()).
-                $message = $this->pendingDiscountFullPaymentMessage($range['can_partial'] ? $range : null);
-            } elseif (abs($amount - $range['remaining']) > 0.01) {
-                $message = 'Full payment must equal the remaining balance (' . $this->peso($range['remaining']) . ').';
-            }
+            // Online payment is partial only (see payableRange()): the rest is paid at the hotel.
+            $message = $this->partialOnlyMessage();
         } elseif (! $range['can_partial'] && $range['discount_pending']) {
             $message = 'Your discount is being verified. Payment is on hold until it is applied; the remaining balance ('
                 . $this->peso($range['remaining']) . ') is below the minimum deposit (' . $this->peso($range['min']) . ').';
         } elseif (! $range['can_partial']) {
-            $message = 'Full payment is required: the remaining balance (' . $this->peso($range['remaining'])
-                . ') is below the minimum down payment (' . $this->peso($range['min']) . '). Pay the full '
-                . $this->peso($range['remaining']) . ' instead.';
+            $message = 'The remaining balance (' . $this->peso($range['remaining'])
+                . ') is paid at the Velocity Suites front desk. Online payment is a partial payment only.';
         } elseif ($amount < $range['min'] - 0.005 || $amount > $range['max'] + 0.005) {
             $minPercent = (int) round((float) config('hotel.minimum_payment_ratio', 0.20) * 100);
             $maxPercent = (int) round((float) config('hotel.maximum_payment_ratio', 0.50) * 100);

@@ -255,9 +255,6 @@
                                             <input type="radio" class="btn-check" name="payment_type" id="paymentTypePartial" value="partial"
                                                    {{ old('payment_type', 'partial') === 'partial' ? 'checked' : '' }} onchange="updateGcashAmountMode()">
                                             <label class="btn btn-outline-secondary" for="paymentTypePartial">Partial (Deposit)</label>
-                                            <input type="radio" class="btn-check" name="payment_type" id="paymentTypeFull" value="full"
-                                                   {{ old('payment_type') === 'full' ? 'checked' : '' }} onchange="updateGcashAmountMode()">
-                                            <label class="btn btn-outline-secondary" for="paymentTypeFull">Full Payment</label>
                                         </div>
                                         <div id="gcashPercentChips" class="d-flex flex-wrap gap-2 mb-3">
                                             <button type="button" class="btn btn-sm btn-outline-primary" onclick="setGcashPercent(0.20)">20%</button>

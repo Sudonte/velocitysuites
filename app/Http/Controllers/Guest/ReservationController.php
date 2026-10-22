@@ -254,14 +254,8 @@ class ReservationController extends Controller
         $declaredAmount = $paymentMethod === 'gcash' ? ($validated['gcash_amount'] ?? null) : ($validated['cash_amount'] ?? null);
         if ($declaredAmount !== null) {
             if ($paymentMethod === 'gcash' && $paymentType === 'full') {
-                if ($discountRequested) {
-                    // A discount asked for in this same request is still waiting for the ID check: deposit only.
-                    return back()->withInput()->with('error', $this->workflow->pendingDiscountFullPaymentMessage($range));
-                }
-                if (abs((float) $declaredAmount - $range['total']) > 0.01) {
-                    return back()->withInput()->with('error',
-                        "Full payment must equal the total amount due (₱{$range['total']}).");
-                }
+                // Online payment is partial only; the rest is paid at the hotel.
+                return back()->withInput()->with('error', $this->workflow->partialOnlyMessage());
             } elseif ($discountRequested && (float) $declaredAmount > $this->workflow->pendingDepositCapForNewTransaction($range['total'], null) + 0.005) {
                 return back()->withInput()->with('error', $this->workflow->pendingDiscountFullPaymentMessage($range));
             } elseif ((float) $declaredAmount < $range['min'] || (float) $declaredAmount > $range['max']) {

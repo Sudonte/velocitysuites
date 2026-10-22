@@ -47,7 +47,7 @@ class BookingReservationCreationVisibilityTest extends ApiFlowTestCase
         $total = 2 * (1000 * 1 + 2000 * 2);
 
         $request = Request::create('/api/guest/bookings', 'POST',
-            $this->bookingRequestPayload($rt1, $rt2, 'BookingA', $total, (string) Str::uuid(), 'REF-' . Str::random(10)));
+            $this->bookingRequestPayload($rt1, $rt2, 'BookingA', $total * 0.3, (string) Str::uuid(), 'REF-' . Str::random(10)));
         $request->files->set('receipt', UploadedFile::fake()->image('receipt.jpg', 20, 20));
         $request->setUserResolver(fn () => $user);
 
@@ -94,7 +94,7 @@ class BookingReservationCreationVisibilityTest extends ApiFlowTestCase
             'payment_method' => 'gcash',
             'reference_number' => 'REF-' . Str::random(10),
             'gcash_number' => '9179876543',
-            'amount_paid' => $total,
+            'amount_paid' => $total * 0.3,
             'idempotency_key' => (string) Str::uuid(),
         ];
         $request = Request::create('/api/guest/reservations', 'POST', $payload);
@@ -134,7 +134,7 @@ class BookingReservationCreationVisibilityTest extends ApiFlowTestCase
 
         $makeRequest = function () use ($rt1, $rt2, $total, $idemKey, $refNum, $user) {
             $request = Request::create('/api/guest/bookings', 'POST',
-                $this->bookingRequestPayload($rt1, $rt2, 'IdemGuest', $total, $idemKey, $refNum));
+                $this->bookingRequestPayload($rt1, $rt2, 'IdemGuest', $total * 0.3, $idemKey, $refNum));
             $request->files->set('receipt', UploadedFile::fake()->image('receipt.jpg', 20, 20));
             $request->setUserResolver(fn () => $user);
 
@@ -161,7 +161,7 @@ class BookingReservationCreationVisibilityTest extends ApiFlowTestCase
         $total = 2 * (1000 * 1 + 2000 * 2);
 
         $request = Request::create('/api/guest/bookings', 'POST',
-            $this->bookingRequestPayload($rt1, $rt2, 'OwnerA', $total, (string) Str::uuid(), 'REF-' . Str::random(10)));
+            $this->bookingRequestPayload($rt1, $rt2, 'OwnerA', $total * 0.3, (string) Str::uuid(), 'REF-' . Str::random(10)));
         $request->files->set('receipt', UploadedFile::fake()->image('receipt.jpg', 20, 20));
         $request->setUserResolver(fn () => $userA);
 
@@ -204,7 +204,7 @@ class BookingReservationCreationVisibilityTest extends ApiFlowTestCase
         $rt2 = $this->makeRoomTypeWithRooms('Suite', 2000, 4, 3);
         $total = 2 * (1000 * 1 + 2000 * 2);
 
-        $payload = $this->bookingRequestPayload($rt1, $rt2, 'GuestOrder', $total, (string) Str::uuid(), 'REF-' . Str::random(10));
+        $payload = $this->bookingRequestPayload($rt1, $rt2, 'GuestOrder', $total * 0.3, (string) Str::uuid(), 'REF-' . Str::random(10));
         $payload['adults'] = 2;
         // Deliberately out-of-order keys ('1' before '0') - exactly what a HashMap-backed
         // multipart field map could produce on the wire; PHP preserves this insertion

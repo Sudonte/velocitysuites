@@ -81,7 +81,7 @@ class DiscountWaitingFullPaymentTest extends ApiFlowTestCase
         [$user, $guest] = $this->makeGuestUser('Disc1');
         $r = $this->reservation($guest, 'pending', $this->senior());
 
-        $this->assertRefused($this->pay($user, $r, 'full', 2000), 'being verified');
+        $this->assertRefused($this->pay($user, $r, 'full', 2000), 'partial payment only');
         $this->assertSame(0, Payment::where('reservation_id', $r->id)->count(), 'the refused payment was not recorded');
         $this->assertAccepted($this->pay($user, $r, 'partial', 500));
     }
@@ -91,7 +91,7 @@ class DiscountWaitingFullPaymentTest extends ApiFlowTestCase
         [$user, $guest] = $this->makeGuestUser('Disc2');
         $r = $this->reservation($guest, 'pending', $this->senior());
 
-        $this->assertRefused($this->pay($user, $r, 'full', 2000), '₱400.00 and ₱1,000.00');
+        $this->assertRefused($this->pay($user, $r, 'partial', 100), '₱400.00 and ₱1,000.00');
     }
 
     public function test_pending_also_blocks_full_for_the_exact_remaining_balance_after_an_earlier_deposit(): void
@@ -100,7 +100,7 @@ class DiscountWaitingFullPaymentTest extends ApiFlowTestCase
         $r = $this->reservation($guest, 'pending', $this->senior());
         $this->earlierPayment($r, 600);
 
-        $this->assertRefused($this->pay($user, $r, 'full', 1400), 'being verified');
+        $this->assertRefused($this->pay($user, $r, 'full', 1400), 'partial payment only');
         // all payments together stay under the cap: min(50% of 2,000, 1,600 after the 20% discount) = 1,000, so 400 is left
         $this->assertRefused($this->pay($user, $r, 'partial', 500), '₱400.00');
         $this->assertAccepted($this->pay($user, $r, 'partial', 400));
@@ -136,8 +136,9 @@ class DiscountWaitingFullPaymentTest extends ApiFlowTestCase
 
         // before a Billing exists the undiscounted 2,000 would have been charged; now it is the quote's 1,600
         $this->assertEquals(1600.0, $r->fresh()->total_amount_due);
-        $this->assertRefused($this->pay($user, $r, 'full', 2000), '₱1,600.00');
-        $this->assertAccepted($this->pay($user, $r, 'full', 1600));
+        $this->assertRefused($this->pay($user, $r, 'full', 1600), 'partial payment only');
+        $this->assertRefused($this->pay($user, $r, 'partial', 801), '₱800.00'); // 50% of the discounted 1,600
+        $this->assertAccepted($this->pay($user, $r, 'partial', 800));
     }
 
     public function test_approved_after_a_deposit_full_is_the_discounted_total_minus_what_was_paid(): void
@@ -146,8 +147,8 @@ class DiscountWaitingFullPaymentTest extends ApiFlowTestCase
         $r = $this->reservation($guest, 'approved', $this->senior());
         $this->earlierPayment($r, 600);
 
-        $this->assertRefused($this->pay($user, $r, 'full', 1400), '₱1,000.00');
-        $this->assertAccepted($this->pay($user, $r, 'full', 1000));
+        $this->assertRefused($this->pay($user, $r, 'full', 1000), 'partial payment only');
+        $this->assertAccepted($this->pay($user, $r, 'partial', 500)); // 1,000 is still owed: a deposit that leaves a balance
     }
 
     public function test_approved_deposits_follow_twenty_to_fifty_percent_of_the_discounted_total(): void
@@ -167,7 +168,8 @@ class DiscountWaitingFullPaymentTest extends ApiFlowTestCase
         $r = $this->reservation($guest, 'rejected', $this->senior());
 
         $this->assertEquals(2000.0, $r->fresh()->total_amount_due);
-        $this->assertAccepted($this->pay($user, $r, 'full', 2000));
+        $this->assertRefused($this->pay($user, $r, 'full', 2000), 'partial payment only');
+        $this->assertAccepted($this->pay($user, $r, 'partial', 1000));
     }
 
     public function test_no_discount_requested_leaves_the_normal_rules(): void
@@ -175,7 +177,8 @@ class DiscountWaitingFullPaymentTest extends ApiFlowTestCase
         [$user, $guest] = $this->makeGuestUser('Disc10');
         $r = $this->reservation($guest, 'not_requested');
 
-        $this->assertAccepted($this->pay($user, $r, 'full', 2000));
+        $this->assertRefused($this->pay($user, $r, 'full', 2000), 'partial payment only');
+        $this->assertAccepted($this->pay($user, $r, 'partial', 1000));
     }
 
     // ---- creating a reservation / a booking with the payment ----
@@ -221,14 +224,14 @@ class DiscountWaitingFullPaymentTest extends ApiFlowTestCase
         $discount = $this->senior();
 
         $full = $this->postReservation($user, $this->creationPayload($rt, $this->gcashFields(2000) + ['discount_id' => $discount->id]), UploadedFile::fake()->image('r.jpg'));
-        $this->assertRefused($full, 'being verified');
+        $this->assertRefused($full, 'partial payment only');
 
         $deposit = $this->postReservation($user, $this->creationPayload($rt, $this->gcashFields(500) + ['discount_id' => $discount->id]), UploadedFile::fake()->image('r.jpg'));
         $this->assertAccepted($deposit);
 
-        // and without a discount the full total is still fine
+        // and without a discount the full total is refused too: online payment is partial only
         $plain = $this->postReservation($user, $this->creationPayload($rt, $this->gcashFields(2000)), UploadedFile::fake()->image('r.jpg'));
-        $this->assertAccepted($plain);
+        $this->assertRefused($plain, 'partial payment only');
     }
 
     public function test_creating_a_booking_with_a_discount_and_the_full_total_is_refused_but_a_deposit_goes_through(): void
@@ -250,7 +253,7 @@ class DiscountWaitingFullPaymentTest extends ApiFlowTestCase
             }
         };
 
-        $this->assertRefused($post(2000), 'being verified');
+        $this->assertRefused($post(2000), 'partial payment only');
         $this->assertSame(0, Booking::count(), 'a refused full payment creates no booking');
         $this->assertAccepted($post(500));
     }

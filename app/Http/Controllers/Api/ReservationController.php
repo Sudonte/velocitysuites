@@ -323,6 +323,11 @@ class ReservationController extends Controller
                     'errors' => ['amount_paid' => ["Must be more than ₱0 and at most ₱{$expectedTotal}."]],
                 ], 422);
             }
+            // Online payment is a partial (down) payment only, never the whole bill: the rest is paid at the hotel.
+            $partialError = $this->workflow->newTransactionAmountError($expectedTotal, $amountPaid);
+            if ($partialError !== null) {
+                return response()->json($partialError, 422);
+            }
             // A discount asked for in this same request is by definition still waiting for the ID check: a deposit
             // only, and all payments together stay under the pending-discount cap (ReservationWorkflowService::
             // pendingDepositCap) - never the full (undiscounted) total.
@@ -342,7 +347,7 @@ class ReservationController extends Controller
                 'gcash_number' => $validated['gcash_number'],
                 'receipt_path' => $request->file('receipt')->store('payment-receipts', 'public'),
                 'amount_paid' => $amountPaid,
-                'payment_stage' => $amountPaid >= $expectedTotal - 0.01 ? 'final' : 'deposit',
+                'payment_stage' => 'deposit',
                 'selected_payment_percentage' => $validated['selected_payment_percentage'] ?? null,
             ];
         }

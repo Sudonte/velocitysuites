@@ -189,7 +189,7 @@
             @endif
 
             <!-- Pay Deposit Now (Pay Later + GCash, still awaiting review) -->
-            @if($reservation->status === \App\Models\Reservation::STATUS_AWAITING_GCASH && $reservation->payment_method === 'gcash' && ! $depositRange['is_settled'] && ($depositRange['can_partial'] || ! $depositRange['discount_pending']))
+            @if($reservation->status === \App\Models\Reservation::STATUS_AWAITING_GCASH && $reservation->payment_method === 'gcash' && ! $depositRange['is_settled'] && $depositRange['can_partial'])
                 <x-card title="Pay Deposit Now" icon="fas fa-qrcode" bodyClass="card-body" class="mb-4">
                     <p class="text-muted small">Complete your GCash payment now to move this reservation straight to booking conversion.</p>
                     @if($depositRange['paid'] > 0.009)
@@ -211,12 +211,7 @@
                                        {{ old('payment_type', 'partial') === 'partial' || $depositRange['discount_pending'] ? 'checked' : '' }} onchange="updateDepositAmountMode()">
                                 <label class="btn btn-outline-secondary" for="depositTypePartial">Partial (Deposit)</label>
                             @endif
-                            {{-- Full Payment = the remaining balance; not offered while a discount waits for its ID check. --}}
-                            @unless($depositRange['discount_pending'])
-                                <input type="radio" class="btn-check" name="payment_type" id="depositTypeFull" value="full"
-                                       {{ old('payment_type') === 'full' || ! $depositRange['can_partial'] ? 'checked' : '' }} onchange="updateDepositAmountMode()">
-                                <label class="btn btn-outline-secondary" for="depositTypeFull">Full Payment</label>
-                            @endunless
+                            {{-- Online payment is partial only; the rest is paid at the hotel. --}}
                         </div>
                         <div id="depositPercentChips" class="d-flex gap-2 mb-3">
                             <button type="button" class="btn btn-sm btn-outline-primary" onclick="setDepositPercent(0.20)">20%</button>

@@ -136,13 +136,13 @@ class GuestRulesApiTest extends ApiFlowTestCase
     {
         [$user] = $this->makeGuestUser('WindowB');
         $rt = $this->makeRoomTypeWithRooms('Deluxe', 1000, 2, 3);
-        $res = $this->postBooking($user, $this->bookingPayload($rt, 1000, [
+        $res = $this->postBooking($user, $this->bookingPayload($rt, 300, [
             'check_in' => now('Asia/Manila')->addDay()->toDateString(),
             'check_out' => now('Asia/Manila')->addDays(2)->toDateString(),
         ]));
         $this->assertRejected($res, 'Check-in must be at least 2 days from today');
 
-        $ok = $this->postBooking($user, $this->bookingPayload($rt, 3000, [
+        $ok = $this->postBooking($user, $this->bookingPayload($rt, 1000, [
             'check_in' => now('Asia/Manila')->addDays(60)->toDateString(),
             'check_out' => now('Asia/Manila')->addDays(63)->toDateString(),
         ]));
@@ -238,8 +238,8 @@ class GuestRulesApiTest extends ApiFlowTestCase
         $active = $this->discount('VIP', 'active', 15);
         $total = 2 * 1000; // 2 nights
 
-        $this->assertRejected($this->postBooking($user, $this->bookingPayload($rt, $total, ['discount_id' => $inactive->id]), UploadedFile::fake()->image('id.jpg')), 'no longer available');
-        $this->assertRejected($this->postBooking($user, $this->bookingPayload($rt, $total, ['discount_id' => $active->id])), 'upload a valid ID');
+        $this->assertRejected($this->postBooking($user, $this->bookingPayload($rt, $total / 4, ['discount_id' => $inactive->id]), UploadedFile::fake()->image('id.jpg')), 'no longer available');
+        $this->assertRejected($this->postBooking($user, $this->bookingPayload($rt, $total / 4, ['discount_id' => $active->id])), 'upload a valid ID');
 
         // a deposit, not the full total: a discount waiting for its ID check allows deposits only
         $ok = $this->postBooking($user, $this->bookingPayload($rt, $total / 4, ['discount_id' => $active->id]), UploadedFile::fake()->image('id.jpg'));

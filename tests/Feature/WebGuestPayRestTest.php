@@ -72,15 +72,14 @@ class WebGuestPayRestTest extends ApiFlowTestCase
 
     // ---- pay the rest ----
 
-    public function test_the_website_accepts_a_full_payment_of_the_remaining_balance_after_a_verified_deposit(): void
+    public function test_the_website_refuses_a_full_payment_of_the_remaining_balance_after_a_verified_deposit(): void
     {
         [$user, $guest] = $this->makeGuestUser('Web1');
         $r = $this->reservation($guest);
         $this->verified($r, 600);
 
-        $this->assertNull($this->payNow($user, $r, 'full', 1400));
-        $this->assertEquals(1400.0, (float) $this->pending($r)->amount_paid);
-        $this->assertSame('final', $this->pending($r)->payment_stage);
+        $this->assertStringContainsString('partial payment only', (string) $this->payNow($user, $r, 'full', 1400));
+        $this->assertNull($this->pending($r), 'nothing was recorded');
     }
 
     public function test_the_website_refuses_the_whole_price_once_something_is_paid(): void
@@ -89,7 +88,7 @@ class WebGuestPayRestTest extends ApiFlowTestCase
         $r = $this->reservation($guest);
         $this->verified($r, 600);
 
-        $this->assertStringContainsString('₱1,400.00', (string) $this->payNow($user, $r, 'full', 2000));
+        $this->assertStringContainsString('partial payment only', (string) $this->payNow($user, $r, 'full', 2000));
         $this->assertNull($this->pending($r), 'nothing was recorded');
     }
 
@@ -97,11 +96,11 @@ class WebGuestPayRestTest extends ApiFlowTestCase
     {
         [$user, $guest] = $this->makeGuestUser('Web3');
         $r = $this->reservation($guest);
-        $this->verified($r, 1200); // 800 left: the 50% maximum (1,000) would overshoot
+        $this->verified($r, 1200); // 800 left: a payment can never pay off the whole balance online
 
-        $this->assertStringContainsString('₱800.00', (string) $this->payNow($user, $r, 'partial', 900));
-        $this->assertNull($this->payNow($user, $r, 'partial', 800));
-        $this->assertSame('final', $this->pending($r)->payment_stage, 'a payment that settles the balance is the final one');
+        $this->assertStringContainsString('front desk', (string) $this->payNow($user, $r, 'partial', 800));
+        $this->assertStringContainsString('front desk', (string) $this->payNow($user, $r, 'partial', 500));
+        $this->assertNull($this->pending($r), 'nothing was recorded');
     }
 
     public function test_the_website_blocks_a_fully_paid_reservation(): void
@@ -121,7 +120,7 @@ class WebGuestPayRestTest extends ApiFlowTestCase
         $senior = Discount::create(['name' => 'Senior Citizen', 'discount_type' => 'percentage', 'value' => 20, 'description' => 'RA 9994', 'status' => 'active']);
         $r = $this->reservation($guest, Reservation::STATUS_AWAITING_GCASH, $senior, 'pending');
 
-        $this->assertStringContainsString('being verified', (string) $this->payNow($user, $r, 'full', 2000));
+        $this->assertStringContainsString('partial payment only', (string) $this->payNow($user, $r, 'full', 2000));
         $this->assertNull($this->payNow($user, $r, 'partial', 500));
     }
 

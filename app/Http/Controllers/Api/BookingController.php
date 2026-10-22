@@ -142,7 +142,7 @@ class BookingController extends Controller
         }
 
         if ($booking->verified_at !== null) {
-            return response()->json(['message' => 'This booking has already been verified by our staff and can no longer be cancelled.'], 422);
+            return response()->json(['message' => 'Your booking has been verified by the front desk, so it can no longer be cancelled.'], 422);
         }
 
         DB::transaction(function () use ($booking) {
@@ -320,6 +320,13 @@ class BookingController extends Controller
             ], 422);
         }
 
+        // Online payment for a booking is a partial (down) payment only: 20%-50% of the total, never the whole bill. The rest is
+        // paid at the hotel (check-in and/or check-out).
+        $partialError = app(\App\Services\ReservationWorkflowService::class)->newTransactionAmountError($expectedTotal, $amountPaid);
+        if ($partialError !== null) {
+            return response()->json($partialError, 422);
+        }
+
         [$discount, $discountError] = \App\Support\DiscountSelection::resolve($validated['discount_id'] ?? null, $validated['id_card_type'] ?? null);
         if ($discountError !== null) {
             return response()->json(['message' => $discountError, 'errors' => ['discount_id' => [$discountError]]], 422);
@@ -354,7 +361,7 @@ class BookingController extends Controller
             'amount_paid' => $validated['amount_paid'],
             // A partial payment (deposit) leaves a remaining balance the guest
             // pays later; matches the amount_paid <= expectedTotal check above.
-            'payment_stage' => $amountPaid >= $expectedTotal - 0.01 ? 'final' : 'deposit',
+            'payment_stage' => 'deposit',
         ];
         if ($validated['payment_method'] === 'gcash') {
             $paymentData['reference_number'] = $validated['reference_number'];

@@ -74,7 +74,7 @@ class CashDepositWithPendingDiscountTest extends ApiFlowTestCase
 
         $full = $this->pay($user, $r, 'full', 2000);
         $this->assertSame(422, $full->getStatusCode());
-        $this->assertStringContainsString('being verified', $this->message($full));
+        $this->assertStringContainsString('partial payment only', $this->message($full));
         $this->assertSame(0, Payment::where('reservation_id', $r->id)->count());
 
         $deposit = $this->pay($user, $r, 'partial', 500);
@@ -101,9 +101,10 @@ class CashDepositWithPendingDiscountTest extends ApiFlowTestCase
         [$user, $guest] = $this->makeGuestUser('Cash3');
         $r = $this->reservation($guest, false);
 
-        $full = $this->pay($user, $r, 'full', 2000);
-        $this->assertSame(201, $full->getStatusCode(), $full->getContent());
-        $this->assertSame('final', Payment::where('reservation_id', $r->id)->value('payment_stage'));
+        $this->assertSame(422, $this->pay($user, $r, 'full', 2000)->getStatusCode(), 'online payment is partial only');
+        $partial = $this->pay($user, $r, 'partial', 1000);
+        $this->assertSame(201, $partial->getStatusCode(), $partial->getContent());
+        $this->assertSame('deposit', Payment::where('reservation_id', $r->id)->value('payment_stage'));
     }
 
     // ---- the receptionist's cash confirmation ----
