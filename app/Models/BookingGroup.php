@@ -4,7 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 
-/** Several stays booked together: each stay is its own booking or reservation (see the booking_groups migration). */
+/** Several stays booked together: each stay is its own booking or reservation (see the booking_groups migration; a group is only a link, never a bill). */
 class BookingGroup extends Model
 {
     protected $fillable = ['guest_id'];
