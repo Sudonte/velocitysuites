@@ -472,6 +472,13 @@ class ReceiptService
 
         return [
             'receipt_type' => $receiptType,
+            // The three receipts of a stay by their guest-facing names.
+            'receipt_title' => match ($receiptType) {
+                'PARTIAL_RECEIPT', 'FULL_PAYMENT_RECEIPT' => 'Payment verified',
+                'CHECKIN_SETTLEMENT_RECEIPT' => 'Check-in',
+                'OFFICIAL_RECEIPT' => 'Check-out (final)',
+                default => null,
+            },
             'receipt_stage' => match ($receiptType) {
                 'PARTIAL_RECEIPT', 'FULL_PAYMENT_RECEIPT' => 1,
                 'CHECKIN_SETTLEMENT_RECEIPT' => 2,

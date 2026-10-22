@@ -148,10 +148,13 @@ final class StayBill
         // them - those the guest requested after booking or the desk added - as their own lines.
         $amenityRows = $booking->preloadedAmenityRequests !== null
             ? ($billing ? $booking->preloadedBilledAmenityRequests : $booking->preloadedAmenityRequests)
-            : ($billing ? $booking->billedAmenityRequests()->get() : $booking->billableAmenityRequests()->get());
+            : ($billing ? $booking->billedAmenityRequests()->with('room')->get() : $booking->billableAmenityRequests()->with('room')->get());
         // The amenity rows frozen on the bill at check-in (listed in its receipt snapshot); older stays fall back to timestamps.
         $checkinAmenityIds = isset($billing?->checkin_receipt_snapshot['amenity_ids']) ? array_map('intval', $billing->checkin_receipt_snapshot['amenity_ids']) : null;
         $amenityLines = $amenityRows->map(fn ($r) => [
+            // The room it was requested for (null: one booked for the whole stay). Only read when the relation is loaded.
+            'room_id' => $r->room_id,
+            'room_number' => $r->relationLoaded('room') ? $r->room?->room_number : null,
             'amenity_name' => $r->amenity_name,
             'quantity' => (int) $r->quantity,
             'unit_price' => round((float) $r->charge, 2),

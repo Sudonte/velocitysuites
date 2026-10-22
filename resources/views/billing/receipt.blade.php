@@ -17,7 +17,7 @@
                      rule (billing_status=paid AND booking_status=
                      COMPLETED_BOOKING) - never assumed "Official" just
                      because this page happens to be reachable. --}}
-                {{ $paymentSummary['official_receipt_available'] ? 'Official Payment Receipt' : 'Payment Receipt' }}
+                {{ $paymentSummary['official_receipt_available'] ? 'Check-out (final) receipt' : 'Payment receipt' }}
             </h1>
             @if($billing->booking)
                 <p class="text-muted">

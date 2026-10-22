@@ -41,7 +41,7 @@ class ReceiptSnapshotService
             'total_paid' => $paid,
             'remaining_balance' => $remaining,
             'amount_to_pay' => $remaining,
-            'amount_to_pay_note' => 'Due at check-in',
+            'amount_to_pay_note' => $remaining <= 0.004 ? 'Fully paid' : 'Remaining balance due at the hotel',
         ];
 
         return $this->store($booking, Receipt::BOOKING_VERIFICATION, $payment->receipt_number, $payload, $by, $total, $paid, $remaining);
@@ -67,7 +67,7 @@ class ReceiptSnapshotService
             'total_paid' => $paid,
             'remaining_balance' => $remaining,
             'amount_to_pay' => $remaining,
-            'amount_to_pay_note' => $remaining <= 0.004 ? 'Fully paid' : 'Still due',
+            'amount_to_pay_note' => $remaining <= 0.004 ? 'Fully paid' : 'To be paid at check-out',
         ];
 
         return $this->store($booking, Receipt::CHECKIN_PAYMENT, $billing->checkin_receipt_number, $payload, $by, $total, $paid, $remaining);
@@ -90,8 +90,37 @@ class ReceiptSnapshotService
         $fromR1 = round((float) ($r1?->snapshot['highlight']['amount_paid_now'] ?? 0), 2);
         $fromR2 = round((float) ($r2?->snapshot['highlight']['amount_paid_now'] ?? 0), 2);
         $stay = $payload['stay_bill'] ?? [];
+
+        // Approved amenities grouped by the room they were for ("All rooms" for one booked for the whole stay).
+        $byRoom = [];
+        foreach ($stay['amenity_lines'] ?? [] as $line) {
+            $key = $line['room_number'] ?? '';
+            $byRoom[$key]['room'] = $line['room_number'] ?? null;
+            $byRoom[$key]['items'][] = ['name' => $line['amenity_name'], 'quantity' => $line['quantity'], 'unit_price' => $line['unit_price'], 'subtotal' => $line['subtotal']];
+            $byRoom[$key]['subtotal'] = round(($byRoom[$key]['subtotal'] ?? 0) + (float) $line['subtotal'], 2);
+        }
+        ksort($byRoom);
+        // Every payment that counts, in order, labelled by where it was taken.
+        $payments = [];
+        foreach ($payload['payment_transactions'] ?? [] as $tx) {
+            if (($tx['payment_status'] ?? null) !== 'completed' || (float) $tx['amount_paid'] <= 0) {
+                continue;
+            }
+            $ref = (string) ($tx['reference_number'] ?? '');
+            $payments[] = [
+                'label' => str_starts_with($ref, 'CHECKIN-') ? 'Paid at check-in'
+                    : (($tx['receipt_type'] ?? null) !== null && ($tx['receipt_number'] ?? null) !== null ? 'Payment verified' : 'Paid at check-out'),
+                'amount' => round((float) $tx['amount_paid'], 2),
+                'method' => $tx['payment_method'] ?? null,
+                'date' => $tx['payment_date'] ?? null,
+            ];
+        }
         $payload['highlight'] = [
             'kind' => 'checkout_final',
+            'amenities_by_room' => array_values($byRoom),
+            'other_charges' => array_map(fn ($c) => ['name' => $c['description'], 'amount' => $c['amount']], $stay['additional_charges'] ?? []),
+            'payments' => $payments,
+            'no_refund_note' => \App\Support\StayBill::NO_REFUND_NOTE,
             'room_charges' => round((float) ($stay['room_charge'] ?? 0), 2),
             'amenities_total' => round((float) ($stay['amenity_charge'] ?? 0), 2),
             'additional_charges_total' => round((float) ($stay['additional_charges_total'] ?? 0), 2),

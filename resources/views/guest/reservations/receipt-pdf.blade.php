@@ -34,7 +34,7 @@
         payment must never print as "Official Payment Receipt" - see
         PAYMENT_RECEIPT_HISTORY_BACKEND_SPEC.md §7.
     --}}
-    <p class="subtitle">{{ $paymentSummary['official_receipt_available'] ? 'Official Payment Receipt' : 'Payment Receipt' }}</p>
+    <p class="subtitle">{{ $paymentSummary['official_receipt_available'] ? 'Check-out (final) receipt' : 'Payment receipt' }}</p>
     <hr>
 
     <h2>Booking Information</h2>

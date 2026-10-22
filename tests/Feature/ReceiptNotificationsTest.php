@@ -71,7 +71,7 @@ class ReceiptNotificationsTest extends ApiFlowTestCase
         $n1 = $this->receiptNotes($user, 'PARTIAL_RECEIPT');
         $this->assertCount(1, $n1, 'exactly one Receipt 1 notification');
         $this->assertStringContainsString('Your booking has been verified. Receipt 1 ('.$p->fresh()->receipt_number.') is ready.', $n1[0]->message);
-        $this->assertStringContainsString('Remaining balance: ₱600.00', $n1[0]->message);
+        $this->assertStringContainsString('Amount paid: ₱400.00. Remaining balance due at the hotel: ₱600.00.', $n1[0]->message);
         $this->assertSame((int) $booking->id, (int) $n1[0]->reference_id, 'it points at the booking');
         $this->assertSame($p->fresh()->receipt_number, $n1[0]->receipt_number, 'and carries the receipt to open');
         $this->assertSame($bell0 + 1, $this->unread($user), 'the bell went up');
@@ -89,7 +89,7 @@ class ReceiptNotificationsTest extends ApiFlowTestCase
         $this->assertStringContainsString('Welcome! You are checked in to', $n2[0]->message);
         $this->assertStringContainsString('Your check-in payment was verified. Receipt 2 (', $n2[0]->message);
         $this->assertSame(0, Notification::where('user_id', $user->id)->whereIn('title', ['Checked In', 'Payment Received'])->count(), 'no separate check-in / payment messages');
-        $this->assertStringContainsString('Remaining balance: ₱0.00', $n2[0]->message);
+        $this->assertStringContainsString('Paid at check-in: ₱600.00. Total paid so far: ₱1,000.00. Nothing is left to pay at check-out.', $n2[0]->message);
         $this->assertSame((int) $booking->id, (int) $n2[0]->reference_id);
         $this->assertGreaterThan($bell1, $this->unread($user), 'the bell went up again');
 
@@ -107,7 +107,25 @@ class ReceiptNotificationsTest extends ApiFlowTestCase
         $this->assertSame(0, Notification::where('user_id', $user->id)->whereIn('title', ['Checked Out', 'Payment Complete'])->count(), 'no separate check-out messages');
         $this->assertSame(1, Notification::where('user_id', $user->id)->where('title', 'You Can Now Request Additional Amenities')->count(), 'the amenities-unlocked message is its own, separate notification');
         $this->assertStringContainsString('Grand total: ₱1,000.00', $n3[0]->message);
-        $this->assertStringContainsString('Remaining balance: ₱0.00', $n3[0]->message);
+        $this->assertStringContainsString('Total paid: ₱1,000.00. Final balance: ₱0.00.', $n3[0]->message);
+
+        // the three stored receipts say what they must: titles, the money lines and the notes
+        $receipts = \App\Models\Receipt::where('booking_id', $booking->id)->orderBy('receipt_type')->get();
+        $this->assertSame(['Payment verified', 'Check-in', 'Check-out (final)'], $receipts->map(fn ($r) => $r->snapshot['receipt_title'])->all());
+        $h1 = $receipts[0]->snapshot['highlight'];
+        $this->assertSame('Remaining balance due at the hotel', $h1['amount_to_pay_note']);
+        $this->assertEquals(600.0, $h1['remaining_balance']);
+        $h2 = $receipts[1]->snapshot['highlight'];
+        $this->assertEquals(600.0, $h2['amount_paid_now']);
+        $this->assertEquals(1000.0, $h2['total_paid']);
+        $this->assertSame('Fully paid', $h2['amount_to_pay_note']);
+        $h3 = $receipts[2]->snapshot['highlight'];
+        $this->assertEquals(1000.0, $h3['room_charges'], 'the booked nights');
+        $this->assertEquals(1000.0, $h3['grand_total']);
+        $this->assertEquals(0.0, $h3['remaining_balance']);
+        $this->assertSame('No refunds for early check-out (hotel policy).', $h3['no_refund_note']);
+        $this->assertSame([], $h3['other_charges']);
+        $this->assertSame([], $h3['amenities_by_room']);
         $this->assertSame((int) $booking->id, (int) $n3[0]->reference_id);
         $this->assertGreaterThan($bell2, $this->unread($user));
 

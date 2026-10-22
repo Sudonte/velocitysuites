@@ -88,10 +88,12 @@ $labels = [
     // Required labels per PAYMENT_RECEIPT_HISTORY_BACKEND_SPEC.md - a
     // verified 100% payment made before checkout is a "Payment Receipt",
     // NEVER "Official Payment Receipt" (that label is checkout-only).
+    // The stay's three receipts by their guest-facing names: payment verified, check-in, check-out (final).
     'receipt_type' => [
-        'PARTIAL_RECEIPT' => 'Partial Payment Receipt',
-        'FULL_PAYMENT_RECEIPT' => 'Payment Receipt',
-        'OFFICIAL_RECEIPT' => 'Official Payment Receipt',
+        'PARTIAL_RECEIPT' => 'Payment verified',
+        'FULL_PAYMENT_RECEIPT' => 'Payment verified',
+        'CHECKIN_SETTLEMENT_RECEIPT' => 'Check-in',
+        'OFFICIAL_RECEIPT' => 'Check-out (final)',
     ],
     'verification_status' => [
         'verified' => 'Verified', 'pending_verification' => 'Pending Verification', 'rejected' => 'Rejected',
