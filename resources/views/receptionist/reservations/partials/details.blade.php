@@ -58,7 +58,7 @@
                 <div><dt>Email</dt><dd>{{ $reservation->guest?->user?->email ?? 'N/A' }}</dd></div>
                 <div><dt>Mobile Number</dt><dd>{{ $reservation->guest?->mobile_number ?: 'Not provided' }}</dd></div>
                 <div><dt>Adults</dt><dd>{{ $reservation->adults }}</dd></div>
-                <div><dt>Children</dt><dd>{{ $reservation->children }}</dd></div>
+                <div><dt>Minors</dt><dd>{{ $reservation->children }}</dd></div>
                 <div><dt>Total Guests</dt><dd>{{ $reservation->number_of_guests }}</dd></div>
             </dl>
             @if(!empty($reservation->additional_guest_details))

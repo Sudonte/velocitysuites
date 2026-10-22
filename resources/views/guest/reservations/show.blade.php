@@ -447,7 +447,7 @@
                             </div>
                             <div class="col-md-6">
                                 <div class="form-group mb-3">
-                                    <label for="mod_children">Children <span class="text-muted">(under 12)</span></label>
+                                    <label for="mod_children">Number of minors <span class="text-muted">(under 12)</span></label>
                                     <input type="number" class="form-control" id="mod_children" name="children"
                                            value="{{ $reservation->children }}" min="0">
                                     <small class="guest-capacity-hint d-block text-muted mt-1"></small>

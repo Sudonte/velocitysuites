@@ -112,7 +112,7 @@
                                     <input type="number" min="1" max="50" name="capacity" class="form-control @error('capacity') is-invalid @enderror"
                                            value="{{ old('capacity', $roomType->capacity) }}" required aria-label="Maximum guests">
                                 </div>
-                                <small class="text-muted">Adults and children combined, per room. Applies to every room of this type.</small>
+                                <small class="text-muted">Adults and minors combined, per room. Applies to every room of this type.</small>
                                 @error('min_capacity')<div class="invalid-feedback d-block">{{ $message }}</div>@enderror
                                 @error('capacity')<div class="invalid-feedback d-block">{{ $message }}</div>@enderror
                             </div>

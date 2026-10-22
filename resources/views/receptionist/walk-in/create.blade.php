@@ -128,7 +128,7 @@
                         </div>
                         <div class="col-md-6">
                             <div class="form-group mb-3">
-                                <label for="children"><strong>Children</strong></label>
+                                <label for="children"><strong>Minors</strong></label>
                                 <input type="number" class="form-control" id="children" name="children" min="0" value="0">
                             </div>
                         </div>

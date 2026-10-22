@@ -115,7 +115,7 @@
                                value="{{ old('adults', $booking->adults) }}">
                     </div>
                     <div class="col-md-6">
-                        <label class="form-label small mb-1">Children</label>
+                        <label class="form-label small mb-1">Minors</label>
                         <input type="number" name="children" min="0" class="form-control form-control-sm"
                                value="{{ old('children', $booking->children ?? 0) }}">
                     </div>

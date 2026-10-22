@@ -98,7 +98,7 @@
                         </div>
                         <div class="col-md-6">
                             <div class="form-group mb-3">
-                                <label for="children">Children</label>
+                                <label for="children">Minors</label>
                                 <input type="number" min="0" class="form-control @error('children') is-invalid @enderror"
                                        id="children" name="children" value="{{ old('children', 0) }}">
                                 <small class="guest-capacity-hint d-block text-muted mt-1"></small>

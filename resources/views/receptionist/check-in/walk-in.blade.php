@@ -86,7 +86,7 @@
                             <input type="number" min="1" class="form-control @error('adults') is-invalid @enderror" id="adults" name="adults" value="{{ old('adults', 1) }}" required>
                         </div>
                         <div class="col-md-3">
-                            <label class="form-label" for="children">Children</label>
+                            <label class="form-label" for="children">Minors</label>
                             <input type="number" min="0" class="form-control" id="children" name="children" value="{{ old('children', 0) }}">
                         </div>
                     </div>

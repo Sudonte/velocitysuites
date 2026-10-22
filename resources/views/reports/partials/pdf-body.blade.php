@@ -30,7 +30,7 @@
         <tr><td>Confirmed / Pending</td><td>{{ $s['stays_confirmed'] }} / {{ $s['stays_pending'] }}</td><td>Pending = awaiting payment or verification</td></tr>
         <tr><td>Cancelled</td><td>{{ $s['cancellations'] }} ({{ $s['cancellation_rate'] }}%)</td><td>Each cancelled stay counted once</td></tr>
         <tr><td>No-Shows</td><td>{{ $s['no_shows'] }} ({{ $s['no_show_rate'] }}%)</td><td>Marked by a receptionist</td></tr>
-        <tr><td>Total Guests Stayed</td><td>{{ $s['guests_total'] }}</td><td>Adults + children of stays that checked in</td></tr>
+        <tr><td>Total Guests Stayed</td><td>{{ $s['guests_total'] }}</td><td>Adults + minors of stays that checked in</td></tr>
         @if($withRevenue)
             <tr><td>ADR</td><td>{!! $peso($s['adr']) !!}</td><td>Room revenue &divide; room-nights sold</td></tr>
             <tr><td>RevPAR</td><td>{!! $peso($s['revpar']) !!}</td><td>Room revenue &divide; room-nights available</td></tr>

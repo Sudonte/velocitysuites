@@ -68,7 +68,7 @@
                 </div>
                 <div class="row mb-2">
                     <div class="col-md-4"><strong>Guests:</strong></div>
-                    <div class="col-md-8">{{ $booking->adults }} adult{{ $booking->adults == 1 ? '' : 's' }}@if($booking->children > 0), {{ $booking->children }} child{{ $booking->children == 1 ? '' : 'ren' }}@endif</div>
+                    <div class="col-md-8">{{ $booking->adults }} adult{{ $booking->adults == 1 ? '' : 's' }}@if($booking->children > 0), {{ $booking->children }} minor{{ $booking->children == 1 ? '' : 's' }}@endif</div>
                 </div>
                 <div class="row mb-0">
                     <div class="col-md-4"><strong>Confirmed At:</strong></div>

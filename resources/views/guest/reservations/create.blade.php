@@ -163,7 +163,7 @@
                             </div>
                             <div class="col-md-6">
                                 <div class="form-group mb-3">
-                                    <label for="children" class="form-label">Children <span class="text-muted">(under 12)</span></label>
+                                    <label for="children" class="form-label">Number of minors <span class="text-muted">(under 12)</span></label>
                                     <input type="number" class="form-control @error('children') is-invalid @enderror"
                                            id="children" name="children" min="0"
                                            value="{{ old('children', 0) }}">

@@ -58,7 +58,7 @@
                         <dd>
                             {{ $reservation->number_of_guests }}
                             @if($reservation->adults || $reservation->children)
-                                <span class="text-muted">({{ $reservation->adults }} adult{{ $reservation->adults == 1 ? '' : 's' }}@if($reservation->children), {{ $reservation->children }} child{{ $reservation->children == 1 ? '' : 'ren' }}@endif)</span>
+                                <span class="text-muted">({{ $reservation->adults }} adult{{ $reservation->adults == 1 ? '' : 's' }}@if($reservation->children), {{ $reservation->children }} minor{{ $reservation->children == 1 ? '' : 's' }}@endif)</span>
                             @endif
                         </dd>
                     </div>

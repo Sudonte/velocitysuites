@@ -46,7 +46,7 @@ class GuestCapacity
         ['min' => $min, 'max' => $max] = self::range($lines);
 
         if ($totalGuests > $max) {
-            return "Adults and children combined ({$totalGuests}) exceed the total capacity ({$max}) of the selected room(s).";
+            return "Adults and minors combined ({$totalGuests}) exceed the total capacity ({$max}) of the selected room(s).";
         }
         if ($totalGuests < $min) {
             return "The selected room(s) require at least {$min} guest(s); you entered {$totalGuests}.";

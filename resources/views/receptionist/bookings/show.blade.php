@@ -60,7 +60,7 @@
                             <div><dt>Email</dt><dd>{{ $booking->account_guest?->user?->email ?? 'N/A' }}</dd></div>
                             <div><dt>Mobile Number</dt><dd>{{ $booking->account_guest?->mobile_number ?: 'Not provided' }}</dd></div>
                             <div><dt>Adults</dt><dd>{{ $booking->adults }}</dd></div>
-                            <div><dt>Children</dt><dd>{{ $booking->children }}</dd></div>
+                            <div><dt>Minors</dt><dd>{{ $booking->children }}</dd></div>
                             <div><dt>Total Guests</dt><dd>{{ $booking->number_of_guests }}</dd></div>
                         </dl>
                     </x-card>
