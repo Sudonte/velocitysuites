@@ -152,6 +152,8 @@ class GuestController extends Controller
             'reservation' => $reservation,
             'paymentSummary' => $paymentSummary,
             'paymentTransactions' => $paymentTransactions,
+            // The booking's frozen receipts (payment verified, check-in, check-out), printed with the same titles and money lines as the app.
+            'storedReceipts' => $reservation->booking ? \App\Models\Receipt::where('booking_id', $reservation->booking->id)->orderBy('receipt_type')->get() : collect(),
         ])->setPaper('a4', 'portrait');
 
         return $pdf->download('Receipt_Reservation_' . $reservation->id . '.pdf');

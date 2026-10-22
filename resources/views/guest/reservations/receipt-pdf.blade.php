@@ -76,6 +76,46 @@
         </tbody>
     </table>
 
+    @foreach(($storedReceipts ?? collect()) as $stored)
+        @php
+            $h = $stored->snapshot['highlight'] ?? [];
+            $titles = [1 => 'Payment verified', 2 => 'Check-in', 3 => 'Check-out (final)'];
+            $peso = fn ($v) => '&#8369;' . number_format((float) $v, 2);
+        @endphp
+        <h2 style="margin-top: 16px;">Receipt {{ $stored->receipt_type }} - {{ $titles[$stored->receipt_type] ?? 'Payment receipt' }} ({{ $stored->receipt_no }})</h2>
+        <table class="summary">
+            <tbody>
+                @if(($h['kind'] ?? null) === 'checkout_final')
+                    <tr><td>Room charges (booked nights)</td><td>{!! $peso($h['room_charges'] ?? 0) !!}</td></tr>
+                    @if(($h['discount'] ?? 0) > 0.004)<tr><td>Discount</td><td>-{!! $peso($h['discount']) !!}</td></tr>@endif
+                    @foreach($h['amenities_by_room'] ?? [] as $group)
+                        @foreach($group['items'] as $item)
+                            <tr><td>{{ $group['room'] ? 'Room '.$group['room'] : 'All rooms' }}: {{ $item['name'] }} x{{ $item['quantity'] }}</td><td>{!! $peso($item['subtotal']) !!}</td></tr>
+                        @endforeach
+                    @endforeach
+                    <tr><td>Approved amenities total</td><td>{!! $peso($h['amenities_total'] ?? 0) !!}</td></tr>
+                    @foreach($h['other_charges'] ?? [] as $charge)<tr><td>{{ $charge['name'] }}</td><td>{!! $peso($charge['amount']) !!}</td></tr>@endforeach
+                    <tr><td>Other charges total</td><td>{!! $peso($h['additional_charges_total'] ?? 0) !!}</td></tr>
+                    <tr class="total-row"><td>Total</td><td>{!! $peso($h['grand_total'] ?? 0) !!}</td></tr>
+                    @foreach($h['payments'] ?? [] as $pay)<tr><td>{{ $pay['label'] }}</td><td>{!! $peso($pay['amount']) !!}</td></tr>@endforeach
+                    <tr><td>Total paid</td><td>{!! $peso($h['total_paid'] ?? 0) !!}</td></tr>
+                    <tr><td>Final balance</td><td>{!! $peso($h['remaining_balance'] ?? 0) !!}</td></tr>
+                    <tr><td colspan="2" class="remaining">{{ $h['no_refund_note'] ?? \App\Support\StayBill::NO_REFUND_NOTE }}</td></tr>
+                @else
+                    <tr><td>Total booking amount</td><td>{!! $peso($h['total_amount'] ?? $stored->total_amount) !!}</td></tr>
+                    @if(($h['kind'] ?? null) === 'checkin_payment')
+                        <tr><td>Paid before check-in</td><td>{!! $peso($h['previous_payments'] ?? 0) !!}</td></tr>
+                        <tr><td>Paid at check-in</td><td>{!! $peso($h['amount_paid_now'] ?? 0) !!}</td></tr>
+                    @else
+                        <tr><td>Amount paid now</td><td>{!! $peso($h['amount_paid_now'] ?? 0) !!}</td></tr>
+                    @endif
+                    <tr><td>Total paid so far</td><td>{!! $peso($h['total_paid'] ?? $stored->total_paid) !!}</td></tr>
+                    <tr class="total-row"><td>{{ ($h['remaining_balance'] ?? 0) > 0.004 ? (($h['kind'] ?? '') === 'checkin_payment' ? 'Balance due at check-out' : 'Remaining balance due at the hotel') : 'Balance' }}</td><td>{!! $peso($h['remaining_balance'] ?? $stored->remaining_balance) !!}</td></tr>
+                @endif
+            </tbody>
+        </table>
+    @endforeach
+
     @if(!empty($paymentTransactions))
         <h2 style="margin-top: 16px;">Payment Transaction History</h2>
         <table class="history">
