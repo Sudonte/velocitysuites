@@ -246,6 +246,31 @@ class BookingGroupTest extends ApiFlowTestCase
         $this->actingAs($desk)->put(route('receptionist.booking-groups.verify', $group))->assertSessionHas('error'); // nothing left to verify
     }
 
+    public function test_the_stays_of_a_group_are_listed_together_even_with_another_booking_between_their_dates(): void
+    {
+        [$user] = $this->makeGuestUser('Grp11');
+        $d = $this->makeRoomTypeWithRooms('Deluxe', 1000, 2, 4);
+        $s = $this->makeRoomTypeWithRooms('Suite', 2000, 4, 2);
+        $created = $this->submit($user, $this->twoStays($d, $s), 2400);
+        $this->assertSame(201, $created->getStatusCode(), $created->getContent());
+        $group = BookingGroup::findOrFail($created->getData(true)['group_id']);
+        // another booking that checks in between the two stays (day 5 and day 10)
+        $between = $group->bookings()->first()->replicate();
+        $between->group_id = null;
+        $between->idempotency_key = null;
+        $between->check_in = now('Asia/Manila')->addDays(7)->toDateString();
+        $between->check_out = now('Asia/Manila')->addDays(8)->toDateString();
+        $between->save();
+        $desk = \App\Models\User::create([
+            'first_name' => 'Rita', 'last_name' => 'Desk', 'email' => 'desk-grp2@example.test', 'password' => bcrypt('x'), 'role' => 'receptionist', 'status' => 'active', 'email_verified_at' => now(),
+        ]);
+
+        $listed = $this->actingAs($desk)->get(route('receptionist.bookings.index'))->assertOk()->viewData('bookings')->getCollection()->pluck('id')->all();
+        $positions = array_map(fn ($id) => array_search($id, $listed, true), $group->bookings()->pluck('id')->all());
+        $this->assertNotContains(false, $positions);
+        $this->assertSame(1, max($positions) - min($positions), 'the two stays are next to each other: ' . json_encode($listed));
+    }
+
     public function test_a_single_booking_is_unchanged_and_has_no_group(): void
     {
         [$user] = $this->makeGuestUser('Grp9');

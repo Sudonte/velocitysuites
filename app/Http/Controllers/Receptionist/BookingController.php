@@ -98,7 +98,16 @@ class BookingController extends Controller
         // same fix as Check-in's index(): the numbered page-link boxes
         // render broken/oversized here for reasons that don't trace back
         // to anything in this app's own CSS.
-        $bookings = $query->orderByRaw('viewed_at IS NULL DESC')->orderBy('check_in')->simplePaginate(15)->withQueryString();
+        // The stays of one group sit together: they take the group's place in the list (its earliest check-in, unread if any stay is)
+        // and are then ordered among themselves by their own check-in. A booking that is not in a group is its own place.
+        $groupUnread = '(SELECT MAX(CASE WHEN g.viewed_at IS NULL THEN 1 ELSE 0 END) FROM bookings g WHERE g.group_id = bookings.group_id)';
+        $groupFirstIn = '(SELECT MIN(g.check_in) FROM bookings g WHERE g.group_id = bookings.group_id)';
+        $bookings = $query
+            ->orderByRaw("CASE WHEN group_id IS NULL THEN (CASE WHEN viewed_at IS NULL THEN 1 ELSE 0 END) ELSE $groupUnread END DESC")
+            ->orderByRaw("CASE WHEN group_id IS NULL THEN check_in ELSE $groupFirstIn END")
+            ->orderByRaw('COALESCE(group_id, -id)')
+            ->orderBy('check_in')
+            ->simplePaginate(15)->withQueryString();
         // "Group of N stays": how many bookings each group on this page has (any status, so a cancelled stay still counts).
         $groupSizes = Booking::withTrashed()->whereIn('group_id', $bookings->pluck('group_id')->filter()->unique())
             ->selectRaw('group_id, COUNT(*) AS n')->groupBy('group_id')->pluck('n', 'group_id')->all();
