@@ -63,8 +63,8 @@ class DirectBookingService
         $available = $this->availability->availableCount($roomType, $checkIn, $checkOut);
         if ($available < $roomsRequested) {
             throw ValidationException::withMessages([
-                'rooms_requested' => $roomsRequested > 1
-                    ? "Not enough {$roomType->name} rooms available for these dates (needs {$roomsRequested}, only {$available} free)."
+                'rooms_requested' => $available > 0
+                    ? "No more {$roomType->name} rooms available for these dates ({$available} available)."
                     : "{$roomType->name} is fully booked for these dates.",
             ]);
         }
