@@ -22,7 +22,12 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('guests', function (Blueprint $table) {
-            $table->timestamp('profile_last_updated_at')->nullable()->after('profile_edit_used');
+            $column = $table->timestamp('profile_last_updated_at')->nullable();
+            // profile_edit_used exists on the live database but no migration creates it -
+            // a fresh install has no such column to place this one after.
+            if (Schema::hasColumn('guests', 'profile_edit_used')) {
+                $column->after('profile_edit_used');
+            }
         });
     }
 

@@ -89,7 +89,7 @@ return new class extends Migration
         ];
 
         foreach ($entries as $entry) {
-            $existing = Amenity::whereRaw('LOWER(amenity_name) = ?', [strtolower($entry['amenity_name'])])->first();
+            $existing = Amenity::withTrashed()->whereRaw('LOWER(amenity_name) = ?', [strtolower($entry['amenity_name'])])->first();
 
             if ($existing) {
                 $fill = [];

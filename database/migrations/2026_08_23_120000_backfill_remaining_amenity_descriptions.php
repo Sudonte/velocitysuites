@@ -54,7 +54,7 @@ return new class extends Migration
         ];
 
         foreach ($entries as $name => $fields) {
-            $amenity = Amenity::whereRaw('LOWER(amenity_name) = ?', [strtolower($name)])->first();
+            $amenity = Amenity::withTrashed()->whereRaw('LOWER(amenity_name) = ?', [strtolower($name)])->first();
 
             if (! $amenity) {
                 continue;

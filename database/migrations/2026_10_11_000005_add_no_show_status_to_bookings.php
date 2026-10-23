@@ -19,6 +19,14 @@ return new class extends Migration
             DB::statement("ALTER TABLE bookings MODIFY booking_status ENUM('ACTIVE_BOOKING','CHECKED_IN','COMPLETED_BOOKING','CANCELLED_BOOKING','NO_SHOW_BOOKING') NOT NULL DEFAULT 'ACTIVE_BOOKING'");
         }
 
+        // bookings.cancelled_at exists on the live database but no migration created it, and
+        // Receptionist\BookingController writes it on cancel / no-show - add it on a fresh install.
+        if (! Schema::hasColumn('bookings', 'cancelled_at')) {
+            Schema::table('bookings', function (Blueprint $table) {
+                $table->timestamp('cancelled_at')->nullable();
+            });
+        }
+
         Schema::table('bookings', function (Blueprint $table) {
             $table->timestamp('no_show_at')->nullable()->after('cancelled_at');
             $table->foreignId('status_changed_by')->nullable()->after('no_show_at')->constrained('users')->nullOnDelete();

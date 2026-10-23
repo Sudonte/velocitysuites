@@ -67,7 +67,6 @@ class RoomCatalogSeeder extends Seeder
                         'room_name' => $entry['name'] . ' Room',
                         'room_type_id' => $roomType->id,
                         'room_capacity' => $entry['capacity'],
-                        'description' => $entry['room_description'],
                         'status' => 'available',
                     ]);
                 }
