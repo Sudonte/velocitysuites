@@ -37,8 +37,8 @@ class AppDownloadTest extends ApiFlowTestCase
             ->assertSee('Your stay, in your pocket')
             ->assertSee('Download for Android')
             ->assertSee('href="' . route('app.download') . '"', false)
-            ->assertSee('download="velocity-suites-v1.52.0.apk"', false)
-            ->assertSee('Version 1.52.0 · 18.2 MB · Android 10 or newer')
+            ->assertSee('download="velocity-suites-v1.53.0.apk"', false)
+            ->assertSee('Version 1.53.0 · 18.2 MB · Android 10 or newer')
             ->assertSee('How to install')
             ->assertSee('Scan to download on your phone')
             ->assertSee('data-app-qr="' . route('app.download') . '"', false)
@@ -61,7 +61,7 @@ class AppDownloadTest extends ApiFlowTestCase
         $response->assertOk();
         $response->assertHeader('Content-Type', 'application/vnd.android.package-archive');
         $this->assertStringContainsString('attachment', $response->headers->get('Content-Disposition'));
-        $this->assertStringContainsString('velocity-suites-v1.52.0.apk', $response->headers->get('Content-Disposition'));
+        $this->assertStringContainsString('velocity-suites-v1.53.0.apk', $response->headers->get('Content-Disposition'));
         $this->assertSame(filesize(MobileApp::path()), (int) $response->baseResponse->getFile()->getSize());
     }
 
@@ -93,7 +93,7 @@ class AppDownloadTest extends ApiFlowTestCase
             $this->assertStringContainsString('<strong>' . $title . '</strong><span>' . $line . '</span>', $html);
         }
         $this->assertSame(6, substr_count($html, 'class="hero-feature-icon"'));
-        $this->assertStringContainsString('Version 1.52.0 · 18.2 MB · Android 10 or newer', $html);
+        $this->assertStringContainsString('Version 1.53.0 · 18.2 MB · Android 10 or newer', $html);
         foreach (['Free to download', 'Secure GCash payments', 'Android 10 or newer'] as $fact) {
             $this->assertStringContainsString($fact, $html);
         }

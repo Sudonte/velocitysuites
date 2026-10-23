@@ -174,7 +174,7 @@
                             </div>
                         </div>
                         <small class="text-muted d-block mb-0">
-                            Capacity: {{ $roomType->capacity_label }} per room, adults and children combined.
+                            Capacity: {{ $roomType->capacity_label }} per room, adults and minors combined.
                         </small>
                         <small class="guest-capacity-hint d-block text-muted"></small>
                     </div>
