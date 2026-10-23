@@ -23,6 +23,12 @@ class LoginController extends Controller
 
     private const LOCKED_MESSAGE = 'For your security, sign-in is paused for 15 minutes after 3 failed attempts in a row. Reset your password below to continue now.';
 
+    public const SUSPENDED_MESSAGE = 'Your account has been suspended. Please contact the hotel\'s System Administrator to have it reactivated.';
+
+    public const DEACTIVATED_MESSAGE = 'Your account is deactivated. Sign in on the Velocity Suites mobile app to reactivate it with the verification code sent to your email.';
+
+    public const DELETED_MESSAGE = 'This account has been deleted and is no longer available.';
+
     /**
      * Handle login request.
      */
@@ -35,10 +41,20 @@ class LoginController extends Controller
 
         $user = User::where('email', $credentials['email'])->first();
 
-        // Unknown email, wrong password and a suspended account all get the
-        // same message, so the login form never reveals whether an account exists.
-        if (! $user || $user->status === 'suspended') {
+        if (! $user) {
             return back()->withInput($request->only('email'))->with('error', self::FAILED_MESSAGE);
+        }
+
+        // A suspended, deactivated or deleted account is told why it can't sign in -
+        // but only once the password is right, so a wrong guess still gets the same
+        // message as an unknown email and the form never reveals which accounts exist.
+        if ($blocked = $this->blockedMessage($user)) {
+            if (! Hash::check($credentials['password'], $user->password)) {
+                return back()->withInput($request->only('email'))->with('error', self::FAILED_MESSAGE);
+            }
+            Activity::logFor($user, 'Sign-in refused', "Account {$user->status} (web)");
+
+            return back()->withInput($request->only('email'))->with('error', $blocked);
         }
 
         // Check account lockout after 3 failed attempts - every role takes
@@ -139,6 +155,20 @@ class LoginController extends Controller
             : self::FAILED_MESSAGE;
 
         return back()->withInput($request->only('email'))->with('error', $message);
+    }
+
+    /**
+     * Why this account can't sign in, or null when it can. A guest inside the 30-day
+     * restore window still signs in - CheckAccountStatus routes them to the restore prompt.
+     */
+    private function blockedMessage(User $user): ?string
+    {
+        return match (true) {
+            $user->status === 'suspended' => self::SUSPENDED_MESSAGE,
+            $user->status === 'deactivated' => self::DEACTIVATED_MESSAGE,
+            $user->isPendingDeletion() && ! $user->isRestorable() => self::DELETED_MESSAGE,
+            default => null,
+        };
     }
 
     /**

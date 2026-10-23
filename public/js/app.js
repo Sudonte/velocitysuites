@@ -483,6 +483,74 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 })();
 
+// Global message modal (components/notice-modal.blade.php) - the in-app
+// replacement for alert(). window.showNotice({title, message, variant, link})
+// returns a Promise that resolves when it is closed. Like the confirmation, it
+// opens stacked on top of a modal that is already open, and closing it returns
+// to that modal.
+(function () {
+    const ICONS = {
+        success: 'fa-circle-check text-success',
+        danger: 'fa-circle-exclamation text-danger',
+        warning: 'fa-triangle-exclamation text-warning',
+        info: 'fa-circle-info text-primary',
+    };
+    let hostModalEl = null;
+    let pendingResolve = null;
+
+    window.showNotice = function (opts) {
+        opts = typeof opts === 'string' ? { message: opts } : (opts || {});
+        const el = document.getElementById('globalNoticeModal');
+        if (!el || !window.bootstrap) {
+            window.alert(opts.message || opts.title || '');
+            return Promise.resolve();
+        }
+        const variant = ICONS[opts.variant] ? opts.variant : 'info';
+        document.getElementById('globalNoticeTitleText').textContent = opts.title || (variant === 'danger' ? 'Something went wrong' : 'Notice');
+        document.getElementById('globalNoticeIcon').className = 'fas me-1 ' + ICONS[variant];
+        document.getElementById('globalNoticeMessage').textContent = opts.message || '';
+        const link = document.getElementById('globalNoticeLink');
+        link.classList.toggle('d-none', !(opts.link && opts.link.href));
+        if (opts.link && opts.link.href) {
+            link.href = opts.link.href;
+            link.textContent = opts.link.label || 'Open';
+        }
+
+        hostModalEl = document.querySelector('.modal.show:not(#globalNoticeModal)');
+        el.classList.toggle('confirm-stacked', !!hostModalEl);
+        if (hostModalEl) {
+            const host = bootstrap.Modal.getInstance(hostModalEl);
+            if (host && host._focustrap) host._focustrap.deactivate();
+        }
+        return new Promise(function (resolve) {
+            pendingResolve = resolve;
+            bootstrap.Modal.getOrCreateInstance(el).show();
+        });
+    };
+
+    document.addEventListener('shown.bs.modal', function (event) {
+        if (event.target.id !== 'globalNoticeModal' || !hostModalEl) return;
+        const backdrops = document.querySelectorAll('.modal-backdrop');
+        if (backdrops.length) backdrops[backdrops.length - 1].classList.add('confirm-stacked-backdrop');
+    });
+
+    document.addEventListener('hidden.bs.modal', function (event) {
+        if (event.target.id !== 'globalNoticeModal') return;
+        event.target.classList.remove('confirm-stacked');
+        if (hostModalEl && hostModalEl.classList.contains('show')) {
+            document.body.classList.add('modal-open');
+            const host = bootstrap.Modal.getInstance(hostModalEl);
+            if (host && host._focustrap) host._focustrap.activate();
+        }
+        hostModalEl = null;
+        if (pendingResolve) {
+            const resolve = pendingResolve;
+            pendingResolve = null;
+            resolve();
+        }
+    });
+})();
+
 // Forms marked data-submit-once disable their submit buttons on submit so a
 // double click can't send the action twice.
 document.addEventListener('submit', function (event) {

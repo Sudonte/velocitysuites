@@ -6,20 +6,6 @@
 <div class="container-fluid py-4">
     <x-page-header icon="fas fa-sign-out-alt" title="Check-Out" subtitle="Checkout can happen before or after the scheduled date; the bill is settled either way." />
 
-    @if (session('success'))
-        <div class="alert alert-success alert-dismissible fade show" role="alert">
-            <i class="fas fa-check-circle"></i> {{ session('success') }}
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-        </div>
-    @endif
-
-    @if (session('error'))
-        <div class="alert alert-danger alert-dismissible fade show" role="alert">
-            <i class="fas fa-exclamation-circle"></i> {{ session('error') }}
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-        </div>
-    @endif
-
     <ul class="nav nav-tabs mb-3">
         <li class="nav-item">
             <a class="nav-link {{ $tab === 'expected' ? 'active' : '' }}" href="{{ route('receptionist.check-out.index', ['tab' => 'expected']) }}">
@@ -187,6 +173,13 @@
 document.addEventListener('DOMContentLoaded', function () {
     const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
 
+    // Messages from a redirect open in the same message modal as everything else here.
+    @if (session('success'))
+        window.showNotice({ variant: 'success', title: 'Done', message: @json(session('success')) });
+    @elseif (session('error'))
+        window.showNotice({ variant: 'danger', message: @json(session('error')) });
+    @endif
+
     const confirmModalEl = document.getElementById('confirmCheckoutModal');
     const billingModalEl = document.getElementById('billingPanelModal');
     const paymentModalEl = document.getElementById('paymentPanelModal');
@@ -279,7 +272,7 @@ document.addEventListener('DOMContentLoaded', function () {
             roomsPanelContent.innerHTML = html;
             roomsModal.show();
         } catch (err) {
-            alert(err.message);
+            window.showNotice({ variant: 'danger', message: err.message });
         }
     }
 
@@ -332,7 +325,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 alertBox.textContent = err.message;
                 alertBox.classList.remove('d-none');
             } else {
-                alert(err.message);
+                window.showNotice({ variant: 'danger', message: err.message });
             }
             btn.disabled = false;
         }
@@ -387,7 +380,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 alertBox.textContent = err.message;
                 alertBox.classList.remove('d-none');
             } else {
-                alert(err.message);
+                window.showNotice({ variant: 'danger', message: err.message });
             }
             btn.disabled = false;
         }
@@ -401,7 +394,7 @@ document.addEventListener('DOMContentLoaded', function () {
             confirmModal.hide();
             billingModal.show();
         } catch (err) {
-            alert(err.message);
+            window.showNotice({ variant: 'danger', message: err.message });
         }
     });
 
@@ -416,7 +409,7 @@ document.addEventListener('DOMContentLoaded', function () {
             alertBox.textContent = message;
             alertBox.classList.remove('d-none');
         } else {
-            alert(message);
+            window.showNotice({ variant: 'danger', message: message });
         }
     }
 
@@ -632,7 +625,7 @@ document.addEventListener('DOMContentLoaded', function () {
             alertBox.textContent = message;
             alertBox.classList.remove('d-none');
         } else {
-            alert(message);
+            window.showNotice({ variant: 'danger', message: message });
         }
     }
 
@@ -693,13 +686,22 @@ document.addEventListener('DOMContentLoaded', function () {
                 if (!tbody.querySelector('tr')) {
                     tbody.innerHTML = '<tr id="noCheckOutsRow"><td colspan="5" class="text-center text-muted py-4">No pending check-outs.</td></tr>';
                 }
-                alert(data.message + (data.receipt_url ? '\n\nReceipt: ' + data.receipt_url : ''));
+                window.showNotice({
+                    variant: 'success',
+                    title: 'Check-out complete',
+                    message: data.message,
+                    link: data.receipt_url ? { href: data.receipt_url, label: 'View Receipt' } : null,
+                });
             } else {
                 if (row) {
                     const cell = row.querySelector('.bill-status-cell');
                     cell.innerHTML = '<span class="badge bg-warning text-dark">Partially Paid</span>';
                 }
-                alert(data.message + ' Remaining balance: ₱' + Number(data.balance).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+                window.showNotice({
+                    variant: 'warning',
+                    title: 'Payment recorded',
+                    message: data.message + ' Remaining balance: ' + peso(data.balance),
+                });
             }
 
             activeBookingId = null;

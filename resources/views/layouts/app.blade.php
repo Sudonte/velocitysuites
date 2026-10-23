@@ -96,6 +96,7 @@
          container - keeps them reliably on top instead of risking being clipped or stacked
          behind the sticky sidebar/header. --}}
     @include('components.confirm-modal')
+    @include('components.notice-modal')
     @stack('modals')
 
     <!-- Scripts -->

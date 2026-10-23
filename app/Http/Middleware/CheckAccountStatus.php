@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Http\Controllers\Auth\LoginController;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -19,7 +20,7 @@ class CheckAccountStatus
 
         if ($user && $user->status === 'suspended') {
             auth()->logout();
-            return redirect()->route('login')->with('error', 'Your account has been suspended.');
+            return redirect()->route('login')->with('error', LoginController::SUSPENDED_MESSAGE);
         }
 
         // Same 30-day soft-delete/restore window the mobile API enforces
@@ -31,7 +32,7 @@ class CheckAccountStatus
         if ($user && $user->role === 'guest' && $user->isPendingDeletion()) {
             if (! $user->isRestorable()) {
                 auth()->logout();
-                return redirect()->route('login')->with('error', 'This account is no longer available.');
+                return redirect()->route('login')->with('error', LoginController::DELETED_MESSAGE);
             }
 
             if (! $request->routeIs('guest.account.restore-prompt', 'guest.account.restore', 'logout')) {
