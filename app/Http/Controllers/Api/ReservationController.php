@@ -666,7 +666,12 @@ class ReservationController extends Controller
             $resolvedAmenities = true; // each stay's own selection replaces the old one
         } elseif (array_key_exists('amenities', $validated)) {
             // the flat shape: one selection for the (single) stay
-            $resolvedAmenities = $this->amenityService->validateSelection($validated['amenities'] ?? []);
+            $rawAmenities = array_values($validated['amenities'] ?? []);
+            // each entry keeps the booked room it was chosen for (room type + which room of that type), as on create
+            $resolvedAmenities = $this->amenityService->validateSelection($rawAmenities)->values()->map(fn (array $entry, int $k) => $entry + [
+                'room_type_id' => isset($rawAmenities[$k]['room_type_id']) ? (int) $rawAmenities[$k]['room_type_id'] : null,
+                'room_slot' => isset($rawAmenities[$k]['room_slot']) ? (int) $rawAmenities[$k]['room_slot'] : null,
+            ]);
         }
 
         // Discount / ID. Untouched unless the request names a discount (discount_id or

@@ -189,4 +189,45 @@ class RoomAmenityTest extends ApiFlowTestCase
         $this->assertSame('Deluxe (room 2)', $bill['stays'][0]['amenity_lines'][0]['room_label']);
         $this->assertEquals(300.0, $bill['amenity_charge']);
     }
+
+    public function test_modifying_a_reservation_resends_the_room_choices_and_they_are_kept(): void
+    {
+        [$user] = $this->makeGuestUser('RA7');
+        $deluxe = $this->makeRoomTypeWithRooms('Deluxe', 1000, 2, 4);
+        $bed = $this->bed();
+        $this->actingAs($user);
+        $in = now('Asia/Manila')->addDays(6)->toDateString();
+        $out = now('Asia/Manila')->addDays(7)->toDateString();
+        $create = Request::create('/api/guest/reservations', 'POST', [
+            'stays' => [$this->stay(6, 1, [['room_type_id' => $deluxe->id, 'quantity' => 2]], [['amenity_id' => $bed->id, 'quantity' => 1, 'room_type_id' => $deluxe->id, 'room_slot' => 2]])],
+            'adults' => 1, 'children' => 0, 'guest_first_name' => 'Ana', 'guest_last_name' => 'Cruz', 'payment_method' => 'cash',
+        ]);
+        $create->setUserResolver(fn () => $user);
+        $this->assertSame(201, app(ReservationController::class)->store($create)->getStatusCode());
+        $reservation = Reservation::firstOrFail();
+
+        // the guest edits: 3 Deluxe now, and the bed moves to room 1 plus one in room 3
+        $edit = Request::create('/api/guest/reservations/' . $reservation->id, 'PUT', [
+            'check_in' => $in, 'check_out' => $out, 'adults' => 1, 'children' => 0,
+            'rooms' => [['room_type_id' => $deluxe->id, 'quantity' => 3]],
+            'amenities' => [
+                ['amenity_id' => $bed->id, 'quantity' => 1, 'room_type_id' => $deluxe->id, 'room_slot' => 1],
+                ['amenity_id' => $bed->id, 'quantity' => 2, 'room_type_id' => $deluxe->id, 'room_slot' => 3],
+            ],
+        ]);
+        $edit->setUserResolver(fn () => $user);
+        $response = app(ReservationController::class)->update($edit, $reservation);
+
+        $this->assertSame(200, $response->getStatusCode(), $response->getContent());
+        RoomLineRef::forget();
+        $rows = ReservationAmenity::orderBy('id')->get();
+        $this->assertCount(2, $rows, 'the old choice was replaced, not added to');
+        $this->assertSame(['Deluxe (room 1)', 'Deluxe (room 3)'], $rows->map->room_label->all());
+        $this->assertSame([1, 2], $rows->map->quantity->all());
+        $payload = $response->getData(true);
+        $labels = collect($payload['stays'][0]['amenities'])->pluck('room_label')->all();
+        $this->assertSame(['Deluxe (room 1)', 'Deluxe (room 3)'], $labels);
+        $this->assertSame((string) $deluxe->id, (string) $payload['stays'][0]['amenities'][0]['room_type_id'], 'the room type comes back so the app can seed the next edit');
+        $this->assertEquals(3900.0, (float) $payload['total_amount_due'], '3 rooms x 1,000 + 3 beds x 300');
+    }
 }

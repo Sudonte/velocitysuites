@@ -15,7 +15,7 @@ use Illuminate\Support\Facades\DB;
  */
 final class RoomLineRef
 {
-    /** @var array<string,?array{type:string,quantity:int}> */
+    /** @var array<string,?array{type:string,quantity:int,type_id:int}> */
     private static array $lines = [];
 
     /**
@@ -54,8 +54,8 @@ final class RoomLineRef
         $table = $isReservation ? 'reservation_room_lines' : 'booking_room_lines';
         $key = $table . ':' . $lineId;
         if (! array_key_exists($key, self::$lines)) {
-            $line = DB::table($table)->where('id', $lineId)->first(['room_type_name', 'quantity']);
-            self::$lines[$key] = $line ? ['type' => (string) $line->room_type_name, 'quantity' => (int) $line->quantity] : null;
+            $line = DB::table($table)->where('id', $lineId)->first(['room_type_id', 'room_type_name', 'quantity']);
+            self::$lines[$key] = $line ? ['type' => (string) $line->room_type_name, 'quantity' => (int) $line->quantity, 'type_id' => (int) $line->room_type_id] : null;
         }
         $line = self::$lines[$key];
         if ($line === null) {
@@ -66,10 +66,23 @@ final class RoomLineRef
         return $slot ? "{$line['type']} (room {$slot})" : $line['type'];
     }
 
-    /** The three fields a payload carries for a row. */
+    /** The room type of the row's line (what a client names it by when it sends the amenity back on an edit). */
+    public static function roomTypeId(object $row): ?int
+    {
+        self::label($row);
+        $lineId = $row->room_line_id ?? null;
+        if (! $lineId) {
+            return null;
+        }
+        $isReservation = ! empty($row->reservation_id) || ($row instanceof \App\Models\ReservationAmenity);
+        return self::$lines[($isReservation ? 'reservation_room_lines' : 'booking_room_lines') . ':' . $lineId]['type_id'] ?? null;
+    }
+
+    /** The fields a payload carries for a row. */
     public static function payload(object $row): array
     {
         return [
+            'room_type_id' => self::roomTypeId($row),
             'room_line_id' => $row->room_line_id ?? null,
             'room_slot' => $row->room_slot ?? null,
             'room_label' => self::label($row),
