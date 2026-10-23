@@ -123,6 +123,12 @@ class Reservation extends Model
      * payment_deadline is the 48-hour Pay Later/Pay Now cutoff (see
      * getPaymentDeadlineAttribute()) - also always derived, never stored.
      */
+    /**
+     * A list eager-loads `roomLines`; Eloquent would serialize that relation under the SAME key as the mapped `room_lines` accessor and
+     * overwrite it with the raw table rows (room_type_name, number_of_nights), so the app saw no room names. The accessor is the shape.
+     */
+    protected $hidden = ['roomLines'];
+
     protected $appends = ['discount_preview', 'payment_deadline', 'room_lines', 'deposit_cap', 'hidden_by_guest', 'discount_rejection_reason', 'group_reservation_ids'];
 
     /** The other stays booked together with this one (their reservation ids, by check-in), or [] when it is not part of a group. */
