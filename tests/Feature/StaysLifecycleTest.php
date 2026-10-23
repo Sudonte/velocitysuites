@@ -213,4 +213,38 @@ class StaysLifecycleTest extends ApiFlowTestCase
         $this->checkIn($desk, $booking->fresh(), $stay2, [(string) $deluxe->id => [$r2->id]])->assertOk();
         $this->assertSame(2, DB::table('booking_rooms')->where('booking_id', $booking->id)->count());
     }
+
+    public function test_a_booking_created_by_old_code_with_no_stay_row_still_works_and_the_backfill_fixes_it_and_is_idempotent(): void
+    {
+        [$user, $desk, $booking, $deluxeRoom] = $this->twoStayBooking();
+        // as if the OLD live code made it between the migration and the deploy: one booking, no stay rows, children untagged
+        $old = Booking::create([
+            'guest_id' => $booking->guest_id, 'room_type_id' => $deluxeRoom->room_type_id, 'rooms_requested' => 1, 'adults' => 1, 'children' => 0, 'number_of_guests' => 1,
+            'check_in' => now('Asia/Manila')->addDays(20)->toDateString(), 'check_out' => now('Asia/Manila')->addDays(22)->toDateString(),
+            'booking_status' => Booking::STATUS_ACTIVE, 'confirmed_at' => now(), 'payment_method' => 'cash', 'verified_at' => now(),
+        ]);
+        $old->roomLines()->create(['room_type_id' => $deluxeRoom->room_type_id, 'room_type_name' => 'Deluxe', 'quantity' => 1, 'price_per_night' => 1000, 'number_of_nights' => 2, 'subtotal' => 2000]);
+        DB::table('stays')->where('booking_id', $old->id)->delete();
+        DB::table('booking_room_lines')->where('booking_id', $old->id)->update(['stay_id' => null]);
+        $old = Booking::find($old->id);
+
+        // reads as ONE stay on its own dates, never crashes
+        $this->assertSame(1, $old->stayCount());
+        $this->assertEquals(2000.0, $old->total_amount_due);
+        $payload = $old->staysPayload();
+        $this->assertCount(1, $payload);
+        $this->assertSame(2, $payload[0]['nights']);
+        $this->assertEquals(2000.0, StayBill::forBooking($old, StayBill::PROJECTED)['total']);
+        $this->asGuest($user)->getJson('/api/guest/bookings/' . $old->id)->assertOk()->assertJsonCount(1, 'stays');
+        $this->actingAs($desk)->get(route('receptionist.bookings.index'))->assertOk();
+
+        // the backfill gives it its stay, and a second run changes nothing
+        $first = \App\Support\StaysBackfill::run();
+        $this->assertSame(1, $first['bookings']);
+        $this->assertSame(1, Stay::where('booking_id', $old->id)->count());
+        $this->assertNotNull(DB::table('booking_room_lines')->where('booking_id', $old->id)->value('stay_id'));
+        $second = \App\Support\StaysBackfill::run();
+        $this->assertSame(['bookings' => 0, 'reservations' => 0], $second);
+        $this->assertSame(1, Stay::where('booking_id', $old->id)->count());
+    }
 }

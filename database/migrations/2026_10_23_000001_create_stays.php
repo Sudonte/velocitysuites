@@ -63,49 +63,7 @@ return new class extends Migration
     /** One stay per existing booking and reservation (soft-deleted ones included), and every child row pointed at it. */
     private function backfill(): void
     {
-        DB::table('bookings')->orderBy('id')->chunkById(200, function ($bookings) {
-            foreach ($bookings as $b) {
-                if (DB::table('stays')->where('booking_id', $b->id)->exists()) {
-                    continue;
-                }
-                $stayId = DB::table('stays')->insertGetId([
-                    'booking_id' => $b->id,
-                    'position' => 1,
-                    'check_in' => $b->check_in,
-                    'check_out' => $b->check_out,
-                    'checked_in_at' => $b->checked_in_at ?? null,
-                    'checked_out_at' => $b->checked_out_at ?? null,
-                    'created_at' => $b->created_at ?? now(),
-                    'updated_at' => now(),
-                ]);
-                DB::table('booking_room_lines')->where('booking_id', $b->id)->whereNull('stay_id')->update(['stay_id' => $stayId]);
-                DB::table('booking_rooms')->where('booking_id', $b->id)->whereNull('stay_id')->update(['stay_id' => $stayId]);
-                DB::table('amenity_requests')->where('booking_id', $b->id)->whereNull('stay_id')->update(['stay_id' => $stayId]);
-                // a converted reservation's amenity rows are keyed by the reservation: they belong to this booking's stay now
-                if ($b->reservation_id) {
-                    DB::table('amenity_requests')->where('reservation_id', $b->reservation_id)->whereNull('booking_id')->whereNull('stay_id')->update(['stay_id' => $stayId]);
-                }
-            }
-        });
-
-        DB::table('reservations')->orderBy('id')->chunkById(200, function ($reservations) {
-            foreach ($reservations as $r) {
-                if (DB::table('stays')->where('reservation_id', $r->id)->exists()) {
-                    continue;
-                }
-                $stayId = DB::table('stays')->insertGetId([
-                    'reservation_id' => $r->id,
-                    'position' => 1,
-                    'check_in' => $r->check_in,
-                    'check_out' => $r->check_out,
-                    'created_at' => $r->created_at ?? now(),
-                    'updated_at' => now(),
-                ]);
-                DB::table('reservation_room_lines')->where('reservation_id', $r->id)->whereNull('stay_id')->update(['stay_id' => $stayId]);
-                DB::table('reservation_amenities')->where('reservation_id', $r->id)->whereNull('stay_id')->update(['stay_id' => $stayId]);
-                DB::table('amenity_requests')->where('reservation_id', $r->id)->whereNull('stay_id')->update(['stay_id' => $stayId]);
-            }
-        });
+        \App\Support\StaysBackfill::run();
     }
 
     public function down(): void
