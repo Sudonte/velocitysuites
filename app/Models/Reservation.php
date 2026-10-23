@@ -302,7 +302,7 @@ class Reservation extends Model
             'quantity' => $a->quantity,
             'unit_price' => (float) $a->charge,
             'subtotal' => (float) $a->subtotal,
-        ])->values()->all();
+        ] + \App\Support\RoomLineRef::payload($a))->values()->all();
     }
 
     /**

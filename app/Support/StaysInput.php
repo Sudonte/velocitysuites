@@ -33,6 +33,9 @@ final class StaysInput
             'stays.*.amenities' => 'nullable|array',
             'stays.*.amenities.*.amenity_id' => 'required_with:stays.*.amenities|integer',
             'stays.*.amenities.*.quantity' => 'required_with:stays.*.amenities|integer|min:1',
+            // optional: which booked room of the stay the amenity is for (room type + which room of that type, 1-based)
+            'stays.*.amenities.*.room_type_id' => 'nullable|integer',
+            'stays.*.amenities.*.room_slot' => 'nullable|integer|min:1|max:50',
         ];
     }
 
@@ -85,7 +88,23 @@ final class StaysInput
             $service->validateSelection(array_values($merged)); // throws the same "only N left" error when the stays together ask too much
         }
         foreach ($stays as $i => $stay) {
-            $stays[$i]['amenities'] = $service->validateSelection($stay['raw_amenities']);
+            $resolved = $service->validateSelection($stay['raw_amenities']);
+            // each entry keeps the room it was chosen for (validateSelection answers in the order it was asked)
+            $stays[$i]['amenities'] = $resolved->values()->map(function (array $entry, int $k) use ($stay, $i) {
+                $raw = $stay['raw_amenities'][$k] ?? [];
+                $typeId = isset($raw['room_type_id']) ? (int) $raw['room_type_id'] : null;
+                $slot = isset($raw['room_slot']) ? (int) $raw['room_slot'] : null;
+                if ($typeId) {
+                    $line = collect($stay['lines'])->first(fn ($l) => $l['room_type']->id === $typeId);
+                    if (! $line || ($slot && $slot > $line['quantity'])) {
+                        throw \Illuminate\Validation\ValidationException::withMessages([
+                            'amenities' => 'Stay ' . ($i + 1) . ': an amenity was chosen for a room that is not part of that stay.',
+                        ]);
+                    }
+                }
+
+                return $entry + ['room_type_id' => $typeId, 'room_slot' => $slot];
+            });
         }
 
         return $stays;

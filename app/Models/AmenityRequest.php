@@ -29,6 +29,8 @@ class AmenityRequest extends Model
         'booking_id',
         'room_id',
         'stay_id',
+        'room_line_id',
+        'room_slot',
         'room_type_id',
         'amenity_id',
         'amenity_name',
@@ -62,6 +64,12 @@ class AmenityRequest extends Model
     public function stay()
     {
         return $this->belongsTo(Stay::class);
+    }
+
+    /** "Deluxe (room 2)": the booked room this amenity is for; null when it was booked for the whole stay. */
+    public function getRoomLabelAttribute(): ?string
+    {
+        return \App\Support\RoomLineRef::label($this);
     }
 
     /** "Stay 2 of 3" for a request that belongs to one stay of a multi-stay booking; null for a one-stay transaction. */

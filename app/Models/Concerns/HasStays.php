@@ -208,7 +208,7 @@ trait HasStays
                     'unit_price' => $unit,
                     'subtotal' => round($unit * $qty, 2),
                     'status' => $isBooking ? $a->status : null,
-                ];
+                ] + \App\Support\RoomLineRef::payload($a);
             })->values()->all();
 
             $roomsSubtotal = round((float) collect($rooms)->sum('subtotal'), 2);

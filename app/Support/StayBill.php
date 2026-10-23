@@ -190,6 +190,8 @@ final class StayBill
             // The room it was requested for (null: one booked for the whole stay). Only read when the relation is loaded.
             'room_id' => $r->room_id,
             'room_number' => $r->relationLoaded('room') ? $r->room?->room_number : null,
+            // the booked room it was chosen for at booking time ("Deluxe (room 2)"); null for one booked for the whole stay
+            'room_label' => \App\Support\RoomLineRef::label($r),
             'amenity_name' => $r->amenity_name,
             'quantity' => (int) $r->quantity,
             'unit_price' => round((float) $r->charge, 2),

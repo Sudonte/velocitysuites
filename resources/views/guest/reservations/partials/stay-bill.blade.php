@@ -16,7 +16,7 @@
     @endforeach
     @foreach($stay['amenity_lines'] as $a)
         <div class="d-flex justify-content-between mb-1">
-            <span>{{ $a['amenity_name'] }} &times; {{ $a['quantity'] }}@if($a['additional']) <small class="text-muted">(requested)</small>@endif</span>
+            <span>{{ $a['amenity_name'] }} &times; {{ $a['quantity'] }}@if(! empty($a['room_label'])) <small class="text-muted">&middot; {{ $a['room_label'] }}</small>@endif @if($a['additional']) <small class="text-muted">(requested)</small>@endif</span>
             <span>{{ $peso($a['subtotal']) }}</span>
         </div>
     @endforeach

@@ -23,7 +23,7 @@
                         </tr>
                     @endforeach
                     @foreach($stay['amenities'] as $a)
-                        <tr><td>{{ $a['amenity_name'] }} &times; {{ $a['quantity'] }}</td><td>{!! $peso($a['subtotal']) !!}</td></tr>
+                        <tr><td>{{ $a['amenity_name'] }} &times; {{ $a['quantity'] }}@if(! empty($a['room_label'])) <small class="text-muted">&middot; {{ $a['room_label'] }}</small>@endif</td><td>{!! $peso($a['subtotal']) !!}</td></tr>
                     @endforeach
                     <tr><td><strong>Stay {{ $stay['position'] }} subtotal</strong></td><td><strong>{!! $peso($stay['subtotal']) !!}</strong></td></tr>
                 </tbody>
@@ -42,7 +42,7 @@
                     </div>
                 @endforeach
                 @foreach($stay['amenities'] as $a)
-                    <div class="d-flex justify-content-between text-muted"><span>{{ $a['amenity_name'] }} &times; {{ $a['quantity'] }}</span><span>{!! $peso($a['subtotal']) !!}</span></div>
+                    <div class="d-flex justify-content-between text-muted"><span>{{ $a['amenity_name'] }} &times; {{ $a['quantity'] }}@if(! empty($a['room_label'])) <small>&middot; {{ $a['room_label'] }}</small>@endif</span><span>{!! $peso($a['subtotal']) !!}</span></div>
                 @endforeach
                 <div class="d-flex justify-content-between fw-semibold border-top mt-1 pt-1"><span>Stay {{ $stay['position'] }} subtotal</span><span>{!! $peso($stay['subtotal']) !!}</span></div>
             </div>

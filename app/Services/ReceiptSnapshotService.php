@@ -94,8 +94,9 @@ class ReceiptSnapshotService
         // Approved amenities grouped by the room they were for ("All rooms" for one booked for the whole stay).
         $byRoom = [];
         foreach ($stay['amenity_lines'] ?? [] as $line) {
-            $key = $line['room_number'] ?? '';
+            $key = $line['room_number'] ?? $line['room_label'] ?? '';
             $byRoom[$key]['room'] = $line['room_number'] ?? null;
+            $byRoom[$key]['label'] = $line['room_number'] ? null : ($line['room_label'] ?? null);
             $byRoom[$key]['items'][] = ['name' => $line['amenity_name'], 'quantity' => $line['quantity'], 'unit_price' => $line['unit_price'], 'subtotal' => $line['subtotal']];
             $byRoom[$key]['subtotal'] = round(($byRoom[$key]['subtotal'] ?? 0) + (float) $line['subtotal'], 2);
         }
@@ -125,7 +126,7 @@ class ReceiptSnapshotService
                 'check_out' => $section['check_out'],
                 'nights' => $section['nights'],
                 'rooms' => array_map(fn ($r) => ['room_number' => $r['room_number'], 'room_type' => $r['room_type'], 'rate' => $r['rate'], 'nights' => $r['nights'], 'subtotal' => $r['subtotal']], $section['rooms']),
-                'amenities' => array_map(fn ($a) => ['name' => $a['amenity_name'], 'quantity' => $a['quantity'], 'unit_price' => $a['unit_price'], 'subtotal' => $a['subtotal']], $section['amenity_lines']),
+                'amenities' => array_map(fn ($a) => ['name' => $a['amenity_name'], 'quantity' => $a['quantity'], 'unit_price' => $a['unit_price'], 'subtotal' => $a['subtotal'], 'room' => $a['room_label'] ?? null], $section['amenity_lines']),
                 'subtotal' => $section['subtotal'],
             ], $stay['stays'] ?? []),
             'other_charges' => array_map(fn ($c) => ['name' => $c['description'], 'amount' => $c['amount']], $stay['additional_charges'] ?? []),

@@ -20,6 +20,8 @@ class ReservationAmenity extends Model
     protected $fillable = [
         'reservation_id',
         'stay_id',
+        'room_line_id',
+        'room_slot',
         'amenity_id',
         'amenity_name',
         'category',
@@ -32,6 +34,12 @@ class ReservationAmenity extends Model
         'charge' => 'decimal:2',
         'subtotal' => 'decimal:2',
     ];
+
+    /** "Deluxe (room 2)": the booked room this amenity is for; null when it was booked for the whole stay. */
+    public function getRoomLabelAttribute(): ?string
+    {
+        return \App\Support\RoomLineRef::label($this);
+    }
 
     public function reservation()
     {

@@ -87,7 +87,8 @@ class ReservationAmenityService
             $amenity = $entry['amenity'];
             $quantity = $entry['quantity'];
 
-            $reservation->bookingAmenities()->create([
+            $roomRef = \App\Support\RoomLineRef::resolve($reservation, $stayId, $entry['room_type_id'] ?? null, $entry['room_slot'] ?? null);
+            $reservation->bookingAmenities()->create($roomRef + [
                 'stay_id' => $stayId,
                 'amenity_id' => $amenity->id,
                 'amenity_name' => $amenity->amenity_name,
@@ -97,7 +98,7 @@ class ReservationAmenityService
                 'subtotal' => $amenity->charge * $quantity,
             ]);
 
-            AmenityRequest::create([
+            AmenityRequest::create($roomRef + [
                 'guest_id' => $reservation->guest_id,
                 'reservation_id' => $reservation->id,
                 'stay_id' => $stayId,

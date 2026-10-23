@@ -95,7 +95,7 @@
                     @if(($h['discount'] ?? 0) > 0.004)<tr><td>Discount</td><td>-{!! $peso($h['discount']) !!}</td></tr>@endif
                     @foreach($h['amenities_by_room'] ?? [] as $group)
                         @foreach($group['items'] as $item)
-                            <tr><td>{{ $group['room'] ? 'Room '.$group['room'] : 'All rooms' }}: {{ $item['name'] }} x{{ $item['quantity'] }}</td><td>{!! $peso($item['subtotal']) !!}</td></tr>
+                            <tr><td>{{ $group['room'] ? 'Room '.$group['room'] : ($group['label'] ?? 'All rooms') }}: {{ $item['name'] }} x{{ $item['quantity'] }}</td><td>{!! $peso($item['subtotal']) !!}</td></tr>
                         @endforeach
                     @endforeach
                     <tr><td>Approved amenities total</td><td>{!! $peso($h['amenities_total'] ?? 0) !!}</td></tr>

@@ -368,6 +368,8 @@ abstract class ApiFlowTestCase extends TestCase
             $table->decimal('subtotal', 10, 2);
             $table->timestamps();
             $table->unsignedBigInteger('stay_id')->nullable();
+            $table->unsignedBigInteger('room_line_id')->nullable();
+            $table->unsignedSmallInteger('room_slot')->nullable();
         });
 
         Schema::create('amenity_requests', function (Blueprint $table) {
@@ -392,6 +394,8 @@ abstract class ApiFlowTestCase extends TestCase
             $table->timestamp('archived_at')->nullable();
             $table->timestamps();
             $table->unsignedBigInteger('stay_id')->nullable();
+            $table->unsignedBigInteger('room_line_id')->nullable();
+            $table->unsignedSmallInteger('room_slot')->nullable();
         });
 
         Schema::create('activity_logs', function (Blueprint $table) {

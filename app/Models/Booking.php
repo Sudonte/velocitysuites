@@ -695,7 +695,7 @@ class Booking extends Model
             'quantity' => $a->quantity,
             'unit_price' => (float) $a->charge,
             'subtotal' => round((float) $a->charge * $a->quantity, 2),
-        ])->values()->all();
+        ] + \App\Support\RoomLineRef::payload($a))->values()->all();
     }
 
     /**

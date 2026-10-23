@@ -10,7 +10,7 @@
         $extraLines = [];
         foreach (($stay['amenity_lines'] ?? []) as $line) {
             $extraLines[] = [
-                'label' => $line['amenity_name'].' x'.$line['quantity'].(! empty($line['additional']) ? ' (requested)' : ''),
+                'label' => $line['amenity_name'].' x'.$line['quantity'].(! empty($line['room_label']) ? ' · '.$line['room_label'] : '').(! empty($line['additional']) ? ' (requested)' : ''),
                 'amount' => (float) $line['subtotal'],
             ];
         }

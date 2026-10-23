@@ -135,7 +135,7 @@
                         <tbody>
                             @foreach($amenityRows as $row)
                                 <tr>
-                                    <td>{{ $row->amenity_name }}</td>
+                                    <td>{{ $row->amenity_name }}@if($row->room_label)<div class="small text-muted">{{ $row->room_label }}</div>@endif</td>
                                     <td>{{ $row->quantity }}</td>
                                     <td>₱{{ number_format($row->charge, 2) }}</td>
                                     <td>₱{{ number_format($row->subtotal, 2) }}</td>

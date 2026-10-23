@@ -204,6 +204,8 @@ class ReservationController extends Controller
             'amenities' => 'nullable|array',
             'amenities.*.amenity_id' => 'required_with:amenities|integer',
             'amenities.*.quantity' => 'required_with:amenities|integer|min:1',
+            'amenities.*.room_type_id' => 'nullable|integer',
+            'amenities.*.room_slot' => 'nullable|integer|min:1|max:50',
             // Optional: a fresh Reservation may now submit real GCash payment
             // at creation time itself, instead of only ever being created
             // unpaid and paid later via a separate Pay Now action. All four
@@ -559,6 +561,8 @@ class ReservationController extends Controller
             'amenities' => 'nullable|array',
             'amenities.*.amenity_id' => 'required_with:amenities|integer',
             'amenities.*.quantity' => 'required_with:amenities|integer|min:1',
+            'amenities.*.room_type_id' => 'nullable|integer',
+            'amenities.*.room_slot' => 'nullable|integer|min:1|max:50',
         ];
         if ($hasStays) {
             // The whole transaction's stays, replacing the current ones (each with its own dates, rooms and amenities).

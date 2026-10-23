@@ -240,6 +240,8 @@ class BookingController extends Controller
             'amenities' => 'nullable|array',
             'amenities.*.amenity_id' => 'required_with:amenities|integer',
             'amenities.*.quantity' => 'required_with:amenities|integer|min:1',
+            'amenities.*.room_type_id' => 'nullable|integer',
+            'amenities.*.room_slot' => 'nullable|integer|min:1|max:50',
             'payment_method' => 'required|in:cash,gcash',
             'reference_number' => [
                 'required_if:payment_method,gcash',
