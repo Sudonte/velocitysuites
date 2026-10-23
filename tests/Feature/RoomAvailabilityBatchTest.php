@@ -37,7 +37,8 @@ class RoomAvailabilityBatchTest extends ApiFlowTestCase
         foreach ($types as $type) {
             $this->assertSame($service->availableCount($type, $in, $out), $batched[$type->id], 'type '.$type->id);
         }
-        $this->assertLessThanOrEqual(3, $queries);
+        // constant, however many room types: inventory + maintenance + the stay room lines + bookings that predate room lines
+        $this->assertLessThanOrEqual(4, $queries);
         $this->assertSame(0, $batched[$types[0]->id]);
     }
 }

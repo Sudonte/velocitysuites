@@ -15,8 +15,11 @@ use Illuminate\Database\Eloquent\Model;
  */
 class ReservationAmenity extends Model
 {
+    use \App\Models\Concerns\BelongsToStay;
+
     protected $fillable = [
         'reservation_id',
+        'stay_id',
         'amenity_id',
         'amenity_name',
         'category',

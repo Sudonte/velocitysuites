@@ -97,6 +97,19 @@ class CheckoutFinalStagePaymentReparentingTest extends TestCase
             $table->integer('number_of_nights');
             $table->decimal('subtotal', 10, 2);
             $table->timestamps();
+            $table->unsignedBigInteger('stay_id')->nullable();
+        });
+
+        Schema::create('stays', function (Blueprint $table) {
+            $table->id();
+            $table->unsignedBigInteger('booking_id')->nullable();
+            $table->unsignedBigInteger('reservation_id')->nullable();
+            $table->unsignedSmallInteger('position')->default(1);
+            $table->dateTime('check_in');
+            $table->dateTime('check_out');
+            $table->timestamp('checked_in_at')->nullable();
+            $table->timestamp('checked_out_at')->nullable();
+            $table->timestamps();
         });
 
         Schema::create('bookings', function (Blueprint $table) {
@@ -155,6 +168,7 @@ class CheckoutFinalStagePaymentReparentingTest extends TestCase
             $table->integer('number_of_nights');
             $table->decimal('subtotal', 10, 2);
             $table->timestamps();
+            $table->unsignedBigInteger('stay_id')->nullable();
         });
 
         Schema::create('booking_rooms', function (Blueprint $table) {
@@ -163,6 +177,7 @@ class CheckoutFinalStagePaymentReparentingTest extends TestCase
             $table->unsignedBigInteger('room_id');
             $table->timestamp('checked_out_at')->nullable();
             $table->timestamps();
+            $table->unsignedBigInteger('stay_id')->nullable();
         });
 
         Schema::create('receipts', function (Blueprint $table) {
@@ -237,6 +252,7 @@ class CheckoutFinalStagePaymentReparentingTest extends TestCase
             $table->decimal('charge', 10, 2)->default(0);
             $table->string('status', 20)->default('pending');
             $table->timestamps();
+            $table->unsignedBigInteger('stay_id')->nullable();
         });
 
         Schema::create('discounts', function (Blueprint $table) {

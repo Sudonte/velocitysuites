@@ -139,7 +139,7 @@ class Room extends Model
      */
     public function assignedBookings()
     {
-        return $this->belongsToMany(Booking::class, 'booking_rooms')->withPivot('checked_out_at')->withTimestamps();
+        return $this->belongsToMany(Booking::class, 'booking_rooms')->withPivot('checked_out_at', 'stay_id')->withTimestamps();
     }
 
     /**

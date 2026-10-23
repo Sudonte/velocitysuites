@@ -59,6 +59,11 @@ class TransactionArchiveService
             'booking_rooms' => $booking
                 ? DB::table('booking_rooms')->where('booking_id', $booking->id)->get()->all()
                 : [],
+            // every stay of the transaction (its dates, check-in / check-out moments); rooms and lines above carry their stay_id
+            'stays' => DB::table('stays')
+                ->when($reservation, fn ($q) => $q->orWhere('reservation_id', $reservation->id))
+                ->when($booking, fn ($q) => $q->orWhere('booking_id', $booking->id))
+                ->get()->all(),
         ];
 
         TransactionDeletionArchive::create([
@@ -84,6 +89,12 @@ class TransactionArchiveService
         // but clearing both explicitly here avoids leaving a null-reservation_id
         // request row behind for a transaction that no longer exists at all.
         AmenityRequest::query()
+            ->when($reservation, fn ($q) => $q->orWhere('reservation_id', $reservation->id))
+            ->when($booking, fn ($q) => $q->orWhere('booking_id', $booking->id))
+            ->delete();
+
+        // the stays go with the transaction they belonged to (archived in the snapshot above)
+        DB::table('stays')
             ->when($reservation, fn ($q) => $q->orWhere('reservation_id', $reservation->id))
             ->when($booking, fn ($q) => $q->orWhere('booking_id', $booking->id))
             ->delete();

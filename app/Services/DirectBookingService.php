@@ -9,6 +9,7 @@ use App\Models\BookingRoomLine;
 use App\Models\Guest;
 use App\Models\Payment;
 use App\Models\RoomType;
+use App\Support\StaysInput;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -123,18 +124,7 @@ class DirectBookingService
     }
 
     /**
-     * Creates the Booking, its itemized booking_room_lines (one per distinct
-     * room type), its Payment, and any paid-amenity request rows atomically -
-     * either the whole transaction lands, or none of it does. `$roomLines`
-     * is never empty (see this class's own doc). The parent Booking row's
-     * own `room_type_id`/`rooms_requested` are kept in sync from the first
-     * line's type and the summed quantity across every line, purely for
-     * backward-compatible display - identical convention to
-     * Api\ReservationController::update()'s patched multi-room path.
-     * `$paymentData` mirrors Api\PaymentController::store()'s already-
-     * validated shape (payment_method, reference_number, gcash_number,
-     * receipt_path, amount_paid). `$idCard` is ['type' => ..., 'path' => ...]
-     * or null when the guest didn't need to attach one.
+     * A one-stay booking: the stay's rooms, dates and amenities. Same as createWithStays() with a single stay.
      */
     public function create(
         Guest $guest,
@@ -150,65 +140,65 @@ class DirectBookingService
         Collection $resolvedAmenities,
         ?string $idempotencyKey = null
     ): Booking {
-        // array_values(), not the raw validated array - a multipart request whose
-        // additional_guests[i][*] fields arrived out of index order (e.g. an older
-        // Android build's HashMap-backed field map hashing them out of order) produces a
-        // PHP array like ['1' => ..., '0' => ...] here: the VALUES are fine but the keys
-        // are not in the exact 0..n-1 order json_encode() requires to detect a "list" -
-        // it then serializes this as a JSON OBJECT ({"1":...,"0":...}) instead of a JSON
-        // ARRAY, which crashes Android's Gson (`List<AdditionalGuestDto>` expects
-        // BEGIN_ARRAY) the moment this booking is fetched back - confirmed live via 4 real
-        // corrupted rows (see the one-time repair for existing data). array_values() here
-        // guarantees a genuine 0-indexed list is what ever gets stored, regardless of the
-        // arrival order of any current or future client.
+        return $this->createWithStays(
+            $guest,
+            [['check_in' => $checkIn, 'check_out' => $checkOut, 'lines' => $roomLines, 'amenities' => $resolvedAmenities]],
+            $adults, $children, $guestName, $additionalGuests, $idCard, $paymentData, $idempotencyKey
+        );
+    }
+
+    /**
+     * Creates ONE Booking - one transaction, one ID - holding every stay (see StaysInput for the shape), its itemized room lines per
+     * stay, its Payment, and any paid-amenity requests atomically: either the whole transaction lands, or none of it does. The parent
+     * Booking row's own check_in / check_out are the overall span and room_type_id / rooms_requested stay the first type and the total
+     * room count, purely for backward-compatible display. `$paymentData` mirrors Api\PaymentController::store()'s already-validated
+     * shape (payment_method, reference_number, gcash_number, receipt_path, amount_paid). `$idCard` is ['type' => ..., 'path' => ...]
+     * or null - one ID for the whole transaction.
+     *
+     * @param  array<int,array{check_in: Carbon, check_out: Carbon, lines: array, amenities: Collection}>  $stays
+     */
+    public function createWithStays(
+        Guest $guest,
+        array $stays,
+        int $adults,
+        int $children,
+        array $guestName,
+        ?array $additionalGuests,
+        ?array $idCard,
+        array $paymentData,
+        ?string $idempotencyKey = null
+    ): Booking {
+        // array_values(), not the raw validated array - a multipart request whose additional_guests[i][*] fields arrived out of index
+        // order produces a PHP array whose keys are not in 0..n-1 order, which json_encode() then serializes as a JSON OBJECT instead
+        // of a JSON ARRAY and crashes Android's Gson (confirmed live via 4 corrupted rows). array_values() guarantees a real list.
         $additionalGuests = $additionalGuests !== null ? array_values($additionalGuests) : null;
+        $stays = array_values($stays);
+        $recorder = app(StayRecorder::class);
 
-        return DB::transaction(function () use (
-            $guest, $roomLines, $checkIn, $checkOut, $adults, $children,
-            $guestName, $additionalGuests, $idCard, $paymentData, $resolvedAmenities, $idempotencyKey
-        ) {
-            // The caller (Api\BookingController::store()) already ran
-            // validateRoomLinesAvailability() before opening this
-            // transaction, but that was only a fast-fail check against a
-            // snapshot that could already be stale by the time we get here -
-            // two guests racing for the last room of the same type could
-            // both pass it before either had committed. Locking every
-            // requested room_type row (in a stable ascending-id order, so
-            // two overlapping multi-room-type bookings can never deadlock
-            // each other over lock ordering) forces a truly concurrent
-            // create() for the same room type to wait for this transaction
-            // to commit or roll back before it can run its own availability
-            // count, so the re-check right after actually sees the other
-            // request's consumption instead of racing past it. Shared with
-            // every other Booking-creating call site - see
-            // RoomAvailabilityService::lockRoomTypesForAvailabilityCheck()'s
-            // own doc.
-            $this->availability->lockRoomTypesForAvailabilityCheck(collect($roomLines)->pluck('room_type.id'));
-            $this->validateRoomLinesAvailability($roomLines, $checkIn, $checkOut);
+        return DB::transaction(function () use ($guest, $stays, $adults, $children, $guestName, $additionalGuests, $idCard, $paymentData, $idempotencyKey, $recorder) {
+            // The caller already ran a fast-fail availability check, but that was a snapshot that could be stale by now: two guests
+            // racing for the last room of a type could both pass it. Locking every requested room_type row (stable ascending order,
+            // so two overlapping bookings can't deadlock) makes a truly concurrent create wait for this one to commit, so the re-check
+            // right below sees the other request's rooms.
+            $this->availability->lockRoomTypesForAvailabilityCheck(collect($stays)->flatMap(fn ($s) => collect($s['lines'])->pluck('room_type.id')));
+            if ($shortfall = $this->availability->staysShortfall($stays)) {
+                StaysInput::throwShortfall($shortfall);
+            }
 
-            $nights = max(1, abs($checkOut->diffInDays($checkIn)));
-            $firstRoomType = $roomLines[0]['room_type'];
-            $totalRoomsRequested = collect($roomLines)->sum('quantity');
+            $summary = $recorder->summaryColumns($stays);
 
-            // idempotency_key is set here, as part of THIS insert, rather
-            // than in a separate update() after the fact - a collision (two
-            // requests racing with the same key) must fail at the earliest
-            // possible point, before any room_lines/payment/amenity_request
-            // rows are created, so the DB::transaction() rollback below
-            // leaves nothing behind for the loser to clean up. See
-            // Api\BookingController::store()'s catch of the resulting
-            // UniqueConstraintViolationException for the re-fetch-and-return
-            // side of this protection.
+            // idempotency_key is set as part of THIS insert, not a later update: a collision (two requests racing with the same key)
+            // must fail at the earliest point, before any child row exists, so the rollback leaves nothing behind for the loser.
             $booking = Booking::create([
                 'reservation_id' => null,
                 'guest_id' => $guest->id,
                 'guest_first_name' => $guestName['first_name'],
                 'guest_middle_name' => $guestName['middle_name'] ?? null,
                 'guest_last_name' => $guestName['last_name'],
-                'room_type_id' => $firstRoomType->id,
-                'rooms_requested' => $totalRoomsRequested,
-                'check_in' => $checkIn,
-                'check_out' => $checkOut,
+                'room_type_id' => $summary['room_type_id'],
+                'rooms_requested' => $summary['rooms_requested'],
+                'check_in' => $summary['check_in'],
+                'check_out' => $summary['check_out'],
                 'adults' => $adults,
                 'children' => $children,
                 'number_of_guests' => $adults + $children,
@@ -222,33 +212,12 @@ class DirectBookingService
                 'discount_verification_status' => $idCard !== null ? 'pending' : 'not_requested',
                 'additional_guest_details' => $additionalGuests,
                 'idempotency_key' => $idempotencyKey,
-                // No verified_by - no staff member actually verified
-                // anything here, the system is just recognizing there's
-                // nothing to verify (mirrors payment_status starting
-                // 'completed' for Cash below, and
-                // ReservationWorkflowService::convertToBooking()'s
-                // identical auto-verify for a Cash reservation) - a GCash
-                // booking still starts unverified, needing
-                // Receptionist\PaymentController::verify() before it
-                // leaves the Bookings module's "For Verification" tab.
+                // No verified_by - no staff member actually verified anything here, the system is just recognizing there's nothing to
+                // verify (a Cash booking); a GCash booking still starts unverified, needing Receptionist\PaymentController::verify().
                 'verified_at' => $paymentData['payment_method'] === 'gcash' ? null : now(),
             ]);
 
-            foreach ($roomLines as $line) {
-                /** @var RoomType $roomType */
-                $roomType = $line['room_type'];
-                $quantity = $line['quantity'];
-
-                BookingRoomLine::create([
-                    'booking_id' => $booking->id,
-                    'room_type_id' => $roomType->id,
-                    'room_type_name' => $roomType->name,
-                    'quantity' => $quantity,
-                    'price_per_night' => $roomType->rate,
-                    'number_of_nights' => $nights,
-                    'subtotal' => round((float) $roomType->rate * $nights * $quantity, 2),
-                ]);
-            }
+            $savedStays = $recorder->record($booking, $stays);
 
             $payment = Payment::create([
                 'reservation_id' => null,
@@ -259,49 +228,36 @@ class DirectBookingService
                 'receipt_path' => $paymentData['receipt_path'] ?? null,
                 'amount_paid' => $paymentData['amount_paid'],
                 'payment_status' => $paymentData['payment_method'] === 'gcash' ? 'pending' : 'completed',
-                // Computed by the caller against totalAmountDueForLines() -
-                // defaults to 'final' for any caller that doesn't set it
-                // (e.g. a future full-payment-only path), preserving prior
-                // behavior.
+                // Computed by the caller against the transaction total; 'final' for a caller that doesn't set it.
                 'payment_stage' => $paymentData['payment_stage'] ?? 'final',
                 'payment_date' => now(),
             ]);
 
-            // A direct booking has no separate "verify the transaction" step
-            // the way a Reservation does (Receptionist\ReservationController
-            // ::verify()) - it's created already confirmed. The equivalent
-            // gate here is payment verification: a Cash payment is already
-            // 'completed' at creation (nothing left to verify), so its
-            // amenity requests can start approved; a GCash payment starts
-            // 'pending' until the receptionist verifies it
-            // (Receptionist\PaymentController), so its amenity requests
-            // start pending too and get bulk-flipped to approved at that
-            // same verification step (see the PaymentController audit).
+            // A direct booking has no separate "verify the transaction" step the way a Reservation does - it's created already confirmed.
+            // The equivalent gate here is payment verification: a Cash payment is already 'completed' at creation, so its amenity
+            // requests can start approved; a GCash payment starts 'pending' until the receptionist verifies it, so its amenity requests
+            // start pending too and get bulk-flipped to approved at that same verification step.
             $initialAmenityStatus = $payment->payment_status === 'completed' ? 'approved' : 'pending';
 
-            foreach ($resolvedAmenities as $entry) {
-                /** @var Amenity $amenity */
-                $amenity = $entry['amenity'];
-                $quantity = $entry['quantity'];
-
-                AmenityRequest::create([
-                    'guest_id' => $guest->id,
-                    'reservation_id' => null,
-                    'booking_id' => $booking->id,
-                    // Amenity requests were always keyed to a single
-                    // room_type_id even before multi-room-type support -
-                    // kept pointed at the first line's type (the same
-                    // "first line" convention used for the parent row's own
-                    // room_type_id above), since amenities aren't currently
-                    // attributed to a specific room type anywhere downstream.
-                    'room_type_id' => $firstRoomType->id,
-                    'amenity_id' => $amenity->id,
-                    'amenity_name' => $amenity->amenity_name,
-                    'category' => $amenity->category,
-                    'quantity' => $quantity,
-                    'charge' => $amenity->charge,
-                    'status' => $initialAmenityStatus,
-                ]);
+            foreach ($stays as $i => $stay) {
+                foreach ($stay['amenities'] as $entry) {
+                    /** @var Amenity $amenity */
+                    $amenity = $entry['amenity'];
+                    AmenityRequest::create([
+                        'guest_id' => $guest->id,
+                        'reservation_id' => null,
+                        'booking_id' => $booking->id,
+                        'stay_id' => $savedStays[$i]->id,
+                        // keyed to the first room type of THIS stay (amenities aren't attributed to a specific room type downstream)
+                        'room_type_id' => $stay['lines'][0]['room_type']->id,
+                        'amenity_id' => $amenity->id,
+                        'amenity_name' => $amenity->amenity_name,
+                        'category' => $amenity->category,
+                        'quantity' => $entry['quantity'],
+                        'charge' => $amenity->charge,
+                        'status' => $initialAmenityStatus,
+                    ]);
+                }
             }
 
             return $booking->fresh(['roomType', 'guest.user', 'payments', 'roomLines']);

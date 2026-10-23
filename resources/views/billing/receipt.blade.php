@@ -37,6 +37,11 @@
 
     <div class="row">
         <div class="col-lg-8">
+            @if($billing->booking && $billing->booking->hasSeveralStays())
+                <x-card title="Stays" icon="fas fa-layer-group" bodyClass="card-body" class="mb-4">
+                    @include('partials.stays-list', ['stays' => $billing->booking->staysPayload()])
+                </x-card>
+            @endif
             <x-card bodyClass="card-body" class="mb-4">
                 <x-slot:title>Charges</x-slot:title>
                 <x-slot:actions>

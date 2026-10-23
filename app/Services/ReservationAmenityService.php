@@ -81,13 +81,14 @@ class ReservationAmenityService
      * reservation/booking's own price columns - the base room price is
      * computed and stored exactly as it already was.
      */
-    public function snapshot(Reservation $reservation, Collection $resolved): void
+    public function snapshot(Reservation $reservation, Collection $resolved, ?int $stayId = null): void
     {
         foreach ($resolved as $entry) {
             $amenity = $entry['amenity'];
             $quantity = $entry['quantity'];
 
             $reservation->bookingAmenities()->create([
+                'stay_id' => $stayId,
                 'amenity_id' => $amenity->id,
                 'amenity_name' => $amenity->amenity_name,
                 'category' => $amenity->category,
@@ -99,6 +100,7 @@ class ReservationAmenityService
             AmenityRequest::create([
                 'guest_id' => $reservation->guest_id,
                 'reservation_id' => $reservation->id,
+                'stay_id' => $stayId,
                 'room_id' => null,
                 'room_type_id' => $reservation->room_type_id,
                 'amenity_id' => $amenity->id,

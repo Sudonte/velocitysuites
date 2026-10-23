@@ -102,11 +102,28 @@ class TransactionTimeline
         }
 
         if ($booking) {
-            if ($booking->checked_in_at) {
-                $steps[] = self::step('checked_in', 'Checked in', self::VERIFIED, $booking->checked_in_at);
-            }
-            if ($booking->checked_out_at) {
-                $steps[] = self::step('checked_out', 'Checked out', self::VERIFIED, $booking->checked_out_at);
+            if ($booking->hasSeveralStays()) {
+                // Several stays: each one's own arrival and departure, in the order they happened.
+                $moments = [];
+                foreach ($booking->stayList() as $stay) {
+                    if ($stay->checked_in_at) {
+                        $moments[] = [$stay->checked_in_at, self::step('stay_'.$stay->id.'_checked_in', "Stay {$stay->position} checked in", self::VERIFIED, $stay->checked_in_at)];
+                    }
+                    if ($stay->checked_out_at) {
+                        $moments[] = [$stay->checked_out_at, self::step('stay_'.$stay->id.'_checked_out', "Stay {$stay->position} checked out", self::VERIFIED, $stay->checked_out_at)];
+                    }
+                }
+                usort($moments, fn ($a, $b) => $a[0] <=> $b[0]);
+                foreach ($moments as [, $step]) {
+                    $steps[] = $step;
+                }
+            } else {
+                if ($booking->checked_in_at) {
+                    $steps[] = self::step('checked_in', 'Checked in', self::VERIFIED, $booking->checked_in_at);
+                }
+                if ($booking->checked_out_at) {
+                    $steps[] = self::step('checked_out', 'Checked out', self::VERIFIED, $booking->checked_out_at);
+                }
             }
             if ($booking->completed_at) {
                 $steps[] = self::step('completed', 'Completed', self::VERIFIED, $booking->completed_at);

@@ -3,6 +3,14 @@
     // checkOutRoom()) - used to label whichever card is the last one
     // remaining, since checking THAT one out is what proceeds to billing.
     $remainingCount = $booking->rooms->whereNull('pivot.checked_out_at')->count();
+    // Several stays: the rooms of each stay together; the booking is only billed once the LAST stay has left.
+    $firstStayId = $booking->stayList()->first()?->id;
+    $stayGroups = $booking->stayList()->map(fn ($st) => [
+        'stay' => $st,
+        'rooms' => $booking->rooms->filter(fn ($r) => (($r->pivot->stay_id ?? $firstStayId) === $st->id))->values(),
+    ]);
+    $stillToArrive = $booking->stayList()->filter(fn ($st) => $booking->stateOf($st) === 'upcoming')->count();
+    $isLastRoom = $remainingCount === 1 && $stillToArrive === 0;
 @endphp
 <div class="modal-header modal-header-brand">
     <h5 class="modal-title"><i class="fas fa-door-open"></i> Check Out Rooms</h5>
@@ -31,10 +39,13 @@
 
     <p class="text-muted small mb-2">
         <i class="fas fa-circle-info"></i>
-        This booking has {{ $booking->rooms->count() }} rooms. Tick the rooms leaving now, or check out all of them -
+        This booking has {{ $booking->rooms->count() }} rooms{{ $stayGroups->count() > 1 ? ' in ' . $stayGroups->count() . ' stays' : '' }}. Tick the rooms leaving now, or check out all of them -
         each room keeps its own check-out date, and a room that already left is never re-billed.
-        The booking closes (and billing opens) once every room is out.
+        The booking closes (and billing opens) once every room of every stay is out.
     </p>
+    @if($stillToArrive > 0)
+        <div class="alert alert-info py-2 small"><i class="fas fa-layer-group"></i> {{ $stillToArrive }} more {{ $stillToArrive === 1 ? 'stay has' : 'stays have' }} not arrived yet. Billing opens after the last stay checks out.</div>
+    @endif
     @if($remainingCount > 0)
         <div class="d-flex flex-wrap gap-2 align-items-center mb-3">
             <div class="form-check mb-0">
@@ -51,7 +62,12 @@
     @endif
 
     <div class="row g-3" id="roomsCardGrid">
-        @foreach($booking->rooms as $room)
+        @foreach($stayGroups as $group)
+        @if($stayGroups->count() > 1)
+            <div class="col-12"><h6 class="mb-0 mt-2"><i class="fas fa-layer-group"></i> Stay {{ $group['stay']->position }} &middot; {{ $group['stay']->check_in->format('M d') }} &rarr; {{ $group['stay']->check_out->format('M d, Y') }}
+                @if($group['rooms']->isEmpty()) <span class="badge bg-light text-dark border">Not arrived yet</span> @endif</h6></div>
+        @endif
+        @foreach($group['rooms'] as $room)
             @php $isCheckedOut = (bool) $room->pivot->checked_out_at; @endphp
             <div class="col-md-6" data-room-card="{{ $room->id }}">
                 <div class="card h-100 {{ $isCheckedOut ? 'border-secondary' : 'border-primary' }}">
@@ -70,7 +86,7 @@
                                 &middot; {{ \Illuminate\Support\Carbon::parse($room->pivot->checked_out_at)->format('M d, Y g:i A') }}
                             </span>
                         @else
-                            @if($remainingCount === 1)
+                            @if($isLastRoom)
                                 <span class="badge bg-warning text-dark mb-2 d-block">
                                     <i class="fas fa-triangle-exclamation"></i>
                                     Last room - checking out will proceed to billing
@@ -78,13 +94,14 @@
                             @endif
                             <button type="button" class="btn btn-sm btn-primary w-100 btn-checkout-room"
                                     data-room-id="{{ $room->id }}" data-room-number="{{ $room->room_number }}"
-                                    data-last-room="{{ $remainingCount === 1 ? '1' : '' }}">
+                                    data-last-room="{{ $isLastRoom ? '1' : '' }}">
                                 <i class="fas fa-sign-out-alt"></i> Check Out This Room
                             </button>
                         @endif
                     </div>
                 </div>
             </div>
+        @endforeach
         @endforeach
     </div>
 </div>

@@ -73,6 +73,9 @@
                             <div><dt>Check-In</dt><dd>{{ $booking->check_in->format('F d, Y') }}</dd></div>
                             <div><dt>Check-Out</dt><dd>{{ $booking->check_out->format('F d, Y') }}</dd></div>
                             <div><dt>Nights</dt><dd>{{ $nights }}</dd></div>
+                            @if($booking->hasSeveralStays())
+                                <div><dt>Stays</dt><dd>{{ $booking->stayCount() }} (listed below)</dd></div>
+                            @endif
                             <div><dt>Booking / Creation Date</dt><dd>{{ $booking->created_at?->format('F d, Y') ?? 'N/A' }}</dd></div>
                             <div><dt>Creation Time</dt><dd>{{ $booking->created_at?->format('h:i A') ?? 'N/A' }}</dd></div>
                         </dl>
@@ -86,6 +89,12 @@
                  etc.) must show every line, never just the first, and each
                  line's own image must never be a broken-image icon when
                  image_url is missing/null (falls back to a plain icon tile). -->
+            @if($booking->hasSeveralStays())
+                <x-card title="2. Stays" icon="fas fa-layer-group" bodyClass="card-body" class="mb-4">
+                    <p class="text-muted small">One booking, {{ $booking->stayCount() }} stays: verification covers the whole booking; rooms, check-in and check-out are per stay.</p>
+                    @include('partials.stays-list', ['stays' => $booking->staysPayload()])
+                </x-card>
+            @endif
             <x-card title="2. Charges - Rooms" icon="fas fa-bed" bodyClass="card-body" class="mb-4">
                 <div class="room-type-card-list">
                     @foreach($roomLines as $line)

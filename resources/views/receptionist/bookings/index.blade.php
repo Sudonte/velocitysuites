@@ -117,8 +117,16 @@
                     </div>
                     <div class="monitoring-item-row">
                         <span class="text-muted">Stay</span>
-                        <span>{{ $booking->check_in->format('M d') }}&ndash;{{ $booking->check_out->format('M d, Y') }}</span>
+                        <span>{{ $booking->check_in->format('M d') }}&ndash;{{ $booking->check_out->format('M d, Y') }}@if($booking->stayCount() > 1) &middot; {{ $booking->stayCount() }} stays @endif</span>
                     </div>
+                    @if($booking->stayCount() > 1)
+                        @foreach($booking->stayList() as $st)
+                            <div class="monitoring-item-row small">
+                                <span class="text-muted">Stay {{ $st->position }}</span>
+                                <span>{{ $st->check_in->format('M d') }}&ndash;{{ $st->check_out->format('M d') }}</span>
+                            </div>
+                        @endforeach
+                    @endif
                     <div class="monitoring-item-row">
                         <span class="text-muted">Total</span>
                         <span>{{ $bookingTotal !== null ? '₱' . number_format($bookingTotal, 2) : 'N/A' }}</span>
@@ -249,7 +257,15 @@
                                 <span class="badge bg-secondary">&times;{{ $booking->rooms_requested }} rooms</span>
                             @endif
                         </td>
-                        <td>{{ $booking->check_in->format('M d, Y') }}</td>
+                        <td>
+                            {{ $booking->check_in->format('M d, Y') }}
+                            @if($booking->stayCount() > 1)
+                                <div class="small"><span class="badge bg-info text-dark"><i class="fas fa-layer-group"></i> {{ $booking->stayCount() }} stays</span></div>
+                                @foreach($booking->stayList() as $st)
+                                    <div class="small text-muted">Stay {{ $st->position }}: {{ $st->check_in->format('M d') }}&ndash;{{ $st->check_out->format('M d') }}</div>
+                                @endforeach
+                            @endif
+                        </td>
                         <td>{{ $booking->check_out->format('M d, Y') }}</td>
                         <td class="d-none d-md-table-cell">{{ $bookingTotal !== null ? '₱' . number_format($bookingTotal, 2) : 'N/A' }}</td>
                         @if($tab === 'pending')

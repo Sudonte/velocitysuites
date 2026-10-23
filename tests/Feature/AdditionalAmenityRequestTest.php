@@ -279,9 +279,9 @@ class AdditionalAmenityRequestTest extends ApiFlowTestCase
 
         // ... and the exact JSON shape the Android app parses (AdditionalAmenityInfoDto / AdditionalAmenityRequestDto)
         $info = $this->asGuest($user)->getJson("/api/guest/reservations/{$reservation->id}/additional-amenities")->assertOk()->json();
-        $this->assertEqualsCanonicalizing(['booking_id', 'can_request', 'reason', 'rooms', 'requests', 'total_approved'], array_keys($info));
+        $this->assertEqualsCanonicalizing(['booking_id', 'can_request', 'reason', 'rooms', 'stays', 'requests', 'total_approved'], array_keys($info));
         $this->assertEqualsCanonicalizing(
-            ['id', 'amenity_id', 'room_id', 'room_number', 'room_type', 'batch_ref', 'name', 'quantity', 'unit_price', 'subtotal', 'status', 'rejection_reason', 'note', 'requested_at', 'decided_at'],
+            ['id', 'amenity_id', 'stay_id', 'room_id', 'room_number', 'room_type', 'batch_ref', 'name', 'quantity', 'unit_price', 'subtotal', 'status', 'rejection_reason', 'note', 'requested_at', 'decided_at'],
             array_keys($info['requests'][0])
         );
         $this->assertSame($booking->id, $info['booking_id']);

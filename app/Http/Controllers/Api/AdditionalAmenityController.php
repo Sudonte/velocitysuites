@@ -78,6 +78,7 @@ class AdditionalAmenityController extends Controller
             'can_request' => $reason === null,
             'reason' => $reason,
             'rooms' => $this->presentRooms($booking),
+            'stays' => $this->presentStays($booking),
             'requests' => $rows->map(fn ($r) => $this->present($r))->values(),
             'total_approved' => round((float) $rows->where('status', 'approved')->sum(fn ($r) => $r->charge * $r->quantity), 2),
         ]);
@@ -103,10 +104,12 @@ class AdditionalAmenityController extends Controller
             'rooms.*.items.*.amenity_id' => 'required|integer',
             'rooms.*.items.*.quantity' => 'required|integer|min:1|max:99',
             'note' => 'nullable|string|max:500',
+            // Which stay of the booking (only needed - and required - when several stays are in house).
+            'stay_id' => 'nullable|integer',
         ]);
 
         try {
-            $created = $this->service->submit($booking, $data['items'] ?? [], $data['note'] ?? null, $data['rooms'] ?? null);
+            $created = $this->service->submit($booking, $data['items'] ?? [], $data['note'] ?? null, $data['rooms'] ?? null, $data['stay_id'] ?? null);
         } catch (ValidationException $e) {
             return response()->json(['message' => collect($e->errors())->flatten()->first(), 'errors' => $e->errors()], 422);
         }
@@ -115,14 +118,37 @@ class AdditionalAmenityController extends Controller
             'can_request' => true,
             'reason' => null,
             'rooms' => $this->presentRooms($booking),
+            'stays' => $this->presentStays($booking),
             'requests' => $created->map(fn ($r) => $this->present($r))->values(),
         ], 201);
+    }
+
+    /** The stays in house right now - the ones an amenity can be requested for - each with its dates and its rooms. */
+    private function presentStays(Booking $booking): array
+    {
+        return $this->service->inHouseStays($booking)->map(fn ($stay) => [
+            'stay_id' => $stay->id,
+            'position' => (int) ($stay->position ?? 1),
+            'check_in' => $stay->check_in->format('Y-m-d'),
+            'check_out' => $stay->check_out->format('Y-m-d'),
+            'nights' => $stay->nights(),
+            'rooms' => $this->service->requestableRooms($booking, $stay->id)->map(fn ($room) => [
+                'room_id' => $room->id,
+                'room_number' => $room->room_number,
+                'room_name' => $room->room_name,
+                'room_type_id' => $room->room_type_id,
+                'room_type' => $room->roomType?->name,
+            ])->values()->all(),
+        ])->values()->all();
     }
 
     /** The rooms of this stay the guest can pick amenities for (assigned at check-in, not checked out). */
     private function presentRooms(Booking $booking): array
     {
+        $firstId = $booking->stayList()->first()?->id;
+
         return $this->service->requestableRooms($booking)->map(fn ($room) => [
+            'stay_id' => $room->pivot->stay_id ?? $firstId,
             'room_id' => $room->id,
             'room_number' => $room->room_number,
             'room_name' => $room->room_name,
@@ -145,6 +171,7 @@ class AdditionalAmenityController extends Controller
         return [
             'id' => $r->id,
             'amenity_id' => $r->amenity_id,
+            'stay_id' => $r->stay_id,
             'room_id' => $r->room_id,
             'room_number' => $r->room?->room_number,
             'room_type' => $r->roomType?->name,

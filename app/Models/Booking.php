@@ -2,15 +2,17 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\HasStays;
 use App\Services\ReceiptService;
 use App\Support\PaymentMath;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\DB;
 
 class Booking extends Model
 {
-    use HasFactory, SoftDeletes;
+    use HasFactory, SoftDeletes, HasStays;
 
     /**
      * bookings.booking_status is a real DB ENUM - these are its exact
@@ -313,7 +315,7 @@ class Booking extends Model
      */
     public function rooms()
     {
-        return $this->belongsToMany(Room::class, 'booking_rooms')->withPivot('checked_out_at')->withTimestamps();
+        return $this->belongsToMany(Room::class, 'booking_rooms')->withPivot('checked_out_at', 'stay_id')->withTimestamps();
     }
 
     /**
@@ -357,13 +359,16 @@ class Booking extends Model
             return [];
         }
 
-        $assignedByType = $this->rooms->groupBy('room_type_id');
+        $firstId = $this->stayList()->first()?->id;
 
-        return $lines->map(function (BookingRoomLine $line) use ($assignedByType) {
-            $assignedNumbers = ($assignedByType->get($line->room_type_id) ?? collect())
+        return $lines->map(function (BookingRoomLine $line) use ($firstId) {
+            // The physical rooms of THIS line: its room type, assigned to the line's own stay.
+            $assignedNumbers = $this->rooms
+                ->filter(fn ($room) => $room->room_type_id === $line->room_type_id && (($room->pivot->stay_id ?? $firstId) === ($line->stay_id ?? $firstId)))
                 ->pluck('room_number')->values()->all();
 
             return [
+                'stay_id' => $line->stay_id ?? $firstId,
                 'room_type_id' => (string) $line->room_type_id,
                 'room_type' => $line->room_type_name,
                 'quantity' => $line->quantity,
@@ -380,7 +385,8 @@ class Booking extends Model
      */
     public function getNumberOfNightsAttribute()
     {
-        return abs($this->check_out->diffInDays($this->check_in));
+        // Booked nights across every stay (a one-stay booking: its own nights).
+        return (int) $this->stayList()->sum(fn (Stay $stay) => $stay->nights());
     }
 
     /**
@@ -395,31 +401,111 @@ class Booking extends Model
      */
     public function getTotalAmountDueAttribute(): float
     {
-        $nights = $this->check_in && $this->check_out
-            ? max(1, abs($this->check_out->diffInDays($this->check_in)))
-            : 1;
-        // Once rooms are actually assigned (at check-in), price off each
-        // room's own effective rate (rate_override, if any) summed - same
-        // math CheckOutController::generateBilling() uses - since it can
-        // differ from the room type's base rate. Before check-in: for a
-        // genuine multi-room-type transaction (real booking_room_lines -
-        // see DirectBookingService::create()), sum each line's own frozen
-        // subtotal (own room type's own rate x own quantity) - using only
-        // roomType/rooms_requested here would silently price every line at
-        // the FIRST line's rate times the SUM of every line's quantity,
-        // both wrong the moment more than one room type is involved.
-        // Genuinely single-room-type bookings (no room_lines rows) keep the
-        // original plain calculation unchanged.
-        $rooms = $this->rooms;
-        if ($rooms->isNotEmpty()) {
-            $roomTotal = $rooms->sum(fn (Room $room) => (float) $room->room_rate) * $nights;
-        } elseif (! empty($this->room_lines)) {
-            $roomTotal = collect($this->room_lines)->sum('subtotal');
-        } else {
-            $roomTotal = (float) ($this->roomType->rate ?? 0) * $nights * max(1, $this->rooms_requested);
+        return round($this->roomTotalByStays() + $this->billableAmenityTotal(), 2);
+    }
+
+    /**
+     * What the rooms cost, stay by stay, each on ITS OWN booked nights. Once rooms are actually assigned (at check-in) a stay is priced off
+     * each assigned room's own effective rate (rate_override, if any) - same math CheckOutController::generateBilling() uses - since it can
+     * differ from the room type's base rate. Before that, off the stay's room lines (each line's own frozen rate x quantity x nights);
+     * a booking from before room lines existed keeps the plain room type rate x rooms_requested x nights.
+     */
+    /**
+     * Stays still waiting for their guests to arrive (no check-in recorded), in order. A booking that predates stay-level check-in
+     * (one stay, checked in with the booking) has none: it is either waiting or in house as a whole.
+     *
+     * @return \Illuminate\Support\Collection<int, Stay>
+     */
+    public function staysAwaitingCheckIn(): \Illuminate\Support\Collection
+    {
+        $this->ensureStays();
+
+        return $this->stayList()->filter(fn (Stay $s) => $s->checked_in_at === null && $this->stateOf($s) === Stay::UPCOMING)->values();
+    }
+
+    /** The stay a front-desk check-in is for: the one named (when it is still waiting), else the first stay still waiting. */
+    public function stayToCheckIn(?int $stayId = null): ?Stay
+    {
+        $waiting = $this->staysAwaitingCheckIn();
+
+        return ($stayId ? $waiting->firstWhere('id', $stayId) : null) ?? ($stayId ? null : $waiting->first());
+    }
+
+    /** The guests of this stay have arrived: its rooms are assigned and the stay is in house. The booking is checked in from the first one. */
+    public function recordStayCheckIn(Stay $stay): void
+    {
+        $stay->update(['checked_in_at' => now()]);
+        $this->unsetRelation('stays');
+    }
+
+    /**
+     * After rooms leave: a stay whose rooms have ALL been checked out is itself checked out (its moment is the last room's). Returns true
+     * when every stay of the booking is now done - the moment the bill is settled and the final receipt is issued.
+     */
+    public function recordStayCheckOuts(): bool
+    {
+        $this->ensureStays();
+        $firstId = $this->stayList()->first()?->id;
+        $pivots = DB::table('booking_rooms')->where('booking_id', $this->id)->get();
+        foreach ($this->stayList() as $stay) {
+            if ($stay->checked_out_at !== null || $stay->checked_in_at === null) {
+                continue;
+            }
+            $mine = $pivots->filter(fn ($p) => ($p->stay_id ?? $firstId) === $stay->id);
+            if ($mine->isNotEmpty() && $mine->every(fn ($p) => $p->checked_out_at !== null)) {
+                $stay->update(['checked_out_at' => $mine->max('checked_out_at')]);
+            }
+        }
+        $this->unsetRelation('stays');
+
+        return $this->stayList()->every(fn (Stay $s) => $s->checked_out_at !== null);
+    }
+
+    /** Rooms still occupied by a guest right now (assigned, not checked out). */
+    public function inHouseRoomCount(): int
+    {
+        return (int) DB::table('booking_rooms')->where('booking_id', $this->id)->whereNull('checked_out_at')->count();
+    }
+
+    /** Checked-in bookings that still have a stay to arrive (and so are also "expected" at check-in). */
+    public function scopeAwaitingCheckIn($query)
+    {
+        return $query->where(function ($q) {
+            $q->where('bookings.booking_status', self::STATUS_ACTIVE)
+                ->orWhere(fn ($q) => $q->where('bookings.booking_status', self::STATUS_CHECKED_IN)->hasStayToArrive());
+        });
+    }
+
+    /** A checked-in booking with several stays, at least one of which has not started. */
+    public function scopeHasStayToArrive($query)
+    {
+        return $query->whereRaw('(SELECT COUNT(*) FROM stays WHERE stays.booking_id = bookings.id) > 1')
+            ->whereExists(fn ($s) => $s->select(DB::raw(1))->from('stays')->whereColumn('stays.booking_id', 'bookings.id')->whereNull('stays.checked_in_at'));
+    }
+
+    public function roomTotalByStays(): float
+    {
+        $stays = $this->stayList();
+        $firstId = $stays->first()?->id;
+        $assigned = $this->rooms;
+        $lines = $this->relationLoaded('roomLines') ? $this->getRelation('roomLines') : $this->roomLines()->get();
+        $total = 0.0;
+
+        foreach ($stays as $stay) {
+            $own = $assigned->filter(fn (Room $room) => (($room->pivot->stay_id ?? $firstId) === $stay->id))->values();
+            if ($own->isNotEmpty()) {
+                $total += (float) $own->sum(fn (Room $room) => (float) $room->room_rate) * $stay->nights();
+                continue;
+            }
+            $mine = $lines->filter(fn ($line) => ($line->stay_id ?? $firstId) === $stay->id);
+            if ($mine->isNotEmpty()) {
+                $total += (float) $mine->sum('subtotal');
+            } elseif ($stays->count() === 1) {
+                $total += (float) ($this->roomType->rate ?? 0) * $stay->nights() * max(1, $this->rooms_requested);
+            }
         }
 
-        return round($roomTotal + $this->billableAmenityTotal(), 2);
+        return round($total, 2);
     }
 
     /** Every billable (not rejected) amenity request's charge x quantity - the amenity half of total_amount_due. */
@@ -464,10 +550,10 @@ class Booking extends Model
         }
         // Eloquent serializes every loaded relation: a loaded `roomLines` would overwrite the mapped `room_lines` field, and the
         // others were never part of this response. Hide whatever this method itself loads, so the JSON only gains fields.
-        $hide = ['billing', 'roomLines', 'rooms', 'room', 'reservation'];
+        $hide = ['billing', 'roomLines', 'rooms', 'room', 'reservation', 'stays'];
         $hidePerBooking = $bookings->mapWithKeys(fn (Booking $b) => [spl_object_id($b) => array_values(array_filter($hide, fn ($r) => ! $b->relationLoaded($r)))]);
         // StayBill::forBooking() loadMissing()es rooms.roomType / room.roomType / reservation per booking - have them already.
-        $bookings->loadMissing(['billing.payments', 'billing.additionalCharges', 'roomLines', 'rooms.roomType', 'room.roomType', 'reservation', 'roomType.assignedAmenities']);
+        $bookings->loadMissing(['billing.payments', 'billing.additionalCharges', 'roomLines', 'rooms.roomType', 'room.roomType', 'reservation', 'roomType.assignedAmenities', 'stays']);
 
         // The same rows billableAmenityRequests() selects, for every booking on the page in one query: a reservation-derived
         // booking's amenities are keyed by reservation_id, a direct booking's by booking_id.
@@ -654,6 +740,13 @@ class Booking extends Model
     {
         if ($this->booking_status === self::STATUS_ACTIVE && $this->verified_at === null) {
             return 'AWAITING_VERIFICATION';
+        }
+        // Several stays, one of them already done and the next one not started: nobody is in a room right now.
+        if ($this->booking_status === self::STATUS_CHECKED_IN && $this->hasSeveralStays()) {
+            $states = $this->stayList()->map(fn (Stay $s) => $this->stateOf($s));
+            if (! $states->contains(Stay::IN_HOUSE) && $states->contains(Stay::UPCOMING)) {
+                return 'BETWEEN_STAYS';
+            }
         }
 
         return $this->booking_status;

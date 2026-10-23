@@ -83,7 +83,7 @@ class BookingController extends Controller
         // out money recorded on the Billing (e.g. paid at check-in), so the Dashboard disagreed with Booking Details.
         Booking::preloadForList($paginated->getCollection());
         $paginated->getCollection()->each(function (Booking $b) {
-            $b->append(['total_amount_due', 'amenities', 'timeline', 'stay_bill']);
+            $b->append(['total_amount_due', 'amenities', 'timeline', 'stay_bill'])->withStays();
             $b->setAttribute('payment_summary', $b->paymentSummary());
         });
 
@@ -106,7 +106,7 @@ class BookingController extends Controller
         // "don't add cost to every listing" convention as total_amount_due/
         // amenities above - only a single Booking Details/Payment Receipt
         // fetch actually needs this.
-        $payload = $booking->append(['total_amount_due', 'amenities', 'timeline', 'stay_bill'])->toArray();
+        $payload = $booking->append(['total_amount_due', 'amenities', 'timeline', 'stay_bill'])->withStays()->toArray();
         $payload['payment_summary'] = $booking->paymentSummary();
         $payload['payment_transactions'] = $booking->paymentTransactionsPayload();
         $payload['receipts'] = $booking->receiptsPayload();
@@ -202,11 +202,12 @@ class BookingController extends Controller
         if (! empty($idempotencyKey)) {
             $existing = Booking::where('idempotency_key', $idempotencyKey)->first();
             if ($existing) {
-                return response()->json($existing->append(['total_amount_due', 'amenities', 'timeline']), 201);
+                return response()->json($existing->append(['total_amount_due', 'amenities', 'timeline'])->withStays(), 201);
             }
         }
 
-        $validated = $request->validate([
+        $hasStays = $request->has('stays');
+        $rules = [
             // Multi-room-type shape (preferred - see MULTI_ROOM_TRANSACTION_BACKEND_SPEC.md).
             // 'rooms' array present -> authoritative, and the legacy
             // room_type_id/rooms_requested pair below is ignored even if
@@ -245,8 +246,7 @@ class BookingController extends Controller
                 'nullable',
                 'string',
                 'max:100',
-                // A stay of a group shares the group's one payment reference with its siblings (see BookingGroupController).
-                $request->attributes->get('group_member') ? 'string' : Rule::unique('payments', 'reference_number')
+                Rule::unique('payments', 'reference_number')
                     ->where(fn ($q) => $q->where('payment_method', 'gcash')->where('payment_status', '!=', 'failed')),
             ],
             'gcash_number' => 'required_if:payment_method,gcash|regex:/^9\d{9}$/',
@@ -267,36 +267,28 @@ class BookingController extends Controller
             // section 9b. Optional - an older app version that never sends
             // one simply gets no idempotency protection, same as today.
             'idempotency_key' => 'nullable|string|max:100',
-        ], [
+        ];
+        if ($hasStays) {
+            // One transaction, several stays: each stay has its own dates, rooms and amenities (StaysInput). The flat fields are for a one-stay request.
+            foreach (['rooms', 'rooms.*.room_type_id', 'rooms.*.quantity', 'room_type_id', 'check_in', 'check_out', 'rooms_requested', 'amenities', 'amenities.*.amenity_id', 'amenities.*.quantity'] as $flat) {
+                unset($rules[$flat]);
+            }
+            $rules += \App\Support\StaysInput::rules();
+        }
+        $validated = $request->validate($rules, [
             'reference_number.unique' => 'This GCash reference number has already been used.',
             ...\App\Support\CheckInWindow::messages(),
+            ...\App\Support\StaysInput::messages(),
         ]);
 
         $children = $validated['children'] ?? 0;
-        $checkIn = Carbon::parse($validated['check_in']);
-        $checkOut = Carbon::parse($validated['check_out']);
 
-        // Normalize either request shape into one array of
-        // ['room_type' => RoomType, 'quantity' => int] lines - everything
-        // below this point is shape-agnostic. See DirectBookingService's
-        // own doc for why $roomLines is never empty.
-        $rawLines = $validated['rooms'] ?? [
-            ['room_type_id' => $validated['room_type_id'], 'quantity' => $validated['rooms_requested'] ?? 1],
-        ];
-        $roomLines = collect($rawLines)->map(fn (array $line) => [
-            'room_type' => RoomType::findOrFail($line['room_type_id']),
-            'quantity' => (int) $line['quantity'],
-        ])->all();
+        // One transaction, one or more stays - a request without stays[] is a single stay built from the flat fields.
+        $stays = \App\Support\StaysInput::normalize($validated);
 
-        // Adults + children combined must not exceed the summed guest
-        // capacity of every selected room (capacity-per-type x quantity,
-        // across every distinct room type in this transaction) - mirrors
-        // Android's Step5AdditionalGuestsFragment/BookingWizardState#
-        // totalSelectedCapacity(), re-enforced here since that client-side
-        // check can't be trusted alone (see amount_paid's identical
-        // resolved-model-dependent check just below for this codebase's
-        // established pattern for this kind of guard).
-        $capacityError = \App\Support\GuestCapacity::error($roomLines, (int) $validated['adults'] + $children);
+        // Adults + children combined must fit the selected rooms of EVERY stay (capacity-per-type x quantity per stay). Re-enforced
+        // here since Android's own check can't be trusted alone.
+        $capacityError = \App\Support\StaysInput::capacityError($stays, (int) $validated['adults'] + $children);
         if ($capacityError !== null) {
             return response()->json([
                 'message' => $capacityError,
@@ -304,15 +296,16 @@ class BookingController extends Controller
             ], 422);
         }
 
-        // Validated before creating anything - an invalid amenity
-        // selection or unavailable room rejects the whole submission
-        // (422) rather than creating a booking and payment first.
-        $resolvedAmenities = $this->amenityService->validateSelection($validated['amenities'] ?? []);
+        // Validated before creating anything - an invalid amenity selection or unavailable room rejects the whole submission (422)
+        // rather than creating a booking and payment first. Stock is checked for all stays together.
+        $stays = \App\Support\StaysInput::resolveAmenities($stays, $this->amenityService);
 
-        $this->directBookingService->validateRoomLinesAvailability($roomLines, $checkIn, $checkOut);
+        // Per night, across ALL the stays of this transaction together and against every other transaction; identical dates refused.
+        if ($shortfall = app(\App\Services\RoomAvailabilityService::class)->staysShortfall($stays)) {
+            \App\Support\StaysInput::throwShortfall($shortfall);
+        }
 
-        $nights = abs($checkOut->diffInDays($checkIn));
-        $expectedTotal = $this->directBookingService->totalAmountDueForLines($roomLines, $nights, $resolvedAmenities);
+        $expectedTotal = \App\Support\StaysInput::total($stays);
         $amountPaid = (float) $validated['amount_paid'];
         if ($amountPaid <= 0 || $amountPaid > $expectedTotal + 0.01) {
             return response()->json([
@@ -374,11 +367,9 @@ class BookingController extends Controller
         $guest = auth()->user()->guest;
 
         try {
-            $booking = $this->directBookingService->create(
+            $booking = $this->directBookingService->createWithStays(
                 $guest,
-                $roomLines,
-                $checkIn,
-                $checkOut,
+                $stays,
                 (int) $validated['adults'],
                 $children,
                 [
@@ -389,7 +380,6 @@ class BookingController extends Controller
                 $validated['additional_guests'] ?? null,
                 $idCard,
                 $paymentData,
-                $resolvedAmenities,
                 $validated['idempotency_key'] ?? null
             );
         } catch (\Illuminate\Database\UniqueConstraintViolationException $e) {
@@ -410,7 +400,7 @@ class BookingController extends Controller
             if (! empty($validated['idempotency_key']) && str_contains($e->getMessage(), 'idempotency_key')) {
                 $winner = Booking::where('idempotency_key', $validated['idempotency_key'])->first();
                 if ($winner) {
-                    return response()->json($winner->append(['total_amount_due', 'amenities', 'timeline']), 201);
+                    return response()->json($winner->append(['total_amount_due', 'amenities', 'timeline'])->withStays(), 201);
                 }
             }
             Log::error('Booking creation failed on an unexpected unique constraint violation', [
@@ -426,17 +416,12 @@ class BookingController extends Controller
         // (a direct Booking has no later "Pay Now against remaining
         // balance" endpoint the way a Reservation's does).
         $booking->update([
-            'group_id' => $request->attributes->get('group_id'),
             'selected_payment_percentage' => $validated['selected_payment_percentage'] ?? null,
             'required_payment_amount' => (float) $validated['amount_paid'],
         ]);
 
-        // "Deluxe x2, Suite x1" for a multi-room-type transaction, or just
-        // "Deluxe" for the common single-line case (no "x1" suffix, matching
-        // the pre-multi-room-type notification/activity text exactly).
-        $roomSummary = collect($roomLines)->map(
-            fn (array $line) => $line['quantity'] > 1 ? "{$line['room_type']->name} x{$line['quantity']}" : $line['room_type']->name
-        )->join(', ');
+        // "Deluxe x2, Suite x1" across every stay of the transaction (a single name when there is one room).
+        $roomSummary = \App\Support\StaysInput::roomSummary($stays);
 
         $user = auth()->user();
         $this->notificationService->notifyNewDirectBooking($user, $roomSummary, $booking->id);
@@ -448,7 +433,7 @@ class BookingController extends Controller
             $booking
         );
 
-        return response()->json($booking->append(['total_amount_due', 'amenities', 'timeline']), 201);
+        return response()->json($booking->append(['total_amount_due', 'amenities', 'timeline'])->withStays(), 201);
     }
 
     /**

@@ -132,19 +132,23 @@
                             <td style="min-width: 200px;">
                                 <span class="text-muted small"><i class="fas fa-door-open"></i> Not yet assigned</span>
                             </td>
+                            @php $nextStay = $booking->stayList()->first(fn ($st) => $booking->stateOf($st) === 'upcoming') ?? $booking->stayList()->first(); @endphp
                             <td>
-                                {{ $booking->check_in->format('M d, Y') }}
-                                @if($booking->check_in->isAfter(today()))
+                                {{ $nextStay->check_in->format('M d, Y') }}
+                                @if($nextStay->check_in->isAfter(today()))
                                     <span class="badge bg-info" title="Scheduled for a future date">Early</span>
                                 @endif
+                                @if($booking->stayCount() > 1)
+                                    <div class="small"><span class="badge bg-info text-dark"><i class="fas fa-layer-group"></i> Stay {{ $nextStay->position }} of {{ $booking->stayCount() }}</span></div>
+                                @endif
                             </td>
-                            <td>{{ $booking->check_out->format('M d, Y') }}</td>
+                            <td>{{ $nextStay->check_out->format('M d, Y') }}</td>
                             <td>{{ $booking->number_of_guests }}</td>
                             @php $pay = \App\Support\StayPayment::of($booking); @endphp
                             <td><span class="badge {{ $pay['badge'] }}">{{ $pay['label'] }}</span>@if($pay['state'] === 'partial')<div class="small text-muted">₱{{ number_format($pay['paid'], 2) }} of ₱{{ number_format($pay['total'], 2) }}</div>@endif</td>
                             <td class="text-nowrap">
                                 <div class="d-flex gap-2">
-                                    <button type="button" class="btn btn-sm btn-success btn-open-check-in" data-booking-id="{{ $booking->id }}">
+                                    <button type="button" class="btn btn-sm btn-success btn-open-check-in" data-booking-id="{{ $booking->id }}" data-stay-id="{{ $nextStay->id }}">
                                         <i class="fas fa-sign-in-alt"></i> Check In
                                     </button>
                                     {{-- Replaces the old automatic no-show: staff archive a
@@ -229,13 +233,16 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
-    async function openCheckInPanel(bookingId) {
+    let activeStayId = null;
+
+    async function openCheckInPanel(bookingId, stayId) {
         activeBookingId = bookingId;
+        activeStayId = stayId || null;
         content.innerHTML = '<div class="modal-body text-center py-5"><i class="fas fa-spinner fa-spin fa-2x"></i></div>';
         modal.show();
 
         try {
-            const response = await fetch(buildUrl(urls.panel, activeBookingId), {
+            const response = await fetch(buildUrl(urls.panel, activeBookingId) + (activeStayId ? '?stay=' + encodeURIComponent(activeStayId) : ''), {
                 headers: { 'X-Requested-With': 'XMLHttpRequest' },
             });
             if (!response.ok) {
@@ -251,8 +258,14 @@ document.addEventListener('DOMContentLoaded', function () {
 
     document.querySelectorAll('.btn-open-check-in').forEach(function (btn) {
         btn.addEventListener('click', function () {
-            openCheckInPanel(btn.dataset.bookingId);
+            openCheckInPanel(btn.dataset.bookingId, btn.dataset.stayId);
         });
+    });
+
+    // A booking with several stays: pick which stay to check in (reloads the panel for that stay).
+    content.addEventListener('click', function (e) {
+        const pick = e.target.closest('[data-checkin-stay]');
+        if (pick && !pick.disabled) openCheckInPanel(activeBookingId, pick.dataset.checkinStay);
     });
 
     // Walk-in Check-in redirects here with ?open={booking} so the Guest
@@ -378,7 +391,7 @@ document.addEventListener('DOMContentLoaded', function () {
             const r = await fetch(url, { method: 'POST', headers: { 'X-CSRF-TOKEN': csrfToken, 'Accept': 'application/json' }, body: fd });
             const data = await r.json().catch(() => ({}));
             if (!r.ok) throw new Error(data.message || 'Something went wrong.');
-            openCheckInPanel(activeBookingId);
+            openCheckInPanel(activeBookingId, activeStayId);
         } catch (err) {
             errBox.textContent = err.message;
             errBox.classList.remove('d-none');
@@ -427,6 +440,7 @@ document.addEventListener('DOMContentLoaded', function () {
         });
         // Multipart, so a GCash receipt photo can go with it.
         const fd = new FormData();
+        if (activeStayId) fd.append('stay_id', activeStayId);
         ['guest_first_name', 'guest_middle_name', 'guest_last_name', 'checkin_permanent_address', 'checkin_current_address',
          'checkin_contact_number', 'adults', 'children', 'amount_received', 'gcash_amount', 'gcash_reference'].forEach(function (name) {
             const el = form.querySelector('[name="' + name + '"]');
@@ -574,7 +588,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     'Accept': 'application/json',
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ items: items }),
+                body: JSON.stringify({ items: items, stay_id: (amenityContent.querySelector('#amenityStaySelect') || {}).value || null }),
             });
             const data = await response.json().catch(() => ({}));
             if (!response.ok) throw new Error(data.message || 'Something went wrong.');

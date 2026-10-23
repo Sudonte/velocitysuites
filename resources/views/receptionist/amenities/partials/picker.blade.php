@@ -10,6 +10,17 @@
         Room {{ $booking->room->room_number ?? 'N/A' }}
     </p>
 
+    @if($inHouseStays->count() > 1)
+        <div class="mb-3">
+            <label class="form-label small mb-1" for="amenityStaySelect">Which stay is it for? *</label>
+            <select id="amenityStaySelect" class="form-select form-select-sm">
+                @foreach($inHouseStays as $s)
+                    <option value="{{ $s->id }}">Stay {{ $s->position }} &middot; {{ $s->check_in->format('M d') }} &rarr; {{ $s->check_out->format('M d, Y') }}</option>
+                @endforeach
+            </select>
+        </div>
+    @endif
+
     @if($amenities->isEmpty())
         <p class="text-muted mb-0">No Paid/Additional amenities are currently active.</p>
     @else

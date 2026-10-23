@@ -15,10 +15,13 @@ use Illuminate\Database\Eloquent\Model;
  */
 class ReservationRoomLine extends Model
 {
+    use \App\Models\Concerns\BelongsToStay;
+
     protected $table = 'reservation_room_lines';
 
     protected $fillable = [
         'reservation_id',
+        'stay_id',
         'room_type_id',
         'room_type_name',
         'quantity',
@@ -31,6 +34,11 @@ class ReservationRoomLine extends Model
         'price_per_night' => 'decimal:2',
         'subtotal' => 'decimal:2',
     ];
+
+    public function stay()
+    {
+        return $this->belongsTo(Stay::class);
+    }
 
     public function reservation()
     {

@@ -92,11 +92,16 @@
 
     <h6 class="mb-2"><i class="fas fa-file-invoice"></i> 2. Payment Summary</h6>
     <div class="border rounded p-2 mb-2 small">
-        @foreach($stay['rooms'] as $line)
-            <div class="d-flex justify-content-between"><span>{{ $line['room_type'] ?? 'Room' }} &middot; {{ $peso($line['rate']) }} &times; {{ \App\Support\StayBill::nightsLabel($line['nights']) }}</span><span>{{ $peso($line['subtotal']) }}</span></div>
-        @endforeach
-        @foreach($stay['amenity_lines'] as $a)
-            <div class="d-flex justify-content-between"><span>{{ $a['amenity_name'] }} &times; {{ $a['quantity'] }}</span><span>{{ $a['subtotal'] > 0 ? $peso($a['subtotal']) : 'Free' }}</span></div>
+        @foreach($stay['stays'] as $section)
+            @if(count($stay['stays']) > 1)
+                <div class="fw-semibold mt-1">Stay {{ $section['position'] }} &middot; {{ \Carbon\Carbon::parse($section['check_in'])->format('M d') }} &rarr; {{ \Carbon\Carbon::parse($section['check_out'])->format('M d, Y') }} ({{ \App\Support\StayBill::nightsLabel($section['nights']) }})</div>
+            @endif
+            @foreach($section['rooms'] as $line)
+                <div class="d-flex justify-content-between"><span>{{ $line['room_type'] ?? 'Room' }} &middot; {{ $peso($line['rate']) }} &times; {{ \App\Support\StayBill::nightsLabel($line['nights']) }}</span><span>{{ $peso($line['subtotal']) }}</span></div>
+            @endforeach
+            @foreach($section['amenity_lines'] as $a)
+                <div class="d-flex justify-content-between"><span>{{ $a['amenity_name'] }} &times; {{ $a['quantity'] }}</span><span>{{ $a['subtotal'] > 0 ? $peso($a['subtotal']) : 'Free' }}</span></div>
+            @endforeach
         @endforeach
         @if($stay['discount'] > 0)
             <div class="d-flex justify-content-between text-success"><span>Discount</span><span>&minus;{{ $peso($stay['discount']) }}</span></div>

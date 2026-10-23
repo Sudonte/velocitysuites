@@ -66,7 +66,8 @@ class CheckInController extends Controller
             'all' => null,
         };
 
-        $expectedCount = Booking::where('booking_status', Booking::STATUS_ACTIVE)->whereNotNull('verified_at')->whereNull('hidden_at')->count();
+        // Expected: confirmed bookings, plus checked-in ones that still have a stay to arrive (their next stay's guests).
+        $expectedCount = Booking::awaitingCheckIn()->whereNotNull('verified_at')->whereNull('hidden_at')->count();
         $checkedInCount = Booking::where('booking_status', Booking::STATUS_CHECKED_IN)->count();
 
         if ($tab === 'checked_in') {
@@ -103,11 +104,17 @@ class CheckInController extends Controller
         // Unread first (viewed_at null - see panel() below, shared with
         // Bookings/Check-out since all three operate on this same Booking
         // row), then the existing date order.
-        $bookings = Booking::with(['reservation.guest.user', 'guest.user', 'rooms', 'roomType'])
-            ->where('booking_status', Booking::STATUS_ACTIVE)
+        $bookings = Booking::with(['reservation.guest.user', 'guest.user', 'rooms', 'roomType', 'stays'])
+            ->awaitingCheckIn()
             ->whereNotNull('verified_at')
             ->whereNull('hidden_at')
-            ->when($rangeEnd, fn ($q) => $q->where('check_in', '<=', $rangeEnd))
+            // the range is about the NEXT stay still to arrive (a booking with no stay rows yet falls back to its own dates)
+            ->when($rangeEnd, fn ($q) => $q->where(function ($q) use ($rangeEnd) {
+                $q->whereExists(fn ($s) => $s->select(\DB::raw(1))->from('stays')->whereColumn('stays.booking_id', 'bookings.id')
+                        ->whereNull('stays.checked_in_at')->where('stays.check_in', '<=', $rangeEnd))
+                    ->orWhere(fn ($q) => $q->whereNotExists(fn ($s) => $s->select(\DB::raw(1))->from('stays')->whereColumn('stays.booking_id', 'bookings.id'))
+                        ->where('check_in', '<=', $rangeEnd));
+            }))
             ->orderByRaw('viewed_at IS NULL DESC')
             ->orderBy('check_in')
             ->simplePaginate(15)
@@ -303,6 +310,8 @@ class CheckInController extends Controller
                 foreach ($rooms as $room) {
                     $room->update(['status' => 'occupied']);
                 }
+                // a walk-in is one stay, checked in right away
+                $booking->recordStayCheckIn($booking->stayList()->first());
 
                 $booking->update([
                     'checkin_permanent_address' => $validated['checkin_permanent_address'],
@@ -354,9 +363,10 @@ class CheckInController extends Controller
      * Guest Details, Assign Room, and Check In are a single action from
      * here, submitted together by store() below.
      */
-    public function panel(Booking $booking)
+    public function panel(Request $request, Booking $booking)
     {
-        if ($booking->booking_status !== Booking::STATUS_ACTIVE) {
+        $checkInStay = $this->stayForCheckIn($booking, $request->integer('stay') ?: null);
+        if ($checkInStay === null) {
             abort(422, 'Only confirmed bookings can be checked in.');
         }
         if ($booking->hidden_at !== null) {
@@ -364,23 +374,24 @@ class CheckInController extends Controller
         }
 
         $booking->load(['reservation.guest.user', 'guest.user', 'roomType', 'rooms']);
-        // One entry per distinct room type this booking actually needs
-        // rooms for (real booking_room_lines for a genuine multi-room-type
-        // booking, or a single legacy entry otherwise) - see
+        // One entry per distinct room type THIS STAY needs rooms for (its own room lines, or a single legacy entry) - see
         // RoomAvailabilityService::assignableRoomsByLine()'s own doc.
-        $assignableRoomsByLine = $this->availability->assignableRoomsByLine($booking);
-        $roomLines = ! empty($booking->room_lines) ? $booking->room_lines : [[
-            'room_type_id' => (string) $booking->room_type_id,
-            'room_type' => $booking->roomType->name ?? 'N/A',
-            'quantity' => $booking->rooms_requested,
-        ]];
-        $assignedRoomIds = $booking->rooms->pluck('id')->all();
-        // Grouped by room_type_id, matching $roomLines' shape - a flat
-        // index into $assignedRoomIds would misalign across multiple
-        // room-type lines (line 2's Nth select would show line 1's Nth
-        // assigned room instead of its own).
-        $assignedRoomIdsByType = $booking->rooms->groupBy('room_type_id')
-            ->map(fn ($rooms) => $rooms->pluck('id')->all());
+        $assignableRoomsByLine = $this->availability->assignableRoomsByLine($booking, $checkInStay);
+        $stayLines = $this->availability->linesOfStay($booking, $checkInStay);
+        $roomLines = $stayLines->isNotEmpty()
+            ? $stayLines->map(fn ($l) => ['room_type_id' => (string) $l->room_type_id, 'room_type' => $l->room_type_name, 'quantity' => (int) $l->quantity])->values()->all()
+            : [[
+                'room_type_id' => (string) $booking->room_type_id,
+                'room_type' => $booking->roomType->name ?? 'N/A',
+                'quantity' => $booking->rooms_requested,
+            ]];
+        // Every stay of the booking (to pick which one is checked in), and whether this is the first check-in: the bill of the WHOLE
+        // transaction is settled then (discount, payment, Receipt 2); later stays only get their rooms.
+        $bookingStays = $booking->stayList();
+        $firstCheckIn = $booking->booking_status === Booking::STATUS_ACTIVE;
+        $panelCapacity = \App\Support\GuestCapacity::range($this->capacityLinesFor($booking, $checkInStay));
+        $assignedRoomIds = [];
+        $assignedRoomIdsByType = [];
         $accountGuest = $booking->account_guest;
 
         // First open marks it read - see index()'s ordering / the
@@ -392,8 +403,31 @@ class CheckInController extends Controller
         }
 
         return view('receptionist.check-in.partials.panel', array_merge(compact(
-            'booking', 'assignableRoomsByLine', 'roomLines', 'assignedRoomIds', 'assignedRoomIdsByType', 'accountGuest'
+            'booking', 'assignableRoomsByLine', 'roomLines', 'assignedRoomIds', 'assignedRoomIdsByType', 'accountGuest',
+            'checkInStay', 'bookingStays', 'firstCheckIn', 'panelCapacity'
         ), $this->settlement($booking)));
+    }
+
+    /** The room types x quantities of ONE stay (what its guests must fit in) - the whole booking's for a one-stay booking. */
+    private function capacityLinesFor(Booking $booking, \App\Models\Stay $stay): array
+    {
+        $stays = \App\Support\StaysInput::fromTransaction($booking);
+        $index = $booking->stayList()->search(fn ($st) => $st->id === $stay->id);
+
+        return $stays[$index !== false ? $index : 0]['lines'] ?? \App\Support\GuestCapacity::linesForBooking($booking);
+    }
+
+    /**
+     * The stay a check-in is for. A confirmed booking checks in its first stay (or the one named); a booking already in house checks in
+     * its next waiting stay. Null when there is nothing left to check in.
+     */
+    private function stayForCheckIn(Booking $booking, ?int $stayId): ?\App\Models\Stay
+    {
+        if (! in_array($booking->booking_status, [Booking::STATUS_ACTIVE, Booking::STATUS_CHECKED_IN], true)) {
+            return null;
+        }
+
+        return $booking->stayToCheckIn($stayId);
     }
 
     /**
@@ -413,16 +447,19 @@ class CheckInController extends Controller
      */
     public function store(Request $request, Booking $booking)
     {
-        if ($booking->booking_status !== Booking::STATUS_ACTIVE) {
+        $checkInStay = $this->stayForCheckIn($booking, $request->integer('stay_id') ?: null);
+        if ($checkInStay === null) {
             return response()->json(['message' => 'Only confirmed bookings can be checked in.'], 422);
         }
         if ($booking->hidden_at !== null) {
             return response()->json(['message' => 'This booking has been archived and can no longer be checked in.'], 422);
         }
+        // The first stay to arrive settles the whole transaction's bill; the stays after it only get their rooms.
+        $firstCheckIn = $booking->booking_status === Booking::STATUS_ACTIVE;
 
         // A requested discount must be decided (approved or rejected) first: the bill is settled from it.
         $holder = $booking->reservation ?? $booking;
-        if (($booking->discount_requested || $holder->discount_requested) && \App\Support\StayBill::discountIdStatus($booking) === 'pending') {
+        if ($firstCheckIn && ($booking->discount_requested || $holder->discount_requested) && \App\Support\StayBill::discountIdStatus($booking) === 'pending') {
             $message = "The guest's discount ID is still pending. Approve or reject it before checking in.";
 
             return response()->json(['message' => $message, 'errors' => ['discount_id' => [$message]]], 422);
@@ -467,8 +504,9 @@ class CheckInController extends Controller
 
         $children = (int) ($validated['children'] ?? 0);
 
+        // This stay's own rooms must hold the guests who are checking in to it.
         $capacityError = \App\Support\GuestCapacity::error(
-            \App\Support\GuestCapacity::linesForBooking($booking),
+            $this->capacityLinesFor($booking, $checkInStay),
             (int) $validated['adults'] + $children
         );
         if ($capacityError !== null) {
@@ -482,15 +520,17 @@ class CheckInController extends Controller
         try {
             $rooms = null;
             $settled = null;
-            DB::transaction(function () use ($request, $booking, $validated, $children, $currentAddress, &$rooms, &$settled) {
-                // Settle first, on the bill as of check-in (scheduled nights) - before rooms are assigned.
-                $settled = $this->settleAtCheckIn($booking, $validated, $request->file('gcash_receipt'));
+            DB::transaction(function () use ($request, $booking, $validated, $children, $currentAddress, $checkInStay, $firstCheckIn, &$rooms, &$settled) {
+                // Settle first, on the bill as of check-in (every stay's booked nights) - before rooms are assigned. Only the FIRST
+                // stay to arrive does: the whole transaction is paid for then, and the stays after it just get their rooms.
+                $settled = $firstCheckIn ? $this->settleAtCheckIn($booking, $validated, $request->file('gcash_receipt')) : ['paid_now' => 0.0, 'change' => 0.0];
 
-                $rooms = $this->availability->assignRoomsForLines($booking, $validated['room_ids']);
+                $rooms = $this->availability->assignRoomsForLines($booking, $validated['room_ids'], $checkInStay);
 
                 foreach ($rooms as $room) {
                     $room->update(['status' => 'occupied']);
                 }
+                $booking->recordStayCheckIn($checkInStay);
 
                 $booking->update([
                     'guest_first_name' => $validated['guest_first_name'],
@@ -503,8 +543,8 @@ class CheckInController extends Controller
                     'children' => $children,
                     'number_of_guests' => $validated['adults'] + $children,
                     'booking_status' => Booking::STATUS_CHECKED_IN,
-                    // Timeline: the moment the receptionist verified/checked the guest in.
-                    'checked_in_at' => now(),
+                    // Timeline: the moment the receptionist verified/checked the guest in (the first stay's).
+                    'checked_in_at' => $booking->checked_in_at ?? now(),
                 ]);
             });
         } catch (HttpExceptionInterface $e) {
@@ -529,12 +569,14 @@ class CheckInController extends Controller
             } elseif (($settled['paid_now'] ?? 0) > 0) {
                 $this->notificationService->notifyPaymentReceived($accountGuest, $settled['paid_now'], $booking->roomType->name ?? null, $booking->reservation_id ?? $booking->id);
             }
-            $this->notificationService->notifyAmenitiesUnlocked($accountGuest, $booking->reservation_id ?? $booking->id);
+            if ($firstCheckIn) {
+                $this->notificationService->notifyAmenitiesUnlocked($accountGuest, $booking->reservation_id ?? $booking->id);
+            }
         }
 
         Activity::log(
             'Checked in guest',
-            "Booking #{$booking->id} - {$booking->guest_display_name} to " . $rooms->pluck('room_number')->implode(', '),
+            "Booking #{$booking->id}" . ($booking->hasSeveralStays() ? " (stay {$checkInStay->position})" : '') . " - {$booking->guest_display_name} to " . $rooms->pluck('room_number')->implode(', '),
             $booking
         );
 

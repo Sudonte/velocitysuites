@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class AmenityRequest extends Model
 {
-    use HasFactory;
+    use HasFactory, \App\Models\Concerns\BelongsToStay;
 
     /** Where a request came from: picked while booking, asked for later by the guest (needs approval), or added by the desk. */
     public const ORIGIN_BOOKING = 'booking';
@@ -28,6 +28,7 @@ class AmenityRequest extends Model
         'reservation_id',
         'booking_id',
         'room_id',
+        'stay_id',
         'room_type_id',
         'amenity_id',
         'amenity_name',
@@ -58,6 +59,26 @@ class AmenityRequest extends Model
     /**
      * Get the guest associated with the amenity request.
      */
+    public function stay()
+    {
+        return $this->belongsTo(Stay::class);
+    }
+
+    /** "Stay 2 of 3" for a request that belongs to one stay of a multi-stay booking; null for a one-stay transaction. */
+    public function getStayLabelAttribute(): ?string
+    {
+        if (! $this->stay_id) {
+            return null;
+        }
+        $stay = $this->relationLoaded('stay') ? $this->stay : Stay::find($this->stay_id);
+        if (! $stay) {
+            return null;
+        }
+        $total = Stay::where($stay->booking_id ? 'booking_id' : 'reservation_id', $stay->booking_id ?? $stay->reservation_id)->count();
+
+        return $total > 1 ? "Stay {$stay->position} of {$total}" : null;
+    }
+
     public function guest()
     {
         return $this->belongsTo(Guest::class);

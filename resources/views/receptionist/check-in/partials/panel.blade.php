@@ -2,7 +2,7 @@
     <h5 class="modal-title"><i class="fas fa-sign-in-alt"></i> Check In Guest</h5>
     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
 </div>
-<div class="modal-body" data-booking-id="{{ $booking->id }}" data-rooms-requested="{{ $booking->rooms_requested }}">
+<div class="modal-body" data-booking-id="{{ $booking->id }}" data-stay-id="{{ $checkInStay->id }}" data-rooms-requested="{{ collect($roomLines)->sum('quantity') }}">
     <div class="alert alert-danger d-none" id="checkInErrorAlert"></div>
 
     <div class="row mb-3">
@@ -12,11 +12,29 @@
             <strong>Room Type{{ count($roomLines) > 1 ? 's' : '' }}:</strong> {{ collect($roomLines)->pluck('room_type')->join(', ') }}
         </div>
         <div class="col-md-6 text-md-end">
-            <strong>Check-In:</strong> {{ $booking->check_in->format('M d, Y') }}<br>
-            <strong>Check-Out:</strong> {{ $booking->check_out->format('M d, Y') }}<br>
+            <strong>Check-In:</strong> {{ $checkInStay->check_in->format('M d, Y') }}<br>
+            <strong>Check-Out:</strong> {{ $checkInStay->check_out->format('M d, Y') }}<br>
             <strong>Guests:</strong> {{ $booking->number_of_guests }}
         </div>
     </div>
+
+    {{-- One booking, several stays: each stay is checked in on its own (its own rooms). The first one to arrive settles the whole bill. --}}
+    @if($bookingStays->count() > 1)
+        <div class="border rounded p-2 mb-3" id="checkInStayPicker">
+            <div class="small fw-semibold mb-1"><i class="fas fa-layer-group"></i> This booking has {{ $bookingStays->count() }} stays - check in one at a time</div>
+            <div class="d-flex flex-wrap gap-2">
+                @foreach($bookingStays as $s)
+                    @php $state = $booking->stateOf($s); @endphp
+                    <button type="button" class="btn btn-sm {{ $s->id === $checkInStay->id ? 'btn-primary' : 'btn-outline-secondary' }}"
+                            data-checkin-stay="{{ $s->id }}" @disabled($state !== 'upcoming')>
+                        Stay {{ $s->position }} &middot; {{ $s->check_in->format('M d') }} &rarr; {{ $s->check_out->format('M d') }}
+                        @if($state === 'in_house') <span class="badge bg-success">In house</span>
+                        @elseif($state === 'checked_out') <span class="badge bg-secondary">Done</span>@endif
+                    </button>
+                @endforeach
+            </div>
+        </div>
+    @endif
 
     {{-- Payment so far, at a glance - same answer as the booking page and Expected Check-ins (App\Support\StayPayment). --}}
     <div class="alert {{ $stayPayment['state'] === 'paid' ? 'alert-success' : ($stayPayment['state'] === 'overpaid' ? 'alert-primary' : 'alert-light border') }} py-2 small mb-3">
@@ -51,12 +69,17 @@
         @php $freeCount = ($assignableRoomsByLine[(string) $shortfallLine['room_type_id']] ?? collect())->count(); @endphp
         <div class="alert alert-warning mb-0">
             <i class="fas fa-exclamation-triangle"></i>
-            This booking needs {{ $shortfallLine['quantity'] }} {{ $shortfallLine['room_type'] }} room(s), but only {{ $freeCount }} {{ $freeCount === 1 ? 'is' : 'are' }} currently free for these dates.
+            This {{ $bookingStays->count() > 1 ? 'stay' : 'booking' }} needs {{ $shortfallLine['quantity'] }} {{ $shortfallLine['room_type'] }} room(s), but only {{ $freeCount }} {{ $freeCount === 1 ? 'is' : 'are' }} currently free for these dates.
         </div>
     @else
-        @php $panelCapacity = \App\Support\GuestCapacity::range(\App\Support\GuestCapacity::linesForBooking($booking)); @endphp
         <form id="checkInForm" data-confirm="The selected rooms will be marked occupied and the stay starts now." data-confirm-title="Complete check-in for {{ $booking->guest_display_name }}?" data-confirm-button="Confirm Check-in" data-confirm-variant="success" data-guest-capacity data-capacity-min="{{ $panelCapacity['min'] }}" data-capacity-max="{{ $panelCapacity['max'] }}">
-            @include('receptionist.check-in.partials.settlement')
+            @if($firstCheckIn)
+                @include('receptionist.check-in.partials.settlement')
+            @else
+                <div id="checkInStepBill">
+                    <div class="alert alert-success py-2 mb-2"><i class="fas fa-check-circle"></i> The bill was settled when the first stay checked in. This stay only needs its rooms - anything added since is paid at check-out.</div>
+                </div>
+            @endif
 
             {{-- Step 2: Guest Details (registration card) - confirmed before room
                  assignment, since who's actually at the counter (and how many of
@@ -179,7 +202,9 @@
                 </p>
 
                 <h6 class="mt-3 mb-2"><i class="fas fa-money-bill-wave"></i> 5. Payment Input</h6>
-                @if($balanceDue > 0)
+                @if(! $firstCheckIn)
+                    <div class="alert alert-success py-2 mb-0"><i class="fas fa-check-circle"></i> Nothing to collect now - the bill was settled at the first check-in.</div>
+                @elseif($balanceDue > 0)
                     {{-- Full payment only - the server refuses anything less. Disabled until this step shows. --}}
                     @include('receptionist.partials.desk-payment-fields', ['due' => $balanceDue, 'mode' => 'full', 'disabled' => true, 'containerId' => 'checkInPayment'])
                 @elseif($changeDue > 0)
@@ -199,7 +224,7 @@
 <div class="modal-footer">
     <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
     @if(!$shortfallLine)
-        @php $idPending = ($discountRequested ?? false) && ($discountStatus ?? '') === 'pending'; @endphp
+        @php $idPending = $firstCheckIn && ($discountRequested ?? false) && ($discountStatus ?? '') === 'pending'; @endphp
         <button type="button" id="checkInBillContinueBtn" class="btn btn-primary" @disabled($idPending) @if($idPending) title="Approve or reject the discount ID first" @endif>
             Next: Guest Details <i class="fas fa-arrow-right"></i>
         </button>

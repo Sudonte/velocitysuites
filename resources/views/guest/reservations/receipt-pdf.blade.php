@@ -45,6 +45,11 @@
     </p>
     <p>Guests: {{ $reservation->number_of_guests }}</p>
     <p>Stay Period: {{ $reservation->check_in->format('M d, Y') }} to {{ $reservation->check_out->format('M d, Y') }}</p>
+    @php $pdfStays = ($reservation->booking ?? $reservation)->staysPayload(); @endphp
+    @if(count($pdfStays) > 1)
+        <h2 style="margin-top: 12px;">Stays</h2>
+        @include('partials.stays-list', ['stays' => $pdfStays, 'pdf' => true])
+    @endif
 
     <h2 style="margin-top: 16px;">Payment Details</h2>
     <?php $latestPayment = $reservation->payments->sortByDesc('created_at')->first(); ?>

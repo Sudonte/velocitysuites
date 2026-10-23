@@ -4,11 +4,12 @@ namespace App\Models;
 
 use App\Support\PaymentMath;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use App\Models\Concerns\HasStays;
 use Illuminate\Database\Eloquent\Model;
 
 class Reservation extends Model
 {
-    use HasFactory;
+    use HasFactory, HasStays;
 
     /**
      * reservations.status is a real DB ENUM (renamed 2026-09-02, directly

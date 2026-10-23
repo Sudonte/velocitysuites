@@ -35,9 +35,21 @@ class AmenityRequestService
             Booking::STATUS_COMPLETED => 'You have already checked out, so extra amenities can no longer be requested.',
             Booking::STATUS_CANCELLED => 'This booking was cancelled or rejected, so extra amenities can\'t be requested.',
             Booking::STATUS_NO_SHOW => 'This booking was marked as a no-show, so extra amenities can\'t be requested.',
-            Booking::STATUS_CHECKED_IN => null,
+            Booking::STATUS_CHECKED_IN => $this->inHouseStays($booking)->isEmpty()
+                ? 'No stay is in house right now. Additional amenities can be requested while one of your stays is checked in.'
+                : null,
             default => self::NOT_CHECKED_IN_YET,
         };
+    }
+
+    /**
+     * The stays whose guests are in a room right now (checked in, not checked out) - the only stays an amenity can be requested for.
+     *
+     * @return Collection<int, \App\Models\Stay>
+     */
+    public function inHouseStays(Booking $booking): Collection
+    {
+        return $booking->stayList()->filter(fn ($stay) => $booking->stateOf($stay) === \App\Models\Stay::IN_HOUSE)->values();
     }
 
     /**
@@ -46,10 +58,14 @@ class AmenityRequestService
      *
      * @return Collection<int, \App\Models\Room>
      */
-    public function requestableRooms(Booking $booking): Collection
+    public function requestableRooms(Booking $booking, ?int $stayId = null): Collection
     {
         $rooms = $booking->rooms()->wherePivotNull('checked_out_at')->with('roomType')->get();
-        if ($rooms->isEmpty() && $booking->room_id) {
+        if ($stayId !== null) {
+            $firstId = $booking->stayList()->first()?->id;
+            $rooms = $rooms->filter(fn ($room) => (($room->pivot->stay_id ?? $firstId) === $stayId))->values();
+        }
+        if ($rooms->isEmpty() && $booking->room_id && $stayId === null) {
             $rooms = collect([$booking->room()->with('roomType')->first()])->filter();
         }
 
@@ -67,13 +83,24 @@ class AmenityRequestService
      *
      * @throws ValidationException
      */
-    public function submit(Booking $booking, array $items, ?string $note, ?array $rooms = null): Collection
+    public function submit(Booking $booking, array $items, ?string $note, ?array $rooms = null, ?int $stayId = null): Collection
     {
         if ($reason = $this->blockedReason($booking)) {
             throw ValidationException::withMessages(['booking' => $reason]);
         }
 
-        $stayRooms = $this->requestableRooms($booking)->keyBy('id');
+        // Which stay: the guest picks it when several are in house; with one in house it is that one.
+        $inHouse = $this->inHouseStays($booking);
+        if ($stayId === null && $inHouse->count() > 1) {
+            throw ValidationException::withMessages(['stay_id' => 'Choose which stay this is for.']);
+        }
+        $stay = $stayId !== null ? $inHouse->firstWhere('id', $stayId) : $inHouse->first();
+        if ($stay === null) {
+            throw ValidationException::withMessages(['stay_id' => 'That stay is not checked in right now.']);
+        }
+        $stayId = $stay->id;
+
+        $stayRooms = $this->requestableRooms($booking, $stayId)->keyBy('id');
         if ($rooms === null) {
             $rooms = [['room_id' => $stayRooms->keys()->first() ?? $booking->room_id, 'items' => $items]];
         }
@@ -97,7 +124,7 @@ class AmenityRequestService
         }
 
         $batchRef = (string) \Illuminate\Support\Str::uuid();
-        $created = DB::transaction(function () use ($booking, $wanted, $perAmenity, $note, $batchRef, $stayRooms) {
+        $created = DB::transaction(function () use ($booking, $wanted, $perAmenity, $note, $batchRef, $stayRooms, $stayId) {
             // Lock the amenities so two requests can't both take the last unit.
             $amenities = Amenity::whereIn('id', array_keys($perAmenity))->lockForUpdate()->get()->keyBy('id');
             $stock = Amenity::remainingStockFor(array_keys($perAmenity));
@@ -127,6 +154,7 @@ class AmenityRequestService
                         'guest_id' => $guestId,
                         'reservation_id' => $booking->reservation_id,
                         'booking_id' => $booking->reservation_id ? null : $booking->id,
+                        'stay_id' => $stayId,
                         'room_id' => $roomId ?: $booking->room_id,
                         'room_type_id' => $room?->room_type_id ?? $booking->room_type_id,
                         'amenity_id' => $amenity->id,

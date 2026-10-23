@@ -180,7 +180,7 @@ class ReceptionistController extends Controller
     {
         $this->archiveDueAmenityRequests();
 
-        $query = AmenityRequest::with(['guest.user', 'amenity', 'room', 'roomType', 'reservation.booking', 'booking'])
+        $query = AmenityRequest::with(['guest.user', 'amenity', 'room', 'roomType', 'reservation.booking', 'booking', 'stay'])
             ->whereNull('archived_at');
 
         // Search by guest name, or the transaction's own reference number -
@@ -381,8 +381,10 @@ class ReceptionistController extends Controller
             ->get();
 
         $remainingStock = $this->remainingAmenityStock($amenities->pluck('id'));
+        // Which stay the amenity is for (a booking with several stays: the ones in a room right now).
+        $inHouseStays = app(\App\Services\AmenityRequestService::class)->inHouseStays($booking);
 
-        return view('receptionist.amenities.partials.picker', compact('booking', 'amenities', 'remainingStock'));
+        return view('receptionist.amenities.partials.picker', compact('booking', 'amenities', 'remainingStock', 'inHouseStays'));
     }
 
     /**
@@ -420,7 +422,19 @@ class ReceptionistController extends Controller
             'items' => 'required|array|min:1',
             'items.*.amenity_id' => 'required|exists:amenities,id',
             'items.*.quantity' => 'required|integer|min:1',
+            'stay_id' => 'nullable|integer',
         ]);
+
+        // The stay the amenity is for: the one named (must be in house), else the only one in house; with several in house it must be named.
+        $inHouse = app(\App\Services\AmenityRequestService::class)->inHouseStays($booking);
+        if (($validated['stay_id'] ?? null) === null && $inHouse->count() > 1) {
+            return response()->json(['message' => 'Choose which stay this amenity is for.'], 422);
+        }
+        $stay = ($validated['stay_id'] ?? null) !== null ? $inHouse->firstWhere('id', (int) $validated['stay_id']) : $inHouse->first();
+        if ($stay === null && $booking->hasSeveralStays()) {
+            return response()->json(['message' => 'That stay is not checked in right now.'], 422);
+        }
+        $stayRoom = $stay ? app(\App\Services\AmenityRequestService::class)->requestableRooms($booking, $stay->id)->first() : null;
 
         // Backend enforcement, not just the card grid's own filtering - a
         // Free/Included amenity can never become a chargeable request.
@@ -453,7 +467,7 @@ class ReceptionistController extends Controller
 
         $guestId = $booking->reservation_id ? $booking->reservation->guest_id : $booking->guest_id;
 
-        DB::transaction(function () use ($validated, $booking, $guestId, $amenities) {
+        DB::transaction(function () use ($validated, $booking, $guestId, $amenities, $stay, $stayRoom) {
             foreach ($validated['items'] as $item) {
                 $amenity = $amenities->get($item['amenity_id']);
 
@@ -461,8 +475,9 @@ class ReceptionistController extends Controller
                     'guest_id' => $guestId,
                     'reservation_id' => $booking->reservation_id,
                     'booking_id' => $booking->reservation_id ? null : $booking->id,
-                    'room_id' => $booking->room_id,
-                    'room_type_id' => $booking->room_type_id,
+                    'stay_id' => $stay?->id,
+                    'room_id' => $stayRoom?->id ?? $booking->room_id,
+                    'room_type_id' => $stayRoom?->room_type_id ?? $booking->room_type_id,
                     'amenity_id' => $amenity->id,
                     // Snapshot the amenity's current name/category/charge at
                     // the time of the request - a later admin rename/

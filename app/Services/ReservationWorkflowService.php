@@ -424,7 +424,7 @@ class ReservationWorkflowService
     {
         $lines = $reservation->roomLines()->get();
 
-        return $lines->isEmpty() ? [$reservation->room_type_id] : $lines->pluck('room_type_id')->all();
+        return $lines->isEmpty() ? [$reservation->room_type_id] : $lines->pluck('room_type_id')->unique()->values()->all();
     }
 
     /**
@@ -441,25 +441,13 @@ class ReservationWorkflowService
      */
     public function firstUnavailableLine(Reservation $reservation): ?array
     {
-        $lines = $reservation->roomLines()->get();
-        if ($lines->isEmpty()) {
-            $available = $this->availability->availableCount($reservation->roomType, $reservation->check_in, $reservation->check_out);
-            if ($available < $reservation->rooms_requested) {
-                return ['name' => $reservation->roomType->name, 'quantity' => $reservation->rooms_requested, 'available' => $available];
-            }
-
+        // Every stay of the reservation, night by night, against what other bookings already hold.
+        $shortfall = $this->availability->staysShortfall(\App\Support\StaysInput::fromTransaction($reservation));
+        if ($shortfall === null || ! isset($shortfall['type_name'])) {
             return null;
         }
 
-        foreach ($lines as $line) {
-            $roomType = RoomType::find($line->room_type_id);
-            $available = $this->availability->availableCount($roomType, $reservation->check_in, $reservation->check_out);
-            if ($available < $line->quantity) {
-                return ['name' => $line->room_type_name, 'quantity' => $line->quantity, 'available' => $available];
-            }
-        }
-
-        return null;
+        return ['name' => $shortfall['type_name'], 'quantity' => $shortfall['needed'], 'available' => $shortfall['free'], 'message' => $shortfall['message']];
     }
 
     /**
@@ -725,23 +713,10 @@ class ReservationWorkflowService
             'required_payment_amount' => $reservation->required_payment_amount,
         ]);
 
-        // Carry every itemized room-type line over to the new Booking - a
-        // genuine multi-room-type reservation (real reservation_room_lines,
-        // not the legacy single room_type_id/rooms_requested pair) must not
-        // lose its per-line breakdown at conversion, or Booking::
-        // getTotalAmountDueAttribute()/BookingService::ensureBilling() would
-        // silently fall back to pricing the whole booking at just the first
-        // line's rate x the summed quantity once room_lines is empty.
-        foreach ($reservation->roomLines()->get() as $line) {
-            $booking->roomLines()->create([
-                'room_type_id' => $line->room_type_id,
-                'room_type_name' => $line->room_type_name,
-                'quantity' => $line->quantity,
-                'price_per_night' => $line->price_per_night,
-                'number_of_nights' => $line->number_of_nights,
-                'subtotal' => $line->subtotal,
-            ]);
-        }
+        // Carry the reservation's stays over to the new Booking - each stay's dates and every itemized room-type line (and the amenity
+        // rows, pointed at the booking's own stays) - so a multi-stay reservation does not lose its per-stay breakdown at conversion, and
+        // Booking::getTotalAmountDueAttribute()/BookingService::ensureBilling() keep pricing every stay on ITS OWN nights.
+        app(\App\Services\StayRecorder::class)->copyReservationToBooking($reservation, $booking);
 
         $reservation->update(['status' => Reservation::STATUS_CONVERTED]);
 
@@ -781,20 +756,8 @@ class ReservationWorkflowService
 
         $cancelled = 0;
         foreach ($candidates as $candidate) {
-            // roomLines() relation, not ->roomLines (that's the JSON array accessor).
-            $candidateLines = $candidate->roomLines()->get();
-            $needs = $candidateLines->isNotEmpty()
-                ? $candidateLines->map(fn ($l) => [$l->room_type_id, (int) $l->quantity])->all()
-                : [[$candidate->room_type_id, max(1, (int) $candidate->rooms_requested)]];
-
-            $fits = true;
-            foreach ($needs as [$typeId, $quantity]) {
-                $type = \App\Models\RoomType::find($typeId);
-                if ($type && $this->availability->availableCount($type, $candidate->check_in, $candidate->check_out) < $quantity) {
-                    $fits = false;
-                    break;
-                }
-            }
+            // Every stay of the candidate, night by night: it fits only if all of them still do.
+            $fits = $this->availability->staysShortfall(\App\Support\StaysInput::fromTransaction($candidate)) === null;
             if ($fits) {
                 continue;
             }

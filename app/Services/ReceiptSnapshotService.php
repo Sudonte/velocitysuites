@@ -118,6 +118,16 @@ class ReceiptSnapshotService
         $payload['highlight'] = [
             'kind' => 'checkout_final',
             'amenities_by_room' => array_values($byRoom),
+            // The same bill stay by stay: each stay's rooms (with room numbers), amenities and subtotal.
+            'stays' => array_map(fn ($section) => [
+                'position' => $section['position'],
+                'check_in' => $section['check_in'],
+                'check_out' => $section['check_out'],
+                'nights' => $section['nights'],
+                'rooms' => array_map(fn ($r) => ['room_number' => $r['room_number'], 'room_type' => $r['room_type'], 'rate' => $r['rate'], 'nights' => $r['nights'], 'subtotal' => $r['subtotal']], $section['rooms']),
+                'amenities' => array_map(fn ($a) => ['name' => $a['amenity_name'], 'quantity' => $a['quantity'], 'unit_price' => $a['unit_price'], 'subtotal' => $a['subtotal']], $section['amenity_lines']),
+                'subtotal' => $section['subtotal'],
+            ], $stay['stays'] ?? []),
             'other_charges' => array_map(fn ($c) => ['name' => $c['description'], 'amount' => $c['amount']], $stay['additional_charges'] ?? []),
             'payments' => $payments,
             'no_refund_note' => \App\Support\StayBill::NO_REFUND_NOTE,

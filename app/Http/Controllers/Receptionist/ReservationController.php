@@ -74,11 +74,10 @@ class ReservationController extends Controller
         // reason up front instead of a click-then-fail).
         $availableCounts = collect();
         foreach ($reservations as $reservation) {
-            $availableCounts[$reservation->id] = $this->availability->availableCount(
-                $reservation->roomType,
-                $reservation->check_in,
-                $reservation->check_out
-            );
+            // Every stay of the reservation must fit, night by night: when one does not, Convert is disabled (0 free).
+            $availableCounts[$reservation->id] = app(\App\Services\ReservationWorkflowService::class)->firstUnavailableLine($reservation)
+                ? 0
+                : max(1, $this->availability->availableCount($reservation->roomType, $reservation->check_in, $reservation->check_out));
         }
 
         return view('receptionist.reservations.index', compact('reservations', 'availableCounts'));
@@ -268,7 +267,9 @@ class ReservationController extends Controller
 
         // Shown/used for either awaiting status - Convert works from both.
         $available = in_array($reservation->status, Reservation::ACTIVE_STATUSES, true)
-            ? $this->availability->availableCount($reservation->roomType, $reservation->check_in, $reservation->check_out)
+            ? (app(\App\Services\ReservationWorkflowService::class)->firstUnavailableLine($reservation)
+                ? 0
+                : max(1, $this->availability->availableCount($reservation->roomType, $reservation->check_in, $reservation->check_out)))
             : null;
 
         // Best-effort multi-room-type grouping - see

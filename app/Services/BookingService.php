@@ -77,7 +77,8 @@ class BookingService
     public function quoteRoomCharge(Reservation $reservation): array
     {
         $roomType = $reservation->roomType;
-        $nights = max(1, abs($reservation->check_out->diffInDays($reservation->check_in)));
+        // Booked nights across every stay (a one-stay reservation: just its nights). The room lines carry each stay's own nights.
+        $nights = max(1, (int) $reservation->stayList()->sum(fn ($stay) => $stay->nights()));
 
         // Per-room-type-line lines when this is a genuine multi-room-type
         // reservation (real reservation_room_lines - see
@@ -276,16 +277,8 @@ class BookingService
             'required_payment_amount' => $reservation->required_payment_amount,
         ]);
 
-        foreach ($reservation->roomLines()->get() as $line) {
-            $booking->roomLines()->create([
-                'room_type_id' => $line->room_type_id,
-                'room_type_name' => $line->room_type_name,
-                'quantity' => $line->quantity,
-                'price_per_night' => $line->price_per_night,
-                'number_of_nights' => $line->number_of_nights,
-                'subtotal' => $line->subtotal,
-            ]);
-        }
+        // the reservation's stays (dates, room lines, amenity rows) become the booking's own
+        app(StayRecorder::class)->copyReservationToBooking($reservation, $booking);
 
         if ($reservation->status !== Reservation::STATUS_CONVERTED) {
             $reservation->update(['status' => Reservation::STATUS_CONVERTED]);

@@ -56,86 +56,119 @@ final class StayBill
         $billing ??= $booking->listPreloaded ? $booking->billing : $booking->billing()->with('additionalCharges')->first();
 
         $today = self::day($asOf ?? Carbon::now());
-        $checkIn = self::calendarDate($booking->check_in);
-        $scheduledOut = self::calendarDate($booking->check_out);
-        $scheduledNights = max(1, self::daysBetween($checkIn, $scheduledOut));
 
-        $rooms = $booking->rooms->isNotEmpty() ? $booking->rooms : collect([$booking->room])->filter();
-        // Booked but no physical room assigned yet: bill what was booked (the room lines' frozen rates, else the room
-        // type's), for the scheduled nights - nothing can have been extended or cut short before check-in.
-        $assigned = $rooms->isNotEmpty();
-        if (! $assigned) {
-            $rooms = self::bookedRooms($booking);
-        }
+        // One bill for the whole transaction, built stay by stay: each stay is priced on ITS OWN booked nights (rooms x nights). A
+        // booking with one stay reads exactly as it always did.
+        $stayList = $booking->stayList()->values();
+        $firstStayId = $stayList->first()?->id;
+        $severalStays = $stayList->count() > 1;
+        $stayDefs = $stayList->map(function ($stay) use ($booking, $firstStayId) {
+            $in = self::calendarDate($stay->check_in);
+            $out = self::calendarDate($stay->check_out);
+            // the physical rooms assigned to THIS stay (a pivot row from before stays existed belongs to the first stay)
+            $own = $booking->rooms->filter(fn ($r) => (($r->pivot->stay_id ?? $firstStayId) === $stay->id))->values();
+            if ($own->isEmpty() && $booking->stayList()->count() === 1) {
+                $own = $booking->rooms->isNotEmpty() ? $booking->rooms : collect([$booking->room])->filter();
+            }
+
+            return ['stay' => $stay, 'in' => $in, 'out' => $out, 'nights' => max(1, self::daysBetween($in, $out)), 'own' => $own];
+        });
+
+        $checkIn = $stayDefs->map(fn ($d) => $d['in'])->min();
+        $scheduledOut = $stayDefs->map(fn ($d) => $d['out'])->max();
+        $scheduledNights = (int) $stayDefs->sum('nights');
+
+        // Booked but no physical room assigned yet (to a stay): bill what was booked (the room lines' frozen rates, else the room type's),
+        // for that stay's scheduled nights - nothing can have been extended or cut short before check-in.
+        $stayDefs = $stayDefs->map(function ($d) use ($booking, $firstStayId) {
+            $d['assigned'] = $d['own']->isNotEmpty();
+            $d['rooms'] = $d['assigned'] ? $d['own'] : self::bookedRooms($booking, $d['stay']->id, $firstStayId);
+
+            return $d;
+        });
         $stayEnded = $booking->booking_status === Booking::STATUS_COMPLETED;
         $endedAt = $booking->checked_out_at ?? $booking->completed_at;
         $endedOn = $endedAt ? self::day($endedAt) : null;
 
-        $build = function (?int $forcedNights) use ($rooms, $assigned, $checkIn, $scheduledNights, $scheduledOut, $stayEnded, $endedOn): array {
+        $build = function (?int $forcedNights) use ($stayDefs, $stayEnded, $endedOn, $severalStays): array {
             $lines = [];
             $roomCharge = 0.0;
             $scheduledRoomCharge = 0.0;
             $latestOut = null;
+            $perStay = [];
 
-            foreach ($rooms as $room) {
-                $checkedOutAt = $room->pivot->checked_out_at ?? null;
-                $isCheckedOut = (bool) $checkedOutAt;
+            foreach ($stayDefs as $def) {
+                $checkIn = $def['in'];
+                $scheduledOut = $def['out'];
+                $scheduledNights = $def['nights'];
+                $stayCharge = 0.0;
+                $stayScheduled = 0.0;
 
-                // Always the BOOKED nights (no refunds, no credit for nights not used). $forcedNights only exists to read an
-                // older, already settled bill that was once priced on the nights stayed (see the reconciliation below).
-                if ($forcedNights !== null) {
-                    $billedUntil = $checkIn->copy()->addDays($forcedNights);
-                    $isCheckedOut = true;
-                } else {
-                    $billedUntil = $scheduledOut;
-                    $isCheckedOut = $isCheckedOut || ($assigned && $stayEnded);
+                foreach ($def['rooms'] as $room) {
+                    $checkedOutAt = $room->pivot->checked_out_at ?? null;
+                    $isCheckedOut = (bool) $checkedOutAt;
+
+                    // Always the BOOKED nights (no refunds, no credit for nights not used). $forcedNights only exists to read an
+                    // older, already settled single-stay bill that was once priced on the nights stayed (see the reconciliation below).
+                    if ($forcedNights !== null && ! $severalStays) {
+                        $billedUntil = $checkIn->copy()->addDays($forcedNights);
+                        $isCheckedOut = true;
+                    } else {
+                        $billedUntil = $scheduledOut;
+                        $isCheckedOut = $isCheckedOut || ($def['assigned'] && $stayEnded);
+                    }
+                    $leftOn = $checkedOutAt ? self::day(Carbon::parse($checkedOutAt)) : ($endedOn ?? $billedUntil);
+
+                    $nights = max(1, self::daysBetween($checkIn, $billedUntil));
+                    $rate = (float) $room->room_rate;
+                    $subtotal = round($rate * $nights, 2);
+                    $scheduledSubtotal = round($rate * $scheduledNights, 2);
+
+                    $roomCharge += $subtotal;
+                    $scheduledRoomCharge += $scheduledSubtotal;
+                    $stayCharge += $subtotal;
+                    $stayScheduled += $scheduledSubtotal;
+                    $latestOut = $latestOut === null || $billedUntil->gt($latestOut) ? $billedUntil : $latestOut;
+
+                    $lines[] = [
+                        'stay_id' => $def['stay']->id,
+                        'stay_position' => (int) ($def['stay']->position ?? 1),
+                        'room_id' => $room->id,
+                        'room_number' => $room->room_number,
+                        'room_type_id' => isset($room->room_type_id) ? (string) $room->room_type_id : null,
+                        'room_type' => $room->roomType?->name,
+                        'rate' => round($rate, 2),
+                        'status' => $isCheckedOut ? 'checked_out' : 'active',
+                        'checked_out_on' => $isCheckedOut ? $leftOn->toDateString() : null,
+                        'billed_until' => $billedUntil->toDateString(),
+                        'scheduled_nights' => $scheduledNights,
+                        'nights' => $nights,
+                        'scheduled_subtotal' => $scheduledSubtotal,
+                        'subtotal' => $subtotal,
+                    ];
                 }
-                $leftOn = $checkedOutAt ? self::day(Carbon::parse($checkedOutAt)) : ($endedOn ?? $billedUntil);
-
-                $nights = max(1, self::daysBetween($checkIn, $billedUntil));
-                $rate = (float) $room->room_rate;
-                $subtotal = round($rate * $nights, 2);
-                $scheduledSubtotal = round($rate * $scheduledNights, 2);
-
-                $roomCharge += $subtotal;
-                $scheduledRoomCharge += $scheduledSubtotal;
-                $latestOut = $latestOut === null || $billedUntil->gt($latestOut) ? $billedUntil : $latestOut;
-
-                $lines[] = [
-                    'room_id' => $room->id,
-                    'room_number' => $room->room_number,
-                    'room_type_id' => isset($room->room_type_id) ? (string) $room->room_type_id : null,
-                    'room_type' => $room->roomType?->name,
-                    'rate' => round($rate, 2),
-                    'status' => $isCheckedOut ? 'checked_out' : 'active',
-                    'checked_out_on' => $isCheckedOut ? $leftOn->toDateString() : null,
-                    'billed_until' => $billedUntil->toDateString(),
-                    'scheduled_nights' => $scheduledNights,
-                    'nights' => $nights,
-                    'scheduled_subtotal' => $scheduledSubtotal,
-                    'subtotal' => $subtotal,
-                ];
+                $perStay[$def['stay']->id ?? 0] = ['room_charge' => round($stayCharge, 2), 'scheduled_room_charge' => round($stayScheduled, 2)];
             }
 
-            return [$lines, round($roomCharge, 2), round($scheduledRoomCharge, 2), $latestOut];
+            return [$lines, round($roomCharge, 2), round($scheduledRoomCharge, 2), $latestOut, $perStay];
         };
 
-        [$lines, $roomCharge, $scheduledRoomCharge, $latestOut] = $build(null);
+        [$lines, $roomCharge, $scheduledRoomCharge, $latestOut, $perStayCharges] = $build(null);
 
         // A finished stay is a fact already written on its billing. When the recomputed room charge differs from it
         // (a bill settled before nights were counted in hotel-local days, e.g. a 7 AM check-out the old UTC clock
         // still dated the day before), keep the recorded charge and take the whole-night count that explains it, so
-        // the lines the guest sees always add up to the amount they actually paid.
-        if ($stayEnded && $billing && abs($roomCharge - (float) $billing->room_charge) > 0.009) {
-            $rates = (float) $rooms->sum(fn ($r) => (float) $r->room_rate);
+        // the lines the guest sees always add up to the amount they actually paid. (Single-stay bookings only.)
+        if (! $severalStays && $stayEnded && $billing && abs($roomCharge - (float) $billing->room_charge) > 0.009) {
+            $rates = (float) $stayDefs->flatMap(fn ($d) => $d['rooms'])->sum(fn ($r) => (float) $r->room_rate);
             $implied = $rates > 0 ? (float) $billing->room_charge / $rates : 0.0;
             if ($implied >= 1 && abs($implied - round($implied)) < 0.0001) {
-                [$lines, $roomCharge, $scheduledRoomCharge, $latestOut] = $build((int) round($implied));
+                [$lines, $roomCharge, $scheduledRoomCharge, $latestOut, $perStayCharges] = $build((int) round($implied));
             }
         }
 
         $actualOut = $latestOut ?? $scheduledOut;
-        $actualNights = max(1, self::daysBetween($checkIn, $actualOut));
+        $actualNights = $severalStays ? $scheduledNights : max(1, self::daysBetween($checkIn, $actualOut));
 
         // Information only, never a price: the day the guest actually leaves (a finished stay's check-out day; today while the
         // desk is billing it) against the booked check-out. An early departure is shown with the no-refund note.
@@ -152,6 +185,8 @@ final class StayBill
         // The amenity rows frozen on the bill at check-in (listed in its receipt snapshot); older stays fall back to timestamps.
         $checkinAmenityIds = isset($billing?->checkin_receipt_snapshot['amenity_ids']) ? array_map('intval', $billing->checkin_receipt_snapshot['amenity_ids']) : null;
         $amenityLines = $amenityRows->map(fn ($r) => [
+            // The stay it belongs to (a row from before stays existed belongs to the first stay).
+            'stay_id' => $r->stay_id ?? $firstStayId,
             // The room it was requested for (null: one booked for the whole stay). Only read when the relation is loaded.
             'room_id' => $r->room_id,
             'room_number' => $r->relationLoaded('room') ? $r->room?->room_number : null,
@@ -225,8 +260,32 @@ final class StayBill
             ? self::receiptBreakdown($billing, $snapshot, $discount, $roomAtCheckIn, $amenityAtCheckIn, $discountAtCheckIn, $roomCharge, $amenityCharge, $amenityLines, $guestFee, $extraCharges, $extraChargesTotal, $discountAmount, $total, $paid)
             : null;
 
+        // The same figures stay by stay (the discount is the transaction's: one ID, one discount, taken off the whole bill).
+        $staySections = $stayDefs->map(function ($def) use ($lines, $amenityLines, $perStayCharges, $booking) {
+            $id = $def['stay']->id;
+            $sectionAmenities = array_values(array_filter($amenityLines, fn ($l) => $l['stay_id'] === $id));
+            $amenityTotal = round(array_sum(array_column($sectionAmenities, 'subtotal')), 2);
+            $charges = $perStayCharges[$id ?? 0] ?? ['room_charge' => 0.0, 'scheduled_room_charge' => 0.0];
+
+            return [
+                'stay_id' => $id,
+                'position' => (int) ($def['stay']->position ?? 1),
+                'check_in' => $def['in']->toDateString(),
+                'check_out' => $def['out']->toDateString(),
+                'nights' => $def['nights'],
+                'state' => $booking->stateOf($def['stay']),
+                'rooms' => array_values(array_filter($lines, fn ($l) => $l['stay_id'] === $id)),
+                'room_charge' => $charges['room_charge'],
+                'scheduled_room_charge' => $charges['scheduled_room_charge'],
+                'amenity_lines' => $sectionAmenities,
+                'amenity_charge' => $amenityTotal,
+                'subtotal' => round($charges['room_charge'] + $amenityTotal, 2),
+            ];
+        })->values()->all();
+
         return [
             'mode' => $mode,
+            'stays' => $staySections,
             'check_in' => $checkIn->toDateString(),
             'scheduled_check_out' => $scheduledOut->toDateString(),
             'actual_check_out' => $actualOut->toDateString(),
@@ -328,7 +387,7 @@ final class StayBill
      * One placeholder per booked room when none is physically assigned: each room line's frozen rate x quantity, or
      * the room type's rate x rooms_requested for a booking without lines.
      */
-    private static function bookedRooms(Booking $booking): \Illuminate\Support\Collection
+    private static function bookedRooms(Booking $booking, ?int $stayId = null, ?int $firstStayId = null): \Illuminate\Support\Collection
     {
         $make = fn (float $rate, ?string $type) => (object) [
             'id' => null,
@@ -338,9 +397,15 @@ final class StayBill
             'pivot' => null,
         ];
 
-        $lines = $booking->room_lines;
-        if (! empty($lines)) {
-            return collect($lines)->flatMap(fn ($line) => array_fill(0, max(1, (int) $line['quantity']), $make((float) $line['price_per_night'], $line['room_type'] ?? null)))->values();
+        $lines = collect($booking->room_lines);
+        // a multi-stay booking: only the lines of this stay (a line from before stays existed belongs to the first stay)
+        if ($booking->stayCount() > 1 && $lines->isNotEmpty()) {
+            $mine = $booking->roomLines()->get()->filter(fn ($l) => ($l->stay_id ?? $firstStayId) === $stayId);
+
+            return $mine->flatMap(fn ($line) => array_fill(0, max(1, (int) $line->quantity), $make((float) $line->price_per_night, $line->room_type_name)))->values();
+        }
+        if ($lines->isNotEmpty()) {
+            return $lines->flatMap(fn ($line) => array_fill(0, max(1, (int) $line['quantity']), $make((float) $line['price_per_night'], $line['room_type'] ?? null)))->values();
         }
 
         return collect(array_fill(0, max(1, (int) $booking->rooms_requested), $make((float) ($booking->roomType->rate ?? 0), $booking->roomType?->name)));

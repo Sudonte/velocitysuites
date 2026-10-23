@@ -101,7 +101,7 @@
                     </div>
                     <div class="monitoring-item-row">
                         <span class="text-muted">Room</span>
-                        <span>{{ $req->room->room_number ?? '—' }}</span>
+                        <span>{{ $req->room->room_number ?? '—' }}@if($req->stay_label) <small class="text-muted">&middot; {{ $req->stay_label }}</small>@endif</span>
                     </div>
                     <div class="monitoring-item-row">
                         <span class="text-muted">Qty &times; Total</span>
@@ -146,7 +146,7 @@
                                     {{ $req->display_is_booking ? 'Booking' : ($req->display_is_booking === false ? 'Reservation' : 'Unlinked') }}
                                 </span>
                             </td>
-                            <td class="d-none d-lg-table-cell">{{ $req->room->room_number ?? '—' }}</td>
+                            <td class="d-none d-lg-table-cell">{{ $req->room->room_number ?? '—' }}@if($req->stay_label)<small class="d-block text-muted">{{ $req->stay_label }}</small>@endif</td>
                             <td>
                                 {{ $req->amenity_name }}
                                 <small class="d-block text-muted d-lg-none">
@@ -258,7 +258,7 @@
                         @endif
                         <div class="room-type-detail-row">
                             <span class="room-type-detail-label">Room:</span>
-                            <span class="room-type-detail-value">{{ $req->room->room_number ?? 'Not yet assigned' }}</span>
+                            <span class="room-type-detail-value">{{ $req->room->room_number ?? 'Not yet assigned' }}@if($req->stay_label) <span class="text-muted">&middot; {{ $req->stay_label }}</span>@endif</span>
                         </div>
                         <div class="room-type-detail-row">
                             <span class="room-type-detail-label">Room Type:</span>

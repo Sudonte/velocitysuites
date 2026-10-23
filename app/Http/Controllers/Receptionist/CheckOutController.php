@@ -46,8 +46,12 @@ class CheckOutController extends Controller
         // Check-in/Bookings/Reservations' index(): the numbered page-link
         // boxes render broken/oversized here for reasons that don't trace
         // back to anything in this app's own CSS.
-        $bookings = Booking::with(['reservation.guest.user', 'guest.user', 'rooms.roomType', 'room.roomType', 'roomType', 'billing'])
+        $bookings = Booking::with(['reservation.guest.user', 'guest.user', 'rooms.roomType', 'room.roomType', 'roomType', 'billing', 'stays'])
             ->where('booking_status', $tab === 'expected' ? Booking::STATUS_CHECKED_IN : Booking::STATUS_COMPLETED)
+            // Between stays (a later stay still to arrive and nobody in a room) is not due out: it comes back when that stay checks in.
+            ->when($tab === 'expected', fn ($q) => $q->where(fn ($q) => $q->whereNotExists(fn ($s) => $s->select(\DB::raw(1))->from('stays')->whereColumn('stays.booking_id', 'bookings.id')->whereNull('stays.checked_in_at'))
+                ->orWhereRaw('(SELECT COUNT(*) FROM stays WHERE stays.booking_id = bookings.id) <= 1')
+                ->orWhereExists(fn ($s) => $s->select(\DB::raw(1))->from('booking_rooms')->whereColumn('booking_rooms.booking_id', 'bookings.id')->whereNull('booking_rooms.checked_out_at'))))
             ->orderByRaw('viewed_at IS NULL DESC')
             ->orderBy('check_out', $tab === 'expected' ? 'asc' : 'desc')
             ->simplePaginate(15)
@@ -170,8 +174,10 @@ class CheckOutController extends Controller
         Activity::log('Checked out room', "Booking #{$booking->id} - Room {$room->room_number}", $booking);
 
         $remaining = $booking->rooms()->wherePivotNull('checked_out_at')->count();
+        // A stay whose rooms are all out is checked out; the booking is done (and billing opens) only when EVERY stay is.
+        $allStaysDone = $booking->recordStayCheckOuts();
 
-        if ($remaining === 0) {
+        if ($remaining === 0 && $allStaysDone) {
             // Timeline: the last room just left - that is the stay's check-out moment.
             if ($booking->checked_out_at === null) {
                 $booking->update(['checked_out_at' => now()]);
@@ -187,7 +193,9 @@ class CheckOutController extends Controller
 
         return response()->json([
             'final' => false,
-            'message' => "Room {$room->room_number} checked out. {$remaining} room(s) still checked in.",
+            'message' => $remaining > 0
+                ? "Room {$room->room_number} checked out. {$remaining} room(s) still checked in."
+                : "Room {$room->room_number} checked out. That stay is done; the next stay has not arrived yet.",
             'html' => view('receptionist.check-out.partials.rooms-panel', compact('booking'))->render(),
         ]);
     }
@@ -232,12 +240,14 @@ class CheckOutController extends Controller
             }
 
             $remaining = $active->count() - $targets->count();
-            if ($remaining === 0 && $locked->checked_out_at === null) {
-                // Timeline: the last room just left - that is the stay's check-out moment.
+            // A stay whose rooms are all out is checked out; the booking's own check-out moment is the LAST stay's.
+            $allStaysDone = $locked->recordStayCheckOuts();
+            if ($remaining === 0 && $allStaysDone && $locked->checked_out_at === null) {
+                // Timeline: the last room of the last stay just left - that is the check-out moment.
                 $locked->update(['checked_out_at' => $at]);
             }
 
-            return ['rooms' => $targets, 'remaining' => $remaining];
+            return ['rooms' => $targets, 'remaining' => $remaining, 'final' => $remaining === 0 && $allStaysDone];
         });
 
         if (isset($result['error'])) {
@@ -247,7 +257,7 @@ class CheckOutController extends Controller
         $numbers = $result['rooms']->pluck('room_number')->implode(', ');
         Activity::log('Checked out rooms', "Booking #{$booking->id} - Room {$numbers}", $booking);
 
-        if ($result['remaining'] === 0) {
+        if ($result['final']) {
             return response()->json([
                 'final' => true,
                 'message' => 'Last room checked out - proceeding to billing.',
@@ -258,7 +268,9 @@ class CheckOutController extends Controller
 
         return response()->json([
             'final' => false,
-            'message' => "Room {$numbers} checked out. {$result['remaining']} room(s) still checked in.",
+            'message' => $result['remaining'] > 0
+                ? "Room {$numbers} checked out. {$result['remaining']} room(s) still checked in."
+                : "Room {$numbers} checked out. That stay is done; the next stay has not arrived yet.",
             'html' => view('receptionist.check-out.partials.rooms-panel', compact('booking'))->render(),
         ]);
     }
@@ -492,6 +504,10 @@ class CheckOutController extends Controller
                     ->where('booking_id', $lockedBooking->id)
                     ->whereNull('checked_out_at')
                     ->update(['checked_out_at' => $lockedBooking->checked_out_at]);
+                // ...and so does every stay: the transaction is complete, each stay carries its own in/out moments.
+                $lockedBooking->ensureStays();
+                $lockedBooking->stays()->whereNull('checked_in_at')->update(['checked_in_at' => $lockedBooking->checked_in_at ?? $lockedBooking->checked_out_at]);
+                $lockedBooking->stays()->whereNull('checked_out_at')->update(['checked_out_at' => $lockedBooking->checked_out_at]);
                 foreach ($rooms as $room) {
                     $room->update(['status' => 'available']);
                 }

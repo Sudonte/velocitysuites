@@ -494,6 +494,8 @@ class ReceiptService
             'representative_name' => $booking->stay_guest_full_name,
             'room_type' => $booking->roomType?->name,
             'room_lines' => $booking->room_lines,
+            // Every stay of the transaction (its own dates, rooms, amenities and subtotal): all three receipts list them all.
+            'stays' => $booking->staysPayload(),
             'check_in' => $booking->check_in?->toIso8601String(),
             'check_out' => $booking->check_out?->toIso8601String(),
             'number_of_nights' => $booking->number_of_nights,

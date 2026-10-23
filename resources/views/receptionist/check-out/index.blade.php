@@ -86,7 +86,7 @@
                             </td>
                             @if($tab === 'expected')
                                 <td>
-                                    @if($booking->rooms->count() > 1)
+                                    @if($booking->rooms->count() > 1 || $booking->stayCount() > 1)
                                         {{-- Multi-room: each room checks out independently -
                                              see the Rooms Panel modal below. Billing only
                                              starts once every room in this booking has
