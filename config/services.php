@@ -63,7 +63,7 @@ return [
         */
         'version' => '1.55.0',
         'file' => 'downloads/velocity-suites-v1.55.0.apk',
-        'size_mb' => 18.2,
+        'size_mb' => 18.3,
         'min_android' => 10,
     ],
 

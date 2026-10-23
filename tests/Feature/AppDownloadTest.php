@@ -38,7 +38,7 @@ class AppDownloadTest extends ApiFlowTestCase
             ->assertSee('Download for Android')
             ->assertSee('href="' . route('app.download') . '"', false)
             ->assertSee('download="velocity-suites-v1.55.0.apk"', false)
-            ->assertSee('Version 1.55.0 · 18.2 MB · Android 10 or newer')
+            ->assertSee('Version 1.55.0 · 18.3 MB · Android 10 or newer')
             ->assertSee('How to install')
             ->assertSee('Scan to download on your phone')
             ->assertSee('data-app-qr="' . route('app.download') . '"', false)
@@ -93,7 +93,7 @@ class AppDownloadTest extends ApiFlowTestCase
             $this->assertStringContainsString('<strong>' . $title . '</strong><span>' . $line . '</span>', $html);
         }
         $this->assertSame(6, substr_count($html, 'class="hero-feature-icon"'));
-        $this->assertStringContainsString('Version 1.55.0 · 18.2 MB · Android 10 or newer', $html);
+        $this->assertStringContainsString('Version 1.55.0 · 18.3 MB · Android 10 or newer', $html);
         foreach (['Free to download', 'Secure GCash payments', 'Android 10 or newer'] as $fact) {
             $this->assertStringContainsString($fact, $html);
         }
