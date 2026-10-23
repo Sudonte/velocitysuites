@@ -28,6 +28,7 @@ abstract class ApiFlowTestCase extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        \App\Support\RoomLineRef::forget(); // its per-process cache is keyed by row id, and every test starts with fresh ids
         Storage::fake('public');
         Storage::fake('local');
 
