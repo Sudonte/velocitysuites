@@ -61,9 +61,9 @@ return [
         | is ever missing - the real size is read from the file when it exists).
         | 'file' is relative to public/.
         */
-        'version' => '1.51.1',
-        'file' => 'downloads/velocity-suites-v1.51.1.apk',
-        'size_mb' => 21.6,
+        'version' => '1.52.0',
+        'file' => 'downloads/velocity-suites-v1.52.0.apk',
+        'size_mb' => 18.2,
         'min_android' => 10,
     ],
 
