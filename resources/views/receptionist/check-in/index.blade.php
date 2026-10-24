@@ -185,7 +185,7 @@
 <!-- Check In Modal (AJAX-loaded: Guest Details, room assignment, and
      check-in are one action - see CheckInController::panel()/store()) -->
 <div class="modal fade" id="checkInModal" tabindex="-1" data-bs-backdrop="static">
-    <div class="modal-dialog modal-dialog-scrollable">
+    <div class="modal-dialog modal-dialog-scrollable modal-lg">
         <div class="modal-content" id="checkInModalContent">
             <!-- Injected via AJAX -->
         </div>

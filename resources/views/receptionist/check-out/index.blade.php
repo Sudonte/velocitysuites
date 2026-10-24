@@ -149,7 +149,7 @@
 
 <!-- Step 3: Payment Panel Modal -->
 <div class="modal fade" id="paymentPanelModal" tabindex="-1" data-bs-backdrop="static">
-    <div class="modal-dialog modal-dialog-scrollable">
+    <div class="modal-dialog modal-dialog-scrollable modal-lg">
         <div class="modal-content" id="paymentPanelContent">
             <!-- Injected via AJAX -->
         </div>
