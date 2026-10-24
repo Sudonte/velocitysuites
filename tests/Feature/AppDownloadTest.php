@@ -39,8 +39,8 @@ class AppDownloadTest extends ApiFlowTestCase
             ->assertDontSee('Your stay, in your pocket')
             ->assertSee('Download for Android')
             ->assertSee('href="' . route('app.download') . '"', false)
-            ->assertSee('download="velocity-suites-v1.61.0.apk"', false)
-            ->assertSee('Version 1.61.0 · 18.2 MB · Android 10 or newer')
+            ->assertSee('download="velocity-suites-v1.62.0.apk"', false)
+            ->assertSee('Version 1.62.0 · 18.2 MB · Android 10 or newer')
             ->assertSee('How to install')
             ->assertSee('Scan to download on your phone')
             ->assertSee('data-app-qr="' . route('app.download') . '"', false)
@@ -63,7 +63,7 @@ class AppDownloadTest extends ApiFlowTestCase
         $response->assertOk();
         $response->assertHeader('Content-Type', 'application/vnd.android.package-archive');
         $this->assertStringContainsString('attachment', $response->headers->get('Content-Disposition'));
-        $this->assertStringContainsString('velocity-suites-v1.61.0.apk', $response->headers->get('Content-Disposition'));
+        $this->assertStringContainsString('velocity-suites-v1.62.0.apk', $response->headers->get('Content-Disposition'));
         $this->assertSame(filesize(MobileApp::path()), (int) $response->baseResponse->getFile()->getSize());
     }
 
@@ -92,7 +92,7 @@ class AppDownloadTest extends ApiFlowTestCase
         $this->assertStringContainsString('<h1 class="hero-app-title">Welcome to Velocity Suites</h1>', $html);
         $this->assertStringContainsString('<p class="hero-app-tagline">Your comfort is our service</p>', $html);
         $this->assertLessThan(strpos($html, 'Your comfort is our service'), strpos($html, 'Welcome to Velocity Suites'), 'the heading comes first, the tagline under it');
-        $this->assertStringContainsString('Version 1.61.0 · 18.2 MB · Android 10 or newer', $html);
+        $this->assertStringContainsString('Version 1.62.0 · 18.2 MB · Android 10 or newer', $html);
         $this->assertSame(1, substr_count($html, '<h1'));
         $this->assertStringContainsString('Explore rooms', $html);
         $this->assertStringContainsString('Sign in', $html);
