@@ -64,12 +64,16 @@ class ReceiptService
     public function paymentSummary(Booking $booking): array
     {
         $grandTotal = $this->grandTotal($booking);
-        $totalPaid = PaymentMath::totalPaid($this->chronologicalPayments($booking));
+        $payments = $this->chronologicalPayments($booking);
+        $totalPaid = PaymentMath::totalPaid($payments);
+        $waiting = PaymentMath::totalWaiting($payments);
         $billing = $this->billingOf($booking);
 
         return [
             'grand_total' => $grandTotal,
             'total_amount_paid' => $totalPaid,
+            // submitted GCash money the front desk has not verified yet: not in the paid total, deducted from the balance once verified
+            'waiting_for_verification' => $waiting,
             'remaining_balance' => PaymentMath::remainingBalance($grandTotal, $totalPaid),
             'payment_status' => PaymentMath::paymentStatus($grandTotal, $totalPaid),
             'payment_percentage' => PaymentMath::normalizePercentage($booking->selected_payment_percentage),
@@ -102,7 +106,7 @@ class ReceiptService
         $runningTotal = 0.0;
 
         return $this->chronologicalPayments($booking)->map(function (Payment $payment) use ($booking, $grandTotal, &$runningTotal) {
-            if ($payment->payment_status === PaymentMath::COUNTS_AS_PAID_STATUS) {
+            if ($payment->countsAsPaid()) {
                 $runningTotal = round($runningTotal + (float) $payment->amount_paid, 2);
             }
 

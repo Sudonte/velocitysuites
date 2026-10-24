@@ -344,7 +344,7 @@ class CheckoutFinalStagePaymentReparentingTest extends TestCase
             'payment_method' => 'gcash',
             'amount_paid' => 2000,
             'payment_status' => 'completed',
-            'payment_stage' => 'final',
+            'payment_stage' => 'final', 'verified_at' => now(),
             'payment_date' => now(),
         ]);
 
@@ -433,7 +433,7 @@ class CheckoutFinalStagePaymentReparentingTest extends TestCase
             'payment_method' => 'gcash',
             'amount_paid' => 2000,
             'payment_status' => 'completed',
-            'payment_stage' => 'final',
+            'payment_stage' => 'final', 'verified_at' => now(),
             'payment_date' => now(),
         ]);
 

@@ -51,7 +51,29 @@ class PaymentMath
     {
         $total = 0.0;
         foreach ($payments as $payment) {
-            if (($payment['payment_status'] ?? null) === self::COUNTS_AS_PAID_STATUS) {
+            if (self::countsAsPaid($payment)) {
+                $total += (float) ($payment['amount_paid'] ?? 0);
+            }
+        }
+
+        return round($total, 2);
+    }
+
+    /** The one rule for "paid" (see Payment::countsAsPaid()), for a model or an array. */
+    public static function countsAsPaid($payment): bool
+    {
+        return ($payment['payment_status'] ?? null) === self::COUNTS_AS_PAID_STATUS
+            && (($payment['payment_method'] ?? null) !== 'gcash' || ($payment['verified_at'] ?? null) !== null || ($payment['billing_id'] ?? null) !== null);
+    }
+
+    /** Submitted GCash money still waiting for the front desk (not counted as paid, not rejected). */
+    public static function totalWaiting(iterable $payments): float
+    {
+        $total = 0.0;
+        foreach ($payments as $payment) {
+            $status = $payment['payment_status'] ?? null;
+            if (($payment['payment_method'] ?? null) === 'gcash' && in_array($status, ['pending', 'completed'], true)
+                && ($payment['verified_at'] ?? null) === null && ($payment['rejected_at'] ?? null) === null && ($payment['billing_id'] ?? null) === null) {
                 $total += (float) ($payment['amount_paid'] ?? 0);
             }
         }

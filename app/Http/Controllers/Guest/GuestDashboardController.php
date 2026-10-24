@@ -125,9 +125,7 @@ class GuestDashboardController extends Controller
 
         // Calculate total pending amount
         $totalPendingAmount = $pendingPayments->sum(function ($billing) {
-            $paid = $billing->payments()
-                ->where('payment_status', 'completed')
-                ->sum('amount_paid');
+            $paid = $billing->payments()->countedAsPaid()->sum('amount_paid');
             return max(0, (float) $billing->total_amount - (float) $paid);
         });
 

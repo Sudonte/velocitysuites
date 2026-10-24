@@ -50,11 +50,19 @@ class PaymentMathTest extends TestCase
         $this->assertSame(0.0, PaymentMath::totalPaid([['payment_status' => 'failed', 'amount_paid' => '2000.00']]));
     }
 
-    public function test_total_paid_includes_a_completed_gcash_deposit(): void
+    public function test_total_paid_counts_a_gcash_deposit_only_once_the_front_desk_verified_it(): void
     {
-        $this->assertSame(2000.0, PaymentMath::totalPaid([
-            ['payment_status' => 'completed', 'amount_paid' => '2000.00', 'payment_method' => 'gcash'],
-        ]));
+        $unverified = ['payment_status' => 'completed', 'amount_paid' => '2000.00', 'payment_method' => 'gcash', 'verified_at' => null];
+        $this->assertSame(0.0, PaymentMath::totalPaid([$unverified]), 'submitted, not verified: not paid');
+        $this->assertSame(2000.0, PaymentMath::totalWaiting([$unverified]), 'it is waiting for verification');
+        $verified = ['verified_at' => '2026-10-24 10:00:00'] + $unverified;
+        $this->assertSame(2000.0, PaymentMath::totalPaid([$verified]));
+        $this->assertSame(0.0, PaymentMath::totalWaiting([$verified]));
+        $rejected = ['rejected_at' => '2026-10-24 10:00:00', 'payment_status' => 'rejected'] + $unverified;
+        $this->assertSame(0.0, PaymentMath::totalPaid([$rejected]));
+        $this->assertSame(0.0, PaymentMath::totalWaiting([$rejected]), 'a rejected payment is no longer waiting');
+        $atDesk = ['billing_id' => 5] + $unverified;
+        $this->assertSame(2000.0, PaymentMath::totalPaid([$atDesk]), 'attached to a billing = handled by staff at check-in/out');
     }
 
     public function test_total_paid_includes_a_completed_checkout_cash_payment_with_no_verified_at(): void

@@ -90,13 +90,17 @@ class ReservationWorkflowService
      */
     public function payableRange(Reservation $reservation): array
     {
+        // What a new payment is checked against: money already VERIFIED plus money SUBMITTED and waiting for the front desk. Submitted money
+        // is committed (a guest cannot pay the same 50% twice while the first is still being checked); it only moves out of "waiting"
+        // and into "paid" once verified, and a rejected payment frees it again.
         if ($reservation->booking) {
             $summary = app(ReceiptService::class)->paymentSummary($reservation->booking);
             $total = (float) $summary['grand_total'];
-            $paid = (float) $summary['total_amount_paid'];
+            $paid = round((float) $summary['total_amount_paid'] + (float) ($summary['waiting_for_verification'] ?? 0), 2);
         } else {
             $total = round((float) $reservation->total_amount_due, 2);
-            $paid = PaymentMath::totalPaid($reservation->payments()->get());
+            $payments = $reservation->payments()->get();
+            $paid = round(PaymentMath::totalPaid($payments) + PaymentMath::totalWaiting($payments), 2);
         }
 
         $remaining = PaymentMath::remainingBalance($total, $paid);

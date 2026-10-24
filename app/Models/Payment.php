@@ -186,6 +186,31 @@ class Payment extends Model
         return $this->verified_at !== null;
     }
 
+    /**
+     * Does this payment count as PAID money? Completed, and - for a guest's GCash payment - checked by the front desk. A GCash payment
+     * is 'completed' the moment it is submitted (auto-converted reservations), so completed alone is not enough. A payment already
+     * attached to a billing was handled by staff at check-in/check-out and counts.
+     */
+    public function countsAsPaid(): bool
+    {
+        return $this->payment_status === 'completed'
+            && ($this->payment_method !== 'gcash' || $this->verified_at !== null || $this->billing_id !== null);
+    }
+
+    /** Query twin of countsAsPaid(). */
+    public function scopeCountedAsPaid($query)
+    {
+        return $query->where('payments.payment_status', 'completed')
+            ->where(fn ($q) => $q->where('payments.payment_method', '!=', 'gcash')->orWhereNotNull('payments.verified_at')->orWhereNotNull('payments.billing_id'));
+    }
+
+    /** Submitted GCash money the front desk has not decided on yet (it will count once verified). */
+    public function isWaitingForVerification(): bool
+    {
+        return $this->payment_method === 'gcash' && in_array($this->payment_status, ['pending', 'completed'], true)
+            && $this->verified_at === null && $this->rejected_at === null && $this->billing_id === null;
+    }
+
     /** Payment states as staff see them (badges, Payment Status filter). */
     public const DISPLAY_STATUSES = ['pending', 'completed', 'rejected', 'failed'];
 

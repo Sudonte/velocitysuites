@@ -213,10 +213,10 @@ class GuestController extends Controller
             $q->whereIn('billing_id', $billingIds)
               ->orWhereIn('reservation_id', $reservationIds)
               ->orWhereIn('booking_id', $directBookingIds);
-        })->where('payment_status', 'completed')->sum('amount_paid');
+        })->countedAsPaid()->sum('amount_paid');
 
         $totalPendingAmount = $pendingBills->sum(function ($billing) {
-            $paid = $billing->payments()->where('payment_status', 'completed')->sum('amount_paid');
+            $paid = $billing->payments()->countedAsPaid()->sum('amount_paid');
             return max(0, (float) $billing->total_amount - (float) $paid);
         });
 

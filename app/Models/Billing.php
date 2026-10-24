@@ -144,9 +144,7 @@ class Billing extends Model
      */
     public function getBalanceAttribute(): float
     {
-        $paid = (float) $this->payments()
-            ->where('payment_status', 'completed')
-            ->sum('amount_paid');
+        $paid = (float) $this->payments()->countedAsPaid()->sum('amount_paid');
 
         return max(0, $this->running_total - $paid);
     }
@@ -252,7 +250,7 @@ class Billing extends Model
         if ($this->isClosed()) {
             return;
         }
-        $paid = (float) $this->payments()->where('payment_status', 'completed')->sum('amount_paid');
+        $paid = (float) $this->payments()->countedAsPaid()->sum('amount_paid');
         $status = $paid <= 0 ? 'pending' : ($paid + 0.004 >= (float) $this->total_amount ? 'paid' : 'partial');
         if ($status !== $this->billing_status) {
             $this->billing_status = $status;

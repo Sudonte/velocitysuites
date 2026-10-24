@@ -367,7 +367,7 @@ class BookingController extends Controller
         $billDiscount = round((float) $stayBills->sum('discount'), 2);
         $discountLabel = $stayBills->pluck('discount_name')->filter()->unique()->implode(', ') ?: 'ID discount';
         $amountPaid = (float) $transactionBookings->sum(
-            fn (Booking $b) => (float) $b->allPayments()->where('payment_status', 'completed')->sum('amount_paid')
+            fn (Booking $b) => $b->paidTotal()
         );
         $remainingBalance = max(0, round($totalDue - $amountPaid, 2));
         // Same status every screen shows - incl. OVERPAID (e.g. paid in full, then a discount was approved).

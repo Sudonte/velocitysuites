@@ -256,7 +256,7 @@ final class StayBill
         }
 
         $total = round(max(0.0, $subtotal - $discountAmount), 2);
-        $paid = round((float) $booking->allPayments()->where('payment_status', 'completed')->sum('amount_paid'), 2);
+        $paid = $booking->paidTotal();
 
         $breakdown = $settledAtCheckIn
             ? self::receiptBreakdown($billing, $snapshot, $discount, $roomAtCheckIn, $amenityAtCheckIn, $discountAtCheckIn, $roomCharge, $amenityCharge, $amenityLines, $guestFee, $extraCharges, $extraChargesTotal, $discountAmount, $total, $paid)

@@ -64,9 +64,9 @@ class StayBillingService
 
         // Every completed payment on the stay (deposits, check-in payment, change returned) counts toward this bill.
         $payments = $booking->reservation_id ? $booking->reservation->payments() : $booking->payments();
-        $payments->where('payment_status', 'completed')->whereNull('billing_id')->update(['billing_id' => $billing->id]);
+        $payments->countedAsPaid()->whereNull('billing_id')->update(['billing_id' => $billing->id]);
 
-        $paid = (float) $billing->payments()->where('payment_status', 'completed')->sum('amount_paid');
+        $paid = (float) $billing->payments()->countedAsPaid()->sum('amount_paid');
         $billing->update([
             'billing_status' => $paid <= 0 ? 'pending' : ($paid + 0.004 >= (float) $billing->total_amount ? 'paid' : 'partial'),
         ]);

@@ -247,4 +247,56 @@ class StaysLifecycleTest extends ApiFlowTestCase
         $this->assertSame(['bookings' => 0, 'reservations' => 0], $second);
         $this->assertSame(1, Stay::where('booking_id', $old->id)->count());
     }
+
+    public function test_a_transaction_cannot_complete_while_a_date_range_was_never_checked_in(): void
+    {
+        [$user, $desk, $booking, $deluxeRoom, $suiteRoom] = $this->twoStayBooking();
+        [$stay1] = $booking->stayList()->all();
+        $this->checkIn($desk, $booking, $stay1, [(string) $deluxeRoom->room_type_id => [$deluxeRoom->id]], ['payment_method' => 'cash', 'amount_received' => 2000])->assertOk();
+        $this->actingAs($desk)->putJson(route('receptionist.check-out.rooms.checkout-many', $booking), ['all' => 1])->assertOk()->assertJsonPath('final', false);
+        $billing = $booking->fresh()->billing()->first();
+
+        // the second date range never arrived: completing is refused, nothing is stamped
+        $this->actingAs($desk)->postJson(route('receptionist.billing.payment.store', $billing), ['payment_method' => 'cash', 'amount_paid' => 0])
+            ->assertStatus(422)->assertJsonPath('message', fn ($m) => str_contains($m, 'never checked in'));
+        $booking = $booking->fresh();
+        $this->assertSame(Booking::STATUS_CHECKED_IN, $booking->booking_status);
+        $this->assertNull($booking->stayList()[1]->checked_in_at, 'the range that never happened is not stamped as checked in');
+        $this->assertNull($booking->completed_at);
+
+        // once it arrives and leaves, the same request completes the transaction
+        $this->checkIn($desk, $booking, $booking->stayList()[1], [(string) $suiteRoom->room_type_id => [$suiteRoom->id]])->assertOk();
+        $this->actingAs($desk)->putJson(route('receptionist.check-out.rooms.checkout-many', $booking->fresh()), ['all' => 1])->assertOk()->assertJsonPath('final', true);
+        $this->actingAs($desk)->postJson(route('receptionist.billing.payment.store', $billing->fresh()), ['payment_method' => 'cash', 'amount_paid' => 0])->assertSuccessful();
+        $this->assertSame(Booking::STATUS_COMPLETED, $booking->fresh()->booking_status);
+    }
+
+    public function test_amenity_requests_and_approvals_appear_in_the_final_receipts_transaction_history(): void
+    {
+        [$user, $desk, $booking, $deluxeRoom, $suiteRoom] = $this->twoStayBooking();
+        [$stay1, $stay2] = $booking->stayList()->all();
+        $this->checkIn($desk, $booking, $stay1, [(string) $deluxeRoom->room_type_id => [$deluxeRoom->id]], ['payment_method' => 'cash', 'amount_received' => 2000])->assertOk();
+        $towel = Amenity::create(['amenity_name' => 'Extra Towel', 'description' => 'd', 'category' => 'Room', 'quantity' => 10, 'charge' => 300, 'status' => 'active']);
+        $this->asGuest($user)->postJson("/api/guest/bookings/{$booking->id}/additional-amenities", [
+            'stay_id' => $stay1->id, 'rooms' => [['room_id' => $deluxeRoom->id, 'items' => [['amenity_id' => $towel->id, 'quantity' => 2]]]],
+        ])->assertCreated();
+        $request = AmenityRequest::firstOrFail();
+        $this->actingAs($desk)->put(route('receptionist.amenity-requests.approve', $request))->assertSessionHas('success');
+
+        $this->actingAs($desk)->putJson(route('receptionist.check-out.rooms.checkout-many', $booking->fresh()), ['all' => 1])->assertOk();
+        $this->checkIn($desk, $booking->fresh(), $booking->fresh()->stayList()[1], [(string) $suiteRoom->room_type_id => [$suiteRoom->id]])->assertOk();
+        $this->actingAs($desk)->putJson(route('receptionist.check-out.rooms.checkout-many', $booking->fresh()), ['all' => 1])->assertOk()->assertJsonPath('final', true);
+        $billing = $booking->fresh()->billing()->first();
+        $this->actingAs($desk)->postJson(route('receptionist.billing.payment.store', $billing), ['payment_method' => 'cash', 'amount_paid' => 600])->assertSuccessful();
+
+        $final = Receipt::where('booking_id', $booking->id)->where('receipt_type', Receipt::CHECKOUT_FINAL)->firstOrFail();
+        $payload = app(\App\Services\ReceiptService::class)->findReceiptPayload($final->receipt_no, $user->guest);
+        $labels = array_column($payload['transaction_history'], 'label');
+        $this->assertContains('Amenity requested: Extra Towel × 2', $labels);
+        $this->assertContains('Amenity approved: Extra Towel × 2', $labels);
+        // both date ranges' check-in and check-out are in the same history, with the receipts issued so far
+        $this->assertCount(2, array_filter($labels, fn ($l) => str_starts_with($l, 'Checked in (')));
+        $this->assertCount(2, array_filter($labels, fn ($l) => str_starts_with($l, 'Checked out (')));
+        $this->assertSame([2, 3], array_column($payload['receipt_numbers'], 'stage'), 'a cash-only booking has no Receipt 1');
+    }
 }

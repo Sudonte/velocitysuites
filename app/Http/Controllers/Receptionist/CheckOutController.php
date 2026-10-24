@@ -284,7 +284,7 @@ class CheckOutController extends Controller
             return response()->json(['message' => 'Cannot cancel a paid bill.'], 422);
         }
 
-        if ($billing->checkin_settled_at || $billing->payments()->where('payment_status', 'completed')->exists()) {
+        if ($billing->checkin_settled_at || $billing->payments()->countedAsPaid()->exists()) {
             return response()->json(['message' => 'This bill already has recorded payments and cannot be discarded.'], 422);
         }
 
@@ -413,7 +413,7 @@ class CheckOutController extends Controller
             // payment sum - never the pre-transaction $billing->balance,
             // which could be stale relative to a payment another request
             // just committed.
-            $currentPaid = (float) $lockedBilling->payments()->where('payment_status', 'completed')->sum('amount_paid');
+            $currentPaid = (float) $lockedBilling->payments()->countedAsPaid()->sum('amount_paid');
             $currentBalance = max(0, (float) $lockedBilling->total_amount - $currentPaid);
 
             // Paid more than the final bill (an early check-out, a discount approved after paying in full): the
@@ -440,6 +440,16 @@ class CheckOutController extends Controller
                 return ['status' => 'partial_refused', 'balance' => $currentBalance];
             }
 
+            // A transaction is Completed only when EVERY date range was checked in (and so checked out): completing it would otherwise
+            // stamp a range that never happened as if the guest had stayed it.
+            if ($amountPaid + 0.004 >= round($currentBalance, 2)) {
+                $lockedBooking->ensureStays();
+                $neverCheckedIn = $lockedBooking->stayCount() > 1 ? $lockedBooking->stays()->whereNull('checked_in_at')->orderBy('position')->get() : collect();
+                if ($neverCheckedIn->isNotEmpty()) {
+                    return ['status' => 'range_not_checked_in', 'ranges' => $neverCheckedIn->map(fn ($st) => $st->check_in->format('M j') . ' → ' . $st->check_out->format('M j'))->implode(', ')];
+                }
+            }
+
             if ($amountPaid > 0) {
                 $referenceNumber = $validated['reference_number'] ?? null;
                 if (empty($referenceNumber)) {
@@ -459,9 +469,7 @@ class CheckOutController extends Controller
                 ]);
             }
 
-            $paid = (float) $lockedBilling->payments()
-                ->where('payment_status', 'completed')
-                ->sum('amount_paid');
+            $paid = (float) $lockedBilling->payments()->countedAsPaid()->sum('amount_paid');
 
             $completed = $paid >= (float) $lockedBilling->total_amount;
             $lockedBilling->update(['billing_status' => $completed ? 'paid' : 'partial']);
@@ -566,6 +574,9 @@ class CheckOutController extends Controller
         }
         if ($result['status'] === 'not_awaiting_checkout') {
             return response()->json(['message' => 'This booking is not awaiting checkout.'], 422);
+        }
+        if ($result['status'] === 'range_not_checked_in') {
+            return response()->json(['message' => 'These dates were never checked in: ' . $result['ranges'] . '. Check them in first, then complete the check-out.'], 422);
         }
         if ($result['status'] === 'overpayment') {
             return response()->json([

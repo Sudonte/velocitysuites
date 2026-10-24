@@ -587,7 +587,13 @@ class Booking extends Model
     /** Completed payments received against this booking so far (reservation-level and booking-level alike). */
     public function paidTotal(): float
     {
-        return round((float) $this->allPayments()->where('payment_status', 'completed')->sum('amount_paid'), 2);
+        return PaymentMath::totalPaid($this->allPayments());
+    }
+
+    /** GCash money submitted and not yet verified: shown to the guest on its own line, deducted from the balance once verified. */
+    public function waitingForVerificationTotal(): float
+    {
+        return PaymentMath::totalWaiting($this->allPayments());
     }
 
     /**
