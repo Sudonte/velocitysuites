@@ -9,7 +9,7 @@
 
 @push('styles')
 <style>
-    /* Hero: "Welcome to Velocity Suites", the tagline, one short line, then the Android download; one full-bleed photo with a dark
+    /* Hero: "Velocity Suites" (the only h1), the tagline, one short line, then the Android download; one full-bleed photo with a dark
        overlay (so the text is light-on-dark in both site themes). One grid: content is at most 1200px wide and centred, with
        16px side padding on phones, 24px on tablets, 32px on desktop. Under 992px it is a single
        column (headline, tagline, line, download, phone); from 992px two columns; the QR code from 1200px.
@@ -89,9 +89,9 @@
 
 
     .hero-app-title {
-        font-size: clamp(2rem, 1.35rem + 2.8vw, 3.5rem);
+        font-size: clamp(2.25rem, 1.8rem + 2vw, 2.75rem); /* 36px to 44px on phones and tablets; 56px to 80px from 992px */
         font-weight: 800;
-        line-height: 1.1;
+        line-height: 1.05;
         color: #fff;
         margin: 0 0 16px;
     }
@@ -121,18 +121,18 @@
     /* Download block. Phone order: download, version line, install help, Explore rooms / Sign in, trust row.
        Desktop: the three buttons on one row, then the version line, install help and trust row. */
     .hero-app-cta {
-        display: grid;
-        grid-template-columns: minmax(0, 1fr);
-        grid-template-areas: "dl" "info" "install" "sec";
+        display: flex;
+        flex-direction: column;
         width: 100%;
+        max-width: 440px;
         margin-top: 32px;
     }
 
+    .hero-app-secondary { order: 1; }
     .hero-app-download,
-    .hero-app-soon { grid-area: dl; }
-    .hero-app-info { grid-area: info; }
-    .hero-app-install { grid-area: install; }
-    .hero-app-secondary { grid-area: sec; }
+    .hero-app-soon { order: 2; }
+    .hero-app-info { order: 3; }
+    .hero-app-install { order: 4; }
 
     .hero-app-download,
     .hero-btn-outline {
@@ -152,6 +152,7 @@
 
     .hero-app-download {
         width: 100%;
+        min-height: 52px;
     }
 
     .hero-btn-outline {
@@ -178,8 +179,10 @@
         display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: 12px;
-        margin-top: 16px;
     }
+
+    .hero-app-download,
+    .hero-app-soon { margin-top: 12px; }
 
     .hero-app-info {
         margin: 8px 0 0;
@@ -309,11 +312,6 @@
     }
 
     @media (min-width: 768px) {
-        .hero-app-download {
-            width: auto;
-            min-width: 260px;
-        }
-
         .hero-phone {
             width: 230px;
         }
@@ -335,24 +333,8 @@
             padding: 48px 32px 56px;
         }
 
-        .hero-app-cta {
-            grid-template-columns: auto minmax(0, 1fr);
-            grid-template-areas: "dl sec" "info info" "install install";
-            column-gap: 12px;
-            align-items: center;
-        }
-
-        .hero-app-download {
-            width: auto;
-            min-width: 0;
-            padding-left: 24px;
-            padding-right: 24px;
-        }
-
-        .hero-app-secondary {
-            display: flex;
-            align-items: stretch;
-            margin-top: 0;
+        .hero-app-title {
+            font-size: clamp(3.5rem, 2.2rem + 3vw, 5rem); /* 56px to 80px */
         }
 
         .hero-btn-outline {
@@ -374,7 +356,6 @@
 
 
         .hero-app-title {
-            font-size: clamp(2rem, 1.1rem + 2.2vw, 2.75rem);
             margin-bottom: 4px;
         }
 
@@ -447,7 +428,7 @@
 
 
         .hero-app-title {
-            font-size: clamp(2.25rem, 3.75vw - 8px, 4rem);
+            font-size: clamp(3.5rem, 1.6rem + 3.2vw, 5rem);
             margin-bottom: calc(var(--hero-gap) * 0.25);
         }
 
@@ -743,11 +724,20 @@
         </div>
         <div class="hero-app">
             <div class="hero-app-copy">
-                <h1 class="hero-app-title">Welcome to Velocity Suites</h1>
+                <h1 class="hero-app-title">Velocity Suites</h1>
                 <p class="hero-app-tagline">Your comfort is our service</p>
                 <p class="hero-app-desc">Book a room in minutes and manage your stay from our Android app.</p>
 
                 <div class="hero-app-cta">
+                    <div class="hero-app-secondary">
+                        <a href="{{ route('public.rooms.index') }}" class="hero-btn-outline">
+                            Explore rooms <i class="fas fa-arrow-right" aria-hidden="true"></i>
+                        </a>
+                        <a href="{{ route('login') }}" class="hero-btn-outline">
+                            Sign in <i class="fas fa-arrow-right" aria-hidden="true"></i>
+                        </a>
+                    </div>
+
                     @if($appAvailable)
                         <a href="{{ route('app.download') }}" download="{{ $appDownloadName }}" class="btn btn-velocity hero-app-download">
                             <i class="fab fa-android" aria-hidden="true"></i> Download for Android
@@ -766,15 +756,6 @@
                     @else
                         <p class="hero-app-soon">The app download is coming soon.</p>
                     @endif
-
-                    <div class="hero-app-secondary">
-                        <a href="{{ route('public.rooms.index') }}" class="hero-btn-outline">
-                            Explore rooms <i class="fas fa-arrow-right" aria-hidden="true"></i>
-                        </a>
-                        <a href="{{ route('login') }}" class="hero-btn-outline">
-                            Sign in <i class="fas fa-arrow-right" aria-hidden="true"></i>
-                        </a>
-                    </div>
                 </div>
             </div>
 

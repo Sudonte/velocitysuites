@@ -34,13 +34,13 @@ class AppDownloadTest extends ApiFlowTestCase
 
         $this->get(route('home'))->assertOk()
             ->assertSee('Your comfort is our service')
-            ->assertSee('Welcome to Velocity Suites')
+            ->assertSee('<h1 class="hero-app-title">Velocity Suites</h1>', false)
             ->assertSee('Book a room in minutes and manage your stay from our Android app.')
             ->assertDontSee('Your stay, in your pocket')
             ->assertSee('Download for Android')
             ->assertSee('href="' . route('app.download') . '"', false)
-            ->assertSee('download="velocity-suites-v1.62.0.apk"', false)
-            ->assertSee('Version 1.62.0 · 18.2 MB · Android 10 or newer')
+            ->assertSee('download="velocity-suites-v1.63.0.apk"', false)
+            ->assertSee('Version 1.63.0 · 18.2 MB · Android 10 or newer')
             ->assertSee('How to install')
             ->assertSee('Scan to download on your phone')
             ->assertSee('data-app-qr="' . route('app.download') . '"', false)
@@ -63,7 +63,7 @@ class AppDownloadTest extends ApiFlowTestCase
         $response->assertOk();
         $response->assertHeader('Content-Type', 'application/vnd.android.package-archive');
         $this->assertStringContainsString('attachment', $response->headers->get('Content-Disposition'));
-        $this->assertStringContainsString('velocity-suites-v1.62.0.apk', $response->headers->get('Content-Disposition'));
+        $this->assertStringContainsString('velocity-suites-v1.63.0.apk', $response->headers->get('Content-Disposition'));
         $this->assertSame(filesize(MobileApp::path()), (int) $response->baseResponse->getFile()->getSize());
     }
 
@@ -89,10 +89,14 @@ class AppDownloadTest extends ApiFlowTestCase
             'Free to download', 'Secure GCash payments', 'hero-feature-icon'] as $removed) {
             $this->assertStringNotContainsString($removed, $html, $removed . ' was removed from the first section');
         }
-        $this->assertStringContainsString('<h1 class="hero-app-title">Welcome to Velocity Suites</h1>', $html);
+        $this->assertStringContainsString('<h1 class="hero-app-title">Velocity Suites</h1>', $html);
         $this->assertStringContainsString('<p class="hero-app-tagline">Your comfort is our service</p>', $html);
-        $this->assertLessThan(strpos($html, 'Your comfort is our service'), strpos($html, 'Welcome to Velocity Suites'), 'the heading comes first, the tagline under it');
-        $this->assertStringContainsString('Version 1.62.0 · 18.2 MB · Android 10 or newer', $html);
+        $this->assertLessThan(strpos($html, '<p class="hero-app-tagline">'), strpos($html, '<h1 class="hero-app-title">Velocity Suites</h1>'), 'the heading comes first, the tagline under it');
+        $this->assertLessThan(strpos($html, 'Download for Android'), strpos($html, 'hero-btn-outline">'), 'Row 1 (Explore rooms, Sign in) comes before the download button');
+        $this->assertLessThan(strpos($html, 'Download for Android'), strpos($html, '>Sign in'), 'Sign in comes before the download button');
+        $this->assertLessThan(strpos($html, 'Android 10 or newer'), strpos($html, 'Download for Android'), 'the version line is under the download button');
+        $this->assertLessThan(strpos($html, 'How to install'), strpos($html, 'Android 10 or newer'), 'How to install is under the version line');
+        $this->assertStringContainsString('Version 1.63.0 · 18.2 MB · Android 10 or newer', $html);
         $this->assertSame(1, substr_count($html, '<h1'));
         $this->assertStringContainsString('Explore rooms', $html);
         $this->assertStringContainsString('Sign in', $html);
