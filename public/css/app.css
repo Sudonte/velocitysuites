@@ -1815,3 +1815,90 @@ td.table-actions .btn-icon, .d-flex > .btn-icon { flex-shrink: 0; }
 #globalConfirmModal.confirm-stacked,
 #globalNoticeModal.confirm-stacked { z-index: 1080; }
 .modal-backdrop.confirm-stacked-backdrop { z-index: 1075; }
+
+/* ---------------------------------------------------------------------------
+   Reports (admin/reports, manager/reports - wrapper .report-page).
+   Calm, neutral surfaces: ink on white, one dark accent for actions, color
+   only where it carries meaning (chart bars, status badges). Uses the theme
+   tokens, so dark mode follows automatically.
+   --------------------------------------------------------------------------- */
+.report-page {
+    --report-ink: var(--text-dark);
+    --report-muted: #6B7280;
+    --report-line: var(--border-color);
+    --report-soft: #F4F5F7;
+}
+[data-bs-theme="dark"] .report-page {
+    --report-muted: #A9AFB8;
+    --report-soft: #262a32;
+}
+
+/* Card headers: quiet title row instead of a solid red bar. */
+.report-page .card-header {
+    background-color: transparent;
+    color: var(--report-ink);
+    border-bottom: 1px solid var(--report-line);
+}
+.report-page .card-header h5 { font-size: 1rem; font-weight: 600; letter-spacing: .01em; }
+.report-page .card-header h5 i { color: var(--report-muted); margin-right: .25rem; }
+.report-page .card:hover { box-shadow: var(--shadow-sm); }
+
+/* Filter bar */
+.report-filter-bar.card { padding: 0; }
+.report-filter-bar .card-body { padding: 1rem 1.25rem; }
+.report-filter-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .75rem; }
+.report-segmented { display: inline-flex; padding: 3px; border-radius: var(--radius-btn); background: var(--report-soft); border: 1px solid var(--report-line); }
+.report-segmented label {
+    padding: .35rem .9rem; border-radius: 6px; font-size: .875rem; color: var(--report-muted);
+    cursor: pointer; user-select: none; transition: background-color .15s ease, color .15s ease, box-shadow .15s ease;
+}
+.report-segmented label:hover { color: var(--report-ink); }
+.report-segmented .btn-check:checked + label { background: var(--surface-color); color: var(--report-ink); font-weight: 600; box-shadow: 0 1px 3px rgba(0,0,0,.12); }
+.report-segmented .btn-check:focus-visible + label { outline: 2px solid #2F5EA8; outline-offset: 1px; }
+.report-filter-selects { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; }
+.report-filter-selects .form-select { width: auto; min-width: 170px; }
+.report-apply { animation: report-fade-in .2s ease; }
+@keyframes report-fade-in { from { opacity: 0; transform: translateY(-2px); } to { opacity: 1; transform: none; } }
+
+/* Custom range: grid-rows 0fr -> 1fr gives a smooth height reveal without measuring. */
+.report-custom { display: grid; grid-template-rows: 0fr; opacity: 0; transition: grid-template-rows .3s ease, opacity .25s ease; }
+.report-custom.is-open { grid-template-rows: 1fr; opacity: 1; }
+.report-custom-inner { overflow: hidden; min-height: 0; }
+.report-custom-fields { display: flex; flex-wrap: wrap; align-items: flex-end; gap: .75rem; padding-top: .9rem; }
+.report-custom-fields input { min-width: 160px; }
+@media (prefers-reduced-motion: reduce) { .report-custom, .report-apply { transition: none; animation: none; } }
+
+.report-filter-summary { margin-top: .75rem; font-size: .85rem; color: var(--report-muted); }
+.report-filter-summary strong { color: var(--report-ink); font-weight: 600; }
+.report-filter-summary i { margin-right: .25rem; }
+.report-filter-loading { margin-left: .5rem; }
+
+/* Key figures */
+.report-kpis { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); }
+.report-kpi {
+    background: var(--surface-color); border: 1px solid var(--report-line); border-radius: var(--radius-card);
+    padding: 1.1rem 1.25rem; box-shadow: var(--shadow-sm);
+}
+.report-kpi-label { font-size: .75rem; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--report-muted); }
+.report-kpi-value { font-size: 1.75rem; font-weight: 700; color: var(--report-ink); line-height: 1.2; margin-top: .35rem; font-variant-numeric: tabular-nums; }
+.report-kpi-sub { font-size: .8rem; color: var(--report-muted); margin-top: .25rem; }
+
+/* Grouped detail panels */
+.report-panel { background: var(--surface-color); border: 1px solid var(--report-line); border-radius: var(--radius-card); padding: 1rem 1.25rem; }
+.report-panel-title { font-size: .8rem; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--report-muted); margin-bottom: .5rem; }
+.report-metrics { margin: 0; }
+.report-metrics > div { display: flex; justify-content: space-between; align-items: baseline; padding: .45rem 0; border-bottom: 1px solid var(--report-line); }
+.report-metrics > div:last-child { border-bottom: 0; }
+.report-metrics dt { font-weight: 400; color: var(--report-muted); font-size: .9rem; }
+.report-metrics dd { margin: 0; font-weight: 600; color: var(--report-ink); font-variant-numeric: tabular-nums; }
+.report-metrics dd small { font-weight: 400; color: var(--report-muted); margin-left: .25rem; }
+
+.report-howto { font-size: .85rem; color: var(--report-muted); }
+.report-howto summary { cursor: pointer; width: fit-content; }
+.report-howto summary:hover { color: var(--report-ink); }
+.report-howto p { margin-top: .5rem; max-width: 70rem; }
+
+/* Tables: muted small-caps heads, numbers aligned. */
+.report-page .table thead th { font-size: .75rem; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: var(--report-muted); border-bottom-width: 1px; white-space: nowrap; }
+.report-page .table td { font-variant-numeric: tabular-nums; }
+.report-page .table tfoot td { border-top: 2px solid var(--report-line); }

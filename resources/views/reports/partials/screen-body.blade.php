@@ -9,71 +9,113 @@
 @php
     $s = $report['summary'];
     $peso = fn ($v) => '₱' . number_format((float) $v, 2);
+    $hasPayments = isset($s['payments_collected']);
+    // One bucket (a single day) makes a chart of one bar - the key figures already say it.
+    $showCharts = $withRevenue && count($report['buckets']) > 1;
 @endphp
 
-<div class="row g-3 mb-3">
-    <div class="col-6 col-lg-3">
-        <x-stat-card icon="fas fa-bed" label="Occupancy ({{ number_format($s['room_nights_sold']) }}/{{ number_format($s['room_nights_available']) }} room-nights)" value="{{ $s['occupancy'] }}%" color="primary" />
+{{-- Key figures: the few numbers an owner checks first, each with a one-line plain explanation. --}}
+<div class="report-kpis mb-4 {{ $withRevenue ? ($hasPayments ? 'report-kpis-5' : 'report-kpis-4') : 'report-kpis-1' }}">
+    <div class="report-kpi">
+        <div class="report-kpi-label">Occupancy</div>
+        <div class="report-kpi-value">{{ $s['occupancy'] }}%</div>
+        <div class="report-kpi-sub">{{ number_format($s['room_nights_sold']) }} of {{ number_format($s['room_nights_available']) }} room-nights sold</div>
     </div>
-    <div class="col-6 col-lg-3">
-        <x-stat-card icon="fas fa-right-left" label="Arrivals / Departures" value="{{ $s['arrivals'] }} / {{ $s['departures'] }}" color="success" />
-    </div>
-    <div class="col-6 col-lg-3">
-        <x-stat-card icon="fas fa-users" label="In-House Now (rooms / guests)" value="{{ $s['in_house_rooms'] }} / {{ $s['in_house_guests'] }}" color="info" />
-    </div>
-    <div class="col-6 col-lg-3">
-        <x-stat-card icon="fas fa-door-closed" label="Rooms / Out of Order" value="{{ $s['inventory'] }} / {{ $s['out_of_order'] }}" color="secondary" />
-    </div>
+    @if($withRevenue)
+        <div class="report-kpi">
+            <div class="report-kpi-label">Room Revenue</div>
+            <div class="report-kpi-value">{{ $peso($s['room_revenue']) }}</div>
+            <div class="report-kpi-sub">Room rate &times; nights stayed</div>
+        </div>
+        <div class="report-kpi">
+            <div class="report-kpi-label">ADR</div>
+            <div class="report-kpi-value">{{ $peso($s['adr']) }}</div>
+            <div class="report-kpi-sub">Average rate per occupied room</div>
+        </div>
+        <div class="report-kpi">
+            <div class="report-kpi-label">RevPAR</div>
+            <div class="report-kpi-value">{{ $peso($s['revpar']) }}</div>
+            <div class="report-kpi-sub">Room revenue per available room</div>
+        </div>
+        @if($hasPayments)
+            <div class="report-kpi">
+                <div class="report-kpi-label">Payments Collected</div>
+                <div class="report-kpi-value">{{ $peso($s['payments_collected']) }}</div>
+                <div class="report-kpi-sub">Cash and verified GCash received</div>
+            </div>
+        @endif
+    @endif
 </div>
 
-{{-- Booking summary [REQ049] + cancellation / no-show [REQ051, REQ062] --}}
-<div class="row g-3 mb-3">
-    <div class="col-6 col-md-4 col-xl"><x-stat-card icon="fas fa-list" label="Total Stays" :value="$s['stays_total']" color="secondary" /></div>
-    <div class="col-6 col-md-4 col-xl"><x-stat-card icon="fas fa-circle-check" label="Confirmed" :value="$s['stays_confirmed']" color="success" /></div>
-    <div class="col-6 col-md-4 col-xl"><x-stat-card icon="fas fa-hourglass-half" label="Pending" :value="$s['stays_pending']" color="warning" /></div>
-    <div class="col-6 col-md-6 col-xl"><x-stat-card icon="fas fa-ban" label="Cancelled ({{ $s['cancellation_rate'] }}%)" :value="$s['cancellations']" color="danger" /></div>
-    <div class="col-12 col-md-6 col-xl"><x-stat-card icon="fas fa-user-slash" label="No-Shows ({{ $s['no_show_rate'] }}%)" :value="$s['no_shows']" color="dark" /></div>
-</div>
-
-{{-- Guest stay statistics [REQ052] --}}
-<div class="row g-3 mb-3">
-    <div class="col-6 col-lg-3"><x-stat-card icon="fas fa-calendar-alt" label="Reservations" :value="$s['reservations']" color="info" /></div>
-    <div class="col-6 col-lg-3"><x-stat-card icon="fas fa-credit-card" label="Direct Bookings" :value="$s['bookings']" color="primary" /></div>
-    <div class="col-6 col-lg-3"><x-stat-card icon="fas fa-people-group" label="Total Guests Stayed" :value="$s['guests_total']" color="success" /></div>
-    <div class="col-6 col-lg-3"><x-stat-card icon="fas fa-moon" label="Average Stay" value="{{ number_format($s['average_stay'], 1) }} nights" color="secondary" /></div>
+{{-- Details, grouped: rooms and front desk | bookings [REQ049, REQ051, REQ062] | guests [REQ052] --}}
+<div class="row g-3 mb-4">
+    <div class="col-lg-4">
+        <div class="report-panel h-100">
+            <div class="report-panel-title">Rooms &amp; Front Desk</div>
+            <dl class="report-metrics">
+                <div><dt>Arrivals</dt><dd>{{ number_format($s['arrivals']) }}</dd></div>
+                <div><dt>Departures</dt><dd>{{ number_format($s['departures']) }}</dd></div>
+                <div><dt>In-house rooms</dt><dd>{{ number_format($s['in_house_rooms']) }}</dd></div>
+                <div><dt>In-house guests</dt><dd>{{ number_format($s['in_house_guests']) }}</dd></div>
+                <div><dt>Total rooms</dt><dd>{{ number_format($s['inventory']) }}</dd></div>
+                <div><dt>Out of order</dt><dd>{{ number_format($s['out_of_order']) }}</dd></div>
+            </dl>
+        </div>
+    </div>
+    <div class="col-lg-4">
+        <div class="report-panel h-100">
+            <div class="report-panel-title">Bookings</div>
+            <dl class="report-metrics">
+                <div><dt>Total stays</dt><dd>{{ number_format($s['stays_total']) }}</dd></div>
+                <div><dt>Confirmed</dt><dd>{{ number_format($s['stays_confirmed']) }}</dd></div>
+                <div><dt>Pending</dt><dd>{{ number_format($s['stays_pending']) }}</dd></div>
+                <div><dt>Cancelled</dt><dd>{{ number_format($s['cancellations']) }} <small>{{ $s['cancellation_rate'] }}%</small></dd></div>
+                <div><dt>No-shows</dt><dd>{{ number_format($s['no_shows']) }} <small>{{ $s['no_show_rate'] }}%</small></dd></div>
+            </dl>
+        </div>
+    </div>
+    <div class="col-lg-4">
+        <div class="report-panel h-100">
+            <div class="report-panel-title">Guest Stays</div>
+            <dl class="report-metrics">
+                <div><dt>Reservations</dt><dd>{{ number_format($s['reservations']) }}</dd></div>
+                <div><dt>Direct bookings</dt><dd>{{ number_format($s['bookings']) }}</dd></div>
+                <div><dt>Guests stayed</dt><dd>{{ number_format($s['guests_total']) }}</dd></div>
+                <div><dt>Average stay</dt><dd>{{ number_format($s['average_stay'], 1) }} <small>nights</small></dd></div>
+                @if($hasPayments)
+                    <div><dt>Other charges</dt><dd>{{ $peso($s['other_charges']) }}</dd></div>
+                @endif
+            </dl>
+        </div>
+    </div>
 </div>
 
 @if($withRevenue)
-    <div class="row g-3 mb-4">
-        <div class="col-6 col-lg">
-            <x-stat-card icon="fas fa-hotel" label="Room Revenue" :value="$peso($s['room_revenue'])" color="success" />
-        </div>
-        <div class="col-6 col-lg">
-            <x-stat-card icon="fas fa-tag" label="ADR (avg. daily rate)" :value="$peso($s['adr'])" color="primary" />
-        </div>
-        <div class="col-6 col-lg">
-            <x-stat-card icon="fas fa-chart-line" label="RevPAR" :value="$peso($s['revpar'])" color="info" />
-        </div>
-        @isset($s['payments_collected'])
-            <div class="col-6 col-lg">
-                <x-stat-card icon="fas fa-concierge-bell" label="Other Charges" :value="$peso($s['other_charges'])" color="secondary" />
-            </div>
-            <div class="col-12 col-lg">
-                <x-stat-card icon="fas fa-money-bill-wave" label="Payments Collected" :value="$peso($s['payments_collected'])" color="warning" />
-            </div>
-        @endisset
-    </div>
-    <p class="text-muted small mt-n2 mb-4">
-        <i class="fas fa-info-circle"></i>
-        Room revenue = room rate &times; nights stayed in the period. ADR = room revenue &divide; room-nights sold; RevPAR = room revenue &divide; room-nights available.
-        @isset($s['payments_collected'])
-            Other charges = amenities, extra-guest fees and additional charges on stays that checked out in the period. Payments collected = money received in the period (GCash once verified).
-        @endisset
-    </p>
+    <details class="report-howto mb-4">
+        <summary><i class="fas fa-circle-info"></i> How these figures are calculated</summary>
+        <p class="mb-0">
+            Room revenue = room rate &times; nights stayed in the period. ADR = room revenue &divide; room-nights sold. RevPAR = room revenue &divide; room-nights available.
+            @if($hasPayments)
+                Other charges = amenities, extra-guest fees and additional charges on stays that checked out in the period. Payments collected = money received in the period (GCash once verified).
+            @endif
+        </p>
+    </details>
 
-    <x-card title="Occupancy and Room Revenue by {{ $report['bucketUnit'] }}" icon="fas fa-chart-column" bodyClass="card-body" class="mb-4">
-        <div style="height: 280px;"><canvas id="reportOccupancyChart"></canvas></div>
-    </x-card>
+    @if($showCharts)
+        {{-- Two charts, one measure each (a % and a peso amount never share one chart). --}}
+        <div class="row g-3 mb-4">
+            <div class="col-lg-6">
+                <x-card title="Occupancy by {{ $report['bucketUnit'] }}" bodyClass="card-body">
+                    <div style="height: 240px;"><canvas id="reportOccupancyChart" aria-label="Occupancy by {{ strtolower($report['bucketUnit']) }}, in percent" role="img"></canvas></div>
+                </x-card>
+            </div>
+            <div class="col-lg-6">
+                <x-card title="Room Revenue by {{ $report['bucketUnit'] }}" bodyClass="card-body">
+                    <div style="height: 240px;"><canvas id="reportRevenueChart" aria-label="Room revenue by {{ strtolower($report['bucketUnit']) }}, in pesos" role="img"></canvas></div>
+                </x-card>
+            </div>
+        </div>
+    @endif
 
     <x-card title="Performance by {{ $report['bucketUnit'] }}" icon="fas fa-table" bodyClass="table-responsive" class="mb-4">
         <table class="table table-hover table-sm mb-0">
@@ -115,33 +157,52 @@
         </table>
     </x-card>
 
+    @if($showCharts)
     @push('scripts')
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <script>
     document.addEventListener('DOMContentLoaded', function () {
-        const canvas = document.getElementById('reportOccupancyChart');
-        if (!canvas || typeof Chart === 'undefined') return;
+        if (typeof Chart === 'undefined') return;
         const buckets = @json($report['buckets']);
-        new Chart(canvas.getContext('2d'), {
-            data: {
-                labels: buckets.map((b) => b.label),
-                datasets: [
-                    { type: 'bar', label: 'Occupancy %', data: buckets.map((b) => b.occupancy), backgroundColor: 'rgba(214, 65, 75, 0.75)', yAxisID: 'y' },
-                    { type: 'line', label: 'Room Revenue (₱)', data: buckets.map((b) => b.revenue), borderColor: '#1B2A4A', backgroundColor: '#1B2A4A', tension: 0.25, yAxisID: 'y1' },
-                ],
-            },
-            options: {
-                maintainAspectRatio: false,
-                interaction: { mode: 'index', intersect: false },
-                scales: {
-                    y: { beginAtZero: true, max: 100, title: { display: true, text: 'Occupancy %' } },
-                    y1: { beginAtZero: true, position: 'right', grid: { drawOnChartArea: false }, title: { display: true, text: 'Room Revenue (₱)' } },
+        const dark = document.documentElement.getAttribute('data-bs-theme') === 'dark';
+        // One hue per chart (validated against both surfaces); recessive grid and axis ink.
+        const ink = dark ? '#A9AFB8' : '#6B7280';
+        const grid = dark ? 'rgba(255,255,255,0.07)' : 'rgba(17,24,39,0.06)';
+        const peso = (v) => '₱' + Number(v).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        Chart.defaults.font.family = getComputedStyle(document.body).fontFamily;
+        Chart.defaults.color = ink;
+
+        function barChart(id, values, color, opts) {
+            const canvas = document.getElementById(id);
+            if (!canvas) return;
+            new Chart(canvas, {
+                type: 'bar',
+                data: {
+                    labels: buckets.map((b) => b.label),
+                    datasets: [{ data: values, backgroundColor: color, hoverBackgroundColor: color, borderRadius: 4, borderSkipped: 'start', maxBarThickness: 28, categoryPercentage: 0.7 }],
                 },
-            },
-        });
+                options: {
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false }, // one measure per chart - the card title names it
+                        tooltip: { displayColors: false, padding: 10, callbacks: { label: (ctx) => opts.format(ctx.parsed.y) } },
+                    },
+                    scales: {
+                        x: { grid: { display: false }, border: { display: false }, ticks: { maxRotation: 0, autoSkipPadding: 12 } },
+                        y: { beginAtZero: true, max: opts.max, grid: { color: grid }, border: { display: false }, ticks: { maxTicksLimit: 5, callback: opts.tick } },
+                    },
+                },
+            });
+        }
+
+        barChart('reportOccupancyChart', buckets.map((b) => b.occupancy), dark ? '#5B8BD6' : '#2F5EA8',
+            { max: 100, format: (v) => v + '% occupied', tick: (v) => v + '%' });
+        barChart('reportRevenueChart', buckets.map((b) => b.revenue), dark ? '#3DAA78' : '#1E8A5A',
+            { max: undefined, format: peso, tick: (v) => '₱' + Number(v).toLocaleString('en-PH', { notation: 'compact' }) });
     });
     </script>
     @endpush
+    @endif
 @endif
 
 <x-card title="Room Types" icon="fas fa-door-open" bodyClass="table-responsive" class="mb-4">
@@ -214,7 +275,7 @@
                     <td>{{ $row['guest'] }}</td>
                     <td>{{ $row['room_type'] }}</td>
                     <td>{{ $row['check_in']->format('M d, Y') }}</td>
-                    <td><span class="badge {{ $row['status'] === 'No-Show' ? 'bg-dark' : 'bg-danger' }}">{{ $row['status'] }}</span></td>
+                    <td><span class="badge rounded-pill {{ $row['status'] === 'No-Show' ? 'bg-secondary-subtle text-secondary-emphasis' : 'bg-danger-subtle text-danger-emphasis' }}"><i class="fas {{ $row['status'] === 'No-Show' ? 'fa-user-slash' : 'fa-ban' }} me-1"></i>{{ $row['status'] }}</span></td>
                     <td>{{ $row['reason'] ?: '—' }}</td>
                     <td>{{ $row['by'] ?: '—' }}</td>
                 </tr>

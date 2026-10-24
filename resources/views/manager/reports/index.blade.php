@@ -3,7 +3,7 @@
 @section('title', 'Reports - Manager')
 
 @section('content')
-<div class="container-fluid py-4">
+<div class="container-fluid py-4 report-page">
     <x-page-header icon="fas fa-file-pdf" title="Manager Reports">
         <x-slot:actions>
             {{-- Real formatted PDF document (dompdf, branded with the
