@@ -1,6 +1,7 @@
 @extends('layouts.app')
 
 @section('title', $roomType->name . ' Rooms - Admin')
+@section('livePage', '1')
 
 @section('content')
 <div class="container-fluid py-4">
@@ -165,7 +166,7 @@
     @else
         <div class="row g-3 mb-3">
             @foreach($rooms as $room)
-                <div class="col-12 col-sm-6 col-lg-4">
+                <div class="col-12 col-sm-6 col-lg-4" id="room-{{ $room->id }}">
                     <div class="card border-0 shadow-sm h-100 room-card">
                         <div class="card-body">
                             <div class="d-flex justify-content-between align-items-start mb-2">

@@ -71,7 +71,10 @@
                      into view at the end of the content instead of floating fixed on
                      top of it, while the header above stays completely still. --}}
                 <div class="content-scroll-wrap">
-                    <main class="main-content">
+                    {{-- A page that declares @section('livePage', '1') has its POST forms sent in
+                         the background and only this area refreshed - no reload, scroll kept
+                         (public/js/app.js, "Live sections"). Only for pages with no inline scripts. --}}
+                    <main class="main-content" id="pageContent" @hasSection('livePage') data-live-region @endif>
                         @yield('content')
                     </main>
                     <footer class="app-footer">

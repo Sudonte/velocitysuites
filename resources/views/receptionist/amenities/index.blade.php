@@ -1,6 +1,7 @@
 @extends('layouts.app')
 
 @section('title', 'Amenity Requests - Receptionist')
+@section('livePage', '1')
 
 @section('content')
 <div class="container-fluid py-4">

@@ -1,6 +1,7 @@
 @extends('layouts.app')
 
 @section('title', 'Password Reset Requests - Admin')
+@section('livePage', '1')
 
 @section('content')
 <div class="container-fluid py-4">

@@ -19,15 +19,17 @@ function showToast(message, type = 'info') {
             return container;
         })();
     
-    const toastElement = document.createElement('div');
-    toastElement.innerHTML = toastHTML;
-    toastContainer.appendChild(toastElement.firstElementChild);
-    
-    const toast = new bootstrap.Toast(toastElement.firstElementChild);
+    const wrapper = document.createElement('div');
+    wrapper.innerHTML = toastHTML;
+    // Keep a reference before appending - appending moves it out of the wrapper.
+    const toastEl = wrapper.firstElementChild;
+    toastContainer.appendChild(toastEl);
+
+    const toast = new bootstrap.Toast(toastEl);
     toast.show();
-    
+
     // Remove element after toast hides
-    toastElement.firstElementChild.addEventListener('hidden.bs.toast', function() {
+    toastEl.addEventListener('hidden.bs.toast', function() {
         this.remove();
     });
 }
@@ -547,6 +549,108 @@ document.addEventListener('DOMContentLoaded', function () {
             const resolve = pendingResolve;
             pendingResolve = null;
             resolve();
+        }
+    });
+})();
+
+// Live sections: a POST form inside a [data-live-region][id] element (a whole
+// page opts in with @section('livePage', '1') - see layouts/app.blade.php) is
+// sent in the background instead of reloading the page. The server handles it
+// exactly as before (same validation, same redirect back); the redirected
+// page's HTML replaces only the live regions, so the list updates where the
+// user is and the scroll position stays. Runs after the confirmation modal
+// (that listener is on the capture phase). A response that lands on a
+// different page navigates there as usual. Opt a form out with data-live-off.
+(function () {
+    const escapeHtml = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+    function messages(doc, selector) {
+        return Array.from(doc.querySelectorAll('#pageContent ' + selector))
+            .filter((el) => !el.classList.contains('d-none') && el.textContent.trim() !== '')
+            .map((el) => el.textContent.replace(/\s+/g, ' ').trim());
+    }
+
+    function hideModal(modalEl) {
+        return new Promise(function (resolve) {
+            if (!modalEl || !modalEl.classList.contains('show')) return resolve();
+            modalEl.addEventListener('hidden.bs.modal', function () { resolve(); }, { once: true });
+            bootstrap.Modal.getOrCreateInstance(modalEl).hide();
+        });
+    }
+
+    document.addEventListener('submit', async function (event) {
+        const form = event.target;
+        if (!form.matches || event.defaultPrevented || form.hasAttribute('data-live-off')) return;
+        if ((form.getAttribute('method') || 'get').toLowerCase() !== 'post' || !form.closest('[data-live-region][id]')) return;
+        if (!window.fetch || !window.DOMParser) return;
+        event.preventDefault();
+
+        const data = new FormData(form);
+        if (event.submitter && event.submitter.name) data.append(event.submitter.name, event.submitter.value);
+        const buttons = form.querySelectorAll('button[type="submit"], button:not([type])');
+        buttons.forEach((b) => { b.disabled = true; });
+        const regions = Array.from(document.querySelectorAll('[data-live-region][id]'));
+        regions.forEach((r) => r.classList.add('live-updating'));
+        const done = () => {
+            buttons.forEach((b) => { b.disabled = false; });
+            regions.forEach((r) => r.classList.remove('live-updating'));
+        };
+
+        let response;
+        try {
+            response = await fetch(form.action, { method: 'POST', body: data, credentials: 'same-origin', headers: { Accept: 'text/html' } });
+        } catch (e) {
+            done();
+            form.submit(); // network trouble: fall back to the normal full-page submit
+            return;
+        }
+        if (!response.ok) {
+            done();
+            window.showNotice({ variant: 'danger', message: 'That action could not be completed (error ' + response.status + '). Please try again.' });
+            return;
+        }
+        const landed = new URL(response.url, window.location.href);
+        if (landed.pathname !== window.location.pathname) {
+            window.location.href = response.url; // the action moved on to another page
+            return;
+        }
+
+        const doc = new DOMParser().parseFromString(await response.text(), 'text/html');
+        const errors = messages(doc, '.alert-danger');
+        const success = messages(doc, '.alert-success');
+        const modalEl = form.closest('.modal');
+
+        // A form in a modal that comes back with errors stays open with what was typed.
+        if (errors.length && modalEl) {
+            done();
+            window.showNotice({ variant: 'danger', title: 'Please check the form', message: errors.join(' ') });
+            return;
+        }
+
+        await hideModal(modalEl && modalEl.classList.contains('show') ? modalEl : null);
+        regions.forEach(function (region) {
+            const fresh = doc.getElementById(region.id);
+            if (!fresh) return;
+            // The toast below reports success; the banner at the top of the page would repeat it out of view.
+            fresh.querySelectorAll('.alert-success.alert-dismissible').forEach((el) => el.remove());
+            region.innerHTML = fresh.innerHTML;
+            if (window.initDatePickers) window.initDatePickers(region);
+        });
+        // Same signal auto-refresh sends after swapping <main>: collapsible cards, preview lists etc. re-init.
+        window.dispatchEvent(new Event('auto-refresh:swapped'));
+        // Bootstrap leaves the body locked if a modal was swapped out while closing.
+        if (!document.querySelector('.modal.show')) {
+            document.querySelectorAll('.modal-backdrop').forEach((b) => b.remove());
+            document.body.classList.remove('modal-open');
+            document.body.style.removeProperty('overflow');
+            document.body.style.removeProperty('padding-right');
+        }
+        done();
+
+        if (errors.length) {
+            window.showNotice({ variant: 'danger', message: errors.join(' ') });
+        } else if (success.length && typeof showToast === 'function') {
+            showToast('<i class="fas fa-check-circle me-1"></i>' + escapeHtml(success[0]), 'success');
         }
     });
 })();

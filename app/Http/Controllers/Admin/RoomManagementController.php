@@ -75,7 +75,9 @@ class RoomManagementController extends Controller
 
         Activity::log('Updated room', "Room {$room->room_number} ({$room->room_name}, {$room->status})", $room);
 
-        return redirect()->route('admin.rooms.edit', $room)->with('success', 'Room updated successfully!');
+        // Back to the room's own card on its type's page, so the admin doesn't scroll to find it again.
+        return redirect()->to(route('admin.room-types.show', $room->room_type_id) . '#room-' . $room->id)
+            ->with('success', "Room {$room->room_number} updated.");
     }
 
     /**
@@ -96,7 +98,7 @@ class RoomManagementController extends Controller
         // silently stop counting a room that's actually occupied. Block until
         // the guest actually checks out.
         if ($room->isCurrentlyOccupied()) {
-            return redirect()->route('admin.rooms.index')
+            return back()
                 ->with('error', "Room {$room->room_number} is currently occupied - it can't be set to maintenance until the guest checks out.");
         }
 
@@ -110,7 +112,8 @@ class RoomManagementController extends Controller
             'room'
         );
 
-        return redirect()->route('admin.rooms.index')->with('success', 'Room deactivated (set to maintenance).');
+        // Back to the page it was done from (the room type's room list), not the room-types grid.
+        return back()->with('success', "Room {$room->room_number} set to maintenance.");
     }
 
     /**
@@ -164,6 +167,6 @@ class RoomManagementController extends Controller
 
         Activity::log('Reactivated room', "Room {$room->room_number}", $room);
 
-        return redirect()->route('admin.rooms.index')->with('success', 'Room reactivated.');
+        return back()->with('success', "Room {$room->room_number} reactivated.");
     }
 }

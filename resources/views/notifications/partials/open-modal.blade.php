@@ -31,9 +31,10 @@
 @push('scripts')
 <script>
 document.addEventListener('DOMContentLoaded', function () {
-    const modalEl = document.getElementById('notificationOpenModal');
-    if (!modalEl) return;
-    const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+    // Looked up on every open, and clicks are delegated: the list and this modal live in <main>,
+    // which auto-refresh and live sections replace - handlers bound once at load would go dead.
+    if (!document.getElementById('notificationOpenModal')) return;
+    let modalEl = null;
     const field = (name) => modalEl.querySelector('[data-notif-field="' + name + '"]');
     const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
 
@@ -57,6 +58,9 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function open(item) {
+        modalEl = document.getElementById('notificationOpenModal');
+        if (!modalEl || !item) return;
+        const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
         field('time').textContent = item.dataset.time;
         field('category').textContent = item.dataset.category;
         field('message').textContent = item.dataset.message;
@@ -87,12 +91,13 @@ document.addEventListener('DOMContentLoaded', function () {
         markRead(item);
     }
 
-    document.querySelectorAll('[data-notif-open]').forEach(function (trigger) {
-        const item = trigger.closest('.notification-item');
-        trigger.addEventListener('click', () => open(item));
-        trigger.addEventListener('keydown', function (e) {
-            if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(item); }
-        });
+    document.addEventListener('click', function (e) {
+        const trigger = e.target.closest('[data-notif-open]');
+        if (trigger) open(trigger.closest('.notification-item'));
+    });
+    document.addEventListener('keydown', function (e) {
+        const trigger = e.target.closest && e.target.closest('[data-notif-open]');
+        if (trigger && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); open(trigger.closest('.notification-item')); }
     });
 });
 </script>
