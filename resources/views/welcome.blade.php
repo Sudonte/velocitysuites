@@ -9,11 +9,11 @@
 
 @push('styles')
 <style>
-    /* Hero: the Android app download, one full-bleed photo with a dark overlay (so the text is
-       light-on-dark in both site themes). One grid: content is at most 1200px wide and centred, with
+    /* Hero: "Welcome to Velocity Suites", the tagline, one short line, then the Android download; one full-bleed photo with a dark
+       overlay (so the text is light-on-dark in both site themes). One grid: content is at most 1200px wide and centred, with
        16px side padding on phones, 24px on tablets, 32px on desktop. Under 992px it is a single
-       column (brand, headline, description, download, features, phone); from 992px two columns, with
-       the features before the download block; the QR code from 1200px. Spacing uses an 8px scale. */
+       column (headline, tagline, line, download, phone); from 992px two columns; the QR code from 1200px.
+       Spacing uses an 8px scale. */
     .hero-section {
         position: relative;
         background-color: #0a0a0a;
@@ -85,30 +85,22 @@
     }
 
     /* Brand line: "Velocity Suites" in red (a lighter tint of the brand red so small text keeps 4.5:1 on the dark photo) over the tagline */
-    .hero-brand {
-        display: flex;
-        flex-direction: column;
-        gap: 2px;
-        margin: 0 0 16px;
-    }
 
-    .hero-brand-name {
-        font-size: 1rem;
-        font-weight: 700;
-        color: #f2767e;
-        letter-spacing: 0.02em;
-    }
 
-    .hero-brand-tagline {
-        font-size: 0.85rem;
-        color: rgba(255, 255, 255, 0.78);
-    }
 
     .hero-app-title {
         font-size: clamp(2rem, 1.35rem + 2.8vw, 3.5rem);
         font-weight: 800;
         line-height: 1.1;
         color: #fff;
+        margin: 0 0 16px;
+    }
+
+    /* "Your comfort is our service": the tagline, directly under the headline */
+    .hero-app-tagline {
+        font-size: clamp(1.05rem, 0.95rem + 0.5vw, 1.4rem);
+        font-weight: 600;
+        color: #f2767e; /* a lighter tint of the brand red, 4.5:1 or better on the dark photo */
         margin: 0 0 16px;
     }
 
@@ -121,59 +113,17 @@
     }
 
     /* Features: 6 items, 2 columns (1 under 400px) */
-    .hero-app-features {
-        list-style: none;
-        padding: 0;
-        margin: 0;
-        display: grid;
-        grid-template-columns: minmax(0, 1fr);
-        gap: 16px 24px;
-        width: 100%;
-    }
 
-    .hero-app-features li {
-        display: flex;
-        align-items: flex-start;
-        gap: 12px;
-        min-width: 0;
-    }
 
-    .hero-feature-icon {
-        flex: 0 0 auto;
-        width: 40px;
-        height: 40px;
-        border-radius: 50%;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 0.95rem;
-        background: rgba(214, 65, 75, 0.2);
-        border: 1px solid rgba(214, 65, 75, 0.5);
-        color: #ff9097;
-    }
 
-    .hero-feature-text {
-        display: flex;
-        flex-direction: column;
-        gap: 2px;
-        min-width: 0;
-        font-size: 0.875rem;
-        line-height: 1.4;
-        color: rgba(255, 255, 255, 0.8);
-    }
 
-    .hero-feature-text strong {
-        font-size: 0.975rem;
-        font-weight: 700;
-        color: #fff;
-    }
 
     /* Download block. Phone order: download, version line, install help, Explore rooms / Sign in, trust row.
        Desktop: the three buttons on one row, then the version line, install help and trust row. */
     .hero-app-cta {
         display: grid;
         grid-template-columns: minmax(0, 1fr);
-        grid-template-areas: "dl" "info" "install" "sec" "trust";
+        grid-template-areas: "dl" "info" "install" "sec";
         width: 100%;
         margin-top: 32px;
     }
@@ -183,7 +133,6 @@
     .hero-app-info { grid-area: info; }
     .hero-app-install { grid-area: install; }
     .hero-app-secondary { grid-area: sec; }
-    .hero-app-trust { grid-area: trust; }
 
     .hero-app-download,
     .hero-btn-outline {
@@ -293,21 +242,7 @@
         color: rgba(255, 255, 255, 0.78);
     }
 
-    .hero-app-trust {
-        list-style: none;
-        padding: 0;
-        margin: 16px 0 0;
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px 24px;
-        font-size: 0.85rem;
-        color: rgba(255, 255, 255, 0.85);
-    }
 
-    .hero-app-trust i {
-        color: #f2767e;
-        margin-right: 4px;
-    }
 
     /* Phone frame, CSS only: thin dark bezel, rounded corners, a punch-hole camera and a soft shadow. The screen is exactly
        the screenshot's own shape (1080 x 2172), so it fills the screen with no stretching and no gaps. */
@@ -365,11 +300,6 @@
         display: none;
     }
 
-    @media (min-width: 400px) {
-        .hero-app-features {
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-        }
-    }
 
     @media (min-width: 576px) {
         .hero-app {
@@ -407,7 +337,7 @@
 
         .hero-app-cta {
             grid-template-columns: auto minmax(0, 1fr);
-            grid-template-areas: "dl sec" "info info" "install install" "trust trust";
+            grid-template-areas: "dl sec" "info info" "install install";
             column-gap: 12px;
             align-items: center;
         }
@@ -442,12 +372,13 @@
             padding-bottom: 32px;
         }
 
-        .hero-brand {
-            margin-bottom: 8px;
-        }
 
         .hero-app-title {
             font-size: clamp(2rem, 1.1rem + 2.2vw, 2.75rem);
+            margin-bottom: 4px;
+        }
+
+        .hero-app-tagline {
             margin-bottom: 8px;
         }
 
@@ -456,9 +387,6 @@
             margin-bottom: 16px;
         }
 
-        .hero-app-features {
-            gap: 12px 24px;
-        }
 
         .hero-app-cta {
             margin-top: 24px;
@@ -515,20 +443,16 @@
             padding: clamp(24px, 3.5vh, 48px) clamp(32px, 4vw, 64px);
         }
 
-        .hero-brand {
-            margin-bottom: calc(var(--hero-gap) * 0.5);
-        }
 
-        .hero-brand-name {
-            font-size: clamp(1rem, 0.35vw + 0.75rem, 1.3rem);
-        }
 
-        .hero-brand-tagline {
-            font-size: clamp(0.85rem, 0.25vw + 0.7rem, 1.05rem);
-        }
 
         .hero-app-title {
             font-size: clamp(2.25rem, 3.75vw - 8px, 4rem);
+            margin-bottom: calc(var(--hero-gap) * 0.25);
+        }
+
+        .hero-app-tagline {
+            font-size: clamp(1.1rem, 0.9vw + 0.6rem, 1.6rem);
             margin-bottom: calc(var(--hero-gap) * 0.5);
         }
 
@@ -538,24 +462,9 @@
             margin-bottom: var(--hero-gap);
         }
 
-        .hero-app-features {
-            gap: var(--hero-gap) clamp(24px, 2vw, 32px);
-            grid-auto-rows: 1fr; /* equal-size items */
-        }
 
-        .hero-feature-icon {
-            width: clamp(40px, 1vw + 28px, 52px);
-            height: clamp(40px, 1vw + 28px, 52px);
-            font-size: clamp(0.95rem, 0.3vw + 0.75rem, 1.2rem);
-        }
 
-        .hero-feature-text {
-            font-size: clamp(0.85rem, 0.64vw + 4.7px, 1.0625rem);
-        }
 
-        .hero-feature-text strong {
-            font-size: clamp(0.95rem, 0.78vw + 5px, 1.25rem);
-        }
 
         .hero-app-cta {
             margin-top: calc(var(--hero-gap) * 1.25);
@@ -567,14 +476,10 @@
             font-size: clamp(1rem, 0.3vw + 0.85rem, 1.125rem);
         }
 
-        .hero-app-info,
-        .hero-app-trust {
+        .hero-app-info {
             font-size: clamp(0.85rem, 0.2vw + 0.7rem, 1rem);
         }
 
-        .hero-app-trust {
-            margin-top: calc(var(--hero-gap) * 0.5);
-        }
 
         .hero-app-visual {
             gap: clamp(16px, 1.5vw, 24px);
@@ -624,12 +529,7 @@
 
     /* Below desktop the download comes before the features (desktop is the other way round) */
     @media (max-width: 991.98px) {
-        .hero-app-label,
-        .hero-brand { order: 1; }
-        .hero-app-title { order: 2; }
-        .hero-app-desc { order: 3; }
-        .hero-app-cta { order: 4; margin-top: 0; }
-        .hero-app-features { order: 5; margin-top: 32px; }
+        .hero-app-cta { margin-top: 0; }
     }
 
     @media (max-width: 359.98px) {
@@ -843,39 +743,9 @@
         </div>
         <div class="hero-app">
             <div class="hero-app-copy">
-                <p class="hero-brand">
-                    <span class="hero-brand-name">Velocity Suites</span>
-                    <span class="hero-brand-tagline">Your comfort is our service</span>
-                </p>
-                <h1 class="hero-app-title">Your stay, in your pocket</h1>
-                <p class="hero-app-desc">Book or reserve rooms, pay with GCash, and follow every step of your stay &mdash; from booking to check-out &mdash; in the Velocity Suites app for Android.</p>
-
-                <ul class="hero-app-features">
-                    <li>
-                        <span class="hero-feature-icon"><i class="fas fa-calendar-check" aria-hidden="true"></i></span>
-                        <span class="hero-feature-text"><strong>Book or reserve</strong><span>Pick your dates and rooms, then book now or reserve and pay later.</span></span>
-                    </li>
-                    <li>
-                        <span class="hero-feature-icon"><i class="fas fa-wallet" aria-hidden="true"></i></span>
-                        <span class="hero-feature-text"><strong>Pay with GCash</strong><span>Pay in the app and upload your receipt for quick verification.</span></span>
-                    </li>
-                    <li>
-                        <span class="hero-feature-icon"><i class="fas fa-route" aria-hidden="true"></i></span>
-                        <span class="hero-feature-text"><strong>Track every step</strong><span>See your booking timeline from payment to check-out, updated live.</span></span>
-                    </li>
-                    <li>
-                        <span class="hero-feature-icon"><i class="fas fa-concierge-bell" aria-hidden="true"></i></span>
-                        <span class="hero-feature-text"><strong>Request amenities</strong><span>Ask for extra pillows, towels and more for each of your rooms.</span></span>
-                    </li>
-                    <li>
-                        <span class="hero-feature-icon"><i class="fas fa-calendar-days" aria-hidden="true"></i></span>
-                        <span class="hero-feature-text"><strong>Stay calendar</strong><span>View your stays by day, week or month at a glance.</span></span>
-                    </li>
-                    <li>
-                        <span class="hero-feature-icon"><i class="fas fa-bell" aria-hidden="true"></i></span>
-                        <span class="hero-feature-text"><strong>Instant updates</strong><span>Get notified about payments, approvals, promotions and announcements.</span></span>
-                    </li>
-                </ul>
+                <h1 class="hero-app-title">Welcome to Velocity Suites</h1>
+                <p class="hero-app-tagline">Your comfort is our service</p>
+                <p class="hero-app-desc">Book a room in minutes and manage your stay from our Android app.</p>
 
                 <div class="hero-app-cta">
                     @if($appAvailable)
@@ -905,14 +775,6 @@
                             Sign in <i class="fas fa-arrow-right" aria-hidden="true"></i>
                         </a>
                     </div>
-
-                    @if($appAvailable)
-                        <ul class="hero-app-trust">
-                            <li><i class="fas fa-check" aria-hidden="true"></i> Free to download</li>
-                            <li><i class="fas fa-check" aria-hidden="true"></i> Secure GCash payments</li>
-                            <li><i class="fas fa-check" aria-hidden="true"></i> Android {{ $appMinAndroid }} or newer</li>
-                        </ul>
-                    @endif
                 </div>
             </div>
 

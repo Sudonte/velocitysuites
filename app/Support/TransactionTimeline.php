@@ -107,10 +107,10 @@ class TransactionTimeline
                 $moments = [];
                 foreach ($booking->stayList() as $stay) {
                     if ($stay->checked_in_at) {
-                        $moments[] = [$stay->checked_in_at, self::step('stay_'.$stay->id.'_checked_in', "Stay {$stay->position} checked in", self::VERIFIED, $stay->checked_in_at)];
+                        $moments[] = [$stay->checked_in_at, self::step('stay_'.$stay->id.'_checked_in', 'Checked in (' . $stay->check_in->format('M j') . ' → ' . $stay->check_out->format('M j') . ')', self::VERIFIED, $stay->checked_in_at)];
                     }
                     if ($stay->checked_out_at) {
-                        $moments[] = [$stay->checked_out_at, self::step('stay_'.$stay->id.'_checked_out', "Stay {$stay->position} checked out", self::VERIFIED, $stay->checked_out_at)];
+                        $moments[] = [$stay->checked_out_at, self::step('stay_'.$stay->id.'_checked_out', 'Checked out (' . $stay->check_in->format('M j') . ' → ' . $stay->check_out->format('M j') . ')', self::VERIFIED, $stay->checked_out_at)];
                     }
                 }
                 usort($moments, fn ($a, $b) => $a[0] <=> $b[0]);

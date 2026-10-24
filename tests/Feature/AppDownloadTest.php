@@ -34,11 +34,13 @@ class AppDownloadTest extends ApiFlowTestCase
 
         $this->get(route('home'))->assertOk()
             ->assertSee('Your comfort is our service')
-            ->assertSee('Your stay, in your pocket')
+            ->assertSee('Welcome to Velocity Suites')
+            ->assertSee('Book a room in minutes and manage your stay from our Android app.')
+            ->assertDontSee('Your stay, in your pocket')
             ->assertSee('Download for Android')
             ->assertSee('href="' . route('app.download') . '"', false)
-            ->assertSee('download="velocity-suites-v1.57.0.apk"', false)
-            ->assertSee('Version 1.57.0 · 18.3 MB · Android 10 or newer')
+            ->assertSee('download="velocity-suites-v1.58.0.apk"', false)
+            ->assertSee('Version 1.58.0 · 18.2 MB · Android 10 or newer')
             ->assertSee('How to install')
             ->assertSee('Scan to download on your phone')
             ->assertSee('data-app-qr="' . route('app.download') . '"', false)
@@ -61,7 +63,7 @@ class AppDownloadTest extends ApiFlowTestCase
         $response->assertOk();
         $response->assertHeader('Content-Type', 'application/vnd.android.package-archive');
         $this->assertStringContainsString('attachment', $response->headers->get('Content-Disposition'));
-        $this->assertStringContainsString('velocity-suites-v1.57.0.apk', $response->headers->get('Content-Disposition'));
+        $this->assertStringContainsString('velocity-suites-v1.58.0.apk', $response->headers->get('Content-Disposition'));
         $this->assertSame(filesize(MobileApp::path()), (int) $response->baseResponse->getFile()->getSize());
     }
 
@@ -82,21 +84,15 @@ class AppDownloadTest extends ApiFlowTestCase
     {
         $html = $this->get(route('home'))->assertOk()->getContent();
 
-        foreach ([
-            'Book or reserve' => 'Pick your dates and rooms, then book now or reserve and pay later.',
-            'Pay with GCash' => 'Pay in the app and upload your receipt for quick verification.',
-            'Track every step' => 'See your booking timeline from payment to check-out, updated live.',
-            'Request amenities' => 'Ask for extra pillows, towels and more for each of your rooms.',
-            'Stay calendar' => 'View your stays by day, week or month at a glance.',
-            'Instant updates' => 'Get notified about payments, approvals, promotions and announcements.',
-        ] as $title => $line) {
-            $this->assertStringContainsString('<strong>' . $title . '</strong><span>' . $line . '</span>', $html);
+        // the six feature items, their description and the trust row are gone: the first section is the heading, the tagline, one line and the buttons
+        foreach (['Your stay, in your pocket', 'Book or reserve', 'Pay with GCash', 'Track every step', 'Request amenities', 'Stay calendar', 'Instant updates',
+            'Free to download', 'Secure GCash payments', 'hero-feature-icon'] as $removed) {
+            $this->assertStringNotContainsString($removed, $html, $removed . ' was removed from the first section');
         }
-        $this->assertSame(6, substr_count($html, 'class="hero-feature-icon"'));
-        $this->assertStringContainsString('Version 1.57.0 · 18.3 MB · Android 10 or newer', $html);
-        foreach (['Free to download', 'Secure GCash payments', 'Android 10 or newer'] as $fact) {
-            $this->assertStringContainsString($fact, $html);
-        }
+        $this->assertStringContainsString('<h1 class="hero-app-title">Welcome to Velocity Suites</h1>', $html);
+        $this->assertStringContainsString('<p class="hero-app-tagline">Your comfort is our service</p>', $html);
+        $this->assertLessThan(strpos($html, 'Your comfort is our service'), strpos($html, 'Welcome to Velocity Suites'), 'the heading comes first, the tagline under it');
+        $this->assertStringContainsString('Version 1.58.0 · 18.2 MB · Android 10 or newer', $html);
         $this->assertSame(1, substr_count($html, '<h1'));
         $this->assertStringContainsString('Explore rooms', $html);
         $this->assertStringContainsString('Sign in', $html);

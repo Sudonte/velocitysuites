@@ -591,7 +591,7 @@ class ReservationController extends Controller
                 foreach ($staysInput as $i => $st) {
                     if (! in_array($st['check_in']->format('Y-m-d'), $keptDates, true) && $st['check_in']->format('Y-m-d') < \App\Support\CheckInWindow::earliest()) {
                         $message = \App\Support\CheckInWindow::messages()['check_in.after_or_equal'];
-                        throw \Illuminate\Validation\ValidationException::withMessages(['stays' => 'Stay ' . ($i + 1) . ': ' . $message]);
+                        throw \Illuminate\Validation\ValidationException::withMessages(['stays' => \App\Support\StaysInput::rangeLabel($st) . ': ' . $message]);
                     }
                 }
             }

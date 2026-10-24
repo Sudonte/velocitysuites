@@ -257,7 +257,9 @@ class StaysTest extends ApiFlowTestCase
         ], 1000, ['adults' => 3]);
 
         $this->assertSame(422, $response->getStatusCode(), $response->getContent());
-        $this->assertStringContainsString('Stay 2', $response->getContent());
+        $message = $response->getData(true)['message'];
+        $this->assertStringContainsString(now('Asia/Manila')->addDays(8)->format('M j') . ' → ', $message, 'names the dates of the range that does not fit');
+        $this->assertStringNotContainsString('Stay 2', $message);
         $this->assertSame(0, Booking::count());
     }
 

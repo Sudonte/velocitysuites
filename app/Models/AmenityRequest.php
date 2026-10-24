@@ -72,7 +72,7 @@ class AmenityRequest extends Model
         return \App\Support\RoomLineRef::label($this);
     }
 
-    /** "Stay 2 of 3" for a request that belongs to one stay of a multi-stay booking; null for a one-stay transaction. */
+    /** "Oct 26 → Oct 27" (the date range) for a request that belongs to one stay of a multi-stay booking; null for a one-stay transaction. */
     public function getStayLabelAttribute(): ?string
     {
         if (! $this->stay_id) {
@@ -84,7 +84,7 @@ class AmenityRequest extends Model
         }
         $total = Stay::where($stay->booking_id ? 'booking_id' : 'reservation_id', $stay->booking_id ?? $stay->reservation_id)->count();
 
-        return $total > 1 ? "Stay {$stay->position} of {$total}" : null;
+        return $total > 1 ? $stay->check_in->format('M j') . ' → ' . $stay->check_out->format('M j') : null;
     }
 
     public function guest()

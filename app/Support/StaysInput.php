@@ -98,7 +98,7 @@ final class StaysInput
                     $line = collect($stay['lines'])->first(fn ($l) => $l['room_type']->id === $typeId);
                     if (! $line || ($slot && $slot > $line['quantity'])) {
                         throw \Illuminate\Validation\ValidationException::withMessages([
-                            'amenities' => 'Stay ' . ($i + 1) . ': an amenity was chosen for a room that is not part of that stay.',
+                            'amenities' => self::rangeLabel($stay) . ': an amenity was chosen for a room that is not part of those dates.',
                         ]);
                     }
                 }
@@ -116,7 +116,7 @@ final class StaysInput
         foreach ($stays as $i => $stay) {
             $error = GuestCapacity::error($stay['lines'], $guests);
             if ($error !== null) {
-                return count($stays) > 1 ? 'Stay ' . ($i + 1) . ': ' . $error : $error;
+                return count($stays) > 1 ? self::rangeLabel($stay) . ': ' . $error : $error;
             }
         }
 
@@ -131,6 +131,12 @@ final class StaysInput
         $amenities = collect($stay['amenities'])->sum(fn (array $e) => (float) $e['amenity']->charge * $e['quantity']);
 
         return round($rooms + $amenities, 2);
+    }
+
+    /** "Oct 26 → Oct 27": how a date range is named in a message (never "Stay 2"). */
+    public static function rangeLabel(array $stay): string
+    {
+        return $stay['check_in']->format('M j') . ' → ' . $stay['check_out']->format('M j');
     }
 
     /** What the whole transaction costs: the sum of its stays (before any discount). */
