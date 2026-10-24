@@ -113,6 +113,9 @@ class TransactionTimeline
                     if ($stay->checked_in_at) {
                         $moments[] = [$stay->checked_in_at, self::step('stay_'.$stay->id.'_checked_in', 'Checked in (' . $stay->check_in->format('M j') . ' → ' . $stay->check_out->format('M j') . ')', self::VERIFIED, $stay->checked_in_at)];
                     }
+                    if ($stay->no_show_at) {
+                        $moments[] = [$stay->no_show_at, self::step('stay_'.$stay->id.'_no_show', 'No-show (' . $stay->check_in->format('M j') . ' → ' . $stay->check_out->format('M j') . ')', self::VERIFIED, $stay->no_show_at)];
+                    }
                     if ($stay->checked_out_at) {
                         $moments[] = [$stay->checked_out_at, self::step('stay_'.$stay->id.'_checked_out', 'Checked out (' . $stay->check_in->format('M j') . ' → ' . $stay->check_out->format('M j') . ')', self::VERIFIED, $stay->checked_out_at)];
                     }

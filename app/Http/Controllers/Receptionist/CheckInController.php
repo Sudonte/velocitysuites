@@ -111,7 +111,7 @@ class CheckInController extends Controller
             // the range is about the NEXT stay still to arrive (a booking with no stay rows yet falls back to its own dates)
             ->when($rangeEnd, fn ($q) => $q->where(function ($q) use ($rangeEnd) {
                 $q->whereExists(fn ($s) => $s->select(\DB::raw(1))->from('stays')->whereColumn('stays.booking_id', 'bookings.id')
-                        ->whereNull('stays.checked_in_at')->where('stays.check_in', '<=', $rangeEnd))
+                        ->whereNull('stays.checked_in_at')->whereNull('stays.no_show_at')->where('stays.check_in', '<=', $rangeEnd))
                     ->orWhere(fn ($q) => $q->whereNotExists(fn ($s) => $s->select(\DB::raw(1))->from('stays')->whereColumn('stays.booking_id', 'bookings.id'))
                         ->where('check_in', '<=', $rangeEnd));
             }))

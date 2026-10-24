@@ -299,4 +299,50 @@ class StaysLifecycleTest extends ApiFlowTestCase
         $this->assertCount(2, array_filter($labels, fn ($l) => str_starts_with($l, 'Checked out (')));
         $this->assertSame([2, 3], array_column($payload['receipt_numbers'], 'stage'), 'a cash-only booking has no Receipt 1');
     }
+
+    public function test_a_range_the_guest_never_arrived_for_can_be_marked_no_show_and_then_the_transaction_completes(): void
+    {
+        [$user, $desk, $booking, $deluxeRoom, $suiteRoom] = $this->twoStayBooking();
+        [$stay1, $stay2] = $booking->stayList()->all();
+        $this->checkIn($desk, $booking, $stay1, [(string) $deluxeRoom->room_type_id => [$deluxeRoom->id]], ['payment_method' => 'cash', 'amount_received' => 2000])->assertOk();
+        $suiteTypeId = $suiteRoom->room_type_id;
+        $nights = [\Carbon\Carbon::parse($stay2->check_in->format('Y-m-d')), \Carbon\Carbon::parse($stay2->check_out->format('Y-m-d'))];
+        $availability = app(\App\Services\RoomAvailabilityService::class);
+        $this->assertSame(1, $availability->occupancyByNight([$suiteTypeId], $nights[0], $nights[1])[$suiteTypeId][$nights[0]->toDateString()] ?? 0, 'the second range holds a suite');
+
+        // while the first range is still in house and the second has not started, it cannot be marked
+        $this->actingAs($desk)->postJson(route('receptionist.check-out.stays.no-show', [$booking, $stay2]), ['reason' => 'too early'])->assertStatus(422);
+        $this->actingAs($desk)->putJson(route('receptionist.check-out.rooms.checkout-many', $booking), ['all' => 1])->assertOk();
+
+        // completing is refused, and says what to do
+        $billing = $booking->fresh()->billing()->first();
+        $this->actingAs($desk)->postJson(route('receptionist.billing.payment.store', $billing), ['payment_method' => 'cash', 'amount_paid' => 0])
+            ->assertStatus(422)->assertJsonPath('message', fn ($m) => str_contains($m, 'no-show'));
+
+        // the rest of the transaction is checked out: now the second range can be marked, with a reason
+        $this->actingAs($desk)->postJson(route('receptionist.check-out.stays.no-show', [$booking, $stay2]), ['reason' => 'Guest called: not coming'])->assertOk()->assertJsonPath('final', true);
+        $stay2 = $stay2->fresh();
+        $this->assertNotNull($stay2->no_show_at);
+        $this->assertSame('Guest called: not coming', $stay2->no_show_reason);
+        $this->assertNull($stay2->checked_in_at, 'it is a no-show, never a stay');
+        $this->assertSame('no_show', $booking->fresh()->stateOf($stay2));
+        $this->assertSame(0, $availability->occupancyByNight([$suiteTypeId], $nights[0], $nights[1])[$suiteTypeId][$nights[0]->toDateString()] ?? 0, 'its rooms are free for others again');
+
+        // now the transaction completes - and is still charged in full
+        $this->actingAs($desk)->postJson(route('receptionist.billing.payment.store', $billing->fresh()), ['payment_method' => 'cash', 'amount_paid' => 0])->assertSuccessful();
+        $booking = $booking->fresh();
+        $this->assertSame(Booking::STATUS_COMPLETED, $booking->booking_status);
+        $this->assertNull($stay2->fresh()->checked_in_at, 'completing did not pretend the guest stayed');
+        $this->assertEquals(3000.0, (float) $booking->billing->total_amount, 'both ranges are charged: no refund for a no-show');
+        $this->assertEquals(3000.0, $booking->paidTotal());
+
+        // the final receipt and the timeline say so
+        $receipt3 = Receipt::where('booking_id', $booking->id)->where('receipt_type', Receipt::CHECKOUT_FINAL)->firstOrFail();
+        $this->assertEquals(3000.0, $receipt3->snapshot['highlight']['grand_total']);
+        $this->assertEquals(2000.0, $receipt3->snapshot['highlight']['stays'][1]['subtotal'], 'the no-show range is still on the bill');
+        $this->assertSame('no_show', collect($receipt3->snapshot['stays'])->firstWhere('id', $stay2->id)['state']);
+        $payload = app(\App\Services\ReceiptService::class)->findReceiptPayload($receipt3->receipt_no, $user->guest);
+        $labels = array_column($payload['transaction_history'], 'label');
+        $this->assertCount(1, array_filter($labels, fn ($l) => str_starts_with($l, 'No-show (')));
+    }
 }

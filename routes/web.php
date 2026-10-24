@@ -369,6 +369,7 @@ Route::middleware(['auth', 'account.status', 'log.activity', 'no.cache'])->group
         Route::get('/check-out/{booking}/rooms', [ReceptionistCheckOutController::class, 'roomsPanel'])->name('check-out.rooms');
         Route::put('/check-out/{booking}/rooms/{room}', [ReceptionistCheckOutController::class, 'checkOutRoom'])->name('check-out.rooms.checkout');
         Route::put('/check-out/{booking}/rooms', [ReceptionistCheckOutController::class, 'checkOutRooms'])->name('check-out.rooms.checkout-many');
+        Route::post('/check-out/{booking}/stays/{stay}/no-show', [ReceptionistCheckOutController::class, 'markStayNoShow'])->name('check-out.stays.no-show');
         Route::delete('/check-out/billing/{billing}', [ReceptionistCheckOutController::class, 'checkOutCancelBilling'])->name('check-out.billing.cancel');
         Route::get('/check-out/billing/{billing}/payment', [ReceptionistCheckOutController::class, 'checkOutPaymentPanel'])->name('check-out.payment');
 

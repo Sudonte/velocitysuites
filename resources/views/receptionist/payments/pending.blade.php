@@ -41,7 +41,10 @@
                         <td>{{ $reservation->roomType->name ?? 'N/A' }}</td>
                         <td>{{ ucfirst($payment->payment_method) }}</td>
                         <td>{{ $payment->reference_number ?? '—' }}</td>
-                        <td>₱{{ number_format($payment->amount_paid, 2) }}</td>
+                        <td>₱{{ number_format($payment->amount_paid, 2) }}
+                            <br><span class="badge bg-warning text-dark">Waiting for verification: ₱{{ number_format($payment->amount_paid, 2) }}</span>
+                            @if($payment->receipt_url)<br><a href="{{ $payment->receipt_url }}" target="_blank" rel="noopener"><i class="fas fa-image"></i> Proof</a>@endif
+                        </td>
                         <td>{{ $payment->created_at->copy()->timezone('Asia/Manila')->format('M d, Y h:i A') }}</td>
                         <td>
                             <div class="d-flex gap-1">

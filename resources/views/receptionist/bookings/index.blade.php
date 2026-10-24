@@ -158,6 +158,7 @@
                         </div>
                     @endif
                     @include('receptionist.bookings.partials.group-badge')
+                    @include('receptionist.partials.waiting-payment', ['booking' => $booking])
                     <div class="d-flex flex-wrap gap-2 mt-2">
                         <a href="{{ route('receptionist.bookings.show', $booking) }}" class="btn btn-outline-primary btn-sm flex-fill btn-icon" title="View" aria-label="View">
                             <i class="fas fa-eye"></i></a>
@@ -297,6 +298,7 @@
                         @endif
                         <td class="text-nowrap">
                             @include('receptionist.bookings.partials.group-badge')
+                            @include('receptionist.partials.waiting-payment', ['booking' => $booking])
                             <a href="{{ route('receptionist.bookings.show', $booking) }}" class="btn btn-outline-primary btn-sm btn-icon" title="View" aria-label="View">
                                 <i class="fas fa-eye"></i></a>
                             @if($tab === 'pending')

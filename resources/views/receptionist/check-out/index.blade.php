@@ -331,6 +331,30 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
+    // A date range the guest never arrived for: still charged in full, finished for completion, its rooms free again.
+    roomsPanelContent.addEventListener('click', async function (e) {
+        const noShowBtn = e.target.closest('.btn-stay-no-show');
+        if (!noShowBtn) return;
+        const reasonInput = noShowBtn.parentElement.querySelector('.no-show-reason');
+        const proceed = await window.confirmAction({ title: 'Mark ' + noShowBtn.dataset.range + ' as a no-show?', message: 'The guest never arrived for these dates. They are still charged in full (no refunds), and the rooms become free for other guests.', button: 'Mark as no-show', variant: 'danger' }, noShowBtn);
+        if (!proceed) return;
+        noShowBtn.disabled = true;
+        try {
+            const url = @json(route('receptionist.check-out.stays.no-show', ['booking' => '__B__', 'stay' => '__S__'])).replace('__B__', activeBookingId).replace('__S__', noShowBtn.dataset.stayId);
+            const data = await fetchJson(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reason: reasonInput ? reasonInput.value : '' }) });
+            if (data.final) {
+                roomsModal.hide();
+                billingPanelContent.innerHTML = await fetchHtml(buildUrl(urls.billing, activeBookingId));
+                billingModal.show();
+            } else {
+                roomsPanelContent.innerHTML = data.html;
+            }
+        } catch (err) {
+            window.showNotice({ variant: 'danger', message: err.message });
+            noShowBtn.disabled = false;
+        }
+    });
+
     roomsPanelContent.addEventListener('click', function (e) {
         const selectedBtn = e.target.closest('#btnCheckoutSelected');
         if (selectedBtn) {

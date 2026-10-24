@@ -125,4 +125,23 @@ class PendingPaymentsNotPaidTest extends ApiFlowTestCase
         $p->update(['verified_at' => now()]);
         $this->assertTrue($p->fresh()->countsAsPaid());
     }
+
+    public function test_the_receptionist_pages_show_waiting_next_to_paid_with_a_link_to_the_proof(): void
+    {
+        $desk = \App\Models\User::create(['first_name' => 'Rita', 'last_name' => 'Desk', 'email' => 'pp-desk' . uniqid() . '@example.test', 'password' => bcrypt('x'),
+            'role' => 'receptionist', 'status' => 'active', 'email_verified_at' => now()]);
+        $b = $this->booking();
+        $this->gcash($b, ['receipt_path' => 'payment-receipts/proof-123.png']);
+
+        $show = $this->actingAs($desk)->get(route('receptionist.bookings.show', $b))->assertOk();
+        $show->assertSee('Waiting for verification', false)->assertSee('proof-123.png', false);
+        $this->assertStringContainsString('₱0.00', $show->getContent(), 'nothing is paid yet');
+
+        $index = $this->actingAs($desk)->get(route('receptionist.bookings.index'))->assertOk();
+        $index->assertSee('Waiting for verification: ₱3,500.00', false)->assertSee('proof-123.png', false);
+
+        // once verified it is paid, and the waiting line is gone
+        Payment::where('booking_id', $b->id)->update(['verified_at' => now(), 'verified_by' => $desk->id]);
+        $this->actingAs($desk)->get(route('receptionist.bookings.show', $b->fresh()))->assertOk()->assertDontSee('Waiting for verification', false);
+    }
 }

@@ -292,6 +292,16 @@
                         <dd>{{ $booking->selected_payment_percentage ? (int) $booking->selected_payment_percentage . '%' : 'N/A' }}</dd>
                     </div>
                     <div><dt>Amount Paid</dt><dd class="text-success">₱{{ number_format($amountPaid, 2) }}</dd></div>
+                    @php $waitingPayments = $booking->allPayments()->filter(fn ($p) => $p->isWaitingForVerification()); @endphp
+                    @if($waitingPayments->isNotEmpty())
+                        <div><dt>Waiting for verification</dt>
+                            <dd class="text-warning">₱{{ number_format((float) $waitingPayments->sum('amount_paid'), 2) }}
+                                @foreach($waitingPayments as $waitingPayment)
+                                    @if($waitingPayment->receipt_url)<a href="{{ $waitingPayment->receipt_url }}" target="_blank" rel="noopener" class="ms-1"><i class="fas fa-image"></i> Proof</a>@endif
+                                @endforeach
+                            </dd>
+                        </div>
+                    @endif
                     <div><dt>Remaining Balance</dt>
                         <dd class="{{ $remainingBalance > 0.009 ? 'text-danger' : 'text-success' }}">₱{{ number_format($remainingBalance, 2) }}</dd>
                     </div>

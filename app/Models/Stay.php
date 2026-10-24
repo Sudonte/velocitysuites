@@ -17,14 +17,16 @@ class Stay extends Model
     public const UPCOMING = 'upcoming';
     public const IN_HOUSE = 'in_house';
     public const CHECKED_OUT = 'checked_out';
+    public const NO_SHOW = 'no_show';
 
-    protected $fillable = ['booking_id', 'reservation_id', 'position', 'check_in', 'check_out', 'checked_in_at', 'checked_out_at'];
+    protected $fillable = ['booking_id', 'reservation_id', 'position', 'check_in', 'check_out', 'checked_in_at', 'checked_out_at', 'no_show_at', 'no_show_reason'];
 
     protected $casts = [
         'check_in' => 'datetime',
         'check_out' => 'datetime',
         'checked_in_at' => 'datetime',
         'checked_out_at' => 'datetime',
+        'no_show_at' => 'datetime',
     ];
 
     public function booking()
@@ -62,6 +64,9 @@ class Stay extends Model
     /** upcoming (no room yet) | in_house | checked_out - read from the two moments the front desk records. */
     public function state(): string
     {
+        if ($this->no_show_at !== null && $this->checked_in_at === null) {
+            return self::NO_SHOW;
+        }
         if ($this->checked_out_at !== null) {
             return self::CHECKED_OUT;
         }

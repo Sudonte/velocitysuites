@@ -65,7 +65,15 @@
         @foreach($stayGroups as $group)
         @if($stayGroups->count() > 1)
             <div class="col-12"><h6 class="mb-0 mt-2"><i class="fas fa-layer-group"></i> Stay {{ $group['stay']->position }} &middot; {{ $group['stay']->check_in->format('M d') }} &rarr; {{ $group['stay']->check_out->format('M d, Y') }}
-                @if($group['rooms']->isEmpty()) <span class="badge bg-light text-dark border">Not arrived yet</span> @endif</h6></div>
+                @if($group['stay']->no_show_at) <span class="badge bg-dark">No-show</span> <span class="small text-muted">still charged in full</span>
+                @elseif($group['rooms']->isEmpty()) <span class="badge bg-light text-dark border">Not arrived yet</span> @endif</h6>
+                @if(! $group['stay']->no_show_at && $group['rooms']->isEmpty() && ! $booking->noShowBlockedReason($group['stay']))
+                    <div class="d-flex flex-wrap gap-2 align-items-center mt-1">
+                        <input type="text" class="form-control form-control-sm w-auto no-show-reason" maxlength="255" placeholder="Reason (optional)" aria-label="Reason for the no-show" style="min-width:220px">
+                        <button type="button" class="btn btn-sm btn-outline-danger btn-stay-no-show" data-stay-id="{{ $group['stay']->id }}" data-range="{{ $group['stay']->check_in->format('M j') }} &rarr; {{ $group['stay']->check_out->format('M j') }}"><i class="fas fa-user-slash"></i> Mark as no-show</button>
+                    </div>
+                @endif
+            </div>
         @endif
         @foreach($group['rooms'] as $room)
             @php $isCheckedOut = (bool) $room->pivot->checked_out_at; @endphp

@@ -135,7 +135,7 @@ class RoomAvailabilityService
             ->when($excludingBookingId, fn ($q) => $q->where('b.id', '!=', $excludingBookingId))
             ->when($excludeTestAccounts, fn ($q) => $q->whereNotIn('b.id', TestAccountScope::testBookingIdsQuery()))
             ->selectRaw('l.room_type_id AS type_id, l.quantity AS qty, b.booking_status AS status, '
-                . 's.id AS stay_id, s.checked_in_at AS stay_in_at, s.checked_out_at AS stay_out_at, '
+                . 's.id AS stay_id, s.checked_in_at AS stay_in_at, s.checked_out_at AS stay_out_at, s.no_show_at AS stay_no_show_at, '
                 . 'COALESCE(s.check_in, b.check_in) AS s_in, COALESCE(s.check_out, b.check_out) AS s_out')
             ->get()
             ->map(fn ($r) => (array) $r);
@@ -149,12 +149,15 @@ class RoomAvailabilityService
             ->when($excludingBookingId, fn ($q) => $q->where('b.id', '!=', $excludingBookingId))
             ->when($excludeTestAccounts, fn ($q) => $q->whereNotIn('b.id', TestAccountScope::testBookingIdsQuery()))
             ->selectRaw('b.room_type_id AS type_id, b.rooms_requested AS qty, b.booking_status AS status, '
-                . 'NULL AS stay_id, NULL AS stay_in_at, NULL AS stay_out_at, b.check_in AS s_in, b.check_out AS s_out')
+                . 'NULL AS stay_id, NULL AS stay_in_at, NULL AS stay_out_at, NULL AS stay_no_show_at, b.check_in AS s_in, b.check_out AS s_out')
             ->get()
             ->map(fn ($r) => (array) $r);
 
         $out = [];
         foreach ($lines->concat($legacy) as $r) {
+            if (($r['stay_no_show_at'] ?? null) !== null && ! $keepCheckedOutStays) {
+                continue; // a date range marked as a no-show no longer holds its rooms
+            }
             if ($r['stay_out_at'] !== null && ! $keepCheckedOutStays) {
                 continue; // that stay's guests have left: the nights they did not use are free again
             }

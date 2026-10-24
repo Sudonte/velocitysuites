@@ -139,6 +139,9 @@ trait HasStays
         if (! $this instanceof \App\Models\Booking) {
             return Stay::UPCOMING;
         }
+        if ($stay->no_show_at !== null && $stay->checked_in_at === null) {
+            return Stay::NO_SHOW;
+        }
         if ($this->booking_status === \App\Models\Booking::STATUS_COMPLETED) {
             return Stay::CHECKED_OUT;
         }
@@ -223,6 +226,8 @@ trait HasStays
                 'state' => $this->stateOf($stay),
                 'checked_in_at' => $stay->checked_in_at?->toIso8601String(),
                 'checked_out_at' => $stay->checked_out_at?->toIso8601String(),
+                'no_show_at' => $stay->no_show_at?->toIso8601String(),
+                'no_show_reason' => $stay->no_show_reason,
                 'rooms' => $rooms,
                 'assigned_rooms' => $stayRooms->map(fn ($room) => [
                     'room_id' => $room->id,

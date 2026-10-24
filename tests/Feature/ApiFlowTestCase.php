@@ -170,6 +170,8 @@ abstract class ApiFlowTestCase extends TestCase
             $table->dateTime('check_out');
             $table->timestamp('checked_in_at')->nullable();
             $table->timestamp('checked_out_at')->nullable();
+            $table->timestamp('no_show_at')->nullable();
+            $table->string('no_show_reason')->nullable();
             $table->timestamps();
         });
 

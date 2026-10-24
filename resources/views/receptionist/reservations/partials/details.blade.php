@@ -9,10 +9,12 @@
     // 'completed') deposit-stage payments count as paid, summed (not just
     // the latest), matching the same authoritative rule
     // Receptionist\BookingController::show() already applies.
+    // (a GCash deposit counts once the front desk verified it; until then it is "waiting")
     $verifiedDepositAmountPaid = (float) $reservation->payments
         ->where('payment_stage', 'deposit')
-        ->where('payment_status', 'completed')
+        ->filter(fn ($p) => $p->countsAsPaid())
         ->sum('amount_paid');
+    $waitingDeposits = $reservation->payments->where('payment_stage', 'deposit')->filter(fn ($p) => $p->isWaitingForVerification());
     $nights = $reservation->number_of_nights;
     // roomCharge kept as the single legacy fallback ONLY for the pre-filled
     // "Amount Paid" input default below - $roomTotal (from the controller,
@@ -168,6 +170,15 @@
                 </div>
                 @if($depositPayment)
                     <div><dt>Amount Paid</dt><dd class="text-success">₱{{ number_format($verifiedDepositAmountPaid, 2) }}</dd></div>
+                    @if($waitingDeposits->isNotEmpty())
+                        <div><dt>Waiting for verification</dt>
+                            <dd class="text-warning">₱{{ number_format((float) $waitingDeposits->sum('amount_paid'), 2) }}
+                                @foreach($waitingDeposits as $waitingDeposit)
+                                    @if($waitingDeposit->receipt_url)<a href="{{ $waitingDeposit->receipt_url }}" target="_blank" rel="noopener" class="ms-1"><i class="fas fa-image"></i> Proof</a>@endif
+                                @endforeach
+                            </dd>
+                        </div>
+                    @endif
                     @php $depositRemaining = max(0, $grandTotal - $verifiedDepositAmountPaid); @endphp
                     <div><dt>Remaining Balance</dt><dd>₱{{ number_format($depositRemaining, 2) }}</dd></div>
                     <div><dt>Payment Status</dt><dd><x-status-badge :status="$depositPayment->payment_status" domain="payment" /></dd></div>

@@ -49,7 +49,7 @@ class CheckOutController extends Controller
         $bookings = Booking::with(['reservation.guest.user', 'guest.user', 'rooms.roomType', 'room.roomType', 'roomType', 'billing', 'stays'])
             ->where('booking_status', $tab === 'expected' ? Booking::STATUS_CHECKED_IN : Booking::STATUS_COMPLETED)
             // Between stays (a later stay still to arrive and nobody in a room) is not due out: it comes back when that stay checks in.
-            ->when($tab === 'expected', fn ($q) => $q->where(fn ($q) => $q->whereNotExists(fn ($s) => $s->select(\DB::raw(1))->from('stays')->whereColumn('stays.booking_id', 'bookings.id')->whereNull('stays.checked_in_at'))
+            ->when($tab === 'expected', fn ($q) => $q->where(fn ($q) => $q->whereNotExists(fn ($s) => $s->select(\DB::raw(1))->from('stays')->whereColumn('stays.booking_id', 'bookings.id')->whereNull('stays.checked_in_at')->whereNull('stays.no_show_at'))
                 ->orWhereRaw('(SELECT COUNT(*) FROM stays WHERE stays.booking_id = bookings.id) <= 1')
                 ->orWhereExists(fn ($s) => $s->select(\DB::raw(1))->from('booking_rooms')->whereColumn('booking_rooms.booking_id', 'bookings.id')->whereNull('booking_rooms.checked_out_at'))))
             ->orderByRaw('viewed_at IS NULL DESC')
@@ -206,6 +206,45 @@ class CheckOutController extends Controller
      * flow only moves on to billing - once every room is out. Same rules as checkOutRoom(), just for several rooms
      * under one row lock so two receptionists can't both claim the last room.
      */
+    /** Mark one date range of a checked-in booking as a no-show: still charged in full, finished for completion, its rooms free for others. */
+    public function markStayNoShow(Request $request, Booking $booking, \App\Models\Stay $stay)
+    {
+        $validated = $request->validate(['reason' => 'nullable|string|max:255']);
+        if ($stay->booking_id !== $booking->id) {
+            return response()->json(['message' => 'That date range does not belong to this booking.'], 404);
+        }
+
+        $result = DB::transaction(function () use ($booking, $stay, $validated) {
+            $locked = Booking::whereKey($booking->id)->lockForUpdate()->first();
+            $lockedStay = \App\Models\Stay::whereKey($stay->id)->lockForUpdate()->first();
+            if (! $locked || ! $lockedStay) {
+                return ['error' => 'Not found.'];
+            }
+            if ($reason = $locked->noShowBlockedReason($lockedStay)) {
+                return ['error' => $reason];
+            }
+            $lockedStay->update(['no_show_at' => now(), 'no_show_reason' => $validated['reason'] ?? null]);
+            $locked->unsetRelation('stays');
+            // it was the last thing outstanding: stamp the booking's own check-out moment like the last room leaving would
+            if ($locked->inHouseRoomCount() === 0 && $locked->recordStayCheckOuts() && $locked->checked_out_at === null) {
+                $locked->update(['checked_out_at' => now()]);
+            }
+
+            return ['final' => $locked->inHouseRoomCount() === 0 && $locked->recordStayCheckOuts(), 'range' => $lockedStay->check_in->format('M j') . ' → ' . $lockedStay->check_out->format('M j')];
+        });
+
+        if (isset($result['error'])) {
+            return response()->json(['message' => $result['error']], 422);
+        }
+        Activity::log('Marked date range as no-show', "Booking #{$booking->id} - {$result['range']}" . (! empty($validated['reason']) ? ' - ' . $validated['reason'] : ''), $booking);
+
+        return response()->json([
+            'final' => $result['final'],
+            'message' => 'Marked as a no-show. It is still charged in full and its rooms are free again.',
+            'html' => view('receptionist.check-out.partials.rooms-panel', ['booking' => $booking->fresh(['rooms.roomType', 'stays']), 'pendingAmenityCount' => $booking->pendingAmenityRequestCount()])->render(),
+        ]);
+    }
+
     public function checkOutRooms(Request $request, Booking $booking)
     {
         $validated = $request->validate([
@@ -444,7 +483,7 @@ class CheckOutController extends Controller
             // stamp a range that never happened as if the guest had stayed it.
             if ($amountPaid + 0.004 >= round($currentBalance, 2)) {
                 $lockedBooking->ensureStays();
-                $neverCheckedIn = $lockedBooking->stayCount() > 1 ? $lockedBooking->stays()->whereNull('checked_in_at')->orderBy('position')->get() : collect();
+                $neverCheckedIn = $lockedBooking->stayCount() > 1 ? $lockedBooking->stays()->whereNull('checked_in_at')->whereNull('no_show_at')->orderBy('position')->get() : collect();
                 if ($neverCheckedIn->isNotEmpty()) {
                     return ['status' => 'range_not_checked_in', 'ranges' => $neverCheckedIn->map(fn ($st) => $st->check_in->format('M j') . ' → ' . $st->check_out->format('M j'))->implode(', ')];
                 }
@@ -514,8 +553,8 @@ class CheckOutController extends Controller
                     ->update(['checked_out_at' => $lockedBooking->checked_out_at]);
                 // ...and so does every stay: the transaction is complete, each stay carries its own in/out moments.
                 $lockedBooking->ensureStays();
-                $lockedBooking->stays()->whereNull('checked_in_at')->update(['checked_in_at' => $lockedBooking->checked_in_at ?? $lockedBooking->checked_out_at]);
-                $lockedBooking->stays()->whereNull('checked_out_at')->update(['checked_out_at' => $lockedBooking->checked_out_at]);
+                $lockedBooking->stays()->whereNull('checked_in_at')->whereNull('no_show_at')->update(['checked_in_at' => $lockedBooking->checked_in_at ?? $lockedBooking->checked_out_at]);
+                $lockedBooking->stays()->whereNull('checked_out_at')->whereNull('no_show_at')->update(['checked_out_at' => $lockedBooking->checked_out_at]);
                 foreach ($rooms as $room) {
                     $room->update(['status' => 'available']);
                 }
@@ -576,7 +615,7 @@ class CheckOutController extends Controller
             return response()->json(['message' => 'This booking is not awaiting checkout.'], 422);
         }
         if ($result['status'] === 'range_not_checked_in') {
-            return response()->json(['message' => 'These dates were never checked in: ' . $result['ranges'] . '. Check them in first, then complete the check-out.'], 422);
+            return response()->json(['message' => 'These dates were never checked in: ' . $result['ranges'] . '. Check them in first, or - if the guest did not show up for them - mark each as a no-show (it is still charged in full), then complete the check-out.'], 422);
         }
         if ($result['status'] === 'overpayment') {
             return response()->json([

@@ -458,7 +458,34 @@ class Booking extends Model
         }
         $this->unsetRelation('stays');
 
-        return $this->stayList()->every(fn (Stay $s) => $s->checked_out_at !== null);
+        return $this->stayList()->every(fn (Stay $s) => $s->checked_out_at !== null || $s->no_show_at !== null);
+    }
+
+    /**
+     * May the front desk mark this date range as a no-show? Only for a checked-in booking with several ranges, a range nobody arrived for
+     * (no check-in, not already marked), once its check-in day has passed - or once nothing else is left to arrive or in house (the rest of the
+     * transaction is being checked out). Returns null when allowed, else the plain reason it is not.
+     */
+    public function noShowBlockedReason(Stay $stay): ?string
+    {
+        if ($this->booking_status !== self::STATUS_CHECKED_IN) {
+            return 'Only a checked-in booking can have one of its date ranges marked as a no-show (for a guest who never arrived at all, mark the booking itself).';
+        }
+        if ($this->stayCount() < 2) {
+            return 'This booking has one date range: mark the booking itself as a no-show.';
+        }
+        if ($stay->checked_in_at !== null || $stay->no_show_at !== null) {
+            return 'This date range was already checked in or marked.';
+        }
+        $today = \Carbon\Carbon::parse(\App\Support\CheckInWindow::date()->format('Y-m-d'));
+        $passed = \Carbon\Carbon::parse($stay->check_in->format('Y-m-d'))->lt($today);
+        $othersDone = $this->stayList()->every(fn (Stay $s) => $s->id === $stay->id || $s->checked_out_at !== null || $s->no_show_at !== null)
+            && $this->inHouseRoomCount() === 0;
+        if (! $passed && ! $othersDone) {
+            return 'This date range starts ' . $stay->check_in->format('M j') . ': it can be marked as a no-show once that day has passed, or when everything else is checked out.';
+        }
+
+        return null;
     }
 
     /** Rooms still occupied by a guest right now (assigned, not checked out). */
@@ -480,7 +507,7 @@ class Booking extends Model
     public function scopeHasStayToArrive($query)
     {
         return $query->whereRaw('(SELECT COUNT(*) FROM stays WHERE stays.booking_id = bookings.id) > 1')
-            ->whereExists(fn ($s) => $s->select(DB::raw(1))->from('stays')->whereColumn('stays.booking_id', 'bookings.id')->whereNull('stays.checked_in_at'));
+            ->whereExists(fn ($s) => $s->select(DB::raw(1))->from('stays')->whereColumn('stays.booking_id', 'bookings.id')->whereNull('stays.checked_in_at')->whereNull('stays.no_show_at'));
     }
 
     public function roomTotalByStays(): float
