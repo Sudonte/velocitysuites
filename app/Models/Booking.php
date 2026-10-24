@@ -535,6 +535,8 @@ class Booking extends Model
 
     /** @var \Illuminate\Support\Collection|null the subset that is on the check-out bill (approved / in progress / completed) */
     public $preloadedBilledAmenityRequests = null;
+    /** Every amenity row of the transaction (booking-time and requested), for the timeline of a list page. */
+    public $preloadedAllAmenityRows = null;
 
     /**
      * Fetch, for a whole page of bookings at once, everything the guest list's computed fields read per row - a constant
@@ -577,6 +579,7 @@ class Booking extends Model
             $booking->preloadedAmenityRequests = $mine->filter(fn (AmenityRequest $a) => $a->origin !== AmenityRequest::ORIGIN_GUEST_REQUEST || $a->status === 'approved')->values();
             // billedAmenityRequests(): what the check-out bill itemizes.
             $booking->preloadedBilledAmenityRequests = $mine->filter(fn (AmenityRequest $a) => in_array($a->status, AmenityRequest::BILLED_STATUSES, true))->values();
+            $booking->preloadedAllAmenityRows = $all;
             $booking->listPreloaded = true;
         }
     }

@@ -126,6 +126,7 @@ class ReceiptService
                     : null,
                 'verified_by' => $payment->verifierName(),
                 'verified_at' => $payment->verified_at?->toIso8601String(),
+                'proof_url' => $payment->payment_method === 'gcash' ? $payment->receipt_url : null,
                 'rejection_reason' => $payment->rejection_reason,
                 // A legacy row can have no payment_date; fall back to when it was verified / recorded so a receipt never shows a blank.
                 'payment_date' => ($payment->payment_date ?? $payment->verified_at ?? $payment->created_at)?->toIso8601String(),
@@ -261,7 +262,7 @@ class ReceiptService
         if ($stored) {
             $booking = Booking::find($stored->booking_id);
 
-            return $booking && $this->ownedBy($booking, $guest) ? $stored->snapshot : null;
+            return $booking && $this->ownedBy($booking, $guest) ? $stored->snapshot + $this->liveExtras($booking) : null;
         }
 
         if (str_starts_with($receiptNumber, 'PR-') || str_starts_with($receiptNumber, 'FR-')) {
@@ -285,7 +286,7 @@ class ReceiptService
                 return null;
             }
 
-            return $this->buildReceiptPayload($booking, $type, $payment);
+            return $this->buildReceiptPayload($booking, $type, $payment) + $this->liveExtras($booking);
         }
 
         if (str_starts_with($receiptNumber, 'SR-')) {
@@ -296,7 +297,7 @@ class ReceiptService
             }
             $billing->setRelation('booking', $booking);
 
-            return $this->buildReceiptPayload($booking, 'CHECKIN_SETTLEMENT_RECEIPT', null, $billing);
+            return $this->buildReceiptPayload($booking, 'CHECKIN_SETTLEMENT_RECEIPT', null, $billing) + $this->liveExtras($booking);
         }
 
         if (str_starts_with($receiptNumber, 'OR-')) {
@@ -321,10 +322,31 @@ class ReceiptService
                 return null;
             }
 
-            return $this->buildReceiptPayload($booking, 'OFFICIAL_RECEIPT', null, $billing);
+            return $this->buildReceiptPayload($booking, 'OFFICIAL_RECEIPT', null, $billing) + $this->liveExtras($booking);
         }
 
         return null;
+    }
+
+    /**
+     * What a receipt shows around its frozen figures, read when it is opened: the receipt numbers issued for the stay so far, the discount
+     * ID, and the full history of the transaction from creation on (the check-out receipt prints it; the other two ignore it).
+     */
+    private function liveExtras(Booking $booking): array
+    {
+        $history = \App\Support\TransactionTimeline::forBooking($booking);
+        usort($history, fn ($a, $b) => strcmp((string) ($a['at'] ?? ''), (string) ($b['at'] ?? '')));
+
+        return [
+            'receipt_numbers' => array_map(fn ($r) => [
+                'stage' => $r['stage'], 'receipt_number' => $r['receipt_number'], 'receipt_type' => $r['receipt_type'], 'issued_at' => $r['issued_at'], 'amount' => $r['amount'],
+            ], $this->receiptsList($booking)),
+            'discount_info' => [
+                'id_type' => $booking->id_card_type,
+                'status' => $booking->discount_verification_status,
+            ],
+            'transaction_history' => $history,
+        ];
     }
 
     private function ownedBy(Booking $booking, Guest $guest): bool

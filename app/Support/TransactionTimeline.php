@@ -64,10 +64,14 @@ class TransactionTimeline
         // Payments, oldest first: one step each, Verified once a receptionist verified it.
         $payments = self::payments($reservation, $booking);
         foreach ($payments as $payment) {
-            // 'completed' is the status a payment only reaches once staff accepted it (verify(),
-            // or recorded at checkout), so it counts as verified even where verified_at was
-            // never stamped (checkout-collected payments).
-            if ($payment->verified_at || $payment->payment_status === 'completed') {
+            // A guest's online payment is 'completed' from the moment it is submitted, yet it is only verified once the front desk
+            // stamps it (verification_status): until then the timeline says it is waiting, never "verified". A payment staff recorded
+            // themselves (cash at check-in / check-out) has no verification step and reads as received.
+            $verification = $payment->verification_status;
+            $staffHasProcessed = $booking && in_array($booking->booking_status, [Booking::STATUS_CHECKED_IN, Booking::STATUS_COMPLETED], true); // checking in or out follows the verification
+            if ($verification === 'pending_verification' && ! $staffHasProcessed) {
+                $steps[] = self::step('payment_'.$payment->id, 'Payment awaiting verification', self::PENDING, $payment->payment_date ?? $payment->created_at);
+            } elseif ($payment->verified_at || $payment->payment_status === 'completed') {
                 $steps[] = self::step('payment_'.$payment->id, 'Payment verified', self::VERIFIED, $payment->verified_at ?? $payment->payment_date ?? $payment->created_at);
             } elseif ($payment->rejected_at || $payment->payment_status === 'rejected') {
                 $steps[] = self::step('payment_'.$payment->id, 'Payment rejected', self::REJECTED, $payment->rejected_at ?? $payment->updated_at);
@@ -142,6 +146,16 @@ class TransactionTimeline
             }
         }
 
+        foreach (self::amenityRequests($reservation, $booking) as $request) {
+            $what = $request->amenity_name . ' × ' . $request->quantity;
+            $steps[] = self::step('amenity_' . $request->id . '_requested', 'Amenity requested: ' . $what, self::RECORDED, $request->created_at);
+            if ($request->status === 'approved' && $request->decided_at) {
+                $steps[] = self::step('amenity_' . $request->id . '_decided', 'Amenity approved: ' . $what, self::VERIFIED, $request->decided_at);
+            } elseif ($request->status === 'rejected' && $request->decided_at) {
+                $steps[] = self::step('amenity_' . $request->id . '_decided', 'Amenity not approved: ' . $what, self::REJECTED, $request->decided_at);
+            }
+        }
+
         if ($booking && $booking->booking_status === Booking::STATUS_COMPLETED) {
             $steps = self::closeOut($steps, $booking);
         }
@@ -167,6 +181,19 @@ class TransactionTimeline
         unset($step);
 
         return $steps;
+    }
+
+    /** The amenities a guest asked for during the stay (not the ones chosen when booking), in order. */
+    private static function amenityRequests(?Reservation $reservation, ?Booking $booking): Collection
+    {
+        if (! $booking) {
+            return collect();
+        }
+
+        $rows = $booking->preloadedAllAmenityRows
+            ?? \App\Models\AmenityRequest::where(fn ($q) => $q->where('booking_id', $booking->id)->when($booking->reservation_id, fn ($qq) => $qq->orWhere('reservation_id', $booking->reservation_id)))->get();
+
+        return $rows->where('origin', \App\Models\AmenityRequest::ORIGIN_GUEST_REQUEST)->sortBy('id')->values();
     }
 
     /** @return Collection<int, Payment> */
