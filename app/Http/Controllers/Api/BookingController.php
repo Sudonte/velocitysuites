@@ -9,7 +9,6 @@ use App\Models\RoomType;
 use App\Services\DirectBookingService;
 use App\Services\NotificationService;
 use App\Services\ReservationAmenityService;
-use App\Services\TransactionArchiveService;
 use App\Support\Activity;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
@@ -32,7 +31,6 @@ class BookingController extends Controller
         private DirectBookingService $directBookingService,
         private ReservationAmenityService $amenityService,
         private NotificationService $notificationService,
-        private TransactionArchiveService $archiveService,
     ) {
     }
 

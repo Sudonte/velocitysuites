@@ -69,6 +69,14 @@ class Payment extends Model
                 $payment->payment_date = now();
             }
         });
+
+        // Money that was received is never erased: cash, a verified GCash payment, or anything attached to a bill stays in the
+        // books. Only a submitted-but-unverified or rejected GCash payment may be removed.
+        static::deleting(function (Payment $payment) {
+            if ($payment->countsAsPaid() || $payment->payment_method === 'cash' || $payment->verified_at !== null) {
+                throw new \LogicException("Payment #{$payment->id} is received money (cash or verified) and cannot be deleted.");
+            }
+        });
     }
 
     public function getReceiptUrlAttribute(): ?string

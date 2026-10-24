@@ -109,11 +109,11 @@ class TransactionHistoryPermanenceTest extends ApiFlowTestCase
 
     public function test_no_guest_or_staff_code_path_hard_deletes_a_transaction_record(): void
     {
-        // forceDelete()/DELETE on bookings, reservations, billings or payments must not exist outside the retired archive service.
+        // forceDelete()/DELETE on bookings, reservations, billings or payments must not exist anywhere in app/ (the archive service that did it is gone).
         $offenders = [];
         $iterator = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator(base_path('app'), \FilesystemIterator::SKIP_DOTS));
         foreach ($iterator as $file) {
-            if ($file->getExtension() !== 'php' || str_ends_with($file->getFilename(), 'TransactionArchiveService.php')) {
+            if ($file->getExtension() !== 'php') {
                 continue;
             }
             $code = php_strip_whitespace($file->getPathname());

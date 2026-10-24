@@ -10,7 +10,6 @@ use App\Models\RoomType;
 use App\Services\NotificationService;
 use App\Services\ReservationAmenityService;
 use App\Services\ReservationWorkflowService;
-use App\Services\TransactionArchiveService;
 use App\Support\Activity;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -24,18 +23,15 @@ class ReservationController extends Controller
     protected NotificationService $notificationService;
     protected ReservationWorkflowService $workflow;
     protected ReservationAmenityService $amenityService;
-    protected TransactionArchiveService $archiveService;
 
     public function __construct(
         NotificationService $notificationService,
         ReservationWorkflowService $workflow,
-        ReservationAmenityService $amenityService,
-        TransactionArchiveService $archiveService
+        ReservationAmenityService $amenityService
     ) {
         $this->notificationService = $notificationService;
         $this->workflow = $workflow;
         $this->amenityService = $amenityService;
-        $this->archiveService = $archiveService;
     }
 
     /**
