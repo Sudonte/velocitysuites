@@ -33,6 +33,16 @@ class FailedLoginLockoutTest extends TestCase
     {
         parent::setUp();
 
+        // An unknown email is checked against sign-ups still waiting for their code.
+        Schema::create('registration_otps', function (Blueprint $table) {
+            $table->id();
+            $table->string('email')->unique();
+            $table->string('otp', 6);
+            $table->json('payload');
+            $table->timestamp('expires_at');
+            $table->timestamps();
+        });
+
         // Sign-in/out actions are written to the audit trail.
         Schema::create('activity_logs', function (Blueprint $table) {
             $table->id();

@@ -37,10 +37,12 @@ class RegisterController extends Controller
             'last_name' => 'required|string|max:100',
             'middle_name' => 'nullable|string|max:100',
             'email' => ['required', 'email:rfc', 'max:255', 'unique:users'],
-            'password' => ['required', 'confirmed', Password::min(8)],
+            // 8+ characters with at least one letter and one number (the same rule the app's sign-up checklist shows)
+            'password' => ['required', 'confirmed', Password::min(8)->letters()->numbers()],
             'age' => 'required|integer|min:18',
             'gender' => 'required|in:male,female',
-            'date_of_birth' => 'required|date|before:today',
+            // the account holder must be 18 or older on the day they register, judged from the date of birth itself
+            'date_of_birth' => ['required', 'date', 'before:today', 'before_or_equal:'.now('Asia/Manila')->subYears(18)->toDateString()],
             'mobile_number' => ['required', 'string', new \App\Rules\ValidPhoneNumber($request->input('country')), 'unique:guests,mobile_number'],
             'country' => 'required|string|max:100',
             // Region/Province/City/Barangay/Street are only ever collected for Philippine
@@ -60,6 +62,9 @@ class RegisterController extends Controller
             'mobile_number.unique' => 'This mobile number is already registered to another account.',
             'email.unique' => 'This email address is already registered. Please login instead.',
             'age.min' => 'You must be at least 18 years old to register.',
+            'date_of_birth.before_or_equal' => 'You must be 18 or older to create an account.',
+            'password.letters' => 'The password must contain at least one letter.',
+            'password.numbers' => 'The password must contain at least one number.',
         ]);
 
         // Same age/DOB cross-check as the mobile app's registration form -
