@@ -39,8 +39,8 @@ class AppDownloadTest extends ApiFlowTestCase
             ->assertDontSee('Your stay, in your pocket')
             ->assertSee('Download for Android')
             ->assertSee('href="' . route('app.download') . '"', false)
-            ->assertSee('download="velocity-suites-v1.66.0.apk"', false)
-            ->assertSee('Version 1.66.0 · 18.3 MB · Android 10 or newer')
+            ->assertSee('download="velocity-suites-v1.67.0.apk"', false)
+            ->assertSee('Version 1.67.0 · 18.3 MB · Android 10 or newer')
             ->assertSee('How to install')
             ->assertSee('Scan to download on your phone')
             ->assertSee('data-app-qr="' . route('app.download') . '"', false)
@@ -63,7 +63,7 @@ class AppDownloadTest extends ApiFlowTestCase
         $response->assertOk();
         $response->assertHeader('Content-Type', 'application/vnd.android.package-archive');
         $this->assertStringContainsString('attachment', $response->headers->get('Content-Disposition'));
-        $this->assertStringContainsString('velocity-suites-v1.66.0.apk', $response->headers->get('Content-Disposition'));
+        $this->assertStringContainsString('velocity-suites-v1.67.0.apk', $response->headers->get('Content-Disposition'));
         $this->assertSame(filesize(MobileApp::path()), (int) $response->baseResponse->getFile()->getSize());
     }
 
@@ -96,7 +96,7 @@ class AppDownloadTest extends ApiFlowTestCase
         $this->assertLessThan(strpos($html, 'Download for Android'), strpos($html, '>Sign in'), 'Sign in comes before the download button');
         $this->assertLessThan(strpos($html, 'Android 10 or newer'), strpos($html, 'Download for Android'), 'the version line is under the download button');
         $this->assertLessThan(strpos($html, 'How to install'), strpos($html, 'Android 10 or newer'), 'How to install is under the version line');
-        $this->assertStringContainsString('Version 1.66.0 · 18.3 MB · Android 10 or newer', $html);
+        $this->assertStringContainsString('Version 1.67.0 · 18.3 MB · Android 10 or newer', $html);
         $this->assertSame(1, substr_count($html, '<h1'));
         $this->assertStringContainsString('Explore rooms', $html);
         $this->assertStringContainsString('Sign in', $html);

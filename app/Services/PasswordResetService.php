@@ -177,11 +177,32 @@ class PasswordResetService
 
     public function resetPassword(User $user, string $password): void
     {
+        // A new password also lifts any sign-in lock: the reset is the way out of one.
         $user->update([
             'password' => $password,
             'failed_login_attempts' => 0,
+            'last_failed_login_at' => null,
         ]);
 
         DB::table('password_reset_tokens')->where('email', $user->email)->delete();
+
+        $this->notifyPasswordChanged($user);
+    }
+
+    /** Tells the account's owner by email that the password was just changed (a failure to send never blocks the change). */
+    private function notifyPasswordChanged(User $user): void
+    {
+        try {
+            $body = "Hi,\n\n"
+                . "The password for your VelocitySuites account was just changed.\n\n"
+                . "If this was you, there is nothing more to do. If it was not you, reset your password right away "
+                . "(Sign in, then Forgot password) and contact the hotel.\n\n"
+                . "- VelocitySuites";
+            Mail::raw($body, function ($message) use ($user) {
+                $message->to($user->email)->subject('Your VelocitySuites password was changed');
+            });
+        } catch (\Throwable $e) {
+            Log::error('Failed to email the password-changed notice: ' . $e->getMessage());
+        }
     }
 }

@@ -200,6 +200,63 @@ class PasswordRuleEverywhereTest extends TestCase
         $this->assertTrue(Hash::check(self::GOOD, $user->fresh()->password));
     }
 
+    // ---- the reset is the way out of a lock, and it signs the guest in ----
+
+    public function test_a_completed_reset_signs_in_clears_the_lock_ends_other_sessions_and_emails_a_notice(): void
+    {
+        $sent = [];
+        Mail::shouldReceive('raw')->once()->andReturnUsing(function ($body, $callback) use (&$sent) {
+            $message = new class {
+                public $to;
+                public $subject;
+
+                public function to($address) { $this->to = $address; return $this; }
+
+                public function subject($subject) { $this->subject = $subject; return $this; }
+            };
+            $callback($message);
+            $sent = ['body' => $body, 'to' => $message->to, 'subject' => $message->subject];
+        });
+
+        $user = $this->user('guest@example.test');
+        $user->update(['failed_login_attempts' => 5, 'last_failed_login_at' => now()]);
+        $this->assertTrue($user->fresh()->isLoginLocked());
+        $this->assertSame(1, $user->apiTokens()->count(), 'another device is signed in');
+        $oldToken = $user->apiTokens()->first()->id;
+
+        $this->seedOtp($user->email);
+        $r = $this->postJson('/api/reset-password', ['email' => $user->email, 'otp' => '123456', 'password' => self::GOOD, 'password_confirmation' => self::GOOD]);
+        $r->assertOk()->assertJsonPath('user.email', $user->email)->assertJsonStructure(['token', 'user']);
+
+        $fresh = $user->fresh();
+        $this->assertFalse($fresh->isLoginLocked(), 'the lock is gone');
+        $this->assertSame(0, $fresh->recentFailedLoginAttempts());
+        $this->assertSame(1, $fresh->apiTokens()->count(), 'only the new session is left');
+        $this->assertNotSame($oldToken, $fresh->apiTokens()->first()->id);
+        $this->assertSame(hash('sha256', $r->json('token')), $fresh->apiTokens()->first()->token, 'the returned token is the live session');
+
+        $this->assertSame('Your VelocitySuites password was changed', $sent['subject']);
+        $this->assertSame('guest@example.test', $sent['to']);
+        $this->assertStringNotContainsString(self::GOOD, $sent['body']);
+
+        // and the new password signs in at once
+        $this->postJson('/api/login', ['email' => $user->email, 'password' => self::GOOD])->assertOk();
+    }
+
+    public function test_a_wrong_code_does_not_change_anything_or_send_a_notice(): void
+    {
+        $user = $this->user('guest@example.test');
+        $user->update(['failed_login_attempts' => 5, 'last_failed_login_at' => now()]);
+        $this->seedOtp($user->email, '654321');
+
+        $this->postJson('/api/reset-password', ['email' => $user->email, 'otp' => '123456', 'password' => self::GOOD, 'password_confirmation' => self::GOOD])
+            ->assertStatus(422);
+
+        $this->assertTrue($user->fresh()->isLoginLocked(), 'still locked');
+        $this->assertSame(1, $user->apiTokens()->count());
+        $this->assertTrue(Hash::check('OldPassword1', $user->fresh()->password));
+    }
+
     // ---- change password ----
 
     public function test_the_apps_change_password_needs_the_rule(): void

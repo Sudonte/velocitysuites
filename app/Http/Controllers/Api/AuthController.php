@@ -221,7 +221,7 @@ class AuthController extends Controller
 
         // Same age/DOB cross-check as the web RegisterController - prevents
         // an age that doesn't match the entered birth date.
-        $calculatedAge = \Carbon\Carbon::parse($validated['date_of_birth'])->age;
+        $calculatedAge = \Carbon\Carbon::parse($validated['date_of_birth'], 'Asia/Manila')->age; // the hotel's day, not the server's (UTC)
         if ((int) $validated['age'] !== $calculatedAge) {
             return response()->json([
                 'message' => "Age ({$validated['age']}) doesn't match the entered date of birth (which makes you {$calculatedAge}).",

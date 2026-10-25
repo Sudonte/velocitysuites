@@ -207,6 +207,7 @@ class ForgotPasswordController extends Controller
         $user = User::where('email', $validated['email'])->first();
 
         $this->passwordReset->resetPassword($user, $validated['password']);
+        $user->apiTokens()->delete(); // the app's sessions end with the old password
 
         // Upon successful reset, sign them straight in and take them to
         // their dashboard rather than back to the login form.
