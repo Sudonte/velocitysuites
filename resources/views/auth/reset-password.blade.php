@@ -48,7 +48,7 @@
             <label for="password">New Password</label>
             <div class="password-input-wrapper">
                 <input type="password" class="form-control @error('password') is-invalid @enderror"
-                       id="password" name="password" minlength="8" required>
+                       id="password" name="password" minlength="8" pattern="(?=.*[A-Za-z])(?=.*[0-9]).{8,}" title="At least 8 characters with a letter and a number" required>
                 <button type="button" class="password-toggle-icon toggle-password" aria-label="Show password" title="Show password"><i class="fas fa-eye-slash"></i></button>
             </div>
             @error('password')

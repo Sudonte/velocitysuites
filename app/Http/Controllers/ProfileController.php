@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Support\PasswordPolicy;
+
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -298,7 +300,7 @@ class ProfileController extends Controller
 
         $validated = $request->validate([
             'otp' => 'required|string|size:6',
-            'new_password' => 'required|string|min:8|confirmed',
+            'new_password' => ['required', 'string', PasswordPolicy::rule(), 'confirmed'],
         ]);
 
         $row = DB::table('password_reset_tokens')->where('email', $user->email)->first();

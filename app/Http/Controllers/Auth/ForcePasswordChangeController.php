@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Auth;
 
+use App\Support\PasswordPolicy;
+
 use App\Http\Controllers\Controller;
 use App\Models\StaffPasswordResetRequest;
 use Illuminate\Http\RedirectResponse;
@@ -33,7 +35,7 @@ class ForcePasswordChangeController extends Controller
     public function update(Request $request): RedirectResponse
     {
         $validated = $request->validate([
-            'password' => ['required', 'string', 'min:8', 'confirmed'],
+            'password' => ['required', 'string', PasswordPolicy::rule(), 'confirmed'],
         ]);
 
         $user = auth()->user();

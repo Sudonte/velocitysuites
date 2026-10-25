@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Guest;
 
+use App\Support\PasswordPolicy;
+
 use App\Http\Controllers\Controller;
 use App\Models\Billing;
 use App\Models\Guest;
@@ -540,7 +542,7 @@ class GuestController extends Controller
 
         $validated = $request->validate([
             'otp' => 'required|string|size:6',
-            'new_password' => 'required|string|min:8|confirmed',
+            'new_password' => ['required', 'string', PasswordPolicy::rule(), 'confirmed'],
         ]);
 
         $row = DB::table('password_reset_tokens')->where('email', $user->email)->first();

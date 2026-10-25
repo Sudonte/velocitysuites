@@ -57,7 +57,7 @@ class WebLoginMessageTest extends ApiFlowTestCase
         ])->map(fn ($c) => $this->loginMessage(...$c));
 
         $this->assertCount(1, $messages->unique());
-        $this->assertStringContainsString('email or password you entered is incorrect', $messages->first());
+        $this->assertStringContainsString('Incorrect email or password', $messages->first());
     }
 
     public function test_right_password_on_a_blocked_account_says_why(): void

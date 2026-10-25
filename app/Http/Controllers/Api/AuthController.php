@@ -9,6 +9,7 @@ use App\Models\RegistrationOtp;
 use App\Models\User;
 use App\Services\AccountReactivationService;
 use App\Services\PasswordResetService;
+use App\Support\PasswordPolicy;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -42,52 +43,51 @@ class AuthController extends Controller
 
         $user = User::where('email', $credentials['email'])->first();
 
-        // Distinct results so the app can tell the guest what to fix:
-        // no such account vs. a wrong password (see the failure branch below).
+        // One answer for "no such account" and "wrong password": the app must not become a way to find out which emails have an
+        // account. (Taking about the same time for both is part of that: an unknown email still pays for one password check.)
+        $invalid = fn () => response()->json(['code' => 'INVALID_CREDENTIALS', 'message' => 'Incorrect email or password.'], 401);
+
         if (! $user) {
-            // A sign-up that was started but never verified: the account is only created once the emailed code is entered, so
-            // there is nothing to sign in to yet. Say so (and let the app offer a new code) instead of "Account does not exist".
-            if (RegistrationOtp::where('email', $credentials['email'])->exists()) {
+            PasswordPolicy::spendCheck($credentials['password']);
+
+            // A sign-up that was started but never verified: the account is only created once the emailed code is entered. Only someone
+            // who knows that sign-up's password is told so (and offered a new code); everyone else gets the answer above.
+            $pending = RegistrationOtp::where('email', $credentials['email'])->first();
+            $pendingPassword = $pending && is_array($pending->payload) ? ($pending->payload['password'] ?? null) : null;
+            if ($pending && $pending->expires_at && $pending->expires_at->isFuture() && is_string($pendingPassword)
+                && hash_equals($pendingPassword, $credentials['password'])) {
                 return response()->json(['code' => 'ACCOUNT_NOT_VERIFIED', 'message' => 'This account is not verified yet. Enter the code we sent to your email, or ask for a new one.'], 401);
             }
 
-            return response()->json(['code' => 'ACCOUNT_NOT_FOUND', 'message' => 'Account does not exist.'], 401);
+            return $invalid();
         }
 
-        if ($user->status === 'suspended') {
-            return response()->json(['message' => 'Account suspended or credentials invalid.'], 401);
-        }
+        // After a lock, a few more guesses are still checked (so the real owner learns the account is locked once the password is
+        // right); past that the password is no longer even compared, so a lock cannot be used to keep guessing.
+        $attempts = $user->recentFailedLoginAttempts();
+        $locked = $attempts >= User::LOGIN_LOCK_THRESHOLD;
+        if ($attempts >= User::LOGIN_LOCK_THRESHOLD + 3) {
+            PasswordPolicy::spendCheck($credentials['password']);
 
-        // Past its 30-day restore window - treat as gone even if the
-        // scheduled purge command (see Console\Commands\PurgeExpiredDeletedAccounts)
-        // hasn't physically removed the row yet.
-        if ($user->isPendingDeletion() && ! $user->isRestorable()) {
-            return response()->json(['message' => 'Account suspended or credentials invalid.'], 401);
-        }
-
-        if ($user->isLoginLocked()) {
-            \App\Support\Activity::logFor($user, 'Sign-in locked', 'Sign-in attempt while locked (app)');
-
-            return response()->json(['message' => 'Account locked due to multiple failed login attempts. Try again in 15 minutes or reset your password.'], 423);
+            return $invalid();
         }
 
         if (! Hash::check($credentials['password'], $user->password)) {
-            // Increment, then re-check the threshold within THIS SAME
-            // request - the pre-check above only ever sees the count from
-            // a PRIOR request, so without this the account doesn't
-            // actually lock until a 4th attempt instead of the intended 3rd.
             $failures = $user->recordFailedLogin();
             \App\Support\Activity::logFor($user, 'Failed login attempt', "Wrong password (app) - {$failures} of " . User::LOGIN_LOCK_THRESHOLD);
 
-            if ($failures >= User::LOGIN_LOCK_THRESHOLD) {
-                return response()->json(['message' => 'Account locked due to multiple failed login attempts. Check your email to verify and reset your password.'], 423);
-            }
+            return $invalid();
+        }
 
-            $message = $failures === User::LOGIN_LOCK_THRESHOLD - 1
-                ? 'Incorrect password. One more failed attempt will require you to verify your account by email.'
-                : 'Incorrect password. Please try again.';
+        // From here the password was right, so these specific answers only ever reach the account's owner.
+        if ($locked) {
+            \App\Support\Activity::logFor($user, 'Sign-in locked', 'Sign-in attempt while locked (app)');
 
-            return response()->json(['code' => 'WRONG_PASSWORD', 'message' => $message], 401);
+            return response()->json(['code' => 'ACCOUNT_LOCKED', 'message' => 'Account locked due to multiple failed login attempts. Try again in 15 minutes or reset your password.'], 423);
+        }
+
+        if ($user->status === 'suspended' || ($user->isPendingDeletion() && ! $user->isRestorable())) {
+            return response()->json(['code' => 'ACCOUNT_BLOCKED', 'message' => 'This account is blocked. Please contact the hotel.'], 403);
         }
 
         // This API/app is guest-facing only - staff (admin/manager/
@@ -175,7 +175,7 @@ class AuthController extends Controller
             'middle_name' => 'nullable|string|max:100',
             'email' => ['required', 'email:rfc', 'max:255', 'unique:users'],
             // 8+ characters with at least one letter and one number (the same rule the app's sign-up checklist shows)
-            'password' => ['required', 'confirmed', Password::min(8)->letters()->numbers()],
+            'password' => ['required', 'confirmed', PasswordPolicy::rule()],
             'age' => 'required|integer|min:18',
             'gender' => 'required|in:male,female',
             // the account holder must be 18 or older on the day they register, judged from the date of birth itself
@@ -428,7 +428,7 @@ class AuthController extends Controller
             $this->passwordReset->sendOtp($user);
         }
 
-        return response()->json(['message' => 'If that email is registered, a reset code has been sent.']);
+        return response()->json(['message' => "If an account exists for that email, we've sent a code."]);
     }
 
     /**
@@ -485,7 +485,7 @@ class AuthController extends Controller
     {
         $validated = $request->validate([
             'reset_token' => 'required|string',
-            'password' => ['required', 'confirmed', Password::min(8)],
+            'password' => ['required', 'confirmed', PasswordPolicy::rule()],
         ]);
 
         $user = $request->user();
@@ -513,7 +513,7 @@ class AuthController extends Controller
         $validated = $request->validate([
             'email' => 'required|email',
             'otp' => 'required|string|size:6',
-            'password' => ['required', 'confirmed', Password::min(8)],
+            'password' => ['required', 'confirmed', PasswordPolicy::rule()],
         ]);
 
         if ($this->passwordReset->tooManyAttempts($validated['email'])) {

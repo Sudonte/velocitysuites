@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Auth;
 
+use App\Support\PasswordPolicy;
+
 use App\Http\Controllers\Controller;
 use App\Models\StaffPasswordResetRequest;
 use App\Models\User;
@@ -40,6 +42,8 @@ class ForgotPasswordController extends Controller
     ) {
     }
 
+    public const SENT_MESSAGE = "If an account exists for that email, we've sent a code.";
+
     public function showLinkRequestForm()
     {
         return view('auth.forgot-password');
@@ -47,9 +51,15 @@ class ForgotPasswordController extends Controller
 
     public function sendResetLink(Request $request)
     {
-        $request->validate(['email' => 'required|email|exists:users']);
+        $request->validate(['email' => 'required|email']);
 
         $user = User::where('email', $request->email)->first();
+
+        // The same answer whether or not the address has an account (the form must not reveal which emails are registered).
+        if (! $user) {
+            return redirect()->route('password.otp.form', ['email' => $request->email])
+                ->with('status', self::SENT_MESSAGE);
+        }
 
         if (in_array($user->role, ['manager', 'receptionist'], true)) {
             return $this->handleStaffRequest($user);
@@ -60,7 +70,7 @@ class ForgotPasswordController extends Controller
         }
 
         return redirect()->route('password.otp.form', ['email' => $user->email])
-            ->with('status', 'A verification code has been sent to your email.');
+            ->with('status', self::SENT_MESSAGE);
     }
 
     /**
@@ -185,9 +195,9 @@ class ForgotPasswordController extends Controller
     public function reset(Request $request)
     {
         $validated = $request->validate([
-            'email' => 'required|email|exists:users',
+            'email' => 'required|email',
             'otp' => 'required|string|size:6',
-            'password' => 'required|string|min:8|confirmed',
+            'password' => ['required', 'string', PasswordPolicy::rule(), 'confirmed'],
         ]);
 
         if (! $this->passwordReset->verifyOtp($validated['email'], $validated['otp'])) {

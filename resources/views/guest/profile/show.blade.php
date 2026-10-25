@@ -264,7 +264,7 @@
                         <div class="mb-3 password-field-group">
                             <label class="form-label">New Password</label>
                             <div class="password-input-wrapper">
-                                <input type="password" name="new_password" class="form-control @error('new_password') is-invalid @enderror" required minlength="8">
+                                <input type="password" name="new_password" class="form-control @error('new_password') is-invalid @enderror" required minlength="8" pattern="(?=.*[A-Za-z])(?=.*[0-9]).{8,}" title="At least 8 characters with a letter and a number">
                                 <button type="button" class="password-toggle-icon toggle-password" aria-label="Show password" title="Show password"><i class="fas fa-eye-slash"></i></button>
                             </div>
                             @error('new_password')<div class="invalid-feedback d-block">{{ $message }}</div>@enderror

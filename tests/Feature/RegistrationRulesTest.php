@@ -66,15 +66,18 @@ class RegistrationRulesTest extends ApiFlowTestCase
         $this->assertArrayNotHasKey('password', $ok->json('errors') ?? [], $ok->getContent());
     }
 
-    public function test_signing_in_before_verifying_says_so_instead_of_account_does_not_exist(): void
+    public function test_signing_in_before_verifying_says_so_only_with_the_right_password(): void
     {
         $email = 'pending'.uniqid().'@example.com';
-        \App\Models\RegistrationOtp::create(['email' => $email, 'otp' => '123456', 'payload' => ['first_name' => 'Ana'], 'expires_at' => now()->addMinutes(10)]);
+        \App\Models\RegistrationOtp::create(['email' => $email, 'otp' => '123456', 'payload' => ['first_name' => 'Ana', 'password' => 'Str0ngPass'], 'expires_at' => now()->addMinutes(10)]);
 
-        $res = $this->postJson('/api/login', ['email' => $email, 'password' => 'Str0ngPass']);
-        $res->assertStatus(401)->assertJson(['code' => 'ACCOUNT_NOT_VERIFIED']);
+        // the right password of the unfinished sign-up: told it is not verified yet (and the app offers a new code)
+        $this->postJson('/api/login', ['email' => $email, 'password' => 'Str0ngPass'])->assertStatus(401)->assertJson(['code' => 'ACCOUNT_NOT_VERIFIED']);
 
-        // an address nobody started a sign-up with is still just "does not exist"
-        $this->postJson('/api/login', ['email' => 'nobody'.uniqid().'@example.com', 'password' => 'Str0ngPass'])->assertStatus(401)->assertJson(['code' => 'ACCOUNT_NOT_FOUND']);
+        // anyone else gets the one shared answer, exactly like an unknown address
+        $wrong = $this->postJson('/api/login', ['email' => $email, 'password' => 'Wrong1234']);
+        $unknown = $this->postJson('/api/login', ['email' => 'nobody'.uniqid().'@example.com', 'password' => 'Wrong1234']);
+        $wrong->assertStatus(401)->assertJson(['code' => 'INVALID_CREDENTIALS']);
+        $this->assertSame($wrong->getContent(), $unknown->getContent());
     }
 }

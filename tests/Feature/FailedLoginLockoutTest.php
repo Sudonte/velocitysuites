@@ -103,67 +103,107 @@ class FailedLoginLockoutTest extends TestCase
         ]);
     }
 
-    public function test_api_login_locks_on_third_failed_attempt_not_fourth(): void
+    public function test_api_login_locks_silently_on_the_third_failure_and_says_so_only_to_the_right_password(): void
     {
         $user = $this->makeUser('guest');
 
-        $r1 = $this->postJson('/api/login', ['email' => $user->email, 'password' => 'wrong']);
-        $r1->assertStatus(401);
-        $this->assertSame(1, $user->refresh()->failed_login_attempts);
+        foreach ([1, 2, 3] as $n) {
+            $r = $this->postJson('/api/login', ['email' => $user->email, 'password' => 'wrong']);
+            $r->assertStatus(401)->assertJsonFragment(['code' => 'INVALID_CREDENTIALS', 'message' => 'Incorrect email or password.']);
+            $this->assertSame($n, $user->refresh()->failed_login_attempts);
+        }
 
-        $r2 = $this->postJson('/api/login', ['email' => $user->email, 'password' => 'wrong']);
-        $r2->assertStatus(401);
-        $r2->assertJsonFragment(['message' => 'Incorrect password. One more failed attempt will require you to verify your account by email.']);
-        $this->assertSame(2, $user->refresh()->failed_login_attempts);
-
-        $r3 = $this->postJson('/api/login', ['email' => $user->email, 'password' => 'wrong']);
-        $r3->assertStatus(423);
-        $this->assertSame(3, $user->refresh()->failed_login_attempts);
-
-        $r4 = $this->postJson('/api/login', ['email' => $user->email, 'password' => 'correct-password']);
-        $r4->assertStatus(423);
-    }
-
-    public function test_api_login_tells_unknown_account_apart_from_wrong_password(): void
-    {
-        $user = $this->makeUser('guest');
-
-        $this->postJson('/api/login', ['email' => 'nobody-here@example.test', 'password' => 'whatever1'])
-            ->assertStatus(401)
-            ->assertJsonFragment(['code' => 'ACCOUNT_NOT_FOUND', 'message' => 'Account does not exist.']);
-
+        // locked now: a wrong guess still gets the one shared answer ...
         $this->postJson('/api/login', ['email' => $user->email, 'password' => 'wrong'])
-            ->assertStatus(401)
-            ->assertJsonFragment(['code' => 'WRONG_PASSWORD', 'message' => 'Incorrect password. Please try again.']);
+            ->assertStatus(401)->assertJsonFragment(['code' => 'INVALID_CREDENTIALS']);
+        // ... and only the correct password learns the account is locked (and does not get in)
+        $this->postJson('/api/login', ['email' => $user->email, 'password' => 'correct-password'])
+            ->assertStatus(423)->assertJsonFragment(['code' => 'ACCOUNT_LOCKED']);
     }
 
-    public function test_web_login_locks_on_third_failed_attempt_not_fourth(): void
+    public function test_api_login_stops_comparing_guesses_after_a_few_more_failures_during_a_lock(): void
+    {
+        $user = $this->makeUser('guest');
+        foreach (range(1, 6) as $i) {
+            $this->postJson('/api/login', ['email' => $user->email, 'password' => 'wrong'])->assertStatus(401);
+        }
+        $this->assertSame(6, $user->refresh()->failed_login_attempts);
+        // six failures: even the right password is no longer compared (a lock cannot be used to keep guessing)
+        $this->postJson('/api/login', ['email' => $user->email, 'password' => 'correct-password'])
+            ->assertStatus(401)->assertJsonFragment(['code' => 'INVALID_CREDENTIALS']);
+    }
+
+    public function test_api_login_gives_the_same_answer_for_an_unknown_email_and_a_wrong_password(): void
     {
         $user = $this->makeUser('guest');
 
-        $this->post('/login', ['email' => $user->email, 'password' => 'wrong']);
-        $this->assertSame(1, $user->refresh()->failed_login_attempts);
+        $unknown = $this->postJson('/api/login', ['email' => 'nobody-here@example.test', 'password' => 'whatever1']);
+        $wrong = $this->postJson('/api/login', ['email' => $user->email, 'password' => 'wrong']);
 
-        $this->post('/login', ['email' => $user->email, 'password' => 'wrong']);
-        $this->assertSame(2, $user->refresh()->failed_login_attempts);
-
-        $response = $this->post('/login', ['email' => $user->email, 'password' => 'wrong']);
-        $this->assertSame(3, $user->refresh()->failed_login_attempts);
-        $response->assertRedirect(route('password.request'));
+        $unknown->assertStatus(401);
+        $wrong->assertStatus(401);
+        $this->assertSame($unknown->getContent(), $wrong->getContent(), 'identical body, status and code');
+        $unknown->assertExactJson(['code' => 'INVALID_CREDENTIALS', 'message' => 'Incorrect email or password.']);
     }
 
-    public function test_web_login_locks_staff_roles_on_third_attempt(): void
+    public function test_api_login_answers_an_unknown_email_about_as_slowly_as_a_wrong_password(): void
+    {
+        $user = $this->makeUser('guest');
+        $time = function (string $email) {
+            $start = hrtime(true);
+            $this->postJson('/api/login', ['email' => $email, 'password' => 'wrong-guess-1']);
+
+            return (hrtime(true) - $start) / 1e6;
+        };
+        $time('warm-up@example.test');
+        $unknown = min($time('nobody-1@example.test'), $time('nobody-2@example.test'), $time('nobody-3@example.test'));
+        $known = min($time($user->email), $time($user->email), $time($user->email));
+        $this->assertGreaterThan(0.5 * $known, $unknown, "unknown email {$unknown}ms vs wrong password {$known}ms: the unknown one must still pay for a password check");
+    }
+
+    public function test_api_login_blocked_and_staff_accounts_are_only_told_after_the_right_password(): void
+    {
+        $suspended = $this->makeUser('guest');
+        $suspended->update(['status' => 'suspended']);
+        $this->postJson('/api/login', ['email' => $suspended->email, 'password' => 'wrong'])
+            ->assertStatus(401)->assertJsonFragment(['code' => 'INVALID_CREDENTIALS']);
+        $this->postJson('/api/login', ['email' => $suspended->email, 'password' => 'correct-password'])
+            ->assertStatus(403)->assertJsonFragment(['code' => 'ACCOUNT_BLOCKED']);
+
+        $staff = $this->makeUser('receptionist');
+        $this->postJson('/api/login', ['email' => $staff->email, 'password' => 'wrong'])->assertStatus(401)->assertJsonFragment(['code' => 'INVALID_CREDENTIALS']);
+        $this->postJson('/api/login', ['email' => $staff->email, 'password' => 'correct-password'])->assertStatus(403);
+    }
+
+    public function test_web_login_gives_one_message_and_never_warns_or_locks_visibly_on_a_wrong_password(): void
+    {
+        $user = $this->makeUser('guest');
+
+        $this->post('/login', ['email' => 'nobody@example.test', 'password' => 'wrong']);
+        $messages = [session('error')];
+        foreach ([1, 2, 3] as $n) {
+            $r = $this->post('/login', ['email' => $user->email, 'password' => 'wrong']);
+            $r->assertRedirect();
+            $this->assertNotSame(route('password.request'), $r->headers->get('Location'), 'no visible lock on a wrong password');
+            $messages[] = session('error');
+            $this->assertSame($n, $user->refresh()->failed_login_attempts);
+        }
+        $this->assertCount(1, array_unique($messages), 'the same message for an unknown email, every wrong guess and the lock');
+
+        // the right password on a locked account is told, and does not get in
+        $locked = $this->post('/login', ['email' => $user->email, 'password' => 'correct-password']);
+        $locked->assertRedirect(route('password.request'));
+        $this->assertGuest();
+    }
+
+    public function test_web_login_locks_staff_roles_the_same_way(): void
     {
         foreach (['receptionist', 'manager', 'admin'] as $role) {
             $user = $this->makeUser($role);
-
-            $this->post('/login', ['email' => $user->email, 'password' => 'wrong']);
-            $this->post('/login', ['email' => $user->email, 'password' => 'wrong']);
-            $response = $this->post('/login', ['email' => $user->email, 'password' => 'wrong']);
-
+            foreach ([1, 2, 3] as $i) {
+                $this->post('/login', ['email' => $user->email, 'password' => 'wrong']);
+            }
             $this->assertSame(3, $user->refresh()->failed_login_attempts, "role={$role}");
-            $response->assertRedirect(route('password.request'));
-
             $blocked = $this->post('/login', ['email' => $user->email, 'password' => 'correct-password']);
             $blocked->assertRedirect(route('password.request'));
         }
