@@ -46,12 +46,14 @@ class CheckOutController extends Controller
         // Check-in/Bookings/Reservations' index(): the numbered page-link
         // boxes render broken/oversized here for reasons that don't trace
         // back to anything in this app's own CSS.
+        $filters = $this->checkedOutFilters($request);
         $bookings = Booking::with(['reservation.guest.user', 'guest.user', 'rooms.roomType', 'room.roomType', 'roomType', 'billing', 'stays'])
             ->where('booking_status', $tab === 'expected' ? Booking::STATUS_CHECKED_IN : Booking::STATUS_COMPLETED)
             // Between stays (a later stay still to arrive and nobody in a room) is not due out: it comes back when that stay checks in.
             ->when($tab === 'expected', fn ($q) => $q->where(fn ($q) => $q->whereNotExists(fn ($s) => $s->select(\DB::raw(1))->from('stays')->whereColumn('stays.booking_id', 'bookings.id')->whereNull('stays.checked_in_at')->whereNull('stays.no_show_at'))
                 ->orWhereRaw('(SELECT COUNT(*) FROM stays WHERE stays.booking_id = bookings.id) <= 1')
                 ->orWhereExists(fn ($s) => $s->select(\DB::raw(1))->from('booking_rooms')->whereColumn('booking_rooms.booking_id', 'bookings.id')->whereNull('booking_rooms.checked_out_at'))))
+            ->when($tab === 'checked_out', fn ($q) => $this->filterCheckedOut($q, $filters))
             ->orderByRaw('viewed_at IS NULL DESC')
             ->orderBy('check_out', $tab === 'expected' ? 'asc' : 'desc')
             ->simplePaginate(15)
@@ -59,8 +61,66 @@ class CheckOutController extends Controller
 
         $expectedCount = Booking::where('booking_status', Booking::STATUS_CHECKED_IN)->count();
         $checkedOutCount = Booking::where('booking_status', Booking::STATUS_COMPLETED)->count();
+        $roomTypes = $tab === 'checked_out' ? \App\Models\RoomType::orderBy('name')->get(['id', 'name']) : collect();
 
-        return view('receptionist.check-out.index', compact('bookings', 'tab', 'expectedCount', 'checkedOutCount'));
+        return view('receptionist.check-out.index', compact('bookings', 'tab', 'expectedCount', 'checkedOutCount', 'filters', 'roomTypes'));
+    }
+
+    /** Checked-out Guests filters: search text, when they checked out, room type. */
+    private function checkedOutFilters(Request $request): array
+    {
+        return [
+            'search' => trim((string) $request->get('search', '')),
+            'period' => in_array($request->get('period'), ['today', 'week', 'month'], true) ? $request->get('period') : 'all',
+            'room_type_id' => (int) $request->get('room_type_id') ?: null,
+        ];
+    }
+
+    /**
+     * Search: guest name (walk-in names on the booking, or the guest's account incl. email), booking number
+     * (594 or BKG-00594), or room number. Period: the hotel day the guest actually checked out (checked_out_at, a
+     * UTC timestamp, against the hotel day's UTC bounds); a booking from before that was recorded uses its check-out date.
+     */
+    private function filterCheckedOut($query, array $f): void
+    {
+        if ($f['period'] !== 'all') {
+            $today = \App\Support\CheckInWindow::today();
+            $from = match ($f['period']) {
+                'today' => $today->copy(),
+                'week' => $today->copy()->startOfWeek(),
+                'month' => $today->copy()->startOfMonth(),
+            };
+            [$fromUtc, $toUtc] = \App\Support\CheckInWindow::rangeBoundsUtc($from, $today);
+            $query->where(fn ($w) => $w
+                ->where(fn ($a) => $a->whereNotNull('checked_out_at')->where('checked_out_at', '>=', $fromUtc)->where('checked_out_at', '<', $toUtc))
+                ->orWhere(fn ($b) => $b->whereNull('checked_out_at')->whereBetween('check_out', [$from->toDateString(), $today->toDateString()])));
+        }
+
+        if ($f['room_type_id']) {
+            $id = $f['room_type_id'];
+            $query->where(fn ($w) => $w->where('room_type_id', $id)->orWhereHas('rooms', fn ($r) => $r->where('room_type_id', $id)));
+        }
+
+        if ($f['search'] !== '') {
+            $search = $f['search'];
+            $words = preg_split('/\s+/', $search);
+            $query->where(function ($any) use ($search, $words) {
+                if (preg_match('/^(?:BKG-?)?0*(\d+)$/i', $search, $m)) {
+                    $any->orWhere('id', (int) $m[1]);
+                }
+                $any->orWhereHas('rooms', fn ($r) => $r->where('room_number', 'like', "%{$search}%"))
+                    ->orWhereHas('room', fn ($r) => $r->where('room_number', 'like', "%{$search}%"))
+                    // every word of a name has to match ("ana live" finds Ana Live)
+                    ->orWhere(function ($names) use ($words) {
+                        foreach ($words as $word) {
+                            $like = "%{$word}%";
+                            $user = fn ($u) => $u->where('first_name', 'like', $like)->orWhere('last_name', 'like', $like)->orWhere('email', 'like', $like);
+                            $names->where(fn ($one) => $one->where('guest_first_name', 'like', $like)->orWhere('guest_last_name', 'like', $like)
+                                ->orWhereHas('guest.user', $user)->orWhereHas('reservation.guest.user', $user));
+                        }
+                    });
+            });
+        }
     }
 
     /**

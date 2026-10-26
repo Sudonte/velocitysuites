@@ -23,6 +23,41 @@
         <div class="card-header">
             <h5 class="mb-0"><i class="fas fa-list"></i> {{ $tab === 'expected' ? 'Expected Check-outs' : 'Checked-out Guests' }}</h5>
         </div>
+        @if($tab === 'checked_out')
+            @php $isFiltered = $filters['search'] !== '' || $filters['period'] !== 'all' || $filters['room_type_id']; @endphp
+            {{-- Search applies on Enter / Search; the two lists apply as soon as they change. --}}
+            <form method="GET" action="{{ route('receptionist.check-out.index') }}" class="row g-2 align-items-end p-3 border-bottom" role="search">
+                <input type="hidden" name="tab" value="checked_out">
+                <div class="col-12 col-md-5">
+                    <label for="checkedOutSearch" class="form-label small text-muted mb-1">Search</label>
+                    <input type="search" id="checkedOutSearch" name="search" class="form-control form-control-sm" value="{{ $filters['search'] }}"
+                           placeholder="Guest name, email, booking no. (BKG-00012) or room no." maxlength="100">
+                </div>
+                <div class="col-6 col-md-2">
+                    <label for="checkedOutPeriod" class="form-label small text-muted mb-1">Checked out</label>
+                    <select id="checkedOutPeriod" name="period" class="form-select form-select-sm" onchange="this.form.submit()">
+                        @foreach(['all' => 'All time', 'today' => 'Today', 'week' => 'This Week', 'month' => 'This Month'] as $value => $label)
+                            <option value="{{ $value }}" {{ $filters['period'] === $value ? 'selected' : '' }}>{{ $label }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div class="col-6 col-md-2">
+                    <label for="checkedOutRoomType" class="form-label small text-muted mb-1">Room type</label>
+                    <select id="checkedOutRoomType" name="room_type_id" class="form-select form-select-sm" onchange="this.form.submit()">
+                        <option value="">All room types</option>
+                        @foreach($roomTypes as $type)
+                            <option value="{{ $type->id }}" {{ (int) $filters['room_type_id'] === $type->id ? 'selected' : '' }}>{{ $type->name }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div class="col-12 col-md-3 d-flex gap-2">
+                    <button type="submit" class="btn btn-sm btn-primary"><i class="fas fa-search"></i> Search</button>
+                    @if($isFiltered)
+                        <a href="{{ route('receptionist.check-out.index', ['tab' => 'checked_out']) }}" class="btn btn-sm btn-outline-secondary"><i class="fas fa-rotate-left"></i> Clear</a>
+                    @endif
+                </div>
+            </form>
+        @endif
         <div class="table-responsive">
             <table class="table table-hover mb-0" id="checkOutTable">
                 <thead>
@@ -96,7 +131,7 @@
                     @empty
                         <tr id="noCheckOutsRow">
                             <td colspan="{{ $tab === 'expected' ? 5 : 4 }}">
-                                <x-empty-state icon="fas fa-sign-out-alt" :message="$tab === 'expected' ? 'No pending check-outs.' : 'No checked-out guests yet.'" />
+                                <x-empty-state icon="fas fa-sign-out-alt" :message="$tab === 'expected' ? 'No pending check-outs.' : (($filters['search'] !== '' || $filters['period'] !== 'all' || $filters['room_type_id']) ? 'No checked-out guests match these filters.' : 'No checked-out guests yet.')" />
                             </td>
                         </tr>
                     @endforelse
