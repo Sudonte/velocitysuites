@@ -6,7 +6,7 @@
 <div class="container-fluid py-4">
     <x-page-header icon="fas fa-sign-out-alt" title="Check-Out" subtitle="Checkout can happen before or after the scheduled date; the bill is settled either way." />
 
-    <ul class="nav nav-tabs mb-3">
+    <ul class="nav nav-tabs mb-3" data-live-sync="checkout-tabs">
         <li class="nav-item">
             <a class="nav-link {{ $tab === 'expected' ? 'active' : '' }}" href="{{ route('receptionist.check-out.index', ['tab' => 'expected']) }}">
                 Expected Check-outs <span class="badge bg-warning text-dark">{{ $expectedCount }}</span>
@@ -34,7 +34,7 @@
                         @if($tab === 'expected')<th>Action</th>@endif
                     </tr>
                 </thead>
-                <tbody id="checkOutTableBody">
+                <tbody id="checkOutTableBody" data-live-sync="checkout-rows">
                     @forelse($bookings as $booking)
                         <tr data-booking-id="{{ $booking->id }}">
                             <td>@unless($booking->viewed_at)<span class="unread-dot" title="New"></span>@endunless{{ $booking->guest_display_name }}</td>
@@ -103,7 +103,7 @@
                 </tbody>
             </table>
         </div>
-        <div class="card-footer">
+        <div class="card-footer" data-live-sync="checkout-pages">
             {{ $bookings->links() }}
         </div>
     </div>

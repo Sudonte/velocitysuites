@@ -470,10 +470,10 @@
                     <i class="fas fa-calendar-check"></i> <span class="link-text">Bookings</span>
                 </a></li>
                 <li><a href="{{ route('receptionist.check-in.index') }}" class="nav-link {{ request()->routeIs('receptionist.check-in.*') ? 'active' : '' }}" title="Check-In">
-                    <span class="nav-icon-wrap"><i class="fas fa-sign-in-alt"></i>@if($sidebarHasNewCheckIns)<span class="sidebar-nav-dot" title="New"></span>@endif</span> <span class="link-text">Check-In</span>
+                    <span class="nav-icon-wrap" data-live-sync="sidebar-checkin"><i class="fas fa-sign-in-alt"></i>@if($sidebarHasNewCheckIns)<span class="sidebar-nav-dot" title="New"></span>@endif</span> <span class="link-text">Check-In</span>
                 </a></li>
                 <li><a href="{{ route('receptionist.check-out.index') }}" class="nav-link {{ request()->routeIs('receptionist.check-out.*') ? 'active' : '' }}" title="Check-Out">
-                    <span class="nav-icon-wrap"><i class="fas fa-sign-out-alt"></i>@if($sidebarHasNewCheckOuts)<span class="sidebar-nav-dot" title="New"></span>@endif</span> <span class="link-text">Check-Out</span>
+                    <span class="nav-icon-wrap" data-live-sync="sidebar-checkout"><i class="fas fa-sign-out-alt"></i>@if($sidebarHasNewCheckOuts)<span class="sidebar-nav-dot" title="New"></span>@endif</span> <span class="link-text">Check-Out</span>
                 </a></li>
                 <li><a href="{{ route('guest-history.index') }}" class="nav-link {{ request()->routeIs('guest-history.*') ? 'active' : '' }}" title="Guest History">
                     <i class="fas fa-address-book"></i> <span class="link-text">Guest History</span>
@@ -484,9 +484,7 @@
                 <li><a href="{{ route('receptionist.amenities.index') }}" class="nav-link {{ request()->routeIs('receptionist.amenities.*') ? 'active' : '' }}" title="Amenity Requests">
                     <i class="fas fa-spa"></i> <span class="link-text">Amenity Requests</span>
                     @php $sidebarPendingAmenityRequests = \App\Models\AmenityRequest::pendingGuestRequests()->count(); @endphp
-                    @if($sidebarPendingAmenityRequests > 0)
-                        <span class="badge rounded-pill bg-danger ms-auto" title="Pending guest requests" aria-label="{{ $sidebarPendingAmenityRequests }} pending amenity requests">{{ $sidebarPendingAmenityRequests }}</span>
-                    @endif
+                    <span class="ms-auto" data-live-sync="sidebar-amenity-requests">@if($sidebarPendingAmenityRequests > 0)<span class="badge rounded-pill bg-danger" title="Pending guest requests" aria-label="{{ $sidebarPendingAmenityRequests }} pending amenity requests">{{ $sidebarPendingAmenityRequests }}</span>@endif</span>
                 </a></li>
             </ul>
         @elseif(auth()->user()->role === 'guest')

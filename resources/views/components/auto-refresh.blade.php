@@ -1,9 +1,13 @@
-{{-- Silent dashboard refresh: re-fetches the current page every 30s and
-     swaps <main>'s content so counts/tables stay fresh without a manual
-     reload. Polling (not websockets) keeps this shared-hosting friendly.
-     Skips ticks while the tab is hidden, a modal is open, or the user is
-     interacting with a form, so it never yanks UI state mid-action. --}}
+{{-- Silent page refresh for dashboards/notification lists: keeps counts and tables
+     fresh without a manual reload, by swapping <main>'s content.
+     Staff pages: handled by live sync (public/js/app.js) - <main> is swapped only
+     when the data actually changed. Other roles (the guest dashboard): re-fetched
+     every 30s. Either way it skips while the tab is hidden, a modal is open, or the
+     user is in a form, so it never yanks UI state mid-action. --}}
 @push('scripts')
+@if(auth()->check() && in_array(auth()->user()->role, ['admin', 'manager', 'receptionist'], true))
+<script>window.liveSyncMain = true;</script>
+@else
 <script>
 (function () {
     const REFRESH_MS = 30000;
@@ -34,4 +38,5 @@
     setInterval(refreshMain, REFRESH_MS);
 })();
 </script>
+@endif
 @endpush

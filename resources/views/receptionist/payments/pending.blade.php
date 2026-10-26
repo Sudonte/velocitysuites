@@ -33,7 +33,7 @@
                     <th>Action</th>
                 </tr>
             </thead>
-            <tbody>
+            <tbody data-live-sync="pending-payment-rows">
                 @forelse($payments as $payment)
                     @php $reservation = $payment->billing->booking->reservation ?? null; @endphp
                     <tr data-reservation-id="{{ $reservation->id ?? '' }}">
@@ -70,7 +70,7 @@
             </tbody>
         </table>
         <x-slot:footer>
-            {{ $payments->links() }}
+            <div data-live-sync="pending-payment-pages">{{ $payments->links() }}</div>
         </x-slot:footer>
     </x-card>
 </div>

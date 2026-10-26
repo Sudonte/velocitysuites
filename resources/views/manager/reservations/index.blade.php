@@ -1,6 +1,7 @@
 @extends('layouts.app')
 
 @section('title', 'Reservation and Booking Monitoring - Manager')
+@section('livePage', '1')
 
 @section('content')
 <div class="container-fluid py-4">

@@ -26,7 +26,7 @@
         </div>
     @endif
 
-    <ul class="nav nav-tabs mb-3">
+    <ul class="nav nav-tabs mb-3" data-live-sync="checkin-tabs">
         <li class="nav-item">
             <a class="nav-link {{ $tab === 'expected' ? 'active' : '' }}" href="{{ route('receptionist.check-in.index', ['tab' => 'expected', 'range' => $range]) }}">
                 Expected Check-ins <span class="badge bg-warning text-dark">{{ $expectedCount }}</span>
@@ -78,7 +78,7 @@
                     <th class="text-nowrap">Actions</th>
                 </tr>
             </thead>
-            <tbody>
+            <tbody data-live-sync="checkin-rows">
                 @if($tab === 'checked_in')
                     {{-- One row per physical room (see CheckInController::index()) -
                          $bookings here is actually a paginated Room collection.
@@ -177,7 +177,7 @@
             </tbody>
         </table>
         <x-slot:footer>
-            {{ $bookings->links() }}
+            <div data-live-sync="checkin-pages">{{ $bookings->links() }}</div>
         </x-slot:footer>
     </x-card>
 </div>
@@ -256,10 +256,10 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
-    document.querySelectorAll('.btn-open-check-in').forEach(function (btn) {
-        btn.addEventListener('click', function () {
-            openCheckInPanel(btn.dataset.bookingId, btn.dataset.stayId);
-        });
+    // Delegated: the list's rows are replaced when live sync brings in new arrivals.
+    document.addEventListener('click', function (e) {
+        const btn = e.target.closest('.btn-open-check-in');
+        if (btn) openCheckInPanel(btn.dataset.bookingId, btn.dataset.stayId);
     });
 
     // A booking with several stays: pick which stay to check in (reloads the panel for that stay).

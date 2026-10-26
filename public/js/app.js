@@ -655,6 +655,104 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 })();
 
+// Live sync (staff pages - the layout adds <meta name="live-sync"> for admin,
+// manager and receptionist). Every few seconds the page asks for a fingerprint
+// of the data staff screens show (LiveSyncController); only when it changes -
+// a new booking, payment, request, check-in... by anyone, on the website or the
+// app - does the page re-fetch itself and swap just its marked parts:
+//   - every [data-live-sync="name"] element (tab counts, table bodies,
+//     pagination, the bell and sidebar badges), matched by name and order;
+//     only its inner HTML is replaced, so listeners bound on it survive;
+//   - the whole <main> on pages that opt into live sections (livePage) or use
+//     the dashboard auto-refresh.
+// Never mid-action: an update waits while a modal is open, someone is typing
+// in a form, or a background save is running, then goes as soon as it's clear.
+(function () {
+    const meta = document.querySelector('meta[name="live-sync"]');
+    if (!meta || !window.fetch || !window.DOMParser) return;
+    const POLL_MS = 8000;
+    let stamp = null;
+    let pending = false;
+    let busy = false;
+
+    function blocked() {
+        if (document.querySelector('.modal.show, .live-updating')) return true;
+        const el = document.activeElement;
+        return !!(el && el.matches && el.matches('input, textarea, select') && el.closest('form'));
+    }
+
+    async function refreshPage() {
+        busy = true;
+        try {
+            const resp = await fetch(window.location.href, { credentials: 'same-origin', headers: { 'X-Requested-With': 'live-sync' } });
+            // A redirect (e.g. the session ended) is left for the next real navigation.
+            if (!resp.ok || new URL(resp.url, window.location.href).pathname !== window.location.pathname) return false;
+            const doc = new DOMParser().parseFromString(await resp.text(), 'text/html');
+            const swapped = [];
+
+            const main = document.getElementById('pageContent');
+            const wholeMain = main && (main.hasAttribute('data-live-region') || window.liveSyncMain === true);
+            if (wholeMain) {
+                const fresh = doc.getElementById('pageContent');
+                if (fresh && fresh.innerHTML !== main.innerHTML) {
+                    main.innerHTML = fresh.innerHTML;
+                    swapped.push(main);
+                }
+            }
+
+            const names = new Set(Array.from(document.querySelectorAll('[data-live-sync]')).map((el) => el.dataset.liveSync));
+            names.forEach(function (name) {
+                const selector = '[data-live-sync="' + name + '"]';
+                const current = Array.from(document.querySelectorAll(selector)).filter((el) => !(wholeMain && main.contains(el)));
+                const fresh = doc.querySelectorAll(selector);
+                current.forEach(function (el, i) {
+                    if (fresh[i] && fresh[i].innerHTML !== el.innerHTML) {
+                        el.innerHTML = fresh[i].innerHTML;
+                        swapped.push(el);
+                    }
+                });
+            });
+
+            if (swapped.length) {
+                if (window.initDatePickers) swapped.forEach((r) => window.initDatePickers(r));
+                window.dispatchEvent(new Event('auto-refresh:swapped'));
+            }
+            return true;
+        } catch (e) {
+            return false;
+        } finally {
+            busy = false;
+        }
+    }
+
+    async function tick() {
+        if (document.hidden || busy) return;
+        try {
+            const resp = await fetch(meta.content, { credentials: 'same-origin', cache: 'no-store', headers: { Accept: 'application/json' } });
+            if (resp.ok) {
+                const next = (await resp.json()).stamp;
+                if (stamp !== null && next !== stamp) pending = true;
+                stamp = next;
+            }
+        } catch (e) {
+            // offline or a transient error - try again next tick
+        }
+        await flush();
+    }
+
+    // Apply a waiting update when nothing is in the way.
+    async function flush() {
+        if (pending && !busy && !document.hidden && !blocked() && await refreshPage()) pending = false;
+    }
+
+    setInterval(tick, POLL_MS);
+    document.addEventListener('visibilitychange', function () { if (!document.hidden) tick(); });
+    // A modal closing or a field losing focus may free a waiting update.
+    document.addEventListener('hidden.bs.modal', function () { if (pending) setTimeout(flush, 300); });
+    document.addEventListener('focusout', function () { if (pending) setTimeout(flush, 300); });
+    tick();
+})();
+
 // Forms marked data-submit-once disable their submit buttons on submit so a
 // double click can't send the action twice.
 document.addEventListener('submit', function (event) {

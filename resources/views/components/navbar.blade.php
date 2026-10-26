@@ -35,7 +35,7 @@
                     $navUnreadCount = \App\Models\Notification::unreadCountFor(auth()->id());
                     $navNotifUrl = auth()->user()->role === 'manager' ? route('manager.notifications.index') : route('notifications.index');
                 @endphp
-                <li class="nav-item">
+                <li class="nav-item" data-live-sync="nav-bell">
                     <a class="nav-link position-relative navbar-icon-link" href="{{ $navNotifUrl }}"
                        title="Notifications" aria-label="Notifications ({{ $navUnreadCount }} unread)">
                         <i class="fas fa-bell fs-5"></i>

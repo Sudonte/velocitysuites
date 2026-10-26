@@ -27,7 +27,7 @@
         </div>
     @endif
 
-    <ul class="nav nav-tabs mb-3 flex-nowrap overflow-auto">
+    <ul class="nav nav-tabs mb-3 flex-nowrap overflow-auto" data-live-sync="booking-tabs">
         <li class="nav-item">
             <a class="nav-link text-nowrap {{ $tab === 'pending' ? 'active' : '' }}" href="{{ route('receptionist.bookings.index', ['tab' => 'pending']) }}">
                 For Verification <span class="badge bg-warning text-dark">{{ $pendingCount }}</span>
@@ -93,7 +93,7 @@
     @endphp
 
     <x-card :title="$cardTitles[$tab]" icon="fas fa-list" bodyClass="monitoring-table-wrap">
-        <div class="d-md-none monitoring-card-list">
+        <div class="d-md-none monitoring-card-list" data-live-sync="booking-cards">
             @forelse($bookings as $booking)
                 @php
                     $gcashPayment = $booking->latestGcashPayment();
@@ -230,7 +230,7 @@
                     <th>Action</th>
                 </tr>
             </thead>
-            <tbody>
+            <tbody data-live-sync="booking-rows">
                 @forelse($bookings as $booking)
                     @php
                         $gcashPayment = $booking->latestGcashPayment();
@@ -363,7 +363,7 @@
         </table>
         </div>
         <x-slot:footer>
-            {{ $bookings->links() }}
+            <div data-live-sync="booking-pages">{{ $bookings->links() }}</div>
         </x-slot:footer>
     </x-card>
 </div>

@@ -118,6 +118,10 @@ Route::middleware(['auth', 'account.status', 'log.activity', 'no.cache'])->group
         Route::get('/billing/{billing}/discount-id', [\App\Http\Controllers\Staff\DiscountIdController::class, 'show'])->name('billing.discount-id');
     });
 
+    // Live updates on staff pages: a cheap fingerprint polled every few seconds (see LiveSyncController).
+    Route::get('/staff/live-stamp', [\App\Http\Controllers\LiveSyncController::class, 'stamp'])
+        ->middleware('role:admin,manager,receptionist')->name('staff.live-stamp');
+
     // Admin Routes
     Route::middleware('role:admin')->prefix('admin')->name('admin.')->group(function () {
         Route::get('/dashboard', [\App\Http\Controllers\Admin\AdminDashboardController::class, 'index'])->name('dashboard');

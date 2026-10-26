@@ -27,7 +27,7 @@
     @endif
 
     <x-card title="Reservations" icon="fas fa-list" bodyClass="monitoring-table-wrap">
-        <div class="d-md-none monitoring-card-list" id="reservationsCardList">
+        <div class="d-md-none monitoring-card-list" id="reservationsCardList" data-live-sync="reservation-cards">
             @forelse($reservations as $reservation)
                 <div class="monitoring-item-card" data-reservation-row="{{ $reservation->id }}">
                     <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
@@ -90,7 +90,7 @@
                     <th class="text-nowrap">Actions</th>
                 </tr>
             </thead>
-            <tbody id="reservationsTableBody">
+            <tbody id="reservationsTableBody" data-live-sync="reservation-rows">
                 @forelse($reservations as $reservation)
                     <tr data-reservation-row="{{ $reservation->id }}">
                         <td class="fw-bold">@unless($reservation->viewed_at)<span class="unread-dot" title="New"></span>@endunless#{{ $reservation->id }}</td>
@@ -145,7 +145,7 @@
         </table>
         </div>
         <x-slot:footer>
-            {{ $reservations->links() }}
+            <div data-live-sync="reservation-pages">{{ $reservations->links() }}</div>
         </x-slot:footer>
     </x-card>
 </div>
