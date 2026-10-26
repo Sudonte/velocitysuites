@@ -36,9 +36,10 @@ class ReservationAmenityService
      * for overlapping stays and both would pass, unaware of each other.
      * Returns the resolved [Amenity, quantity] pairs, ready to snapshot.
      */
-    public function validateSelection(array $items): Collection
+    public function validateSelection(array $items, iterable $roomTypes = []): Collection
     {
         $resolved = collect();
+        $roomTypes = collect($roomTypes)->filter();
         $amenityIds = collect($items)->pluck('amenity_id')->filter()->unique();
         $remainingStock = Amenity::remainingStockFor($amenityIds);
 
@@ -53,6 +54,8 @@ class ReservationAmenityService
                 ]);
             }
 
+            self::refuseIfIncluded($amenity, $roomTypes, isset($item['room_type_id']) ? (int) $item['room_type_id'] : null);
+
             $quantity = (int) $item['quantity'];
             $remaining = $remainingStock[$amenity->id] ?? 0;
 
@@ -66,6 +69,26 @@ class ReservationAmenityService
         }
 
         return $resolved;
+    }
+
+    /**
+     * A paid amenity the room's type already includes is never sold as an add-on for
+     * that room - the guest has it at no charge, so nothing may be added to the bill
+     * for it. $typeId is the room the item was chosen for; without one, the single
+     * room type in $roomTypes is the room (a stay of one type). With several types and
+     * no room named, the item is allowed (it may be meant for a type that doesn't
+     * include it).
+     */
+    public static function refuseIfIncluded(Amenity $amenity, iterable $roomTypes, ?int $typeId = null): void
+    {
+        $types = collect($roomTypes)->filter()->keyBy('id');
+        $type = $typeId ? ($types->get($typeId) ?? \App\Models\RoomType::find($typeId)) : ($types->count() === 1 ? $types->first() : null);
+
+        if ($type && $type->includesAmenity($amenity)) {
+            throw ValidationException::withMessages([
+                'amenities' => "\"{$amenity->amenity_name}\" is already included with the {$type->name} room at no extra charge - remove it from the add-ons.",
+            ]);
+        }
     }
 
     /**

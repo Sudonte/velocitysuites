@@ -150,6 +150,8 @@ class AmenityRequestService
                         throw ValidationException::withMessages(['items' => 'Quantities must be at least 1.']);
                     }
                     $amenity = $amenities->get($amenityId);
+                    // a paid amenity this room's type includes is never charged on top
+                    ReservationAmenityService::refuseIfIncluded($amenity, [], $room?->room_type_id ?? $booking->room_type_id);
                     $rows->push(AmenityRequest::create([
                         'guest_id' => $guestId,
                         'reservation_id' => $booking->reservation_id,

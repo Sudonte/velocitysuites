@@ -227,7 +227,7 @@ class CheckInController extends Controller
 
         // Amenities picked on the form (rows left at 0 are ignored) - checked against live stock before anything is created.
         $pickedAmenities = collect($validated['amenities'] ?? [])->filter(fn ($a) => (int) ($a['quantity'] ?? 0) > 0)->values()->all();
-        $resolvedAmenities = app(\App\Services\ReservationAmenityService::class)->validateSelection($pickedAmenities);
+        $resolvedAmenities = app(\App\Services\ReservationAmenityService::class)->validateSelection($pickedAmenities, collect($roomLines)->pluck('room_type'));
 
         try {
             [$booking, $rooms, $settled] = DB::transaction(function () use (

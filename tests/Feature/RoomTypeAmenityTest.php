@@ -59,9 +59,39 @@ class RoomTypeAmenityTest extends ApiFlowTestCase
         // same item shape as before (the mobile API serializes this list)
         $this->assertSame(['name', 'category', 'description', 'pricing_type', 'fee', 'quantity', 'is_unlimited'], array_keys($deluxe->fresh()->amenities[0]));
         $this->assertSame('complimentary', $deluxe->fresh()->amenities[0]['pricing_type']);
-        $this->assertSame('paid', $deluxe->fresh()->amenities[1]['pricing_type']);
+        // the included paid amenity is shown as included - no fee on top of the rate
+        $this->assertSame('complimentary', $deluxe->fresh()->amenities[1]['pricing_type']);
+        $this->assertNull($deluxe->fresh()->amenities[1]['fee']);
         $this->assertSame(['Extra Bed'], $deluxe->fresh()->paidAmenities()->pluck('amenity_name')->all());
         $this->assertNotNull($wifi);
+    }
+
+    public function test_an_included_paid_amenity_is_never_charged_as_an_add_on_for_that_room(): void
+    {
+        $deluxe = $this->makeRoomTypeWithRooms('Deluxe', 1000, 2, 1);
+        $suite = $this->makeRoomTypeWithRooms('Suite', 2000, 2, 1);
+        $bed = $this->amenity('Extra Bed', 500);
+        $towel = $this->amenity('Additional Towel', 50);
+        $deluxe->assignedAmenities()->sync([$bed->id]);
+        $service = app(\App\Services\ReservationAmenityService::class);
+
+        // a Deluxe stay: Extra Bed is already included, so adding it is refused (nothing to charge)
+        try {
+            $service->validateSelection([['amenity_id' => $bed->id, 'quantity' => 1]], [$deluxe->fresh()]);
+            $this->fail('An included amenity was accepted as a paid add-on.');
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            $this->assertStringContainsString('already included with the Deluxe room', $e->errors()['amenities'][0]);
+        }
+
+        // other paid amenities still work for Deluxe, and Extra Bed is still sold for a Suite
+        $this->assertCount(1, $service->validateSelection([['amenity_id' => $towel->id, 'quantity' => 1]], [$deluxe->fresh()]));
+        $this->assertCount(1, $service->validateSelection([['amenity_id' => $bed->id, 'quantity' => 1]], [$suite->fresh()]));
+
+        // a stay with both types: the room the item was chosen for decides
+        $both = [$deluxe->fresh(), $suite->fresh()];
+        $this->assertCount(1, $service->validateSelection([['amenity_id' => $bed->id, 'quantity' => 1, 'room_type_id' => $suite->id]], $both));
+        $this->expectException(\Illuminate\Validation\ValidationException::class);
+        $service->validateSelection([['amenity_id' => $bed->id, 'quantity' => 1, 'room_type_id' => $deluxe->id]], $both);
     }
 
     public function test_admin_chooses_only_paid_amenities_for_a_room_type(): void
@@ -84,6 +114,6 @@ class RoomTypeAmenityTest extends ApiFlowTestCase
 
         // the admin page lists the paid amenity, not the free one
         $this->actingAs($admin)->get(route('admin.room-types.show', $rt))->assertOk()
-            ->assertSee('Paid Amenities for This Type')->assertSee('Extra Bed');
+            ->assertSee('Paid Amenities Included with This Type')->assertSee('Extra Bed');
     }
 }

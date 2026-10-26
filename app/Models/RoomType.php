@@ -95,11 +95,20 @@ class RoomType extends Model
         return $assigned->where('status', 'active')->filter(fn (Amenity $a) => $a->isPaid())->values();
     }
 
+    /** A paid amenity this type includes - the guest has it at no charge, so it is never sold as an add-on here. */
+    public function includesAmenity(Amenity $amenity): bool
+    {
+        return $amenity->isPaid() && $this->paidAmenities()->contains('id', $amenity->id);
+    }
+
     /**
      * The room type's amenities for guest display (website, mobile API, front desk):
      * every active Free/Included amenity - those come with every room, so they are
-     * never assigned per type - followed by this type's paid amenities. Shape per
-     * item: ['name','category','description','pricing_type','fee','quantity',
+     * never assigned per type - followed by the paid amenities this type includes.
+     * Both are included in the room at no extra charge, so both read as
+     * 'complimentary' with no fee (a paid amenity's price only applies when it is
+     * bought as an add-on for a room that doesn't include it). Shape per item:
+     * ['name','category','description','pricing_type','fee','quantity',
      * 'is_unlimited']; an empty array drives "No Available Amenities".
      */
     public function getAmenitiesAttribute(): array
@@ -110,8 +119,8 @@ class RoomType extends Model
                     'name' => $amenity->amenity_name,
                     'category' => $amenity->category,
                     'description' => $amenity->description,
-                    'pricing_type' => $amenity->isPaid() ? 'paid' : 'complimentary',
-                    'fee' => $amenity->isPaid() ? (string) $amenity->charge : null,
+                    'pricing_type' => 'complimentary', // included with the room either way - nothing added to the rate
+                    'fee' => null,
                     'quantity' => $amenity->quantity,
                     'is_unlimited' => (bool) $amenity->is_unlimited,
                 ];

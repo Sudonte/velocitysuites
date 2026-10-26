@@ -112,19 +112,20 @@
     <x-room-gallery :images="$mergedGallery" :title="$roomType->name" id="adminMergedGallery" />
 
     <x-card icon="fas fa-concierge-bell" bodyClass="card-body" class="mb-4">
-        <x-slot:title>Paid Amenities for This Type</x-slot:title>
+        <x-slot:title>Paid Amenities Included with This Type</x-slot:title>
         <small class="text-muted d-block mb-2">
-            Paid amenities offered with this room type - add or remove them from the Edit Type form.
-            Free amenities are included with every room automatically and are shown to guests without being assigned here.
+            Guests booking this room type get these at no extra charge - nothing is added to their rate, and they can't be
+            bought again as an add-on for this room. Add or remove them from the Edit Type form. Free amenities are included
+            with every room automatically and are shown to guests without being assigned here.
         </small>
         @if($paidAmenities->isNotEmpty())
             <div class="d-flex flex-wrap gap-2">
                 @foreach($paidAmenities as $amenity)
-                    <span class="badge bg-warning text-dark">{{ $amenity->amenity_name }} (+₱{{ number_format($amenity->charge, 2) }})</span>
+                    <span class="badge bg-success">{{ $amenity->amenity_name }} &middot; included (₱{{ number_format($amenity->charge, 2) }} value)</span>
                 @endforeach
             </div>
         @else
-            <p class="mb-0 text-muted">No paid amenities assigned.</p>
+            <p class="mb-0 text-muted">No paid amenities included.</p>
         @endif
     </x-card>
 

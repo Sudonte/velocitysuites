@@ -379,6 +379,9 @@ class ReceptionistController extends Controller
             ->orderBy('category')
             ->orderBy('amenity_name')
             ->get();
+        // A paid amenity every room of this booking already includes is theirs at no charge - not offered for sale.
+        $types = $booking->rooms->pluck('roomType')->push($booking->roomType)->filter()->unique('id');
+        $amenities = $amenities->reject(fn (Amenity $a) => $types->isNotEmpty() && $types->every(fn ($t) => $t->includesAmenity($a)))->values();
 
         $remainingStock = $this->remainingAmenityStock($amenities->pluck('id'));
         // Which stay the amenity is for (a booking with several stays: the ones in a room right now).
@@ -449,6 +452,15 @@ class ReceptionistController extends Controller
         foreach ($validated['items'] as $item) {
             if (! $amenities->has($item['amenity_id'])) {
                 return response()->json(['message' => 'Only Paid/Additional amenities can be requested.'], 422);
+            }
+        }
+
+        // A paid amenity this room's type includes is the guest's at no charge - never added to the bill.
+        $roomType = \App\Models\RoomType::find($stayRoom?->room_type_id ?? $booking->room_type_id);
+        foreach ($validated['items'] as $item) {
+            $amenity = $amenities->get($item['amenity_id']);
+            if ($roomType && $roomType->includesAmenity($amenity)) {
+                return response()->json(['message' => "\"{$amenity->amenity_name}\" is already included with the {$roomType->name} room at no extra charge."], 422);
             }
         }
 

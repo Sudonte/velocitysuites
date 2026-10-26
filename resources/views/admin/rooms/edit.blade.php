@@ -145,7 +145,7 @@
                             @if($paidAmenities->isNotEmpty())
                                 <div class="d-flex flex-wrap gap-2 mb-2">
                                     @foreach($paidAmenities as $amenity)
-                                        <span class="badge bg-warning text-dark">{{ $amenity->amenity_name }} (+₱{{ number_format($amenity->charge, 2) }})</span>
+                                        <span class="badge bg-success">{{ $amenity->amenity_name }} &middot; included</span>
                                     @endforeach
                                 </div>
                             @else

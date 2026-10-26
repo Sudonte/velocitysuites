@@ -160,7 +160,8 @@
 
                         <div class="mb-3">
                             <small class="text-muted d-block mb-2">
-                                <strong class="text-body">Click a paid amenity below to offer it with this room type</strong>, then Save Changes.
+                                <strong class="text-body">Click a paid amenity below to include it with this room type</strong>, then Save Changes.
+                                Included amenities are free for guests booking this type - nothing is added to their rate.
                                 Free amenities are included with every room automatically, so they aren't listed here.
                                 <a href="{{ route('admin.amenities.create') }}" target="_blank">Create a new amenity <i class="fas fa-arrow-up-right-from-square fa-xs"></i></a>
                             </small>
