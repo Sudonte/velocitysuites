@@ -110,8 +110,8 @@
                         <div class="mb-3">
                             <small class="text-muted d-block mb-2">
                                 <strong class="text-body">Click a paid amenity below to include it with this room type</strong> - optional,
-                                and applies to every room of this type. Included amenities are free for guests booking this
-                                type - nothing is added to their rate. Free amenities are included with every room
+                                and applies to every room of this type. Set how many each room gets free (e.g. 1 extra bed) -
+                                more can still be added as paid add-ons. Free amenities are included with every room
                                 automatically, so they aren't listed here.
                                 <a href="{{ route('admin.amenities.create') }}" target="_blank">Create a new amenity <i class="fas fa-arrow-up-right-from-square fa-xs"></i></a>
                             </small>
@@ -138,19 +138,26 @@
                                         <h6 class="amenity-picker-category-title">{{ $category ?: 'Uncategorized' }}</h6>
                                         <div class="audience-chip-group">
                                             @foreach($group as $amenity)
-                                                <input type="checkbox" class="btn-check" autocomplete="off" name="amenities[]"
-                                                       id="amenity_{{ $amenity->id }}" value="{{ $amenity->id }}"
-                                                       {{ in_array($amenity->id, old('amenities', [])) ? 'checked' : '' }}>
-                                                <label class="btn btn-outline-secondary audience-chip" for="amenity_{{ $amenity->id }}"
-                                                       title="{{ $amenity->description }}">
-                                                    <i class="fas fa-plus amenity-toggle-icon-add" aria-hidden="true"></i><i class="fas fa-check amenity-toggle-icon-added" aria-hidden="true"></i>
-                                                    {{ $amenity->amenity_name }}
-                                                    @if($amenity->isPaid())
-                                                        <span class="text-warning">(+₱{{ number_format($amenity->charge, 2) }})</span>
-                                                    @else
-                                                        <span class="text-success">(Free)</span>
-                                                    @endif
-                                                </label>
+                                                <span class="amenity-chip">
+                                                    <input type="checkbox" class="btn-check" autocomplete="off" name="amenities[]"
+                                                           id="amenity_{{ $amenity->id }}" value="{{ $amenity->id }}"
+                                                           {{ in_array($amenity->id, old('amenities', [])) ? 'checked' : '' }}>
+                                                    <label class="btn btn-outline-secondary audience-chip" for="amenity_{{ $amenity->id }}"
+                                                           title="{{ $amenity->description }}">
+                                                        <i class="fas fa-plus amenity-toggle-icon-add" aria-hidden="true"></i><i class="fas fa-check amenity-toggle-icon-added" aria-hidden="true"></i>
+                                                        {{ $amenity->amenity_name }}
+                                                        @if($amenity->isPaid())
+                                                            <span class="text-warning">(+₱{{ number_format($amenity->charge, 2) }})</span>
+                                                        @else
+                                                            <span class="text-success">(Free)</span>
+                                                        @endif
+                                                    </label>
+                                                    <span class="amenity-qty" title="How many each room of this type gets free">
+                                                        <input type="number" class="form-control form-control-sm" name="amenity_qty[{{ $amenity->id }}]" min="1" max="20"
+                                                               value="{{ old('amenity_qty.' . $amenity->id, 1) }}" aria-label="{{ $amenity->amenity_name }} - free per room">
+                                                        <span>free per room</span>
+                                                    </span>
+                                                </span>
                                             @endforeach
                                         </div>
                                     </div>

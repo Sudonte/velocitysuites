@@ -88,8 +88,7 @@ final class StaysInput
             $service->validateSelection(array_values($merged)); // throws the same "only N left" error when the stays together ask too much
         }
         foreach ($stays as $i => $stay) {
-            // the stay's own room types: an amenity a chosen room already includes is refused, never charged
-            $resolved = $service->validateSelection($stay['raw_amenities'], collect($stay['lines'])->pluck('room_type'));
+            $resolved = $service->validateSelection($stay['raw_amenities']);
             // each entry keeps the room it was chosen for (validateSelection answers in the order it was asked)
             $stays[$i]['amenities'] = $resolved->values()->map(function (array $entry, int $k) use ($stay, $i) {
                 $raw = $stay['raw_amenities'][$k] ?? [];

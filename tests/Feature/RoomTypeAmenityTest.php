@@ -53,7 +53,7 @@ class RoomTypeAmenityTest extends ApiFlowTestCase
         $deluxe->assignedAmenities()->sync([$bed->id]);
 
         $deluxeNames = array_column($deluxe->fresh()->amenities, 'name');
-        $this->assertSame(['Free Wi-Fi', 'Extra Bed'], $deluxeNames); // free first, unassigned paid not shown
+        $this->assertSame(['Free Wi-Fi', '1 × Extra Bed'], $deluxeNames); // free first, then included paid with its count; unassigned paid not shown
         $this->assertSame(['Free Wi-Fi'], array_column($suite->fresh()->amenities, 'name'));
 
         // same item shape as before (the mobile API serializes this list)
@@ -66,33 +66,6 @@ class RoomTypeAmenityTest extends ApiFlowTestCase
         $this->assertNotNull($wifi);
     }
 
-    public function test_an_included_paid_amenity_is_never_charged_as_an_add_on_for_that_room(): void
-    {
-        $deluxe = $this->makeRoomTypeWithRooms('Deluxe', 1000, 2, 1);
-        $suite = $this->makeRoomTypeWithRooms('Suite', 2000, 2, 1);
-        $bed = $this->amenity('Extra Bed', 500);
-        $towel = $this->amenity('Additional Towel', 50);
-        $deluxe->assignedAmenities()->sync([$bed->id]);
-        $service = app(\App\Services\ReservationAmenityService::class);
-
-        // a Deluxe stay: Extra Bed is already included, so adding it is refused (nothing to charge)
-        try {
-            $service->validateSelection([['amenity_id' => $bed->id, 'quantity' => 1]], [$deluxe->fresh()]);
-            $this->fail('An included amenity was accepted as a paid add-on.');
-        } catch (\Illuminate\Validation\ValidationException $e) {
-            $this->assertStringContainsString('already included with the Deluxe room', $e->errors()['amenities'][0]);
-        }
-
-        // other paid amenities still work for Deluxe, and Extra Bed is still sold for a Suite
-        $this->assertCount(1, $service->validateSelection([['amenity_id' => $towel->id, 'quantity' => 1]], [$deluxe->fresh()]));
-        $this->assertCount(1, $service->validateSelection([['amenity_id' => $bed->id, 'quantity' => 1]], [$suite->fresh()]));
-
-        // a stay with both types: the room the item was chosen for decides
-        $both = [$deluxe->fresh(), $suite->fresh()];
-        $this->assertCount(1, $service->validateSelection([['amenity_id' => $bed->id, 'quantity' => 1, 'room_type_id' => $suite->id]], $both));
-        $this->expectException(\Illuminate\Validation\ValidationException::class);
-        $service->validateSelection([['amenity_id' => $bed->id, 'quantity' => 1, 'room_type_id' => $deluxe->id]], $both);
-    }
 
     public function test_admin_chooses_only_paid_amenities_for_a_room_type(): void
     {
@@ -108,12 +81,59 @@ class RoomTypeAmenityTest extends ApiFlowTestCase
         $this->actingAs($admin)->put(route('admin.room-types.update', $rt), $this->updatePayload($rt, [$wifi->id]))
             ->assertSessionHasErrors('amenities.0');
 
-        $this->actingAs($admin)->put(route('admin.room-types.update', $rt), $this->updatePayload($rt, [$bed->id]))
+        // 2 extra beds free per room
+        $this->actingAs($admin)->put(route('admin.room-types.update', $rt), $this->updatePayload($rt, [$bed->id]) + ['amenity_qty' => [$bed->id => 2]])
             ->assertSessionHasNoErrors()->assertRedirect(route('admin.room-types.index'));
         $this->assertSame([$bed->id], $rt->assignedAmenities()->pluck('amenities.id')->all());
+        $this->assertSame(2, (int) $rt->assignedAmenities()->first()->pivot->quantity);
+        $this->assertSame('2 × Extra Bed', array_column($rt->fresh()->amenities, 'name')[1]);
 
         // the admin page lists the paid amenity, not the free one
         $this->actingAs($admin)->get(route('admin.room-types.show', $rt))->assertOk()
-            ->assertSee('Paid Amenities Included with This Type')->assertSee('Extra Bed');
+            ->assertSee('Paid Amenities Included with This Type')->assertSee('2 × Extra Bed free per room');
+    }
+
+    public function test_included_amenities_leave_stock_at_check_in_and_more_can_still_be_bought(): void
+    {
+        $this->addPromotionAmenityTable();
+        $rt = $this->makeRoomTypeWithRooms('Deluxe', 1000, 2, 1);
+        $bed = $this->amenity('Extra Bed', 500); // 10 in stock
+        $rt->assignedAmenities()->sync([$bed->id => ['quantity' => 1]]);
+        $desk = User::create(['first_name' => 'Rita', 'last_name' => 'Desk', 'email' => 'desk-incl@example.test', 'password' => bcrypt('x'),
+            'role' => 'receptionist', 'status' => 'active', 'email_verified_at' => now()]);
+        $this->assertSame(10, Amenity::remainingStockFor([$bed->id])[$bed->id]);
+
+        // walk-in check-in for 1 night, buying 2 MORE extra beds as add-ons: 1000 + 2 x 500 = 2000 (the included one costs nothing)
+        $this->actingAs($desk)->post(route('receptionist.check-in.walk-in.store'), [
+            'guest_first_name' => 'Walk', 'guest_last_name' => 'In', 'checkin_permanent_address' => '1 Test St', 'current_address_same_as_permanent' => 1,
+            'checkin_contact_number' => '09171234567', 'room_ids' => [$rt->rooms()->first()->id],
+            'check_out' => \App\Support\CheckInWindow::today()->addDay()->toDateString(), 'adults' => 1, 'children' => 0,
+            'amenities' => [['amenity_id' => $bed->id, 'quantity' => 2]], 'payment_method' => 'cash', 'amount_received' => 2000,
+        ])->assertSessionHasNoErrors();
+
+        $booking = \App\Models\Booking::first();
+        $included = \App\Models\AmenityRequest::where('origin', \App\Models\AmenityRequest::ORIGIN_INCLUDED)->get();
+        $this->assertCount(1, $included);
+        $this->assertSame(1, (int) $included->first()->quantity);
+        $this->assertEquals(0, (float) $included->first()->charge);
+        $this->assertSame('approved', $included->first()->status);
+        $this->assertSame('Extra Bed (included)', $included->first()->amenity_name);
+
+        // stock: 10 - 1 included - 2 bought = 7; the bill only charges the 2 bought
+        $this->assertSame(7, Amenity::remainingStockFor([$bed->id])[$bed->id]);
+        $this->assertEqualsWithDelta(2000, $booking->fresh()->paidTotal(), 0.01);
+    }
+
+    private function addPromotionAmenityTable(): void
+    {
+        if (! \Illuminate\Support\Facades\Schema::hasTable('promotion_amenity')) {
+            \Illuminate\Support\Facades\Schema::create('promotion_amenity', function ($table) {
+                $table->id();
+                $table->unsignedBigInteger('promotion_id');
+                $table->unsignedBigInteger('amenity_id');
+                $table->unsignedInteger('quantity')->default(1);
+                $table->timestamps();
+            });
+        }
     }
 }

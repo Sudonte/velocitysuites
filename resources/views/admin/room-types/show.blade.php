@@ -114,14 +114,14 @@
     <x-card icon="fas fa-concierge-bell" bodyClass="card-body" class="mb-4">
         <x-slot:title>Paid Amenities Included with This Type</x-slot:title>
         <small class="text-muted d-block mb-2">
-            Guests booking this room type get these at no extra charge - nothing is added to their rate, and they can't be
-            bought again as an add-on for this room. Add or remove them from the Edit Type form. Free amenities are included
-            with every room automatically and are shown to guests without being assigned here.
+            Each room of this type gets these free, in the quantity shown - nothing is added to the rate. Guests can still
+            add more as paid add-ons. The included ones are taken from stock when the guest checks in. Change them from the
+            Edit Type form. Free amenities are included with every room automatically and aren't assigned here.
         </small>
         @if($paidAmenities->isNotEmpty())
             <div class="d-flex flex-wrap gap-2">
                 @foreach($paidAmenities as $amenity)
-                    <span class="badge bg-success">{{ $amenity->amenity_name }} &middot; included (₱{{ number_format($amenity->charge, 2) }} value)</span>
+                    <span class="badge bg-success">{{ \App\Models\RoomType::includedQuantity($amenity) }} × {{ $amenity->amenity_name }} free per room (₱{{ number_format($amenity->charge, 2) }} each after that)</span>
                 @endforeach
             </div>
         @else

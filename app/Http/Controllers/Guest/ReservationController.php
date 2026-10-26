@@ -209,7 +209,7 @@ class ReservationController extends Controller
         // Validated before creating anything, so an invalid amenity
         // selection rejects the whole submission rather than creating a
         // reservation and then silently dropping items.
-        $resolvedAmenities = $this->amenityService->validateSelection($validated['amenities'] ?? [], [RoomType::find($validated['room_type_id'])]);
+        $resolvedAmenities = $this->amenityService->validateSelection($validated['amenities'] ?? []);
 
         $children = $validated['children'] ?? 0;
         $discountRequested = (bool) ($validated['discount_requested'] ?? false);

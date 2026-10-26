@@ -357,6 +357,7 @@ abstract class ApiFlowTestCase extends TestCase
             $table->id();
             $table->unsignedBigInteger('room_type_id');
             $table->unsignedBigInteger('amenity_id');
+            $table->unsignedSmallInteger('quantity')->default(1);
             $table->timestamps();
         });
 

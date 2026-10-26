@@ -13,6 +13,8 @@ class AmenityRequest extends Model
     public const ORIGIN_BOOKING = 'booking';
     public const ORIGIN_GUEST_REQUEST = 'guest_request';
     public const ORIGIN_STAFF = 'staff';
+    /** A paid amenity the room type includes, handed over (and taken from stock) at check-in - always ₱0. */
+    public const ORIGIN_INCLUDED = 'included';
 
     /** Statuses that are billed (a guest request only ever becomes one of these by being approved). */
     public const BILLED_STATUSES = ['approved', 'in_progress', 'completed'];

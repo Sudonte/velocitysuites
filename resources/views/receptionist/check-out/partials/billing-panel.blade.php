@@ -76,7 +76,7 @@
                 @endif
                 @foreach($bookedAmenities as $req)
                     <tr>
-                        <td>{{ $req->amenity->amenity_name ?? $req->amenity_name ?? 'N/A' }} <span class="text-muted">x{{ $req->quantity }}</span></td>
+                        <td>{{ $req->amenity->amenity_name ?? $req->amenity_name ?? 'N/A' }} <span class="text-muted">x{{ $req->quantity }}</span> @if($req->origin === \App\Models\AmenityRequest::ORIGIN_INCLUDED) <span class="badge rounded-pill bg-success-subtle text-success-emphasis">Included with room</span>@endif</td>
                         <td class="text-end">{{ $peso($req->charge * $req->quantity) }}</td>
                     </tr>
                 @endforeach
@@ -132,7 +132,7 @@
                 <tbody>
                     @forelse($addedAmenities as $req)
                         <tr>
-                            <td>{{ $req->amenity->amenity_name ?? $req->amenity_name ?? 'N/A' }}</td>
+                            <td>{{ $req->amenity->amenity_name ?? $req->amenity_name ?? 'N/A' }} @if($req->origin === \App\Models\AmenityRequest::ORIGIN_INCLUDED) <span class="badge rounded-pill bg-success-subtle text-success-emphasis">Included with room</span>@endif</td>
                             <td class="text-end">x{{ $req->quantity }}</td>
                             <td class="text-end">{{ $peso($req->charge * $req->quantity) }}</td>
                         </tr>

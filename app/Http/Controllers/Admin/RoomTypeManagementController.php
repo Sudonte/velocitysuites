@@ -118,14 +118,17 @@ class RoomTypeManagementController extends Controller
             'status' => 'required|in:active,inactive',
             'amenities' => 'nullable|array',
             'amenities.*' => ['exists:amenities,id', $this->paidAmenityRule()],
+            // how many of each included paid amenity a room gets free
+            'amenity_qty' => 'nullable|array',
+            'amenity_qty.*' => 'nullable|integer|min:1|max:20',
         ], [
             'number_format.regex' => 'The numbering format must contain a run of # placeholders (e.g. 1## for 101, 102... or D-## for D-01, D-02...).',
             'min_capacity.lte' => 'Minimum guests cannot be more than the maximum guests.',
         ]);
 
         $validated['image'] = $this->storeImage($request);
-        $amenityIds = $validated['amenities'] ?? [];
-        unset($validated['amenities']);
+        $amenityIds = $this->amenitySync($validated);
+        unset($validated['amenities'], $validated['amenity_qty']);
 
         $roomType = RoomType::create($validated);
         $roomType->assignedAmenities()->sync($amenityIds);
@@ -161,11 +164,13 @@ class RoomTypeManagementController extends Controller
      * Paid/Additional amenity (Free/Included ones are on every room already
      * and never appear here) plus any paid amenity already assigned via
      * $currentAssignment even if it's since been deactivated (still shown,
-     * checked, and marked Inactive). Returns [$pickerList, $selectedIds].
+     * checked, and marked Inactive). Returns [$pickerList, $selectedIds, $includedQty (id => quantity)].
      */
     private function amenityPickerData($currentAssignment): array
     {
-        $selectedIds = $currentAssignment->where('charge', '>', 0)->pluck('amenities.id')->all();
+        $assigned = $currentAssignment->where('charge', '>', 0)->get();
+        $selectedIds = $assigned->pluck('id')->all();
+        $includedQty = $assigned->mapWithKeys(fn (Amenity $a) => [$a->id => RoomType::includedQuantity($a)])->all();
 
         $amenities = Amenity::where('charge', '>', 0)
             ->where(fn ($q) => $q->where('status', 'active')->orWhereIn('id', $selectedIds))
@@ -173,7 +178,17 @@ class RoomTypeManagementController extends Controller
             ->orderBy('amenity_name')
             ->get();
 
-        return [$amenities, $selectedIds];
+        return [$amenities, $selectedIds, $includedQty];
+    }
+
+    /** [amenity id => ['quantity' => n]] for the pivot: each chosen paid amenity with how many a room gets free (default 1). */
+    private function amenitySync(array $validated): array
+    {
+        $qty = $validated['amenity_qty'] ?? [];
+
+        return collect($validated['amenities'] ?? [])
+            ->mapWithKeys(fn ($id) => [(int) $id => ['quantity' => max(1, (int) ($qty[$id] ?? 1))]])
+            ->all();
     }
 
     /**
@@ -242,9 +257,9 @@ class RoomTypeManagementController extends Controller
             ->distinct()
             ->pluck('number_format');
 
-        [$amenities, $selectedAmenityIds] = $this->amenityPickerData($roomType->assignedAmenities());
+        [$amenities, $selectedAmenityIds, $includedQty] = $this->amenityPickerData($roomType->assignedAmenities());
 
-        return view('admin.room-types.edit', compact('roomType', 'existingFormats', 'amenities', 'selectedAmenityIds'));
+        return view('admin.room-types.edit', compact('roomType', 'existingFormats', 'amenities', 'selectedAmenityIds', 'includedQty'));
     }
 
     /**
@@ -263,6 +278,9 @@ class RoomTypeManagementController extends Controller
             'status' => 'required|in:active,inactive',
             'amenities' => 'nullable|array',
             'amenities.*' => ['exists:amenities,id', $this->paidAmenityRule()],
+            // how many of each included paid amenity a room gets free
+            'amenity_qty' => 'nullable|array',
+            'amenity_qty.*' => 'nullable|integer|min:1|max:20',
         ], [
             'number_format.regex' => 'The numbering format must contain a run of # placeholders (e.g. 1## for 101, 102... or D-## for D-01, D-02...).',
             'min_capacity.lte' => 'Minimum guests cannot be more than the maximum guests.',
@@ -284,8 +302,8 @@ class RoomTypeManagementController extends Controller
             $validated['image_changed_at'] = now();
         }
 
-        $amenityIds = $validated['amenities'] ?? [];
-        unset($validated['amenities']);
+        $amenityIds = $this->amenitySync($validated);
+        unset($validated['amenities'], $validated['amenity_qty']);
 
         $roomType->update($validated);
         $roomType->assignedAmenities()->sync($amenityIds);

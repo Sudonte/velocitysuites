@@ -436,6 +436,8 @@ class Booking extends Model
     {
         $stay->update(['checked_in_at' => now()]);
         $this->unsetRelation('stays');
+        // the paid amenities each room's type includes are handed over now (and leave stock until check-out)
+        app(\App\Services\IncludedAmenityService::class)->grant($this, $stay);
     }
 
     /**

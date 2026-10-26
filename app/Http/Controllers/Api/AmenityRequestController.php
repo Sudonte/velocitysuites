@@ -103,9 +103,6 @@ class AmenityRequestController extends Controller
             ], 422);
         }
 
-        // Included with the booked room type: the guest already has it at no charge.
-        \App\Services\ReservationAmenityService::refuseIfIncluded($liveAmenity, [], $reservation->room_type_id);
-
         // Same shared-pool ceiling ReservationAmenityService::validateSelection()
         // and Receptionist\ReceptionistController::amenitiesStore() enforce -
         // the amenity's actual remaining stock right now (catalog quantity

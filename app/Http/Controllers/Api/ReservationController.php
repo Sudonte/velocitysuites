@@ -664,8 +664,7 @@ class ReservationController extends Controller
             // the flat shape: one selection for the (single) stay
             $rawAmenities = array_values($validated['amenities'] ?? []);
             // each entry keeps the booked room it was chosen for (room type + which room of that type), as on create
-            $bookedTypes = \App\Models\RoomType::whereIn('id', $reservation->roomLines()->pluck('room_type_id')->push($reservation->room_type_id)->filter())->get();
-            $resolvedAmenities = $this->amenityService->validateSelection($rawAmenities, $bookedTypes)->values()->map(fn (array $entry, int $k) => $entry + [
+            $resolvedAmenities = $this->amenityService->validateSelection($rawAmenities)->values()->map(fn (array $entry, int $k) => $entry + [
                 'room_type_id' => isset($rawAmenities[$k]['room_type_id']) ? (int) $rawAmenities[$k]['room_type_id'] : null,
                 'room_slot' => isset($rawAmenities[$k]['room_slot']) ? (int) $rawAmenities[$k]['room_slot'] : null,
             ]);

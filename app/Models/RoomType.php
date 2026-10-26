@@ -78,7 +78,8 @@ class RoomType extends Model
      */
     public function assignedAmenities()
     {
-        return $this->belongsToMany(Amenity::class, 'room_type_amenity')->withTimestamps();
+        // pivot quantity: how many of a paid amenity each room of this type includes (e.g. 1 extra bed)
+        return $this->belongsToMany(Amenity::class, 'room_type_amenity')->withPivot('quantity')->withTimestamps();
     }
 
     /**
@@ -95,19 +96,19 @@ class RoomType extends Model
         return $assigned->where('status', 'active')->filter(fn (Amenity $a) => $a->isPaid())->values();
     }
 
-    /** A paid amenity this type includes - the guest has it at no charge, so it is never sold as an add-on here. */
-    public function includesAmenity(Amenity $amenity): bool
+    /** How many of an included paid amenity each room gets free (the assignment's quantity, at least 1). */
+    public static function includedQuantity(Amenity $amenity): int
     {
-        return $amenity->isPaid() && $this->paidAmenities()->contains('id', $amenity->id);
+        return max(1, (int) ($amenity->pivot->quantity ?? 1));
     }
 
     /**
      * The room type's amenities for guest display (website, mobile API, front desk):
      * every active Free/Included amenity - those come with every room, so they are
-     * never assigned per type - followed by the paid amenities this type includes.
-     * Both are included in the room at no extra charge, so both read as
-     * 'complimentary' with no fee (a paid amenity's price only applies when it is
-     * bought as an add-on for a room that doesn't include it). Shape per item:
+     * never assigned per type - followed by the paid amenities this type includes,
+     * named with how many come free per room ("1 × Extra Bed"). Both are part of
+     * the room at no extra charge, so both read as 'complimentary' with no fee;
+     * more of a paid one can still be bought as an add-on at its price. Shape per item:
      * ['name','category','description','pricing_type','fee','quantity',
      * 'is_unlimited']; an empty array drives "No Available Amenities".
      */
@@ -116,7 +117,7 @@ class RoomType extends Model
         return Amenity::freeIncluded()->concat($this->paidAmenities())
             ->map(function (Amenity $amenity) {
                 return [
-                    'name' => $amenity->amenity_name,
+                    'name' => $amenity->isPaid() ? self::includedQuantity($amenity) . ' × ' . $amenity->amenity_name : $amenity->amenity_name,
                     'category' => $amenity->category,
                     'description' => $amenity->description,
                     'pricing_type' => 'complimentary', // included with the room either way - nothing added to the rate
