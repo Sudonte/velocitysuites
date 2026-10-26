@@ -75,7 +75,7 @@ class RoomTypeAmenityTest extends ApiFlowTestCase
         $admin = $this->admin();
 
         $this->actingAs($admin)->get(route('admin.room-types.edit', $rt))->assertOk()
-            ->assertSee('Extra Bed')->assertDontSee('Free Wi-Fi')->assertSee('Free amenities are included with every room automatically');
+            ->assertSee('Extra Bed')->assertDontSee('Free Wi-Fi')->assertSee('Free amenities come with every room automatically')->assertSee('Promotions for this room type');
 
         // a free amenity is refused - it is already included everywhere
         $this->actingAs($admin)->put(route('admin.room-types.update', $rt), $this->updatePayload($rt, [$wifi->id]))

@@ -84,7 +84,9 @@ class RoomTypeManagementController extends Controller
         // RoomType::getGalleryAttribute().
         $mergedGallery = collect($roomType->gallery);
 
-        return view('admin.room-types.show', compact('roomType', 'rooms', 'nextNumbers', 'mergedGallery', 'archivedCount'));
+        $promotions = $this->promotionsFor($roomType);
+
+        return view('admin.room-types.show', compact('roomType', 'rooms', 'nextNumbers', 'mergedGallery', 'archivedCount', 'promotions'));
     }
 
     /**
@@ -99,7 +101,9 @@ class RoomTypeManagementController extends Controller
         $amenities = Amenity::where('status', 'active')->where('charge', '>', 0)
             ->orderBy('category')->orderBy('amenity_name')->get();
 
-        return view('admin.room-types.create', compact('existingFormats', 'amenities'));
+        $promotions = $this->promotionsFor(null);
+
+        return view('admin.room-types.create', compact('existingFormats', 'amenities', 'promotions'));
     }
 
     /**
@@ -181,6 +185,14 @@ class RoomTypeManagementController extends Controller
         return [$amenities, $selectedIds, $includedQty];
     }
 
+    /** Active promotions that apply to this room type - its own and the ones for every type (all-types only for a new type). */
+    private function promotionsFor(?RoomType $roomType): \Illuminate\Support\Collection
+    {
+        return \App\Models\Promotion::with('amenities')->where('status', 'active')
+            ->where(fn ($q) => $roomType ? $q->whereNull('room_type_id')->orWhere('room_type_id', $roomType->id) : $q->whereNull('room_type_id'))
+            ->orderBy('start_date')->get();
+    }
+
     /** [amenity id => ['quantity' => n]] for the pivot: each chosen paid amenity with how many a room gets free (default 1). */
     private function amenitySync(array $validated): array
     {
@@ -259,7 +271,9 @@ class RoomTypeManagementController extends Controller
 
         [$amenities, $selectedAmenityIds, $includedQty] = $this->amenityPickerData($roomType->assignedAmenities());
 
-        return view('admin.room-types.edit', compact('roomType', 'existingFormats', 'amenities', 'selectedAmenityIds', 'includedQty'));
+        $promotions = $this->promotionsFor($roomType);
+
+        return view('admin.room-types.edit', compact('roomType', 'existingFormats', 'amenities', 'selectedAmenityIds', 'includedQty', 'promotions'));
     }
 
     /**

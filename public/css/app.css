@@ -1909,8 +1909,16 @@ td.table-actions .btn-icon, .d-flex > .btn-icon { flex-shrink: 0; }
 /* Room cards are jumped to after editing a room (#room-ID) - keep them clear of the sticky header. */
 [id^="room-"] { scroll-margin-top: 1rem; }
 
-/* Room type paid-amenity picker: a selected chip shows how many each room gets free. */
-.amenity-chip { display: inline-flex; align-items: center; gap: .35rem; }
-.amenity-chip .amenity-qty { display: none; align-items: center; gap: .3rem; font-size: .8rem; color: var(--text-light); }
-.amenity-chip .btn-check:checked ~ .amenity-qty { display: inline-flex; }
-.amenity-chip .amenity-qty input { width: 4.25rem; }
+
+/* Room type form: paid amenities included, one row each (name | free per room | remove). */
+.included-amenities { display: flex; flex-direction: column; gap: .5rem; }
+.included-amenity {
+    display: flex; align-items: center; gap: .75rem; flex-wrap: wrap;
+    padding: .55rem .75rem; border: 1px solid var(--border-color); border-radius: var(--radius-btn); background: var(--surface-color);
+}
+.included-amenity-name { flex: 1 1 14rem; font-weight: 500; }
+.included-amenity-name small { font-weight: 400; margin-left: .25rem; }
+.included-amenity-qty { display: inline-flex; align-items: center; gap: .4rem; margin: 0; font-size: .85rem; color: var(--text-light); white-space: nowrap; }
+.included-amenity-qty input { width: 4.5rem; }
+.included-promo { padding: .4rem 0; border-bottom: 1px solid var(--border-color); }
+.included-promo:last-child { border-bottom: 0; }

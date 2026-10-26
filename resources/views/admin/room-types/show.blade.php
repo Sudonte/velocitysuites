@@ -129,6 +129,25 @@
         @endif
     </x-card>
 
+    <x-card icon="fas fa-tags" bodyClass="card-body" class="mb-4">
+        <x-slot:title>Promotions for This Type</x-slot:title>
+        @forelse($promotions as $promo)
+            <div class="included-promo">
+                <span class="fw-semibold">{{ $promo->promo_name }}</span>
+                <span class="text-muted small">
+                    {{ $promo->room_type_id ? 'This room type' : 'All room types' }} &middot;
+                    @if($promo->is_recurring) Every year, @endif
+                    {{ optional($promo->start_date)->format('M d, Y') }} &ndash; {{ optional($promo->end_date)->format('M d, Y') }}
+                    @if($promo->amenities->isNotEmpty())
+                        &middot; Includes {{ $promo->amenities->map(fn ($a) => max(1, (int) $a->pivot->quantity) . ' × ' . $a->amenity_name)->join(', ') }}
+                    @endif
+                </span>
+            </div>
+        @empty
+            <p class="mb-0 text-muted">No active promotions apply to this room type. <a href="{{ route('admin.promotions.index') }}">Manage promotions</a></p>
+        @endforelse
+    </x-card>
+
     <!-- Search and Filter -->
     <x-card bodyClass="card-body" class="mb-4">
         <form method="GET" action="{{ route('admin.room-types.show', $roomType) }}" class="row g-3">

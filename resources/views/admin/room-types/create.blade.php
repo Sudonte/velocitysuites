@@ -104,70 +104,7 @@
                         </div>
                     </div>
 
-                    <div class="form-subsection">
-                        <h6 class="form-subsection-title">Paid Amenities</h6>
-
-                        <div class="mb-3">
-                            <small class="text-muted d-block mb-2">
-                                <strong class="text-body">Click a paid amenity below to include it with this room type</strong> - optional,
-                                and applies to every room of this type. Set how many each room gets free (e.g. 1 extra bed) -
-                                more can still be added as paid add-ons. Free amenities are included with every room
-                                automatically, so they aren't listed here.
-                                <a href="{{ route('admin.amenities.create') }}" target="_blank">Create a new amenity <i class="fas fa-arrow-up-right-from-square fa-xs"></i></a>
-                            </small>
-                            @if($amenities->isNotEmpty())
-                                <div class="input-group input-group-sm mb-3" style="max-width: 420px;">
-                                    <select class="form-select" id="amenityAddSelect">
-                                        <option value="">+ Add a paid amenity&hellip;</option>
-                                        @foreach($amenities->groupBy('category') as $category => $group)
-                                            <optgroup label="{{ $category ?: 'Uncategorized' }}">
-                                                @foreach($group as $amenity)
-                                                    <option value="{{ $amenity->id }}" {{ in_array($amenity->id, old('amenities', [])) ? 'disabled' : '' }}>
-                                                        {{ $amenity->amenity_name }} ({{ $amenity->isPaid() ? '+₱' . number_format($amenity->charge, 2) : 'Free' }})
-                                                    </option>
-                                                @endforeach
-                                            </optgroup>
-                                        @endforeach
-                                    </select>
-                                    <button type="button" class="btn btn-primary" id="amenityAddBtn">
-                                        <i class="fas fa-plus"></i> Add
-                                    </button>
-                                </div>
-                                @foreach($amenities->groupBy('category') as $category => $group)
-                                    <div class="amenity-picker-category">
-                                        <h6 class="amenity-picker-category-title">{{ $category ?: 'Uncategorized' }}</h6>
-                                        <div class="audience-chip-group">
-                                            @foreach($group as $amenity)
-                                                <span class="amenity-chip">
-                                                    <input type="checkbox" class="btn-check" autocomplete="off" name="amenities[]"
-                                                           id="amenity_{{ $amenity->id }}" value="{{ $amenity->id }}"
-                                                           {{ in_array($amenity->id, old('amenities', [])) ? 'checked' : '' }}>
-                                                    <label class="btn btn-outline-secondary audience-chip" for="amenity_{{ $amenity->id }}"
-                                                           title="{{ $amenity->description }}">
-                                                        <i class="fas fa-plus amenity-toggle-icon-add" aria-hidden="true"></i><i class="fas fa-check amenity-toggle-icon-added" aria-hidden="true"></i>
-                                                        {{ $amenity->amenity_name }}
-                                                        @if($amenity->isPaid())
-                                                            <span class="text-warning">(+₱{{ number_format($amenity->charge, 2) }})</span>
-                                                        @else
-                                                            <span class="text-success">(Free)</span>
-                                                        @endif
-                                                    </label>
-                                                    <span class="amenity-qty" title="How many each room of this type gets free">
-                                                        <input type="number" class="form-control form-control-sm" name="amenity_qty[{{ $amenity->id }}]" min="1" max="20"
-                                                               value="{{ old('amenity_qty.' . $amenity->id, 1) }}" aria-label="{{ $amenity->amenity_name }} - free per room">
-                                                        <span>free per room</span>
-                                                    </span>
-                                                </span>
-                                            @endforeach
-                                        </div>
-                                    </div>
-                                @endforeach
-                            @else
-                                <p class="text-muted mb-0">No paid amenities exist yet. <a href="{{ route('admin.amenities.create') }}">Create one</a> to offer it here.</p>
-                            @endif
-                            @error('amenities')<div class="invalid-feedback d-block">{{ $message }}</div>@enderror
-                        </div>
-                    </div>
+                    @include('admin.room-types.partials.amenity-picker', ['amenities' => $amenities, 'selectedIds' => [], 'includedQty' => [], 'promotions' => $promotions])
 
                     <div class="form-subsection">
                         <h6 class="form-subsection-title">Status</h6>
@@ -191,42 +128,4 @@
     </div>
 </div>
 
-<script>
-    document.addEventListener('DOMContentLoaded', function () {
-        // "+ Add" button/dropdown - an explicit alternative to clicking a
-        // chip directly below for admins who'd rather pick from a list than
-        // scan every category. Just checks the same hidden checkbox the
-        // chip already toggles, so validation/submission need no changes;
-        // the chip itself still flips to "selected" via the existing
-        // .btn-check:checked CSS, and still works for removing it again.
-        var amenityAddSelect = document.getElementById('amenityAddSelect');
-        var amenityAddBtn = document.getElementById('amenityAddBtn');
-        if (amenityAddSelect && amenityAddBtn) {
-            amenityAddBtn.addEventListener('click', function () {
-                var id = amenityAddSelect.value;
-                if (!id) return;
-                var checkbox = document.getElementById('amenity_' + id);
-                if (checkbox) {
-                    checkbox.checked = true;
-                }
-                var option = amenityAddSelect.querySelector('option[value="' + id + '"]');
-                if (option) {
-                    option.disabled = true;
-                }
-                amenityAddSelect.value = '';
-            });
-
-            // Re-enable the dropdown option if its chip is later deselected
-            // (clicked directly, or removed) so it can be added again.
-            document.querySelectorAll('.audience-chip-group .btn-check').forEach(function (checkbox) {
-                checkbox.addEventListener('change', function () {
-                    var option = amenityAddSelect.querySelector('option[value="' + checkbox.value + '"]');
-                    if (option) {
-                        option.disabled = checkbox.checked;
-                    }
-                });
-            });
-        }
-    });
-</script>
 @endsection
