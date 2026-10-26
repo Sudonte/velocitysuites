@@ -141,15 +141,11 @@
                         <h6 class="form-subsection-title">Amenities</h6>
 
                         <div class="form-group mb-1">
-                            @if(!empty($room->amenities))
+                            @php $paidAmenities = $room->roomType->paidAmenities(); @endphp
+                            @if($paidAmenities->isNotEmpty())
                                 <div class="d-flex flex-wrap gap-2 mb-2">
-                                    @foreach($room->amenities as $amenity)
-                                        <span class="badge {{ $amenity['pricing_type'] === 'paid' ? 'bg-warning text-dark' : 'bg-success' }}">
-                                            {{ $amenity['name'] }}
-                                            @if($amenity['pricing_type'] === 'paid')
-                                                (+₱{{ number_format($amenity['fee'], 2) }})
-                                            @endif
-                                        </span>
+                                    @foreach($paidAmenities as $amenity)
+                                        <span class="badge bg-warning text-dark">{{ $amenity->amenity_name }} (+₱{{ number_format($amenity->charge, 2) }})</span>
                                     @endforeach
                                 </div>
                             @else

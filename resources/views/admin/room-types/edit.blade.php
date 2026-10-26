@@ -156,19 +156,18 @@
                     </div>
 
                     <div class="form-subsection">
-                        <h6 class="form-subsection-title">Amenities</h6>
+                        <h6 class="form-subsection-title">Paid Amenities</h6>
 
                         <div class="mb-3">
                             <small class="text-muted d-block mb-2">
-                                <strong class="text-body">Click an amenity below to add or remove it from this room type</strong>, then Save Changes.
-                                Applies to every room of this type - amenities are managed only at the Room Type level,
-                                never on an individual room.
+                                <strong class="text-body">Click a paid amenity below to offer it with this room type</strong>, then Save Changes.
+                                Free amenities are included with every room automatically, so they aren't listed here.
                                 <a href="{{ route('admin.amenities.create') }}" target="_blank">Create a new amenity <i class="fas fa-arrow-up-right-from-square fa-xs"></i></a>
                             </small>
                             @if($amenities->isNotEmpty())
                                 <div class="input-group input-group-sm mb-3" style="max-width: 420px;">
                                     <select class="form-select" id="amenityAddSelect">
-                                        <option value="">+ Add an amenity&hellip;</option>
+                                        <option value="">+ Add a paid amenity&hellip;</option>
                                         @foreach($amenities->groupBy('category') as $category => $group)
                                             <optgroup label="{{ $category ?: 'Uncategorized' }}">
                                                 @foreach($group as $amenity)
@@ -209,7 +208,7 @@
                                     </div>
                                 @endforeach
                             @else
-                                <p class="text-muted mb-0">No amenities exist yet. <a href="{{ route('admin.amenities.create') }}">Create one</a> to assign it here.</p>
+                                <p class="text-muted mb-0">No paid amenities exist yet. <a href="{{ route('admin.amenities.create') }}">Create one</a> to offer it here.</p>
                             @endif
                             @error('amenities')<div class="invalid-feedback d-block">{{ $message }}</div>@enderror
                         </div>

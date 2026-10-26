@@ -82,18 +82,29 @@ class RoomType extends Model
     }
 
     /**
-     * The room type's amenities for guest display - active-only. Shape:
-     * ['name','category','description','pricing_type','fee']; empty array
-     * drives "No Available Amenities" everywhere it's shown.
+     * Paid amenities the System Administrator chose for this type (active only) -
+     * the only part of a type's amenity list that is edited per type.
+     */
+    public function paidAmenities(): \Illuminate\Support\Collection
+    {
+        // A list that eager-loaded assignedAmenities (guest booking lists) reads them; anyone else queries.
+        $assigned = $this->relationLoaded('assignedAmenities')
+            ? $this->assignedAmenities
+            : $this->assignedAmenities()->get();
+
+        return $assigned->where('status', 'active')->filter(fn (Amenity $a) => $a->isPaid())->values();
+    }
+
+    /**
+     * The room type's amenities for guest display (website, mobile API, front desk):
+     * every active Free/Included amenity - those come with every room, so they are
+     * never assigned per type - followed by this type's paid amenities. Shape per
+     * item: ['name','category','description','pricing_type','fee','quantity',
+     * 'is_unlimited']; an empty array drives "No Available Amenities".
      */
     public function getAmenitiesAttribute(): array
     {
-        // A list that eager-loaded assignedAmenities (guest booking lists) reads them; anyone else queries as before.
-        $amenities = $this->relationLoaded('assignedAmenities')
-            ? $this->assignedAmenities->where('status', 'active')
-            : $this->assignedAmenities()->where('status', 'active')->get();
-
-        return $amenities
+        return Amenity::freeIncluded()->concat($this->paidAmenities())
             ->map(function (Amenity $amenity) {
                 return [
                     'name' => $amenity->amenity_name,

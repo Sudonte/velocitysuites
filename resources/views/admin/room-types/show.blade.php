@@ -69,12 +69,13 @@
                             <span class="room-type-detail-value">{{ $roomType->number_format ?? 'Not set' }}</span>
                         </div>
                         <div class="room-type-detail-row">
-                            <span class="room-type-detail-label">Amenities:</span>
+                            <span class="room-type-detail-label">Paid Amenities:</span>
                             <span class="room-type-detail-value">
-                                @if($roomType->amenities)
-                                    {{ collect($roomType->amenities)->map(fn($a) => $a['name'] . ($a['category'] ? ' (' . $a['category'] . ')' : ''))->join(', ') }}
+                                @php $paidAmenities = $roomType->paidAmenities(); @endphp
+                                @if($paidAmenities->isNotEmpty())
+                                    {{ $paidAmenities->map(fn ($a) => $a->amenity_name . ' (₱' . number_format($a->charge, 2) . ')')->join(', ') }}
                                 @else
-                                    No Available Amenities
+                                    None
                                 @endif
                             </span>
                         </div>
@@ -110,25 +111,20 @@
     </small>
     <x-room-gallery :images="$mergedGallery" :title="$roomType->name" id="adminMergedGallery" />
 
-    <x-card icon="fas fa-eye" bodyClass="card-body" class="mb-4">
-        <x-slot:title>All Amenities Available to Guests</x-slot:title>
+    <x-card icon="fas fa-concierge-bell" bodyClass="card-body" class="mb-4">
+        <x-slot:title>Paid Amenities for This Type</x-slot:title>
         <small class="text-muted d-block mb-2">
-            This type's assigned amenities - what guests see on this type's details page. Add, remove, or change
-            amenities from the Edit Type form.
+            Paid amenities offered with this room type - add or remove them from the Edit Type form.
+            Free amenities are included with every room automatically and are shown to guests without being assigned here.
         </small>
-        @if($roomType->amenities)
+        @if($paidAmenities->isNotEmpty())
             <div class="d-flex flex-wrap gap-2">
-                @foreach($roomType->amenities as $amenity)
-                    <span class="badge {{ $amenity['pricing_type'] === 'paid' ? 'bg-warning text-dark' : 'bg-success' }}">
-                        {{ $amenity['name'] }}
-                        @if($amenity['pricing_type'] === 'paid')
-                            (+₱{{ number_format($amenity['fee'], 2) }})
-                        @endif
-                    </span>
+                @foreach($paidAmenities as $amenity)
+                    <span class="badge bg-warning text-dark">{{ $amenity->amenity_name }} (+₱{{ number_format($amenity->charge, 2) }})</span>
                 @endforeach
             </div>
         @else
-            <p class="mb-0 text-muted">No Available Amenities.</p>
+            <p class="mb-0 text-muted">No paid amenities assigned.</p>
         @endif
     </x-card>
 
@@ -192,8 +188,8 @@
                                         <span class="badge bg-warning text-dark ms-1" title="Overrides the type's base rate of ₱{{ number_format($roomType->rate, 2) }}">override</span>
                                     @endif
                                 </span>
-                                @if($room->amenities)
-                                    <span class="room-type-stat-chip"><i class="fas fa-concierge-bell"></i> {{ count($room->amenities) }} {{ Str::plural('amenity', count($room->amenities)) }}</span>
+                                @if($paidAmenities->isNotEmpty())
+                                    <span class="room-type-stat-chip"><i class="fas fa-concierge-bell"></i> {{ $paidAmenities->count() }} paid {{ Str::plural('amenity', $paidAmenities->count()) }}</span>
                                 @endif
                             </div>
                         </div>

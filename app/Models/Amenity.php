@@ -39,6 +39,31 @@ class Amenity extends Model
     /** Quantity the mobile API reports for an Unlimited amenity (display only). */
     public const API_UNLIMITED_DISPLAY_QUANTITY = 999;
 
+    private const FREE_INCLUDED_KEY = 'amenities.free-included';
+
+    /**
+     * Every active Free/Included amenity - included with every room type without
+     * being assigned (see RoomType::getAmenitiesAttribute()). Read once per request
+     * or queued job (scoped), so a list of many room types doesn't query it per
+     * type; any amenity save or delete in this process drops the cached copy.
+     */
+    public static function freeIncluded(): \Illuminate\Support\Collection
+    {
+        if (! app()->bound(self::FREE_INCLUDED_KEY)) {
+            app()->scoped(self::FREE_INCLUDED_KEY, fn () => static::where('status', 'active')->where('charge', '<=', 0)
+                ->orderBy('category')->orderBy('amenity_name')->get());
+        }
+
+        return app(self::FREE_INCLUDED_KEY);
+    }
+
+    protected static function booted(): void
+    {
+        $forget = fn () => app()->forgetInstance(self::FREE_INCLUDED_KEY);
+        static::saved($forget);
+        static::deleted($forget);
+    }
+
     /** Display text for stock: "Unlimited" or the configured quantity. */
     public function getStockLabelAttribute(): string
     {

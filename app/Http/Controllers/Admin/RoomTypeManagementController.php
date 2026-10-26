@@ -93,10 +93,10 @@ class RoomTypeManagementController extends Controller
     public function create(): View
     {
         $existingFormats = RoomType::whereNotNull('number_format')->distinct()->pluck('number_format');
-        // Only Free/Included amenities are ever assignable to a Room Type -
-        // Paid/Additional amenities belong exclusively to the guest booking
-        // add-on catalog, never to a room's standard amenity list.
-        $amenities = Amenity::where('status', 'active')->where('charge', 0)
+        // Only Paid/Additional amenities are chosen per Room Type - every active
+        // Free/Included amenity comes with every room automatically (see
+        // RoomType::getAmenitiesAttribute()), so there is nothing to assign.
+        $amenities = Amenity::where('status', 'active')->where('charge', '>', 0)
             ->orderBy('category')->orderBy('amenity_name')->get();
 
         return view('admin.room-types.create', compact('existingFormats', 'amenities'));
@@ -117,7 +117,7 @@ class RoomTypeManagementController extends Controller
             'number_format' => ['required', 'string', 'max:20', 'regex:/^[A-Za-z0-9\-]*#+[A-Za-z0-9\-]*$/'],
             'status' => 'required|in:active,inactive',
             'amenities' => 'nullable|array',
-            'amenities.*' => ['exists:amenities,id', $this->freeAmenityRule()],
+            'amenities.*' => ['exists:amenities,id', $this->paidAmenityRule()],
         ], [
             'number_format.regex' => 'The numbering format must contain a run of # placeholders (e.g. 1## for 101, 102... or D-## for D-01, D-02...).',
             'min_capacity.lte' => 'Minimum guests cannot be more than the maximum guests.',
@@ -157,23 +157,18 @@ class RoomTypeManagementController extends Controller
     }
 
     /**
-     * Builds the amenity picker list for an assignment form: every active,
-     * Free/Included amenity (selectable for new assignment - Paid/
-     * Additional amenities never appear here, they belong only to the
-     * guest booking add-on catalog) plus any amenity already assigned via
-     * $currentAssignment even if it's since been deactivated or is paid
-     * (still shown, checked, and visually marked - a later Amenities
-     * module change must not silently hide it from a type it's already
-     * on). Returns [$pickerList, $selectedIds].
+     * Builds the amenity picker list for an assignment form: every active
+     * Paid/Additional amenity (Free/Included ones are on every room already
+     * and never appear here) plus any paid amenity already assigned via
+     * $currentAssignment even if it's since been deactivated (still shown,
+     * checked, and marked Inactive). Returns [$pickerList, $selectedIds].
      */
     private function amenityPickerData($currentAssignment): array
     {
-        $selectedIds = $currentAssignment->pluck('amenities.id')->all();
+        $selectedIds = $currentAssignment->where('charge', '>', 0)->pluck('amenities.id')->all();
 
-        $amenities = Amenity::where(function ($q) {
-                $q->where('status', 'active')->where('charge', 0);
-            })
-            ->orWhereIn('id', $selectedIds)
+        $amenities = Amenity::where('charge', '>', 0)
+            ->where(fn ($q) => $q->where('status', 'active')->orWhereIn('id', $selectedIds))
             ->orderBy('category')
             ->orderBy('amenity_name')
             ->get();
@@ -182,17 +177,16 @@ class RoomTypeManagementController extends Controller
     }
 
     /**
-     * Rejects any submitted amenity id that isn't a currently active,
-     * Free/Included amenity - real backend enforcement (not just hiding
-     * paid amenities from the picker's UI) of "only free amenities are
-     * assignable to a Room Type."
+     * Rejects a Free/Included amenity - those are on every room already, so only
+     * Paid/Additional amenities are chosen per Room Type (backend enforcement, not
+     * just the picker hiding them).
      */
-    private function freeAmenityRule(): \Closure
+    private function paidAmenityRule(): \Closure
     {
         return function (string $attribute, mixed $value, \Closure $fail): void {
             $amenity = Amenity::find($value);
-            if ($amenity && $amenity->isPaid()) {
-                $fail("\"{$amenity->amenity_name}\" is a Paid/Additional amenity and cannot be assigned to a Room Type - only Free/Included amenities are assignable here.");
+            if ($amenity && ! $amenity->isPaid()) {
+                $fail("\"{$amenity->amenity_name}\" is free and already included with every room - only paid amenities are chosen per room type.");
             }
         };
     }
@@ -268,7 +262,7 @@ class RoomTypeManagementController extends Controller
             'number_format' => ['required', 'string', 'max:20', 'regex:/^[A-Za-z0-9\-]*#+[A-Za-z0-9\-]*$/'],
             'status' => 'required|in:active,inactive',
             'amenities' => 'nullable|array',
-            'amenities.*' => ['exists:amenities,id', $this->freeAmenityRule()],
+            'amenities.*' => ['exists:amenities,id', $this->paidAmenityRule()],
         ], [
             'number_format.regex' => 'The numbering format must contain a run of # placeholders (e.g. 1## for 101, 102... or D-## for D-01, D-02...).',
             'min_capacity.lte' => 'Minimum guests cannot be more than the maximum guests.',
