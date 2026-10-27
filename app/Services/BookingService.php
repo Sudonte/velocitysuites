@@ -104,15 +104,18 @@ class BookingService
 
         $roomCharge = (float) $lines->sum('subtotal');
 
+        $addOns = round((float) $reservation->bookingAmenities->sum('subtotal'), 2);
+
         // The promotion applied to this reservation (by the receptionist - never picked automatically, so the
         // estimate and the bill always agree). Its discount, if it has one, comes off the RATE of each room of the
         // promotion's room type only - a promo for Deluxe never discounts a Standard room on the same reservation -
-        // through the same Promotion::discountForRoom() the bill (App\Support\StayBill) uses.
+        // or off the whole total (rooms + the amenities booked; this is all before check-in), through the same
+        // Promotion::discountFor() the bill (App\Support\StayBill) uses.
         $promotion = $reservation->promotion_id
             ? $this->remember('promotion:'.$reservation->promotion_id, fn () => Promotion::find($reservation->promotion_id))
             : null;
         $promoDiscount = $promotion
-            ? round((float) $lines->sum(fn ($l) => $promotion->discountForRoom($l['room_type_id'], $l['rate'], $l['room_nights'])), 2)
+            ? $promotion->discountFor($lines->map(fn ($l) => ['room_type_id' => $l['room_type_id'], 'rate' => $l['rate'], 'nights' => $l['room_nights']])->all(), $roomCharge + $addOns)
             : 0.0;
 
         $discount = $promoDiscount;
@@ -121,7 +124,6 @@ class BookingService
         // 20% by law, RA 9994 / RA 10754), never from a number in code, and it applies to the WHOLE bill - room
         // charges plus the paid amenities the guest selected - through the same function Billing / Check-out uses.
         // A stay gets an ID discount or a promotion, never both.
-        $addOns = round((float) $reservation->bookingAmenities->sum('subtotal'), 2);
         if (! $promotion) {
             $discount += $this->statutoryDiscountAmount($reservation, $roomCharge, $addOns);
         }
@@ -133,7 +135,7 @@ class BookingService
             'room_charge' => round($roomCharge, 2),
             'add_ons' => $addOns,
             'discount' => round($discount, 2),
-            'promo_discount' => round(min($promoDiscount, $roomCharge), 2),
+            'promo_discount' => round(min($promoDiscount, $roomCharge + $addOns), 2),
             'total' => round(max(0, $roomCharge + $addOns - $discount), 2),
         ];
     }

@@ -301,7 +301,7 @@
                                     @if($promo->hasDiscount())<br>@endif
                                 @endif
                                 @if($promo->hasDiscount())
-                                    <strong>Discount:</strong> {{ $promo->discountLabel() }}{{ $promo->roomType ? ' (' . $promo->roomType->name . ' rooms)' : '' }}
+                                    <strong>Discount:</strong> {{ $promo->discountLabel() }}{{ $promo->roomType ? ' (' . $promo->roomType->name . ($promo->discountsTotal() ? ' bookings)' : ' rooms)') : '' }}
                                 @endif
                             </p>
                             <p class="card-text mb-2">

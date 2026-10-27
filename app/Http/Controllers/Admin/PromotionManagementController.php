@@ -87,11 +87,12 @@ class PromotionManagementController extends Controller
 
     /**
      * Validate a promotion request. A promo includes free amenities
-     * (amenities[<id>] = quantity, 0/blank meaning excluded), a discount off
-     * the room rate (has_discount + discount_type/discount_value), or both -
-     * at least one. Its discount only ever comes off the rate of rooms of its
-     * room type (Promotion::discountForRoom). ID-checked discounts (Senior
-     * Citizen, PWD, etc.) are the separate Discount module.
+     * (amenities[<id>] = quantity, 0/blank meaning excluded), a discount
+     * (has_discount + discount_type/discount_value/discount_applies_to), or
+     * both - at least one. The discount comes off either the rate of rooms of
+     * its room type, or the stay's total from before check-in
+     * (Promotion::discountFor). ID-checked discounts (Senior Citizen, PWD,
+     * etc.) are the separate Discount module.
      */
     private function validatePromotion(Request $request, ?Promotion $promotion = null): array
     {
@@ -113,6 +114,8 @@ class PromotionManagementController extends Controller
             'amenities.*' => 'nullable|integer|min:0|max:99',
             'has_discount' => 'nullable|boolean',
             'discount_type' => 'exclude_unless:has_discount,1|required|in:percentage,fixed',
+            // off the room rate (of its room type) or off the total from before check-in - one or the other
+            'discount_applies_to' => 'exclude_unless:has_discount,1|required|in:rate,total',
             'discount_value' => ['exclude_unless:has_discount,1', 'required', 'numeric', 'min:0.01', 'max:99999999',
                 fn ($attribute, $value, $fail) => $request->input('discount_type') === 'percentage' && (float) $value > 100
                     ? $fail('A percentage discount cannot be more than 100%.') : null],
@@ -136,6 +139,7 @@ class PromotionManagementController extends Controller
         if (! $hasDiscount) {
             $validated['discount_type'] = null;
             $validated['discount_value'] = null;
+            $validated['discount_applies_to'] = Promotion::APPLIES_TO_RATE;
         }
         unset($validated['has_discount']);
 

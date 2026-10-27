@@ -154,7 +154,8 @@
 
 @push('scripts')
 <script>
-// Estimated total for the payment hint: rooms x nights, less the discount when it's approved now.
+// Estimated total for the payment hint: rooms x nights, less the discount when it's approved now, or the promo's discount
+// (priced like Promotion::discountFor - its room type's rate, or the total before check-in).
 document.addEventListener('DOMContentLoaded', function () {
     const form = document.querySelector('form[action="{{ route('receptionist.bookings.store') }}"]');
     const pay = document.getElementById('bookingPayment');
@@ -164,16 +165,35 @@ document.addEventListener('DOMContentLoaded', function () {
         let total = 0;
         if (inV && outV) {
             const nights = Math.max(1, Math.round((new Date(outV + 'T00:00:00') - new Date(inV + 'T00:00:00')) / 86400000));
+            const lines = []; // [room type id, nightly rate, rooms]
             form.querySelectorAll('.room-line-row').forEach(function (row) {
                 const opt = (row.querySelector('select') || {}).selectedOptions;
                 const qty = parseInt((row.querySelector('input[type="number"]') || {}).value || '0', 10);
-                if (opt && opt[0] && opt[0].dataset.rate) total += parseFloat(opt[0].dataset.rate) * nights * qty;
+                if (opt && opt[0] && opt[0].dataset.rate) {
+                    total += parseFloat(opt[0].dataset.rate) * nights * qty;
+                    lines.push([String(opt[0].value), parseFloat(opt[0].dataset.rate), qty]);
+                }
             });
             const offer = (form.querySelector('input[name="offer"]:checked') || {}).value;
             const approve = form.querySelector('#offerApprove');
             const dOpt = (form.querySelector('#offerDiscount') || {}).selectedOptions;
             if (offer === 'discount' && approve && approve.checked && dOpt && dOpt[0] && dOpt[0].value) {
                 const off = dOpt[0].dataset.type === 'percentage' ? total * parseFloat(dOpt[0].dataset.value) / 100 : parseFloat(dOpt[0].dataset.value);
+                total = Math.max(0, total - Math.min(total, Math.round(off * 100) / 100));
+            }
+            const pOpt = (form.querySelector('#offerPromotion') || {}).selectedOptions;
+            if (offer === 'promotion' && pOpt && pOpt[0] && pOpt[0].value && pOpt[0].dataset.type) {
+                const p = pOpt[0].dataset, v = parseFloat(p.value);
+                let off = 0;
+                if (p.applies === 'total') {
+                    off = p.type === 'percentage' ? total * Math.min(100, v) / 100 : v;
+                } else {
+                    lines.forEach(function ([typeId, rate, qty]) {
+                        if (p.roomType && p.roomType !== typeId) return;
+                        const perNight = p.type === 'percentage' ? rate * Math.min(100, v) / 100 : Math.min(v, rate);
+                        off += Math.round(perNight * nights * qty * 100) / 100;
+                    });
+                }
                 total = Math.max(0, total - Math.min(total, Math.round(off * 100) / 100));
             }
         }

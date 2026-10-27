@@ -20,8 +20,9 @@ use Illuminate\Support\Facades\DB;
  *   2. + paid amenities / services, + extra charges     (add-ons)
  *   3. - discount, taken from the WHOLE of (1) + (2)    (App\Support\BillDiscount) - and only once the guest's
  *                                                       discount ID is APPROVED; never before. Without one, the stay's
- *                                                       promotion may carry a discount instead: it comes off the RATE
- *                                                       of the rooms of the promotion's room type only (Promotion::discountForRoom)
+ *                                                       promotion may carry a discount instead: off the RATE of the rooms
+ *                                                       of its room type only, or off the total from BEFORE check-in
+ *                                                       (Promotion::discountFor)
  *   4. = total;  - verified payments = balance
  * There is no tax/VAT/service fee anywhere in this hotel's billing.
  *
@@ -234,10 +235,12 @@ final class StayBill
         $idStatus = self::discountIdStatus($booking);
         $discount = $idStatus === 'approved' ? self::approvedDiscount($booking, $billing) : null;
         $discountAmount = round(BillDiscount::amount($discount, $roomCharge, $addOns), 2);
-        // No ID discount: the stay's promotion may carry one - taken off the rate of ITS room type's rooms only.
+        // No ID discount: the stay's promotion may carry one - off the rate of ITS room type's rooms, or off the total
+        // from BEFORE check-in (rooms + amenities booked up to check-in; never what is added during the stay or at check-out).
         $promotion = $discount === null ? self::appliedPromotion($booking) : null;
         if ($promotion) {
-            $discountAmount = min(self::promotionDiscount($promotion, $lines), $subtotal);
+            $beforeCheckIn = round($roomCharge + self::amenitiesBeforeCheckIn($booking, $billing, $amenityRows, $amenityCharge), 2);
+            $discountAmount = min($promotion->discountFor($lines, $beforeCheckIn), $subtotal);
         }
 
         // Paid in full at check-in => the discount was taken off THEN, once. It is never recalculated afterwards, so
@@ -452,13 +455,25 @@ final class StayBill
         return $booking->promotion_id ? \App\Models\Promotion::find($booking->promotion_id) : null;
     }
 
-    /** A promotion's discount over the bill's room lines: each room of a covered type, its rate x nights. */
-    public static function promotionDiscount(\App\Models\Promotion $promotion, array $roomLines): float
+    /**
+     * The amenities that were on the bill before check-in - what a promo's "off the total" discount is taken from,
+     * with the room charge. Paid at check-in: the frozen check-in figure. Checked in otherwise: the rows on the bill
+     * by the check-in moment. Not checked in yet: all of them (everything so far is "before check-in").
+     */
+    private static function amenitiesBeforeCheckIn(Booking $booking, ?Billing $billing, $amenityRows, float $amenityCharge): float
     {
-        return round(array_sum(array_map(
-            fn ($l) => $promotion->discountForRoom($l['room_type_id'], (float) $l['rate'], (int) $l['nights']),
-            $roomLines,
-        )), 2);
+        $snapshot = CheckInSettlement::settledAt($billing) !== null ? (array) ($billing->checkin_receipt_snapshot ?? []) : [];
+        if (isset($snapshot['amenity_charge'])) {
+            return round((float) $snapshot['amenity_charge'], 2);
+        }
+        if ($booking->checked_in_at) {
+            $at = Carbon::parse($booking->checked_in_at);
+
+            return round((float) $amenityRows->filter(fn ($r) => self::onBillSince($r) && Carbon::parse(self::onBillSince($r))->lte($at))
+                ->sum(fn ($r) => (float) $r->charge * (int) $r->quantity), 2);
+        }
+
+        return $amenityCharge;
     }
 
     private static function amenityCharge(Booking $booking): float

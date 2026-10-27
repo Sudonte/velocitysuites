@@ -21,6 +21,7 @@ class Promotion extends Model
         'promo_type',
         'discount_type',
         'discount_value',
+        'discount_applies_to',
         'description',
         'image',
         'room_type_id',
@@ -71,25 +72,40 @@ class Promotion extends Model
             ->withTimestamps();
     }
 
+    /** What its discount comes off (discount_applies_to). */
+    public const APPLIES_TO_RATE = 'rate';
+    public const APPLIES_TO_TOTAL = 'total';
+
     /** A promo can include amenities, a discount, or both. */
     public function hasDiscount(): bool
     {
         return in_array($this->discount_type, ['percentage', 'fixed'], true) && (float) $this->discount_value > 0;
     }
 
-    /** "15% off" / "₱500 off per night" - null without a discount. */
+    /** True when the discount comes off the stay's total from before check-in, not the room rate. */
+    public function discountsTotal(): bool
+    {
+        return $this->discount_applies_to === self::APPLIES_TO_TOTAL;
+    }
+
+    /** "15% off the room rate" / "₱500 off per night" / "10% off the total" / "₱1,000.00 off the total" - null without a discount. */
     public function discountLabel(): ?string
     {
         if (! $this->hasDiscount()) {
             return null;
         }
+        $amount = $this->discount_type === 'percentage'
+            ? rtrim(rtrim(number_format((float) $this->discount_value, 2), '0'), '.') . '%'
+            : '₱' . number_format((float) $this->discount_value, 2);
 
-        return $this->discount_type === 'percentage'
-            ? rtrim(rtrim(number_format((float) $this->discount_value, 2), '0'), '.') . '% off'
-            : '₱' . number_format((float) $this->discount_value, 2) . ' off per night';
+        if ($this->discountsTotal()) {
+            return $amount . ' off the total';
+        }
+
+        return $this->discount_type === 'percentage' ? $amount . ' off the room rate' : $amount . ' off per night';
     }
 
-    /** "2 x Breakfast, 1 x Spa + 10% off (Deluxe rate only)" - what the promo gives, for the staff's pickers. */
+    /** "2 x Breakfast, 1 x Spa + 10% off the room rate (Deluxe only)" - what the promo gives, for the staff's pickers. */
     public function offerSummary(): string
     {
         $parts = [];
@@ -98,7 +114,9 @@ class Promotion extends Model
             $parts[] = $amenities;
         }
         if ($this->hasDiscount()) {
-            $parts[] = $this->discountLabel() . ' (' . ($this->roomType ? $this->roomType->name . ' rate only' : 'every room rate') . ')';
+            $parts[] = $this->discountLabel() . ' (' . ($this->discountsTotal()
+                ? 'before check-in' . ($this->roomType ? ', ' . $this->roomType->name . ' bookings' : '')
+                : ($this->roomType ? $this->roomType->name . ' rooms only' : 'every room')) . ')';
         }
 
         return $parts ? implode(' + ', $parts) : 'nothing included';
@@ -111,13 +129,13 @@ class Promotion extends Model
     }
 
     /**
-     * Pesos this promo takes off one room line: the discount comes off the nightly RATE of a room of the
-     * promo's room type (every room when it is for all types), times its nights. Any other room type is
-     * charged in full. A fixed amount never takes a night below zero.
+     * Pesos this promo takes off one room line (room-rate promos only): the discount comes off the nightly RATE of
+     * a room of the promo's room type (every room when it is for all types), times its nights. Any other room type
+     * is charged in full. A fixed amount never takes a night below zero.
      */
     public function discountForRoom($roomTypeId, float $rate, int $nights): float
     {
-        if (! $this->hasDiscount() || ! $this->coversRoomType($roomTypeId) || $rate <= 0) {
+        if (! $this->hasDiscount() || $this->discountsTotal() || ! $this->coversRoomType($roomTypeId) || $rate <= 0) {
             return 0.0;
         }
         $offPerNight = $this->discount_type === 'percentage'
@@ -125,6 +143,33 @@ class Promotion extends Model
             : min((float) $this->discount_value, $rate);
 
         return round($offPerNight * max(1, $nights), 2);
+    }
+
+    /**
+     * Pesos this promo takes off a stay. A room-rate promo: each room line (room_type_id, rate, nights) on its own.
+     * A total promo: a percentage of, or a fixed amount once off, $totalBeforeCheckIn - the room charge plus the
+     * amenities booked up to check-in. Charges added during the stay or at check-out are never part of that total.
+     *
+     * @param  array<int,array{room_type_id:mixed,rate:float|int|string,nights:int}>  $roomLines
+     */
+    public function discountFor(array $roomLines, float $totalBeforeCheckIn): float
+    {
+        if (! $this->hasDiscount()) {
+            return 0.0;
+        }
+        if ($this->discountsTotal()) {
+            $base = max(0.0, $totalBeforeCheckIn);
+            $off = $this->discount_type === 'percentage'
+                ? $base * min(100.0, (float) $this->discount_value) / 100
+                : (float) $this->discount_value;
+
+            return round(min($off, $base), 2);
+        }
+
+        return round(array_sum(array_map(
+            fn ($l) => $this->discountForRoom($l['room_type_id'], (float) $l['rate'], (int) $l['nights']),
+            $roomLines,
+        )), 2);
     }
 
     /**

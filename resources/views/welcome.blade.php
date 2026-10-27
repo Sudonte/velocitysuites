@@ -947,7 +947,7 @@
                             @endif
                             <div class="card-body p-4 d-flex flex-column">
                                 @if($promotion->hasDiscount())
-                                    <span class="promo-offer-badge mb-3"><i class="fas fa-percent"></i> {{ $promotion->discountLabel() }}{{ $promotion->roomType ? ' ' . $promotion->roomType->name . ' rooms' : '' }}{{ $promotion->amenities->isNotEmpty() ? ' + free add-ons' : '' }}</span>
+                                    <span class="promo-offer-badge mb-3"><i class="fas fa-percent"></i> {{ $promotion->discountLabel() }}{{ $promotion->roomType ? ' · ' . $promotion->roomType->name : '' }}{{ $promotion->amenities->isNotEmpty() ? ' + free add-ons' : '' }}</span>
                                 @else
                                     <span class="promo-offer-badge mb-3"><i class="fas fa-gift"></i> Free Add-Ons Included</span>
                                 @endif

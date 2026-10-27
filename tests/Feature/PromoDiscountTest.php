@@ -13,8 +13,9 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * A promo can give free amenities, a discount off the room rate, or both. The discount only comes off the rate of
- * rooms of the promo's room type (every room when it is for all types); other room types pay full price.
+ * A promo can give free amenities, a discount, or both. The discount comes off EITHER the rate of rooms of the
+ * promo's room type (every room when it is for all types; other room types pay full price) OR the total from
+ * before check-in (charges added during the stay / at check-out are never discounted).
  * Promos and Discounts share one admin page (two tabs), with Archived as a status filter.
  */
 class PromoDiscountTest extends ApiFlowTestCase
@@ -133,6 +134,52 @@ class PromoDiscountTest extends ApiFlowTestCase
         $this->assertSame('Senior Citizen', $bill['discount_name']);
     }
 
+    /** A paid amenity on the booking, put on the bill at $at. */
+    private function amenityRow(Booking $booking, int $guestId, string $name, float $charge, \Carbon\Carbon $at): void
+    {
+        $row = \App\Models\AmenityRequest::create([
+            'guest_id' => $guestId, 'booking_id' => $booking->id, 'room_type_id' => $booking->room_type_id, 'amenity_name' => $name,
+            'quantity' => 1, 'charge' => $charge, 'status' => 'approved', 'origin' => \App\Models\AmenityRequest::ORIGIN_STAFF,
+        ]);
+        $row->forceFill(['created_at' => $at, 'updated_at' => $at])->save();
+    }
+
+    public function test_a_total_promo_discounts_the_whole_total_from_before_check_in_only(): void
+    {
+        $standard = $this->makeRoomTypeWithRooms('Standard', 1000);
+        $deluxe = $this->makeRoomTypeWithRooms('Deluxe', 2000);
+        [, $guest] = $this->makeGuestUser('TotalPromo');
+        $promo = $this->promo(['promo_name' => 'Ten Off All', 'room_type_id' => $deluxe->id, 'discount_type' => 'percentage', 'discount_value' => 10, 'discount_applies_to' => 'total']);
+        $booking = $this->mixedBooking($standard->id, $deluxe->id, $promo->id);
+        $this->amenityRow($booking, $guest->id, 'Breakfast', 1000, now()->subHours(3));
+
+        // Not checked in yet: rooms ₱6,000 + booked breakfast ₱1,000 = ₱7,000 -> 10% = ₱700 (every room, not just Deluxe).
+        $bill = StayBill::forBooking($booking->fresh(), StayBill::PROJECTED);
+        $this->assertSame(700.0, (float) $bill['discount']);
+        $this->assertSame(6300.0, (float) $bill['total']);
+
+        // Checked in two hours ago; a ₱500 spa added since is charged in full - the discount stays on the pre-check-in total.
+        $booking->forceFill(['checked_in_at' => now()->subHours(2)])->save();
+        $this->amenityRow($booking, $guest->id, 'Spa', 500, now());
+        $bill = StayBill::forBooking($booking->fresh(), StayBill::PROJECTED);
+        $this->assertSame(7500.0, (float) $bill['subtotal']);
+        $this->assertSame(700.0, (float) $bill['discount'], 'the spa added after check-in is not discounted');
+        $this->assertSame(6800.0, (float) $bill['total']);
+    }
+
+    public function test_a_fixed_total_promo_comes_off_once_and_never_below_zero(): void
+    {
+        $standard = $this->makeRoomTypeWithRooms('Standard', 1000);
+        $deluxe = $this->makeRoomTypeWithRooms('Deluxe', 2000);
+        $once = $this->promo(['promo_name' => 'Minus 1500', 'discount_type' => 'fixed', 'discount_value' => 1500, 'discount_applies_to' => 'total']);
+        $this->assertSame(1500.0, (float) StayBill::forBooking($this->mixedBooking($standard->id, $deluxe->id, $once->id), StayBill::PROJECTED)['discount'], 'once, not per room or night');
+
+        $huge = $this->promo(['promo_name' => 'Minus 99999', 'discount_type' => 'fixed', 'discount_value' => 99999, 'discount_applies_to' => 'total']);
+        $bill = StayBill::forBooking($this->mixedBooking($standard->id, $deluxe->id, $huge->id), StayBill::PROJECTED);
+        $this->assertSame(6000.0, (float) $bill['discount']);
+        $this->assertSame(0.0, (float) $bill['total']);
+    }
+
     public function test_admin_can_save_a_promo_with_a_discount_amenities_or_both_but_not_neither(): void
     {
         $deluxe = $this->makeRoomTypeWithRooms('Deluxe', 2000);
@@ -141,21 +188,24 @@ class PromoDiscountTest extends ApiFlowTestCase
         $day = \App\Support\CheckInWindow::date(); // the hotel's today (Manila), what the form checks against
         $base = ['room_type_id' => $deluxe->id, 'start_date' => $day->toDateString(), 'end_date' => $day->copy()->addWeek()->toDateString(), 'status' => 'active'];
 
-        $this->actingAs($admin)->post(route('admin.promotions.store'), $base + ['promo_name' => 'Only Off', 'has_discount' => 1, 'discount_type' => 'percentage', 'discount_value' => 15])
+        $this->actingAs($admin)->post(route('admin.promotions.store'), $base + ['promo_name' => 'Only Off', 'has_discount' => 1, 'discount_applies_to' => 'rate', 'discount_type' => 'percentage', 'discount_value' => 15])
             ->assertRedirect(route('admin.promotions.index'))->assertSessionHasNoErrors();
-        $this->actingAs($admin)->post(route('admin.promotions.store'), $base + ['promo_name' => 'Both', 'has_discount' => 1, 'discount_type' => 'fixed', 'discount_value' => 250, 'amenities' => [$amenity->id => 2]])
+        $this->actingAs($admin)->post(route('admin.promotions.store'), $base + ['promo_name' => 'Both', 'has_discount' => 1, 'discount_applies_to' => 'total', 'discount_type' => 'fixed', 'discount_value' => 250, 'amenities' => [$amenity->id => 2]])
             ->assertSessionHasNoErrors();
         $this->actingAs($admin)->post(route('admin.promotions.store'), $base + ['promo_name' => 'Free Only', 'has_discount' => 0, 'discount_type' => 'fixed', 'discount_value' => 99, 'amenities' => [$amenity->id => 1]])
             ->assertSessionHasNoErrors();
 
-        $this->assertSame('15% off', Promotion::where('promo_name', 'Only Off')->first()->discountLabel());
+        $this->assertSame('15% off the room rate', Promotion::where('promo_name', 'Only Off')->first()->discountLabel());
         $both = Promotion::where('promo_name', 'Both')->first();
         $this->assertTrue($both->hasDiscount());
+        $this->assertTrue($both->discountsTotal());
+        $this->assertSame('₱250.00 off the total', $both->discountLabel());
         $this->assertSame(1, $both->amenities()->count());
         $this->assertFalse(Promotion::where('promo_name', 'Free Only')->first()->hasDiscount(), 'switched off = no discount saved');
 
         $this->actingAs($admin)->post(route('admin.promotions.store'), $base + ['promo_name' => 'Nothing', 'has_discount' => 0])->assertSessionHasErrors('amenities');
-        $this->actingAs($admin)->post(route('admin.promotions.store'), $base + ['promo_name' => 'Too Much', 'has_discount' => 1, 'discount_type' => 'percentage', 'discount_value' => 120])->assertSessionHasErrors('discount_value');
+        $this->actingAs($admin)->post(route('admin.promotions.store'), $base + ['promo_name' => 'Too Much', 'has_discount' => 1, 'discount_applies_to' => 'rate', 'discount_type' => 'percentage', 'discount_value' => 120])->assertSessionHasErrors('discount_value');
+        $this->actingAs($admin)->post(route('admin.promotions.store'), $base + ['promo_name' => 'No Choice', 'has_discount' => 1, 'discount_type' => 'percentage', 'discount_value' => 5])->assertSessionHasErrors('discount_applies_to');
     }
 
     public function test_one_page_with_promos_and_discounts_tabs_and_archived_is_a_status_filter(): void

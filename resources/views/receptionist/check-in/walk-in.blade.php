@@ -260,12 +260,14 @@ document.addEventListener('DOMContentLoaded', function () {
         const n = nights();
         const lines = [];
         let roomTotal = 0;
+        const picked = []; // [room type id, nightly rate] per room - a room-rate promo prices each one
         groups.querySelectorAll('.walkin-group').forEach(g => {
             const typeId = g.querySelector('.walkin-type').value;
             g.querySelectorAll('input[name="room_ids[]"]:checked').forEach(b => {
                 const label = g.querySelector('label[for="' + b.id + '"]').textContent;
                 const sub = rates[typeId].rate * n;
                 roomTotal += sub;
+                picked.push([String(typeId), parseFloat(rates[typeId].rate)]);
                 lines.push([rates[typeId].name + ' ' + label + ' &middot; ' + peso(rates[typeId].rate) + ' &times; ' + n + ' night' + (n === 1 ? '' : 's'), sub]);
             });
         });
@@ -288,6 +290,25 @@ document.addEventListener('DOMContentLoaded', function () {
                 discount = Math.round(discount * 100) / 100;
                 discountName = opt.dataset.label;
             }
+        } else if (offer === 'promotion') {
+            // Same as Promotion::discountFor(): off the rate of its room type's rooms (fixed = per room, per night),
+            // or off the total before check-in (rooms + these amenities - everything on this form), once.
+            const opt = form.querySelector('#offerPromotion').selectedOptions[0];
+            if (opt && opt.value && opt.dataset.type) {
+                const v = parseFloat(opt.dataset.value);
+                if (opt.dataset.applies === 'total') {
+                    const base = roomTotal + addOns;
+                    discount = opt.dataset.type === 'percentage' ? base * Math.min(100, v) / 100 : Math.min(base, v);
+                } else {
+                    picked.forEach(([typeId, rate]) => {
+                        if (opt.dataset.roomType && opt.dataset.roomType !== typeId) return;
+                        const perNight = opt.dataset.type === 'percentage' ? rate * Math.min(100, v) / 100 : Math.min(v, rate);
+                        discount += Math.round(perNight * Math.max(1, n) * 100) / 100;
+                    });
+                }
+                discount = Math.min(Math.round(discount * 100) / 100, roomTotal + addOns);
+                discountName = opt.dataset.label;
+            }
         }
         const total = Math.max(0, Math.round((roomTotal + addOns - discount) * 100) / 100);
         const bill = document.getElementById('walkInBill');
@@ -299,13 +320,13 @@ document.addEventListener('DOMContentLoaded', function () {
             bill.innerHTML = lines.map(l => '<div class="d-flex justify-content-between gap-2"><span>' + l[0] + '</span><span class="text-nowrap">' + peso(l[1]) + '</span></div>').join('')
                 + (discount > 0 ? '<div class="d-flex justify-content-between text-success"><span>Discount (' + discountName + ')</span><span>&minus;' + peso(discount) + '</span></div>' : '')
                 + '<hr class="my-1"><div class="d-flex justify-content-between fw-bold"><span>Total to pay now</span><span>' + peso(total) + '</span></div>'
-                + (offer === 'promotion' ? '<div class="text-muted mt-1">The promotion\'s amenities are added free.</div>' : '');
+                + (offer === 'promotion' ? '<div class="text-muted mt-1">The promotion\'s amenities (if any) are added free.</div>' : '');
             pay.dataset.due = total.toFixed(2);
         }
         window.syncDeskPayment(pay);
     }
     form.addEventListener('input', function (e) { if (e.target.name && e.target.name.startsWith('amenities')) renderBill(); });
-    form.addEventListener('change', function (e) { if (e.target.name === 'offer' || e.target.name === 'discount_id') renderBill(); });
+    form.addEventListener('change', function (e) { if (e.target.name === 'offer' || e.target.name === 'discount_id' || e.target.name === 'promotion_id') renderBill(); });
 
     // Start with the room types picked before (form came back with errors), or one empty group.
     if (oldTypes.length) oldTypes.forEach(addGroup); else addGroup('');

@@ -102,7 +102,7 @@
                         <td>
                             @if($promotion->hasDiscount())
                                 <span class="badge bg-info">{{ $promotion->discountLabel() }}</span>
-                                <br><small class="text-muted">{{ $promotion->roomType ? $promotion->roomType->name . ' rate only' : 'every room rate' }}</small>
+                                <br><small class="text-muted">{{ $promotion->discountsTotal() ? 'before check-in' . ($promotion->roomType ? ', ' . $promotion->roomType->name . ' bookings' : '') : ($promotion->roomType ? $promotion->roomType->name . ' rooms only' : 'every room') }}</small>
                             @else
                                 <span class="text-muted">-</span>
                             @endif

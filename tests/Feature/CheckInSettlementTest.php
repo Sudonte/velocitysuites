@@ -269,6 +269,34 @@ class CheckInSettlementTest extends ApiFlowTestCase
         $this->assertEquals(0.0, $billing->checkin_receipt_snapshot['balance']);
     }
 
+    public function test_walk_in_with_a_promo_pays_the_discounted_bill(): void
+    {
+        $rt = $this->makeRoomTypeWithRooms('Deluxe', 1000, 2, 2);
+        $amenity = Amenity::create(['amenity_name' => 'Extra Bed', 'category' => 'Room', 'quantity' => 5, 'is_unlimited' => false, 'charge' => 300, 'status' => 'active']);
+        $day = \App\Support\CheckInWindow::date();
+        $promo = \App\Models\Promotion::create(['promo_name' => 'Walk-in 10', 'promo_type' => 'discount', 'status' => 'active', 'room_type_id' => $rt->id,
+            'discount_type' => 'percentage', 'discount_value' => 10, 'discount_applies_to' => 'total',
+            'start_date' => $day->toDateString(), 'end_date' => $day->copy()->addMonth()->toDateString()]);
+        $desk = $this->desk();
+
+        // The walk-in page offers the promo with what its live bill needs to price it.
+        $this->actingAs($desk)->get(route('receptionist.check-in.walk-in.create'))->assertOk()
+            ->assertSee('Walk-in 10')->assertSee('data-applies="total"', false);
+
+        // 1 night x 1000 + 2 x 300 = 1600, 10% off the total before check-in = 160 -> 1440 to pay now.
+        $payload = $this->walkInPayload($rt, ['amenities' => [['amenity_id' => $amenity->id, 'quantity' => 2]],
+            'offer' => 'promotion', 'promotion_id' => $promo->id, 'payment_method' => 'cash', 'amount_received' => 1440]);
+        $this->actingAs($desk)->post(route('receptionist.check-in.walk-in.store'), $payload)->assertSessionHasNoErrors();
+
+        $booking = Booking::first();
+        $billing = $booking->billing()->first();
+        $this->assertSame($promo->id, (int) $booking->promotion_id);
+        $this->assertEquals(160.0, (float) $billing->discount);
+        $this->assertEquals(1440.0, (float) $billing->total_amount);
+        $this->assertEqualsWithDelta(1440, $booking->paidTotal(), 0.01);
+        $this->assertEquals('Walk-in 10', $billing->checkin_receipt_snapshot['discount']['name']);
+    }
+
     public function test_walk_in_gcash_needs_the_exact_amount_reference_and_receipt(): void
     {
         Storage::fake('public');

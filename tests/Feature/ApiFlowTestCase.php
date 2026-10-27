@@ -344,6 +344,7 @@ abstract class ApiFlowTestCase extends TestCase
             $table->enum('promo_type', ['discount', 'amenity']);
             $table->enum('discount_type', ['percentage', 'fixed'])->nullable();
             $table->decimal('discount_value', 10, 2)->nullable();
+            $table->string('discount_applies_to', 10)->default('rate');
             $table->text('description')->nullable();
             $table->string('image')->nullable();
             $table->unsignedBigInteger('room_type_id')->nullable();

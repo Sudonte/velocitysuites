@@ -57,12 +57,15 @@
         <select name="promotion_id" id="offerPromotion" class="form-select @error('promotion_id') is-invalid @enderror">
             <option value="">Choose...</option>
             @foreach($offerPromotions as $promo)
-                <option value="{{ $promo->id }}" {{ (string) old('promotion_id') === (string) $promo->id ? 'selected' : '' }}>
+                <option value="{{ $promo->id }}" {{ (string) old('promotion_id') === (string) $promo->id ? 'selected' : '' }}
+                        data-label="{{ $promo->promo_name }}" data-room-type="{{ $promo->room_type_id }}"
+                        data-type="{{ $promo->hasDiscount() ? $promo->discount_type : '' }}" data-value="{{ $promo->hasDiscount() ? (float) $promo->discount_value : 0 }}"
+                        data-applies="{{ $promo->discount_applies_to ?: 'rate' }}">
                     {{ $promo->promo_name }} - {{ $promo->offerSummary() }}{{ $promo->roomType && ! $promo->hasDiscount() ? ' (' . $promo->roomType->name . ' only)' : '' }}
                 </option>
             @endforeach
         </select>
-        <small class="text-muted">Its amenities are added free and its discount comes off the rate of its room type only. It must be running on the check-in date for the chosen room type.</small>
+        <small class="text-muted">Its amenities are added free; its discount comes off its room type's rate or the total before check-in, as the promo says. It must be running on the check-in date for the chosen room type.</small>
         @error('promotion_id')<div class="invalid-feedback d-block">{{ $message }}</div>@enderror
     </div>
 </div>
