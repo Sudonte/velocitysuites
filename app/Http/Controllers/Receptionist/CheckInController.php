@@ -166,17 +166,19 @@ class CheckInController extends Controller
         $sellable = min($rooms->count(), $this->availability->availableCount($roomType, $this->hotelToday(), $checkOut));
 
         return response()->json([
-            'rooms' => $rooms->map(fn ($r) => ['id' => $r->id, 'room_number' => $r->room_number])->values(),
+            'rooms' => $rooms->map(fn ($r) => ['id' => $r->id, 'room_number' => $r->room_number, 'rate' => (float) $r->room_rate,
+                'capacity' => $r->guest_capacity, 'capacity_label' => $r->has_capacity_override ? $r->capacity_label : null])->values(),
             'sellable' => $sellable,
         ]);
     }
 
     /**
      * Create the walk-in stay AND check the guest in, as one transaction:
-     * booking + rooms + amenities, the discount (approved now) or promotion,
-     * the full payment (CheckInController::settleAtCheckIn()), then the rooms
-     * are assigned and marked occupied. Anything that fails - a room taken a
-     * moment ago, not enough paid - rolls the whole thing back.
+     * booking + amenities, the discount (approved now) or promotion, the rooms
+     * assigned, then the full payment (CheckInController::settleAtCheckIn())
+     * on THOSE rooms' own rates - a room may charge differently from its type,
+     * and a promotion's discount comes off that actual rate. Anything that
+     * fails - a room taken a moment ago, not enough paid - rolls it all back.
      */
     public function storeWalkIn(Request $request): RedirectResponse
     {
@@ -220,7 +222,8 @@ class CheckInController extends Controller
             ->map(fn ($rooms) => ['room_type' => $rooms->first()->roomType, 'quantity' => $rooms->count(), 'room_ids' => $rooms->pluck('id')->all()])
             ->values()->all();
 
-        $capacityError = \App\Support\GuestCapacity::error($roomLines, (int) $validated['adults'] + $children);
+        // the rooms picked, each with its own capacity
+        $capacityError = \App\Support\GuestCapacity::error(\App\Support\GuestCapacity::linesForRooms($pickedRooms), (int) $validated['adults'] + $children);
         if ($capacityError !== null) {
             return back()->withInput()->with('error', $capacityError);
         }
@@ -300,9 +303,6 @@ class CheckInController extends Controller
                     auth()->user()
                 );
 
-                // The full bill is paid now (cash: amount paid; GCash: amount, reference and receipt).
-                $settled = $this->settleAtCheckIn($booking->fresh(), $validated, $request->file('gcash_receipt'));
-
                 $rooms = $this->availability->assignRoomsForLines(
                     $booking,
                     collect($roomLines)->mapWithKeys(fn ($l) => [(string) $l['room_type']->id => $l['room_ids']])->all()
@@ -310,6 +310,9 @@ class CheckInController extends Controller
                 foreach ($rooms as $room) {
                     $room->update(['status' => 'occupied']);
                 }
+
+                // The full bill is paid now, priced on the rooms just assigned (cash: amount paid; GCash: amount, reference and receipt).
+                $settled = $this->settleAtCheckIn($booking->fresh(), $validated, $request->file('gcash_receipt'));
                 // a walk-in is one stay, checked in right away
                 $booking->recordStayCheckIn($booking->stayList()->first());
 
@@ -504,9 +507,11 @@ class CheckInController extends Controller
 
         $children = (int) ($validated['children'] ?? 0);
 
-        // This stay's own rooms must hold the guests who are checking in to it.
+        // This stay's own rooms must hold the guests who are checking in to it - the rooms picked, each with its own
+        // capacity (a room may hold more or fewer than its type); the booked lines when none can be read.
+        $pickedRooms = Room::with('roomType')->whereIn('id', collect($validated['room_ids'])->flatten()->map(fn ($id) => (int) $id)->all())->get();
         $capacityError = \App\Support\GuestCapacity::error(
-            $this->capacityLinesFor($booking, $checkInStay),
+            $pickedRooms->isNotEmpty() ? \App\Support\GuestCapacity::linesForRooms($pickedRooms) : $this->capacityLinesFor($booking, $checkInStay),
             (int) $validated['adults'] + $children
         );
         if ($capacityError !== null) {
@@ -521,15 +526,16 @@ class CheckInController extends Controller
             $rooms = null;
             $settled = null;
             DB::transaction(function () use ($request, $booking, $validated, $children, $currentAddress, $checkInStay, $firstCheckIn, &$rooms, &$settled) {
-                // Settle first, on the bill as of check-in (every stay's booked nights) - before rooms are assigned. Only the FIRST
-                // stay to arrive does: the whole transaction is paid for then, and the stays after it just get their rooms.
-                $settled = $firstCheckIn ? $this->settleAtCheckIn($booking, $validated, $request->file('gcash_receipt')) : ['paid_now' => 0.0, 'change' => 0.0];
-
+                // Rooms first, then settle on the bill as of check-in (every stay's booked nights) priced on the rooms actually
+                // given - a room may charge its own rate, and a promotion's discount comes off that rate. Only the FIRST stay to
+                // arrive settles: the whole transaction is paid for then, and the stays after it just get their rooms.
                 $rooms = $this->availability->assignRoomsForLines($booking, $validated['room_ids'], $checkInStay);
 
                 foreach ($rooms as $room) {
                     $room->update(['status' => 'occupied']);
                 }
+
+                $settled = $firstCheckIn ? $this->settleAtCheckIn($booking, $validated, $request->file('gcash_receipt')) : ['paid_now' => 0.0, 'change' => 0.0];
                 $booking->recordStayCheckIn($checkInStay);
 
                 $booking->update([
@@ -729,6 +735,46 @@ class CheckInController extends Controller
             'promotionChoices' => $offers->promotionsFor($roomTypeIds, \Carbon\Carbon::parse($booking->check_in)),
             'appliedPromotion' => $booking->promotion_id ? \App\Models\Promotion::find($booking->promotion_id) : null,
         ];
+    }
+
+    /**
+     * The Check In panel's price check once every room is picked: the bill as check-in will settle it, priced on THOSE
+     * rooms (a room may charge its own rate; a promotion's room-rate discount follows it). Nothing is saved.
+     */
+    public function quote(Request $request, Booking $booking)
+    {
+        $checkInStay = $this->stayForCheckIn($booking, $request->integer('stay_id') ?: null);
+        abort_if($checkInStay === null, 422, 'Only confirmed bookings can be checked in.');
+        $validated = $request->validate([
+            'room_ids' => 'required|array|min:1',
+            'room_ids.*' => 'required|array',
+            'room_ids.*.*' => 'required|integer',
+        ]);
+
+        // Only rooms of the type each group is for count - the same grouping check-in itself validates.
+        $picked = collect($validated['room_ids'])->flatMap(fn ($ids, $typeId) => Room::with('roomType')
+            ->where('room_type_id', (int) $typeId)->whereIn('id', array_map('intval', $ids))->get());
+        $picked->each(fn (Room $r) => $r->setRelation('pivot', new \Illuminate\Database\Eloquent\Relations\Pivot(['stay_id' => $checkInStay->id, 'checked_out_at' => null])));
+
+        // This stay's rooms become the picked ones; rooms already given to the transaction's other stays stay as they are.
+        $booking->load('rooms.roomType');
+        $firstStayId = $booking->stayList()->first()?->id;
+        $booking->setRelation('rooms', $booking->rooms->reject(fn ($r) => ($r->pivot->stay_id ?? $firstStayId) === $checkInStay->id)->concat($picked)->values());
+        $booking->unsetRelation('billing');
+
+        $stay = \App\Support\StayBill::forBooking($booking, \App\Support\StayBill::PROJECTED);
+        $payable = round((float) $stay['total'], 2);
+        $paid = $booking->paidTotal();
+
+        return response()->json([
+            'room_charge' => (float) $stay['room_charge'],
+            'discount' => (float) $stay['discount'],
+            'discount_name' => $stay['discount_name'],
+            'total' => $payable,
+            'paid' => $paid,
+            'balance_due' => max(0, round($payable - $paid, 2)),
+            'change_due' => max(0, round($paid - $payable, 2)),
+        ]);
     }
 
     /** Approve the guest's discount ID from the Check In panel (optionally uploading the photo now). */

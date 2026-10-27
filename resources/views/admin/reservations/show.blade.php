@@ -67,7 +67,7 @@
                     <div class="col-md-4"><strong>Room:</strong></div>
                     <div class="col-md-8">
                         @if($reservation->booking?->room)
-                            {{ $reservation->booking->room->room_number }} - {{ $reservation->booking->room->room_name }}
+                            Room {{ $reservation->booking->room->room_number }}{{ $reservation->booking->room->roomType ? ' - ' . $reservation->booking->room->roomType->name : '' }}
                         @else
                             <span class="text-muted">Assigned at check-in</span>
                         @endif

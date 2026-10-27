@@ -63,17 +63,21 @@ class RoomManagementController extends Controller
     {
         $validated = $request->validate([
             'room_number' => 'required|string|unique:rooms,room_number,' . $room->id,
-            'room_name' => 'required|string|max:255',
             'room_type_id' => 'required|exists:room_types,id',
+            // this room's own guest capacity and nightly rate; blank = its type's
+            'room_capacity' => 'nullable|integer|min:1|max:50',
             'rate_override' => 'nullable|numeric|min:0',
         ]);
+        // No separate name to keep: a room is known by its number.
+        $validated['room_name'] = 'Room ' . $validated['room_number'];
+        $validated['room_capacity'] = $validated['room_capacity'] ?? \App\Models\RoomType::whereKey($validated['room_type_id'])->value('capacity');
 
         // Status isn't edited here: Occupied follows check-in/out, and
         // Maintenance is set/cleared by deactivate()/reactivate() (the
         // Quick Actions) - one control per status, not two.
         $room->update($validated);
 
-        Activity::log('Updated room', "Room {$room->room_number} ({$room->room_name}, {$room->status})", $room);
+        Activity::log('Updated room', "Room {$room->room_number} ({$room->capacity_label}, ₱" . number_format((float) $room->room_rate, 2) . "/night, {$room->status})", $room);
 
         // Back to the room's own card on its type's page, so the admin doesn't scroll to find it again.
         return redirect()->to(route('admin.room-types.show', $room->room_type_id) . '#room-' . $room->id)

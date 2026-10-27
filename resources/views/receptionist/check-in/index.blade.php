@@ -281,10 +281,59 @@ document.addEventListener('DOMContentLoaded', function () {
         window.history.replaceState({}, '', url);
     }
 
+    // Payment step: show the state that applies (pay / hand back change / paid). Only the shown one's fields are
+    // enabled and required, so a hidden field never blocks the submit.
+    function applyPayState(state) {
+        const area = document.getElementById('checkInPayArea');
+        if (!area) return;
+        if (state) area.querySelectorAll('[data-pay-state]').forEach(el => el.classList.toggle('d-none', el.dataset.payState !== state));
+        const shown = (area.querySelector('[data-pay-state]:not(.d-none)') || {}).dataset || {};
+        const stepOn = !!content.querySelector('select.room-select:not([disabled])'); // the room step enables its selects first
+        area.querySelectorAll('#checkInPayment input').forEach(i => { i.disabled = !stepOn || shown.payState !== 'due'; });
+        const change = document.getElementById('ciChangeReturned');
+        if (change) { change.disabled = !stepOn || shown.payState !== 'change'; change.required = shown.payState === 'change'; }
+    }
+
+    // Once every room is picked, price the bill on THOSE rooms (a room may charge its own rate; a promotion's
+    // discount follows it) - the amount asked for is then exactly what check-in settles.
+    let quoteSeq = 0;
+    async function quoteRooms() {
+        const area = document.getElementById('checkInPayArea');
+        if (!area) return;
+        const selects = Array.from(content.querySelectorAll('select.room-select'));
+        if (!selects.length || selects.some(s => !s.value)) return;
+        const fd = new FormData();
+        if (activeStayId) fd.append('stay_id', activeStayId);
+        selects.forEach(s => fd.append('room_ids[' + s.dataset.roomTypeId + '][]', s.value));
+        const seq = ++quoteSeq;
+        try {
+            const r = await fetch(area.dataset.quoteUrl, { method: 'POST', headers: { 'X-CSRF-TOKEN': csrfToken, 'Accept': 'application/json' }, body: fd });
+            if (!r.ok || seq !== quoteSeq) return;
+            const q = await r.json();
+            const peso = v => '₱' + Number(v).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            const pay = document.getElementById('checkInPayment');
+            const note = area.querySelector('[data-quote-note]');
+            const before = pay ? parseFloat(pay.dataset.due || '0') : 0;
+            if (pay) {
+                pay.dataset.due = q.balance_due > 0 ? q.balance_due.toFixed(2) : '0';
+                const label = pay.querySelector('[data-due-label]');
+                if (label) label.textContent = peso(q.balance_due);
+            }
+            const changeLabel = area.querySelector('[data-change-label]');
+            if (changeLabel) changeLabel.textContent = peso(q.change_due);
+            applyPayState(q.balance_due > 0 ? 'due' : (q.change_due > 0 ? 'change' : 'paid'));
+            if (pay) window.syncDeskPayment(pay);
+            const moved = Math.abs(before - q.balance_due) > 0.004;
+            note.classList.toggle('d-none', !moved);
+            if (moved) note.textContent = 'Priced on the rooms picked: total ' + peso(q.total) + (q.discount > 0 ? ' after ' + peso(q.discount) + ' off' + (q.discount_name ? ' (' + q.discount_name + ')' : '') : '') + '.';
+        } catch (err) { /* the server still checks the amount on submit */ }
+    }
+
     // Prevent picking the same room in two different rows: whenever any
     // select changes, disable that room's <option> in every other row.
     content.addEventListener('change', function (e) {
         if (!e.target.classList.contains('room-select')) return;
+        quoteRooms();
 
         const allSelects = content.querySelectorAll('.room-select');
         const chosen = Array.from(allSelects).map(s => s.value).filter(Boolean);
@@ -406,7 +455,9 @@ document.addEventListener('DOMContentLoaded', function () {
 
             content.querySelectorAll('.room-select').forEach(s => s.disabled = false);
             content.querySelectorAll('#checkInPayment input, #ciChangeReturned').forEach(i => i.disabled = false);
+            applyPayState();
             window.syncDeskPayment(document.getElementById('checkInPayment'));
+            quoteRooms();
             document.getElementById('checkInStepDetails').classList.add('d-none');
             document.getElementById('checkInStepRooms').classList.remove('d-none');
             document.getElementById('checkInNextBtn').classList.add('d-none');

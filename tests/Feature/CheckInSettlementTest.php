@@ -88,6 +88,33 @@ class CheckInSettlementTest extends ApiFlowTestCase
         $this->assertNotNull($billing->checkin_settled_at);
     }
 
+    public function test_check_in_charges_and_discounts_the_picked_rooms_own_rate(): void
+    {
+        [$rt, $room, $booking] = $this->arriving(); // booked: 2 nights x the type's 1000
+        $room->update(['rate_override' => 1300]);   // the room picked charges its own 1300 a night
+        $day = \App\Support\CheckInWindow::date();
+        $promo = \App\Models\Promotion::create(['promo_name' => 'Rate 10', 'promo_type' => 'discount', 'status' => 'active', 'room_type_id' => $rt->id,
+            'discount_type' => 'percentage', 'discount_value' => 10, 'discount_applies_to' => 'rate',
+            'start_date' => $day->copy()->subDay()->toDateString(), 'end_date' => $day->copy()->addMonth()->toDateString()]);
+        $booking->forceFill(['promotion_id' => $promo->id])->save();
+        $desk = $this->desk();
+
+        // The panel shows the room's own rate, and its price check for that room: 2 x 1300 = 2600, less 10% of THAT rate = 2340.
+        $this->actingAs($desk)->get(route('receptionist.check-in.panel', $booking))->assertOk()->assertSee('data-rate="1300"', false);
+        $this->actingAs($desk)->postJson(route('receptionist.check-in.quote', $booking), ['room_ids' => [(string) $rt->id => [$room->id]]])
+            ->assertOk()->assertJsonPath('room_charge', 2600)->assertJsonPath('discount', 260)->assertJsonPath('balance_due', 2340);
+
+        // Paying the booked-rate price (1800) is refused; the actual room's price goes through.
+        $this->actingAs($desk)->postJson(route('receptionist.check-in.store', $booking), $this->checkInPayload($rt, $room, ['payment_method' => 'cash', 'amount_received' => 1800]))->assertStatus(422);
+        $this->actingAs($desk)->postJson(route('receptionist.check-in.store', $booking), $this->checkInPayload($rt, $room, ['payment_method' => 'cash', 'amount_received' => 2340]))->assertOk();
+
+        $billing = $booking->fresh()->billing()->first();
+        $this->assertEquals(2600.0, (float) $billing->room_charge);
+        $this->assertEquals(260.0, (float) $billing->discount);
+        $this->assertEquals(2340.0, (float) $billing->checkin_settled_total);
+        $this->assertEqualsWithDelta(2340, $booking->fresh()->paidTotal(), 0.01);
+    }
+
     public function test_check_in_is_refused_with_422_while_the_requested_discount_is_still_pending(): void
     {
         [$rt, $room, $booking] = $this->arriving();
@@ -295,6 +322,22 @@ class CheckInSettlementTest extends ApiFlowTestCase
         $this->assertEquals(1440.0, (float) $billing->total_amount);
         $this->assertEqualsWithDelta(1440, $booking->paidTotal(), 0.01);
         $this->assertEquals('Walk-in 10', $billing->checkin_receipt_snapshot['discount']['name']);
+    }
+
+    public function test_walk_in_bills_the_picked_rooms_own_rate(): void
+    {
+        $rt = $this->makeRoomTypeWithRooms('Deluxe', 1000, 2, 1);
+        $rt->rooms()->first()->update(['rate_override' => 1250]);
+        $desk = $this->desk();
+
+        $this->actingAs($desk)->getJson(route('receptionist.check-in.walk-in.rooms', ['room_type_id' => $rt->id, 'check_out' => \App\Support\CheckInWindow::today()->addDay()->toDateString()]))
+            ->assertOk()->assertJsonPath('rooms.0.rate', 1250);
+
+        $this->actingAs($desk)->post(route('receptionist.check-in.walk-in.store'), $this->walkInPayload($rt, ['payment_method' => 'cash', 'amount_received' => 1000]))
+            ->assertSessionHasErrors('amount_received');
+        $this->actingAs($desk)->post(route('receptionist.check-in.walk-in.store'), $this->walkInPayload($rt, ['payment_method' => 'cash', 'amount_received' => 1250]))
+            ->assertSessionHasNoErrors();
+        $this->assertEquals(1250.0, (float) Booking::first()->billing()->first()->checkin_settled_total);
     }
 
     public function test_walk_in_gcash_needs_the_exact_amount_reference_and_receipt(): void

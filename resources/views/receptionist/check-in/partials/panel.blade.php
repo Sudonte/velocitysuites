@@ -189,7 +189,7 @@
                                     <select name="room_ids[{{ $typeId }}][]" class="form-select room-select" data-room-type-id="{{ $typeId }}" required disabled>
                                         <option value="">-- Select an available room --</option>
                                         @foreach($roomsOfType as $room)
-                                            <option value="{{ $room->id }}" {{ (int) $preselected === $room->id ? 'selected' : '' }}>Room {{ $room->room_number }}</option>
+                                            <option value="{{ $room->id }}" data-rate="{{ (float) $room->room_rate }}" {{ (int) $preselected === $room->id ? 'selected' : '' }}>Room {{ $room->room_number }}@if($room->has_capacity_override) &middot; {{ $room->capacity_label }}@endif @if($room->has_rate_override) &middot; ₱{{ number_format((float) $room->room_rate, 2) }}/night @endif</option>
                                         @endforeach
                                     </select>
                                 </div>
@@ -204,18 +204,23 @@
                 <h6 class="mt-3 mb-2"><i class="fas fa-money-bill-wave"></i> 5. Payment Input</h6>
                 @if(! $firstCheckIn)
                     <div class="alert alert-success py-2 mb-0"><i class="fas fa-check-circle"></i> Nothing to collect now - the bill was settled at the first check-in.</div>
-                @elseif($balanceDue > 0)
-                    {{-- Full payment only - the server refuses anything less. Disabled until this step shows. --}}
-                    @include('receptionist.partials.desk-payment-fields', ['due' => $balanceDue, 'mode' => 'full', 'disabled' => true, 'containerId' => 'checkInPayment'])
-                @elseif($changeDue > 0)
-                    <div class="alert alert-primary py-2 mb-0">
-                        <div class="form-check mb-0">
-                            <input class="form-check-input" type="checkbox" name="change_returned" value="1" id="ciChangeReturned" required disabled>
-                            <label class="form-check-label" for="ciChangeReturned">I handed back <strong>₱{{ number_format($changeDue, 2) }}</strong> to the guest (the discount lowered the total below what they paid).</label>
-                        </div>
-                    </div>
                 @else
-                    <div class="alert alert-success py-2 mb-0"><i class="fas fa-check-circle"></i> Paid in full - nothing to collect.</div>
+                    {{-- All three states are on the page: once every room is picked the panel asks the server for the bill priced on
+                         THOSE rooms (CheckInController::quote - a room may charge its own rate, and a promotion's discount follows it)
+                         and shows the one that applies. Full payment only - the server refuses anything less. --}}
+                    <div id="checkInPayArea" data-quote-url="{{ route('receptionist.check-in.quote', $booking) }}">
+                        <div class="alert alert-info py-1 px-2 small mb-2 d-none" data-quote-note></div>
+                        <div data-pay-state="due" class="{{ $balanceDue > 0 ? '' : 'd-none' }}">
+                            @include('receptionist.partials.desk-payment-fields', ['due' => $balanceDue, 'mode' => 'full', 'disabled' => true, 'containerId' => 'checkInPayment'])
+                        </div>
+                        <div data-pay-state="change" class="alert alert-primary py-2 mb-0 {{ $balanceDue <= 0 && $changeDue > 0 ? '' : 'd-none' }}">
+                            <div class="form-check mb-0">
+                                <input class="form-check-input" type="checkbox" name="change_returned" value="1" id="ciChangeReturned" disabled>
+                                <label class="form-check-label" for="ciChangeReturned">I handed back <strong data-change-label>₱{{ number_format($changeDue, 2) }}</strong> to the guest (the total is below what they paid).</label>
+                            </div>
+                        </div>
+                        <div data-pay-state="paid" class="alert alert-success py-2 mb-0 {{ $balanceDue <= 0 && $changeDue <= 0 ? '' : 'd-none' }}"><i class="fas fa-check-circle"></i> Paid in full - nothing to collect.</div>
+                    </div>
                 @endif
             </div>
         </form>

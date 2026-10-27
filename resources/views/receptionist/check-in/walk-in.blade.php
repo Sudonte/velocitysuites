@@ -181,8 +181,11 @@ document.addEventListener('DOMContentLoaded', function () {
             } else {
                 box.innerHTML = '<div class="mb-1">' + data.sellable + ' can be booked for these dates - tick the rooms to give the guest:</div>'
                     + '<div class="d-flex flex-wrap gap-2">' + data.rooms.map(room =>
-                        '<input type="checkbox" class="btn-check" name="room_ids[]" value="' + room.id + '" id="walkInRoom' + room.id + '" data-type="' + typeId + '"' + (kept.includes(String(room.id)) ? ' checked' : '') + '>'
-                        + '<label class="btn btn-sm btn-outline-success" for="walkInRoom' + room.id + '">' + room.room_number + '</label>').join('') + '</div>';
+                        '<input type="checkbox" class="btn-check" name="room_ids[]" value="' + room.id + '" id="walkInRoom' + room.id + '" data-type="' + typeId + '" data-rate="' + room.rate + '"' + (kept.includes(String(room.id)) ? ' checked' : '') + '>'
+                        // a room that charges its own rate (not its type's) says so on its button
+                        + '<label class="btn btn-sm btn-outline-success" for="walkInRoom' + room.id + '">' + room.room_number
+                        + (room.capacity_label ? ' &middot; ' + room.capacity_label : '')
+                        + (Math.abs(room.rate - rates[typeId].rate) > 0.004 ? ' &middot; ' + peso(room.rate) + '/night' : '') + '</label>').join('') + '</div>';
             }
         } catch (err) {
             box.innerHTML = '<span class="text-danger">' + err.message + '</span>';
@@ -264,11 +267,13 @@ document.addEventListener('DOMContentLoaded', function () {
         groups.querySelectorAll('.walkin-group').forEach(g => {
             const typeId = g.querySelector('.walkin-type').value;
             g.querySelectorAll('input[name="room_ids[]"]:checked').forEach(b => {
-                const label = g.querySelector('label[for="' + b.id + '"]').textContent;
-                const sub = rates[typeId].rate * n;
+                const label = g.querySelector('label[for="' + b.id + '"]').textContent.split(' · ')[0]; // the room number, without its rate
+                // the room's own nightly rate (it may differ from its type's) - what check-in bills and discounts
+                const rate = b.dataset.rate !== undefined ? parseFloat(b.dataset.rate) : rates[typeId].rate;
+                const sub = rate * n;
                 roomTotal += sub;
-                picked.push([String(typeId), parseFloat(rates[typeId].rate)]);
-                lines.push([rates[typeId].name + ' ' + label + ' &middot; ' + peso(rates[typeId].rate) + ' &times; ' + n + ' night' + (n === 1 ? '' : 's'), sub]);
+                picked.push([String(typeId), rate]);
+                lines.push([rates[typeId].name + ' ' + label + ' &middot; ' + peso(rate) + ' &times; ' + n + ' night' + (n === 1 ? '' : 's'), sub]);
             });
         });
         let addOns = 0;

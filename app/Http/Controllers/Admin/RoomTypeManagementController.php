@@ -220,20 +220,20 @@ class RoomTypeManagementController extends Controller
 
     /**
      * Bulk-add rooms to this type. Numbers are generated from the type's
-     * numbering format. Room Name and Description are inherited
-     * directly from the room type (never taken from the request, even if
-     * present - the Add Rooms form only shows them as read-only preview
-     * text) so a room can never end up with values other than its type's;
-     * rate_override is intentionally left null (uses the type's base rate)
-     * rather than duplicating the type's rate onto every room, which would
-     * incorrectly flip Room::has_rate_override to true. The admin only
-     * ever controls quantity and initial status.
+     * numbering format; a room is known by its number (no separate name)
+     * and shows its type's description. The admin sets how many, the
+     * initial status and - for every room in the batch - the guest capacity
+     * and nightly rate. Left blank they are the type's: capacity copies the
+     * type's, and rate_override stays null (the type's base rate) rather than
+     * duplicating it, which would flip Room::has_rate_override to true.
      */
     public function storeRooms(Request $request, RoomType $roomType): RedirectResponse
     {
         $validated = $request->validate([
             'quantity' => 'required|integer|min:1|max:50',
             'status' => 'required|in:available,maintenance',
+            'room_capacity' => 'nullable|integer|min:1|max:50',
+            'rate_override' => 'nullable|numeric|min:0',
         ]);
 
         $numbers = $roomType->nextRoomNumbers($validated['quantity']);
@@ -247,8 +247,10 @@ class RoomTypeManagementController extends Controller
         foreach ($numbers as $number) {
             Room::create([
                 'room_number' => $number,
-                'room_name' => $roomType->name . ' Room',
+                'room_name' => 'Room ' . $number,
                 'room_type_id' => $roomType->id,
+                'room_capacity' => $validated['room_capacity'] ?? $roomType->capacity,
+                'rate_override' => isset($validated['rate_override']) && (float) $validated['rate_override'] !== (float) $roomType->rate ? $validated['rate_override'] : null,
                 'status' => $validated['status'],
             ]);
         }
@@ -319,11 +321,14 @@ class RoomTypeManagementController extends Controller
         $amenityIds = $this->amenitySync($validated);
         unset($validated['amenities'], $validated['amenity_qty']);
 
+        $oldCapacity = (int) $roomType->capacity;
         $roomType->update($validated);
         $roomType->assignedAmenities()->sync($amenityIds);
         if ($roomType->wasChanged('capacity')) {
-            // Keep the legacy per-room mirror (API only) in step with the type.
-            Room::where('room_type_id', $roomType->id)->update(['room_capacity' => $roomType->capacity]);
+            // Rooms that followed the type move with it; a room given its own capacity keeps it.
+            Room::where('room_type_id', $roomType->id)
+                ->where(fn ($q) => $q->whereNull('room_capacity')->orWhere('room_capacity', $oldCapacity))
+                ->update(['room_capacity' => $roomType->capacity]);
         }
 
         Activity::log('Updated room type', "{$roomType->name} ({$roomType->capacity_label}, ₱" . number_format($roomType->rate, 2) . '/night, ' . $roomType->status . ')', $roomType);

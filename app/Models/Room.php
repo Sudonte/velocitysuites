@@ -101,6 +101,34 @@ class Room extends Model
     }
 
     /**
+     * Most guests this room holds: its own capacity (set on Add Rooms / Edit Room), else its type's. Check-in and
+     * walk-in check the guest count against the rooms actually picked (App\Support\GuestCapacity::linesForRooms).
+     */
+    public function getGuestCapacityAttribute(): int
+    {
+        return (int) ($this->room_capacity ?: $this->roomType?->capacity ?: 1);
+    }
+
+    /** "Up to 7 guests" / "2–7 guests" - this room's own maximum with its type's minimum. */
+    public function getCapacityLabelAttribute(): string
+    {
+        $max = $this->guest_capacity;
+        $min = $this->roomType ? min(\App\Support\GuestCapacity::minOf($this->roomType), $max) : 1;
+
+        if ($min >= $max) {
+            return $max . ' ' . ($max === 1 ? 'guest' : 'guests');
+        }
+
+        return $min <= 1 ? "Up to {$max} guests" : "{$min}–{$max} guests";
+    }
+
+    /** Whether this room holds a different number of guests than its type. */
+    public function getHasCapacityOverrideAttribute(): bool
+    {
+        return $this->room_capacity !== null && $this->roomType && (int) $this->room_capacity !== (int) $this->roomType->capacity;
+    }
+
+    /**
      * Whether this room charges differently from its type's base rate.
      */
     public function getHasRateOverrideAttribute(): bool

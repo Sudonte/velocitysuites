@@ -11,7 +11,7 @@
     </div>
 
     <x-page-header icon="fas fa-door-open" title="Room {{ $room->room_number }}"
-        subtitle="{{ $room->room_name }} · {{ $roomType->name }} · view-only - room management is handled by the System Administrator" />
+        subtitle="{{ $roomType->name }} · view-only - room management is handled by the System Administrator" />
 
     <div class="row">
         <div class="col-lg-8">
@@ -28,8 +28,8 @@
 
         <div class="col-lg-4">
             <x-card title="Room Details" icon="fas fa-info-circle" bodyClass="card-body" class="mb-4">
-                <p class="mb-1 fw-bold">{{ $room->room_name }}</p>
-                <p class="text-muted mb-3">{{ $roomType->name }} &middot; Room {{ $room->room_number }}</p>
+                <p class="mb-1 fw-bold">Room {{ $room->room_number }}</p>
+                <p class="text-muted mb-3">{{ $roomType->name }} &middot; {{ $room->capacity_label }} &middot; ₱{{ number_format((float) $room->room_rate, 2) }}/night</p>
                 <div class="room-type-stats mb-3">
                     <span class="room-type-stat-chip">
                         <i class="fas fa-tag"></i> ₱{{ number_format($room->room_rate, 2) }}/night
@@ -37,7 +37,7 @@
                             <span class="badge bg-warning text-dark" title="Overrides the type's base rate of ₱{{ number_format($roomType->rate, 2) }}">override</span>
                         @endif
                     </span>
-                    <span class="room-type-stat-chip"><i class="fas fa-user"></i> {{ $room->roomType->capacity_label ?? '' }}</span>
+                    <span class="room-type-stat-chip"><i class="fas fa-user"></i> {{ $room->capacity_label }}</span>
                     @if($roomType->bed_type)
                         <span class="room-type-stat-chip"><i class="fas fa-bed"></i> {{ $roomType->bed_type }}</span>
                     @endif

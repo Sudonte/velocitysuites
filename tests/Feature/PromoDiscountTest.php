@@ -76,6 +76,45 @@ class PromoDiscountTest extends ApiFlowTestCase
         $this->assertSame('Deluxe Days', $bill['discount_name']);
     }
 
+    public function test_a_rate_promo_comes_off_the_actual_rooms_own_rate_not_the_room_types(): void
+    {
+        $standard = $this->makeRoomTypeWithRooms('Standard', 1000);
+        $deluxe = $this->makeRoomTypeWithRooms('Deluxe', 2000);
+        $promo = $this->promo(['promo_name' => 'Deluxe Days', 'room_type_id' => $deluxe->id, 'discount_type' => 'percentage', 'discount_value' => 10]);
+        $booking = $this->mixedBooking($standard->id, $deluxe->id, $promo->id);
+
+        // The guest gets the Deluxe room that charges its own ₱2,600 a night (not the type's ₱2,000), plus a Standard room.
+        $special = $deluxe->rooms()->first();
+        $special->update(['rate_override' => 2600]);
+        $stayId = $booking->stayList()->first()?->id;
+        $booking->rooms()->attach($special->id, ['stay_id' => $stayId]);
+        $booking->rooms()->attach($standard->rooms()->first()->id, ['stay_id' => $stayId]);
+
+        $bill = StayBill::forBooking($booking->fresh(), StayBill::PROJECTED);
+
+        $this->assertSame(7200.0, (float) $bill['room_charge'], '2,600 x 2 + 1,000 x 2');
+        $this->assertSame(520.0, (float) $bill['discount'], '10% of THAT room rate ₱2,600 x 2 nights - the Standard room is not discounted');
+    }
+
+    public function test_a_room_type_with_its_own_rate_is_discounted_on_that_rate(): void
+    {
+        // e.g. the same suite offered as a 1-7 guest type at ₱5,000 and another type at ₱3,000: the promo is per room type,
+        // and the booked line carries the rate of the type the guest actually picked.
+        $small = $this->makeRoomTypeWithRooms('Family Suite (1-4)', 3000);
+        $big = $this->makeRoomTypeWithRooms('Family Suite (1-7)', 5000);
+        $promo = $this->promo(['promo_name' => 'Big Family', 'room_type_id' => $big->id, 'discount_type' => 'fixed', 'discount_value' => 500]);
+        $booking = Booking::create(['room_type_id' => $big->id, 'rooms_requested' => 1, 'guest_first_name' => 'Ana', 'guest_last_name' => 'Reyes',
+            'check_in' => today()->addDays(3), 'check_out' => today()->addDays(6), 'adults' => 6, 'children' => 0, 'number_of_guests' => 6,
+            'booking_status' => Booking::STATUS_ACTIVE, 'payment_method' => 'cash', 'promotion_id' => $promo->id]);
+        BookingRoomLine::create(['booking_id' => $booking->id, 'room_type_id' => $big->id, 'room_type_name' => $big->name, 'quantity' => 1, 'price_per_night' => 5000, 'number_of_nights' => 3, 'subtotal' => 15000]);
+
+        $bill = StayBill::forBooking($booking->fresh(), StayBill::PROJECTED);
+
+        $this->assertSame(1500.0, (float) $bill['discount'], '₱500 off the 1-7 type rate ₱5,000 a night x 3 nights');
+        $this->assertSame(13500.0, (float) $bill['total']);
+        $this->assertNotNull($small); // the other capacity type is untouched by this promo
+    }
+
     public function test_a_fixed_promo_for_all_types_comes_off_every_rooms_nightly_rate(): void
     {
         $standard = $this->makeRoomTypeWithRooms('Standard', 1000);

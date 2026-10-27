@@ -358,6 +358,8 @@ Route::middleware(['auth', 'account.status', 'log.activity', 'no.cache'])->group
         Route::post('/check-in/{booking}/discount/approve', [ReceptionistCheckInController::class, 'approveDiscount'])->name('check-in.discount.approve');
         Route::post('/check-in/{booking}/discount/reject', [ReceptionistCheckInController::class, 'rejectDiscount'])->name('check-in.discount.reject');
         Route::post('/check-in/{booking}/promotion', [ReceptionistCheckInController::class, 'applyPromotion'])->name('check-in.promotion');
+        // Price check once the rooms are picked (a room may charge its own rate) - nothing is saved.
+        Route::post('/check-in/{booking}/quote', [ReceptionistCheckInController::class, 'quote'])->name('check-in.quote');
         // Optional guest-account link on Create Reservation / Create Booking / Walk-in Check-in.
         Route::get('/guest-accounts/search', [\App\Http\Controllers\Receptionist\GuestAccountController::class, 'search'])->name('guest-accounts.search');
         Route::post('/check-in/walk-in', [ReceptionistCheckInController::class, 'storeWalkIn'])->name('check-in.walk-in.store');

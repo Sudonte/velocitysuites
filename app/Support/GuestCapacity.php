@@ -55,6 +55,28 @@ class GuestCapacity
         return null;
     }
 
+    /**
+     * Lines for the physical rooms picked (check-in, walk-in): each room counts with its OWN capacity - a room may
+     * hold more or fewer guests than its type - and its type's minimum.
+     *
+     * @param iterable<\App\Models\Room> $rooms
+     */
+    public static function linesForRooms(iterable $rooms): array
+    {
+        $lines = [];
+        foreach ($rooms as $room) {
+            if (! $room->roomType) {
+                continue;
+            }
+            $type = clone $room->roomType;
+            $type->capacity = $room->guest_capacity;
+            $type->min_capacity = min(self::minOf($room->roomType), $type->capacity);
+            $lines[] = ['room_type' => $type, 'quantity' => 1];
+        }
+
+        return $lines;
+    }
+
     public static function minOf(RoomType $type): int
     {
         return max(1, (int) ($type->min_capacity ?? 1));

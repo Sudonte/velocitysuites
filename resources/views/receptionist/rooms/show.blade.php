@@ -102,7 +102,6 @@
                             <div class="d-flex justify-content-between align-items-start mb-2">
                                 <div>
                                     <h5 class="mb-0">Room {{ $room->room_number }}</h5>
-                                    <small class="text-muted">{{ $room->room_name }}</small>
                                 </div>
                                 <x-status-badge :status="$room->effective_status" domain="room" />
                             </div>
@@ -115,7 +114,7 @@
                             @endif
 
                             <div class="room-type-stats mt-2">
-                                <span class="room-type-stat-chip"><i class="fas fa-user"></i> {{ $room->roomType->capacity_label ?? '' }}</span>
+                                <span class="room-type-stat-chip"><i class="fas fa-user"></i> {{ $room->capacity_label }}</span>
                                 <span class="room-type-stat-chip">
                                     <i class="fas fa-tag"></i> ₱{{ number_format($room->room_rate, 2) }}
                                     @if($room->has_rate_override)

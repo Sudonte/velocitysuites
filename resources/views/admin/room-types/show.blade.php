@@ -191,7 +191,6 @@
                             <div class="d-flex justify-content-between align-items-start mb-2">
                                 <div>
                                     <h5 class="mb-0">Room {{ $room->room_number }}</h5>
-                                    <small class="text-muted">{{ $room->room_name }}</small>
                                 </div>
                                 <x-status-badge :status="$room->effective_status" domain="room" />
                             </div>
@@ -199,12 +198,8 @@
                             <x-room-gallery :images="collect($room->gallery)" :title="'Room ' . $room->room_number"
                                 id="roomGallery{{ $room->id }}" :thumb-only="true" />
 
-                            @if($room->description)
-                                <p class="text-muted small mt-2 mb-0">{{ Str::limit($room->description, 90) }}</p>
-                            @endif
-
                             <div class="room-type-stats mt-2">
-                                <span class="room-type-stat-chip"><i class="fas fa-user"></i> {{ $roomType->capacity_label }}</span>
+                                <span class="room-type-stat-chip"><i class="fas fa-user"></i> {{ $room->capacity_label }}</span>
                                 <span class="room-type-stat-chip">
                                     <i class="fas fa-tag"></i> ₱{{ number_format($room->room_rate, 2) }}
                                     @if($room->has_rate_override)
@@ -298,29 +293,21 @@
                         </select>
                     </div>
 
-                    <div class="alert alert-secondary py-2 mb-0">
-                        <i class="fas fa-circle-info"></i> The fields below are inherited from the
-                        <strong>{{ $roomType->name }}</strong> type and apply to every room in this batch - edit
-                        the type to change them.
-                    </div>
-                    <div class="mb-2 mt-2">
-                        <label class="form-label text-muted">Room Name</label>
-                        <input type="text" class="form-control" value="{{ $roomType->name }} Room" disabled>
-                    </div>
                     <div class="row">
                         <div class="col-6 mb-2">
-                            <label class="form-label text-muted">Capacity (guests)</label>
-                            <input type="text" class="form-control" value="{{ $roomType->capacity_label }}" disabled>
+                            <label class="form-label" for="addRoomsCapacity">Capacity (guests)</label>
+                            <input type="number" name="room_capacity" id="addRoomsCapacity" class="form-control" min="1" max="50"
+                                   value="{{ old('room_capacity', $roomType->capacity) }}">
+                            <small class="text-muted">Most guests per room. Type: {{ $roomType->capacity_label }}.</small>
                         </div>
                         <div class="col-6 mb-2">
-                            <label class="form-label text-muted">Rate Override (₱)</label>
-                            <input type="text" class="form-control" value="Uses base rate (₱{{ number_format($roomType->rate, 2) }})" disabled>
+                            <label class="form-label" for="addRoomsRate">Rate (₱ per night)</label>
+                            <input type="number" name="rate_override" id="addRoomsRate" class="form-control" min="0" step="0.01"
+                                   value="{{ old('rate_override') }}" placeholder="Base: {{ number_format($roomType->rate, 2) }}">
+                            <small class="text-muted">Leave blank for the type's base rate.</small>
                         </div>
                     </div>
-                    <div class="mb-1">
-                        <label class="form-label text-muted">Description</label>
-                        <div class="form-control bg-light" style="white-space: pre-wrap;">{{ $roomType->description ?: 'No description set on the room type yet.' }}</div>
-                    </div>
+                    <p class="text-muted small mb-0"><i class="fas fa-circle-info"></i> Applies to every room in this batch. Each room can be changed later from Edit Room.</p>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>

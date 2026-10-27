@@ -4,7 +4,7 @@
 
 @section('content')
 <div class="container-fluid py-4">
-    <x-page-header icon="fas fa-edit" title="Edit Room: {{ $room->room_name }}" />
+    <x-page-header icon="fas fa-edit" title="Edit Room {{ $room->room_number }}" />
 
     <div class="row">
         <div class="col-lg-8">
@@ -52,16 +52,6 @@
                                     @enderror
                                 </div>
                             </div>
-                            <div class="col-md-6">
-                                <div class="form-group mb-3">
-                                    <label for="room_name">Room Name *</label>
-                                    <input type="text" class="form-control @error('room_name') is-invalid @enderror"
-                                           id="room_name" name="room_name" value="{{ old('room_name', $room->room_name) }}" required>
-                                    @error('room_name')
-                                        <div class="invalid-feedback">{{ $message }}</div>
-                                    @enderror
-                                </div>
-                            </div>
                         </div>
                     </div>
 
@@ -89,9 +79,13 @@
                             </div>
                             <div class="col-md-6">
                                 <div class="form-group mb-3">
-                                    <label>Guest Capacity</label>
-                                    <p class="form-control-plaintext mb-0">{{ $room->roomType->capacity_label ?? 'N/A' }}</p>
-                                    <small class="text-muted">Set on the room type. <a href="{{ route('admin.room-types.edit', $room->roomType) }}">Edit type</a></small>
+                                    <label for="room_capacity">Guest Capacity</label>
+                                    <input type="number" min="1" max="50" class="form-control @error('room_capacity') is-invalid @enderror"
+                                           id="room_capacity" name="room_capacity" value="{{ old('room_capacity', $room->guest_capacity) }}">
+                                    <small class="text-muted">Most guests this room holds. Type: {{ $room->roomType->capacity_label ?? 'N/A' }}.</small>
+                                    @error('room_capacity')
+                                        <div class="invalid-feedback">{{ $message }}</div>
+                                    @enderror
                                 </div>
                             </div>
                         </div>
@@ -122,18 +116,6 @@
                                     <small class="text-muted">Occupied is set by check-in and check-out. Use <strong>Set to Maintenance</strong> / <strong>Reactivate</strong> to take the room out of service.</small>
                                 </div>
                             </div>
-                        </div>
-                    </div>
-
-                    <div class="form-subsection">
-                        <h6 class="form-subsection-title">Description</h6>
-
-                        <div class="form-group mb-1">
-                            <div class="form-control bg-light" style="min-height: 6rem; white-space: pre-wrap;">{{ $room->description ?: 'No description set on the room type yet.' }}</div>
-                            <small class="text-muted">
-                                Inherited from the {{ $room->roomType->name }} room type - edit it there to update every
-                                room of this type at once. <a href="{{ route('admin.room-types.edit', $room->roomType) }}">Edit Type</a>
-                            </small>
                         </div>
                     </div>
 
@@ -179,7 +161,7 @@
             <x-card title="Room Details" bodyClass="card-body" class="mb-3">
                 <p class="mb-2"><strong>Room Number:</strong> {{ $room->room_number }}</p>
                 <p class="mb-2"><strong>Type:</strong> {{ $room->roomType->name }}</p>
-                <p class="mb-2"><strong>Capacity:</strong> {{ $room->roomType->capacity_label ?? 'N/A' }}</p>
+                <p class="mb-2"><strong>Capacity:</strong> {{ $room->capacity_label }}</p>
                 <p class="mb-2"><strong>Rate:</strong> ₱{{ number_format($room->room_rate, 2) }}/night</p>
                 <p class="mb-2"><strong>Status:</strong> <x-status-badge :status="$room->effective_status" domain="room" /></p>
                 <p class="mb-0"><strong>Created:</strong> {{ $room->created_at->copy()->timezone('Asia/Manila')->format('M d, Y') }}</p>

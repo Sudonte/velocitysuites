@@ -243,7 +243,7 @@
             <x-card title="Rooms of This Type" icon="fas fa-door-open" bodyClass="card-body">
                 @forelse($roomType->rooms as $room)
                     <p class="mb-1">
-                        <strong>Room {{ $room->room_number }}</strong> — {{ $room->room_name }}
+                        <strong>Room {{ $room->room_number }}</strong> <span class="text-muted small">{{ $room->capacity_label }} &middot; ₱{{ number_format((float) $room->room_rate, 2) }}/night</span>
                         <x-status-badge :status="$room->effective_status" domain="room" />
                     </p>
                 @empty
