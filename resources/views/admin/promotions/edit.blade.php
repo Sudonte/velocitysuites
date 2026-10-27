@@ -1,10 +1,10 @@
 @extends('layouts.app')
 
-@section('title', 'Edit Promotion - Admin')
+@section('title', 'Edit Promo - Admin')
 
 @section('content')
 <div class="container-fluid py-4">
-    <x-page-header icon="fas fa-edit" title="Edit Promotion: {{ $promotion->promo_name }}" />
+    <x-page-header icon="fas fa-edit" title="Edit Promo: {{ $promotion->promo_name }}" />
 
     <div class="row">
         <div class="col-lg-8">
@@ -21,15 +21,7 @@
                     </div>
                 @endif
 
-                @if($promotion->promo_type !== 'amenity')
-                    <div class="alert alert-warning">
-                        <i class="fas fa-exclamation-triangle"></i> This was a discount-type promotion, deactivated when
-                        Promotions became package/amenity-only. Add at least one included amenity below to convert it,
-                        or leave it inactive and use the new <a href="{{ route('admin.discounts.index') }}">Discounts</a> module instead.
-                    </div>
-                @endif
-
-                <form action="{{ route('admin.promotions.update', $promotion) }}" method="POST" data-confirm="The promotion and its included amenities will be updated." data-confirm-title="Save changes to {{ $promotion->promo_name }}?" data-confirm-button="Save Changes" data-confirm-variant="primary" enctype="multipart/form-data">
+                <form action="{{ route('admin.promotions.update', $promotion) }}" method="POST" data-confirm="The promo, its free amenities and its discount will be updated." data-confirm-title="Save changes to {{ $promotion->promo_name }}?" data-confirm-button="Save Changes" data-confirm-variant="primary" enctype="multipart/form-data">
                     @csrf
                     @method('PUT')
 
@@ -60,6 +52,8 @@
                     </div>
 
                     @include('admin.promotions.partials.amenity-picker', ['selectedAmenities' => $promotion->amenities->mapWithKeys(fn ($a) => [$a->id => $a->pivot->quantity])->all()])
+
+                    @include('admin.promotions.partials.discount-fields', ['promotion' => $promotion])
 
                     <div class="form-group mb-3">
                         <label for="room_type_id">Applicable Room Type</label>

@@ -141,6 +141,9 @@
                     @if($promo->amenities->isNotEmpty())
                         &middot; Includes {{ $promo->amenities->map(fn ($a) => max(1, (int) $a->pivot->quantity) . ' × ' . $a->amenity_name)->join(', ') }}
                     @endif
+                    @if($promo->hasDiscount())
+                        &middot; Discount: {{ $promo->discountLabel() }}
+                    @endif
                 </span>
             </div>
         @empty

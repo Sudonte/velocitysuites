@@ -22,7 +22,9 @@ use Illuminate\Validation\ValidationException;
  *    through DiscountIdVerificationService.
  *  - Promotion: one running on the stay's check-in date for its room
  *    type(s); its included amenities are added free (pre-approved amenity
- *    requests marked with the promotion), recorded as promotion_id.
+ *    requests marked with the promotion), recorded as promotion_id. A
+ *    promotion may also carry a discount: App\Support\StayBill takes it off
+ *    the rate of the rooms of the promotion's room type only.
  */
 class StayOffersService
 {
@@ -48,15 +50,15 @@ class StayOffersService
         return [
             'offerDiscounts' => $this->discounts(),
             'offerPromotions' => Promotion::with(['amenities', 'roomType'])->where('status', 'active')->notArchived()
-                ->where('promo_type', 'amenity')->whereDate('end_date', '>=', \App\Support\CheckInWindow::date())->orderBy('promo_name')->get(),
+                ->whereDate('end_date', '>=', \App\Support\CheckInWindow::date())->orderBy('promo_name')->get(),
         ];
     }
 
     /** Promotions running on $day for any of these room types (null room type = all rooms). */
     public function promotionsFor(array $roomTypeIds, Carbon $day)
     {
-        return Promotion::with('amenities')->where('status', 'active')->notArchived()
-            ->where('promo_type', 'amenity')->runningOn($day)
+        return Promotion::with(['amenities', 'roomType'])->where('status', 'active')->notArchived()
+            ->runningOn($day)
             ->where(fn ($q) => $q->whereNull('room_type_id')->orWhereIn('room_type_id', $roomTypeIds))
             ->orderBy('promo_name')->get();
     }
@@ -106,8 +108,9 @@ class StayOffersService
     }
 
     /**
-     * Apply a promotion: its included amenities are added free (once). Not
-     * allowed alongside an approved ID discount.
+     * Apply a promotion: its included amenities are added free (once) and its
+     * discount, if any, is priced into the bill. Not allowed alongside an
+     * approved ID discount.
      *
      * @throws ValidationException
      */
@@ -145,6 +148,7 @@ class StayOffersService
             ]);
         }
         $stay->forceFill(['promotion_id' => $promotion->id])->save();
+        $this->reprice($stay);
     }
 
     /** Remove a stay's promotion and the free amenities it added. */
@@ -160,6 +164,17 @@ class StayOffersService
                 : $q->where('booking_id', $stay->id)->orWhere('reservation_id', $stay->reservation_id ?? 0))
             ->delete();
         $stay->forceFill(['promotion_id' => null])->save();
+        $this->reprice($stay);
+    }
+
+    /** A booking whose bill already exists (paid ahead) gets its discount re-priced; everything else is priced live. */
+    private function reprice(Reservation|Booking $stay): void
+    {
+        $billing = $stay instanceof Booking ? $stay->billing()->first() : $stay->booking?->billing;
+        $booking = $stay instanceof Booking ? $stay : $stay->booking;
+        if ($billing && $booking && ! $billing->isClosed() && \App\Support\CheckInSettlement::settledAt($billing) === null) {
+            $billing->syncFromStayBill($booking->fresh());
+        }
     }
 
     /** True when this promotion was already applied to the stay (or the reservation it came from). */

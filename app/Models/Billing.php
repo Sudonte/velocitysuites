@@ -94,6 +94,20 @@ class Billing extends Model
         return $this->belongsTo(Discount::class, 'discount_id');
     }
 
+    /** The name of what the discount on this bill is: the ID discount, else the booking's promotion. */
+    public function getDiscountLabelAttribute(): ?string
+    {
+        if ((float) $this->discount <= 0) {
+            return null;
+        }
+        if ($this->discountApplied) {
+            return $this->discountApplied->name;
+        }
+        $promotionId = Booking::whereKey($this->booking_id)->value('promotion_id');
+
+        return $promotionId ? Promotion::whereKey($promotionId)->value('promo_name') : null;
+    }
+
     /**
      * The receptionist who verified the guest's ID and applied the discount.
      */

@@ -13,12 +13,12 @@
 @endphp
 <div class="form-group mb-3" id="promoAmenityPicker">
     <div class="d-flex justify-content-between align-items-center mb-1">
-        <label class="mb-0">Included Amenities *</label>
+        <label class="mb-0">Free Amenities</label>
         <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#promoAmenityModal">
             <i class="fas fa-plus"></i> Add Amenity
         </button>
     </div>
-    <p class="text-muted small mb-2">Amenities included free with the stay, and how many of each.</p>
+    <p class="text-muted small mb-2">Amenities included free with the stay, and how many of each. Optional when the promo gives a discount.</p>
     @error('amenities')
         <div class="text-danger small mb-2">{{ $message }}</div>
     @enderror
@@ -38,7 +38,7 @@
         @endforeach
     </ul>
     <div id="promoAmenityEmpty" class="border rounded p-3 text-center text-muted small {{ $selectedAmenities->filter(fn ($q, $id) => $amenityById->has($id))->isEmpty() ? '' : 'd-none' }}">
-        No amenities added yet. Use <strong>Add Amenity</strong> to choose what this promotion includes.
+        No amenities added yet. Use <strong>Add Amenity</strong> to choose what this promo includes, or give it a discount below.
     </div>
 </div>
 

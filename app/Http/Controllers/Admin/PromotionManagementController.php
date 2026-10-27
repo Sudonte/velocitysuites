@@ -19,35 +19,59 @@ class PromotionManagementController extends Controller
     }
 
     /**
-     * Display list of promotions.
+     * The Promos tab of Promos & Discounts. Filters: name/description, room type, what the promo includes,
+     * when it runs, and status - where "Archived" is a status choice (archived promos are hidden otherwise).
      */
     public function index(Request $request): View
     {
         $query = Promotion::query();
-        $view = $request->get('view') === 'archived' ? 'archived' : 'active';
-        $view === 'archived' ? $query->archived() : $query->notArchived();
+        $filters = [
+            'search' => trim((string) $request->get('search', '')),
+            // an old ?view=archived link still lands on the archived list
+            'status' => (string) $request->get('status', $request->get('view') === 'archived' ? 'archived' : ''),
+            'room_type' => (string) $request->get('room_type', ''),
+            'includes' => (string) $request->get('includes', ''),
+            'period' => (string) $request->get('period', ''),
+        ];
 
-        // Search - grouped so a later ->where('status', ...) ANDs against the
-        // whole name-or-description match, not just the last OR branch (an
-        // ungrouped orWhere() lets SQL's AND-before-OR precedence silently
-        // leak rows past the status filter).
-        if ($request->has('search') && $request->search) {
-            $search = $request->search;
-            $query->where(function ($q) use ($search) {
-                $q->where('promo_name', 'like', "%{$search}%")
-                  ->orWhere('description', 'like', "%{$search}%");
-            });
+        $filters['status'] === 'archived' ? $query->archived() : $query->notArchived();
+        if (in_array($filters['status'], ['active', 'inactive'], true)) {
+            $query->where('status', $filters['status']);
         }
 
-        // Filter by status
-        if ($request->has('status') && $request->status) {
-            $query->where('status', $request->status);
+        // Grouped so the other filters AND against the whole name-or-description match.
+        if ($filters['search'] !== '') {
+            $search = $filters['search'];
+            $query->where(fn ($q) => $q->where('promo_name', 'like', "%{$search}%")->orWhere('description', 'like', "%{$search}%"));
         }
 
-        $promotions = $query->with('amenities')->latest()->paginate(\App\Support\PerPage::resolve($request))->withQueryString();
+        // A room type shows the promos that apply to it: its own and the ones for every type.
+        if ($filters['room_type'] === 'all') {
+            $query->whereNull('room_type_id');
+        } elseif (ctype_digit($filters['room_type'])) {
+            $query->where(fn ($q) => $q->whereNull('room_type_id')->orWhere('room_type_id', (int) $filters['room_type']));
+        }
+
+        $withDiscount = fn ($q) => $q->whereIn('discount_type', ['percentage', 'fixed'])->where('discount_value', '>', 0);
+        match ($filters['includes']) {
+            'amenities' => $query->has('amenities')->whereNot($withDiscount),
+            'discount' => $query->doesntHave('amenities')->where($withDiscount),
+            'both' => $query->has('amenities')->where($withDiscount),
+            default => null,
+        };
+
+        $today = \App\Support\CheckInWindow::date();
+        match ($filters['period']) {
+            'running' => $query->runningOn($today),
+            'upcoming' => $query->whereDate('start_date', '>', $today),
+            'ended' => $query->whereDate('end_date', '<', $today),
+            default => null,
+        };
+
+        $promotions = $query->with(['amenities', 'roomType'])->latest()->paginate(\App\Support\PerPage::resolve($request))->withQueryString();
         $roomTypes = RoomType::orderBy('name')->get();
 
-        return view('admin.promotions.index', compact('promotions', 'roomTypes', 'view'));
+        return view('admin.promotions.index', compact('promotions', 'roomTypes', 'filters'));
     }
 
     /**
@@ -62,11 +86,12 @@ class PromotionManagementController extends Controller
     }
 
     /**
-     * Validate a promotion request. Promotions are package/amenity-only -
-     * authorized discounts (Senior Citizen, PWD, etc.) live in the
-     * separate Discount module now, applied manually by the receptionist
-     * at billing. Requires at least one included amenity (submitted as
-     * amenities[<id>] = quantity, 0/blank meaning excluded).
+     * Validate a promotion request. A promo includes free amenities
+     * (amenities[<id>] = quantity, 0/blank meaning excluded), a discount off
+     * the room rate (has_discount + discount_type/discount_value), or both -
+     * at least one. Its discount only ever comes off the rate of rooms of its
+     * room type (Promotion::discountForRoom). ID-checked discounts (Senior
+     * Citizen, PWD, etc.) are the separate Discount module.
      */
     private function validatePromotion(Request $request, ?Promotion $promotion = null): array
     {
@@ -86,6 +111,11 @@ class PromotionManagementController extends Controller
             'status' => 'required|in:active,inactive',
             'amenities' => 'array',
             'amenities.*' => 'nullable|integer|min:0|max:99',
+            'has_discount' => 'nullable|boolean',
+            'discount_type' => 'exclude_unless:has_discount,1|required|in:percentage,fixed',
+            'discount_value' => ['exclude_unless:has_discount,1', 'required', 'numeric', 'min:0.01', 'max:99999999',
+                fn ($attribute, $value, $fail) => $request->input('discount_type') === 'percentage' && (float) $value > 100
+                    ? $fail('A percentage discount cannot be more than 100%.') : null],
         ]);
 
         $amenityIds = array_keys($validated['amenities'] ?? []);
@@ -97,13 +127,20 @@ class PromotionManagementController extends Controller
         }
 
         $included = collect($validated['amenities'] ?? [])->filter(fn ($qty) => (int) $qty > 0);
-        if ($included->isEmpty()) {
+        $hasDiscount = (bool) ($validated['has_discount'] ?? false);
+        if ($included->isEmpty() && ! $hasDiscount) {
             throw \Illuminate\Validation\ValidationException::withMessages([
-                'amenities' => 'Add at least one amenity to this promotion.',
+                'amenities' => 'Add at least one amenity or a discount to this promotion.',
             ]);
         }
+        if (! $hasDiscount) {
+            $validated['discount_type'] = null;
+            $validated['discount_value'] = null;
+        }
+        unset($validated['has_discount']);
 
-        $validated['promo_type'] = 'amenity';
+        // informational only - what counts is the amenities and the discount it actually has
+        $validated['promo_type'] = $included->isNotEmpty() ? 'amenity' : 'discount';
 
         $validated['is_recurring'] = (bool) ($validated['is_recurring'] ?? false);
         if ($validated['is_recurring']) {
@@ -250,13 +287,13 @@ class PromotionManagementController extends Controller
         $promotion->forceFill(['notified_at' => now()])->save();
     }
 
-    /** Archive instead of delete - it leaves the list and is switched off; restore from the Archived tab. */
+    /** Archive instead of delete - it leaves the list and is switched off; restore it from the Archived status filter. */
     public function archive(Promotion $promotion): \Illuminate\Http\RedirectResponse
     {
         $promotion->archiveRecord();
         \App\Support\Activity::log('Archived promotion', $this->archiveLabel($promotion), $promotion);
 
-        return redirect()->route('admin.promotions.index')->with('success', ucfirst('promotion') . ' archived. You can restore it from the Archived tab.');
+        return redirect()->route('admin.promotions.index')->with('success', ucfirst('promotion') . ' archived. Choose Status: Archived in the search to find and restore it.');
     }
 
     public function unarchive(Promotion $promotion): \Illuminate\Http\RedirectResponse
@@ -264,7 +301,7 @@ class PromotionManagementController extends Controller
         $promotion->unarchive();
         \App\Support\Activity::log('Restored promotion', $this->archiveLabel($promotion), $promotion);
 
-        return redirect()->route('admin.promotions.index', ['view' => 'archived'])->with('success', ucfirst('promotion') . ' restored - it is inactive until you switch it on.');
+        return redirect()->route('admin.promotions.index', ['status' => 'archived'])->with('success', ucfirst('promotion') . ' restored - it is inactive until you switch it on.');
     }
 
     private function archiveLabel(Promotion $promotion): string

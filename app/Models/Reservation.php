@@ -363,7 +363,8 @@ class Reservation extends Model
         // (BookingService::quoteRoomCharge -> App\Support\BillDiscount), never a second discount calculation. A
         // pending, rejected or not-requested discount leaves the total as it was. After conversion the Billing's
         // own total is used (ReceiptService::grandTotal), so this only matters for an unconverted reservation.
-        if ($this->discount_verification_status === 'approved' && $this->roomType && ! $this->booking) {
+        // The same goes for a promotion the desk applied (its discount needs no ID).
+        if (($this->discount_verification_status === 'approved' || $this->promotion_id) && $this->roomType && ! $this->booking) {
             $total = round(max(0, (float) app(\App\Services\BookingService::class)->quoteRoomCharge($this)['total']), 2);
         }
 
@@ -458,7 +459,8 @@ class Reservation extends Model
             return null;
         }
 
-        return app(\App\Services\BookingService::class)->quoteRoomCharge($this);
+        // the app's shape stays as it was (promo_discount is internal to ensureBilling)
+        return \Illuminate\Support\Arr::except(app(\App\Services\BookingService::class)->quoteRoomCharge($this), ['promo_discount']);
     }
 
     /**

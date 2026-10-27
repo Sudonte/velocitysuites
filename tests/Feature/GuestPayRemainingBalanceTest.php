@@ -209,19 +209,23 @@ class GuestPayRemainingBalanceTest extends ApiFlowTestCase
 
     // ---- discount: does it change the bill? ----
 
-    public function test_a_discount_does_not_change_what_a_not_yet_billed_reservation_owes(): void
+    public function test_a_promo_discount_counts_only_once_applied_and_then_the_quote_and_the_amount_owed_agree(): void
     {
         [$user, $guest] = $this->makeGuestUser('Rest12');
         $r = $this->reservation($guest);
-        Promotion::create([
+        $promo = Promotion::create([
             'promo_name' => '10 off', 'promo_type' => 'discount', 'discount_type' => 'percentage', 'discount_value' => 10,
             'room_type_id' => $r->room_type_id, 'start_date' => now()->subDay()->toDateString(), 'end_date' => now()->addMonth()->toDateString(), 'status' => 'active',
         ]);
 
-        // The quote shows a discount, but until a Billing row exists (conversion) the bill the app displays and the
-        // server charges is total_amount_due - the same number on both sides, so there is no mismatch to fix here.
-        $this->assertGreaterThan(0, $r->fresh()->discount_preview['discount']);
+        // Running but not applied to this reservation: nothing changes - the quote and the amount owed are the full price.
+        $this->assertEquals(0.0, $r->fresh()->discount_preview['discount']);
         $this->assertEquals(2000.0, $r->fresh()->total_amount_due);
+
+        // Applied (by the desk): the quote and what the server charges move together - 10% off the room rate.
+        $r->forceFill(['promotion_id' => $promo->id])->save();
+        $this->assertEquals(200.0, $r->fresh()->discount_preview['discount']);
+        $this->assertEquals(1800.0, $r->fresh()->total_amount_due);
         $this->assertAccepted($this->pay($user, $r, 'partial', 800));
     }
 }

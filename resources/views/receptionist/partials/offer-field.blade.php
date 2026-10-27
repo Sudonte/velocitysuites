@@ -58,11 +58,11 @@
             <option value="">Choose...</option>
             @foreach($offerPromotions as $promo)
                 <option value="{{ $promo->id }}" {{ (string) old('promotion_id') === (string) $promo->id ? 'selected' : '' }}>
-                    {{ $promo->promo_name }} - {{ $promo->amenities->map(fn ($a) => $a->pivot->quantity . ' x ' . $a->amenity_name)->implode(', ') ?: 'no amenities' }}{{ $promo->roomType ? ' (' . $promo->roomType->name . ' only)' : '' }}
+                    {{ $promo->promo_name }} - {{ $promo->offerSummary() }}{{ $promo->roomType && ! $promo->hasDiscount() ? ' (' . $promo->roomType->name . ' only)' : '' }}
                 </option>
             @endforeach
         </select>
-        <small class="text-muted">Its amenities are added free. It must be running on the check-in date for the chosen room type.</small>
+        <small class="text-muted">Its amenities are added free and its discount comes off the rate of its room type only. It must be running on the check-in date for the chosen room type.</small>
         @error('promotion_id')<div class="invalid-feedback d-block">{{ $message }}</div>@enderror
     </div>
 </div>

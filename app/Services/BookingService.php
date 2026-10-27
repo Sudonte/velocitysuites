@@ -62,13 +62,10 @@ class BookingService
 
     /**
      * Room charge for the full stay (room type rate x nights x
-     * rooms_requested) minus the best applicable active discount promotion, minus the senior-
+     * rooms_requested) minus the applied promotion's discount (its room type's rooms only), or the senior-
      * citizen/PWD statutory discount (value read from the Discount module) if the reservation has one
      * (id_card_type, mobile-app-only field - see Api\ReservationController
-     * @store). The two are additive, capped at the room charge - they
-     * were never combined before this unification, so stacking rather
-     * than picking one is the conservative choice (doesn't reduce any
-     * discount a guest would previously have gotten via either path).
+     * @store) - one or the other, never both (StayOffersService).
      * Centralizes a calculation that used to be duplicated between
      * Guest\ReservationController@create's preview,
      * Receptionist\ReceptionistController::generateBilling, and
@@ -93,63 +90,41 @@ class BookingService
         $lines = ! empty($reservation->room_lines)
             ? collect($reservation->room_lines)->map(fn (array $l) => [
                 'room_type_id' => (int) $l['room_type_id'],
+                'rate' => (float) $l['price_per_night'],
+                // rooms x nights on this line (from its own frozen subtotal, so an older line without nights still adds up)
+                'room_nights' => (float) $l['price_per_night'] > 0 ? max(1, (int) round((float) $l['subtotal'] / (float) $l['price_per_night'])) : 1,
                 'subtotal' => (float) $l['subtotal'],
             ])
             : collect([[
                 'room_type_id' => $roomType->id,
+                'rate' => (float) $roomType->rate,
+                'room_nights' => $nights * max(1, $reservation->rooms_requested),
                 'subtotal' => (float) $roomType->rate * $nights * max(1, $reservation->rooms_requested),
             ]]);
 
         $roomCharge = (float) $lines->sum('subtotal');
 
-        // A discount-type promo is matched and computed PER LINE, against
-        // that line's own room type and own subtotal - a promo scoped to
-        // one room type must never discount a different room type's
-        // charge (matching the FIRST line's type alone would either
-        // over-discount an unrelated line, or silently skip a genuinely
-        // eligible line that isn't first). Percentage discounts scale
-        // naturally per line; a fixed-amount promo is applied only once
-        // per promo across the whole reservation (not once per matching
-        // line), so a flat "₱500 off" site-wide promo can't become ₱1000+
-        // off just because it matches two different room-type lines.
-        $promoDiscount = 0;
-        $appliedFixedPromoIds = [];
-        foreach ($lines as $line) {
-            $lineRoomType = $this->remember('rt:'.$line['room_type_id'], fn () => RoomType::find($line['room_type_id']));
-            if (! $lineRoomType) {
-                continue;
-            }
-
-            $promo = $this->remember('promo:'.$lineRoomType->id.':'.\App\Support\CheckInWindow::date()->toDateString(), fn () => Promotion::where('status', 'active')
-                ->where('promo_type', 'discount')
-                ->whereDate('start_date', '<=', \App\Support\CheckInWindow::date())
-                ->whereDate('end_date', '>=', \App\Support\CheckInWindow::date())
-                ->where(function ($q) use ($lineRoomType) {
-                    $q->whereNull('room_type_id')
-                      ->orWhere('room_type_id', $lineRoomType->id);
-                })
-                ->orderByDesc('discount_value')
-                ->first());
-
-            if (! $promo) {
-                continue;
-            }
-
-            if ($promo->discount_type === 'percentage') {
-                $promoDiscount += min(round($line['subtotal'] * (float) $promo->discount_value / 100, 2), $line['subtotal']);
-            } elseif (! in_array($promo->id, $appliedFixedPromoIds, true)) {
-                $promoDiscount += min((float) $promo->discount_value, $line['subtotal']);
-                $appliedFixedPromoIds[] = $promo->id;
-            }
-        }
+        // The promotion applied to this reservation (by the receptionist - never picked automatically, so the
+        // estimate and the bill always agree). Its discount, if it has one, comes off the RATE of each room of the
+        // promotion's room type only - a promo for Deluxe never discounts a Standard room on the same reservation -
+        // through the same Promotion::discountForRoom() the bill (App\Support\StayBill) uses.
+        $promotion = $reservation->promotion_id
+            ? $this->remember('promotion:'.$reservation->promotion_id, fn () => Promotion::find($reservation->promotion_id))
+            : null;
+        $promoDiscount = $promotion
+            ? round((float) $lines->sum(fn ($l) => $promotion->discountForRoom($l['room_type_id'], $l['rate'], $l['room_nights'])), 2)
+            : 0.0;
 
         $discount = $promoDiscount;
 
         // Statutory Senior Citizen / PWD discount: the value comes from the Discount module (the admin's row -
         // 20% by law, RA 9994 / RA 10754), never from a number in code, and it applies to the WHOLE bill - room
         // charges plus the paid amenities the guest selected - through the same function Billing / Check-out uses.
+        // A stay gets an ID discount or a promotion, never both.
         $addOns = round((float) $reservation->bookingAmenities->sum('subtotal'), 2);
-        $discount += $this->statutoryDiscountAmount($reservation, $roomCharge, $addOns);
+        if (! $promotion) {
+            $discount += $this->statutoryDiscountAmount($reservation, $roomCharge, $addOns);
+        }
 
         $discount = min($discount, $roomCharge + $addOns);
 
@@ -158,6 +133,7 @@ class BookingService
             'room_charge' => round($roomCharge, 2),
             'add_ons' => $addOns,
             'discount' => round($discount, 2),
+            'promo_discount' => round(min($promoDiscount, $roomCharge), 2),
             'total' => round(max(0, $roomCharge + $addOns - $discount), 2),
         ];
     }
@@ -270,6 +246,7 @@ class BookingService
             'guest_last_name' => $reservation->guest_last_name,
             'additional_guest_details' => $reservation->additional_guest_details,
             'id_card_type' => $reservation->id_card_type,
+            'promotion_id' => $reservation->promotion_id,
             'id_card_image_path' => $reservation->id_card_image_path,
             'discount_requested' => $reservation->discount_requested ?? false,
             'discount_verification_status' => $reservation->discount_verification_status ?? 'not_requested',
@@ -323,7 +300,8 @@ class BookingService
             'amenity_charge' => $amenityCharge,
             // The discount reaches the bill only once the guest's ID is APPROVED (Booking module). A pending or
             // rejected one leaves the bill whole - approval re-prices it (DiscountIdVerificationService).
-            'discount' => $reservation->discount_verification_status === 'approved' ? $quote['discount'] : 0,
+            // A promotion's discount needs no ID, so it is on the bill from the start.
+            'discount' => $reservation->discount_verification_status === 'approved' ? $quote['discount'] : $quote['promo_discount'],
             'discount_id' => $reservation->discount_verification_status === 'approved' ? $reservation->discount_id : null,
             'total_amount' => 0,
             'billing_status' => 'pending',

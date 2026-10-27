@@ -183,9 +183,8 @@ class DatabaseSeeder extends Seeder
             'status' => 'active',
         ]);
 
-        // Sample amenity-type Promotion (package/bundle) - Promotions are
-        // amenity/package-only now; authorized discounts live in the
-        // Discount module seeded above instead.
+        // Sample promo: free amenities only (a promo may also carry a discount off its room type's rate);
+        // ID-checked discounts live in the Discount module seeded above instead.
         $weekendPackage = Promotion::create([
             'promo_name' => 'Weekend Breakfast Package',
             'promo_type' => 'amenity',

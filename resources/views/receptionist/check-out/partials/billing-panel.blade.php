@@ -97,7 +97,7 @@
                     </tr>
                 @elseif($billing->discount > 0)
                     <tr>
-                        <td>Less: Discount{{ $billing->discountApplied ? ' ('.$billing->discountApplied->name.')' : '' }}</td>
+                        <td>Less: Discount{{ $billing->discount_label ? ' ('.$billing->discount_label.')' : '' }}</td>
                         <td class="text-end text-success">-{{ $peso($billing->discount) }}</td>
                     </tr>
                 @endif

@@ -402,11 +402,8 @@
                 <li><a href="{{ route('admin.room-types.index') }}" class="nav-link {{ request()->routeIs('admin.room-types.*') || request()->routeIs('admin.rooms.*') ? 'active' : '' }}" title="Rooms">
                     <i class="fas fa-door-open"></i> <span class="link-text">Rooms</span>
                 </a></li>
-                <li><a href="{{ route('admin.promotions.index') }}" class="nav-link {{ request()->routeIs('admin.promotions.*') ? 'active' : '' }}" title="Promotions">
-                    <i class="fas fa-tag"></i> <span class="link-text">Promotions</span>
-                </a></li>
-                <li><a href="{{ route('admin.discounts.index') }}" class="nav-link {{ request()->routeIs('admin.discounts.*') ? 'active' : '' }}" title="Discounts">
-                    <i class="fas fa-id-card"></i> <span class="link-text">Discounts</span>
+                <li><a href="{{ route('admin.promotions.index') }}" class="nav-link {{ request()->routeIs('admin.promotions.*') || request()->routeIs('admin.discounts.*') ? 'active' : '' }}" title="Promos & Discounts">
+                    <i class="fas fa-tags"></i> <span class="link-text">Promos &amp; Discounts</span>
                 </a></li>
                 <li><a href="{{ route('admin.amenities.index') }}" class="nav-link {{ request()->routeIs('admin.amenities.*') ? 'active' : '' }}" title="Amenities">
                     <i class="fas fa-spa"></i> <span class="link-text">Amenities</span>

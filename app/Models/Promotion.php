@@ -71,6 +71,62 @@ class Promotion extends Model
             ->withTimestamps();
     }
 
+    /** A promo can include amenities, a discount, or both. */
+    public function hasDiscount(): bool
+    {
+        return in_array($this->discount_type, ['percentage', 'fixed'], true) && (float) $this->discount_value > 0;
+    }
+
+    /** "15% off" / "₱500 off per night" - null without a discount. */
+    public function discountLabel(): ?string
+    {
+        if (! $this->hasDiscount()) {
+            return null;
+        }
+
+        return $this->discount_type === 'percentage'
+            ? rtrim(rtrim(number_format((float) $this->discount_value, 2), '0'), '.') . '% off'
+            : '₱' . number_format((float) $this->discount_value, 2) . ' off per night';
+    }
+
+    /** "2 x Breakfast, 1 x Spa + 10% off (Deluxe rate only)" - what the promo gives, for the staff's pickers. */
+    public function offerSummary(): string
+    {
+        $parts = [];
+        $amenities = $this->amenities->map(fn ($a) => $a->pivot->quantity . ' x ' . $a->amenity_name)->implode(', ');
+        if ($amenities !== '') {
+            $parts[] = $amenities;
+        }
+        if ($this->hasDiscount()) {
+            $parts[] = $this->discountLabel() . ' (' . ($this->roomType ? $this->roomType->name . ' rate only' : 'every room rate') . ')';
+        }
+
+        return $parts ? implode(' + ', $parts) : 'nothing included';
+    }
+
+    /** Does this promo cover a room of this type? (no room type = every type) */
+    public function coversRoomType($roomTypeId): bool
+    {
+        return $this->room_type_id === null || (string) $this->room_type_id === (string) $roomTypeId;
+    }
+
+    /**
+     * Pesos this promo takes off one room line: the discount comes off the nightly RATE of a room of the
+     * promo's room type (every room when it is for all types), times its nights. Any other room type is
+     * charged in full. A fixed amount never takes a night below zero.
+     */
+    public function discountForRoom($roomTypeId, float $rate, int $nights): float
+    {
+        if (! $this->hasDiscount() || ! $this->coversRoomType($roomTypeId) || $rate <= 0) {
+            return 0.0;
+        }
+        $offPerNight = $this->discount_type === 'percentage'
+            ? $rate * min(100.0, (float) $this->discount_value) / 100
+            : min((float) $this->discount_value, $rate);
+
+        return round($offPerNight * max(1, $nights), 2);
+    }
+
     /**
      * Check if promotion is currently active.
      *

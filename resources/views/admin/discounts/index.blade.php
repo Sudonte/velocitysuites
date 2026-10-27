@@ -1,17 +1,11 @@
 @extends('layouts.app')
 
-@section('title', 'Discounts - Admin')
+@section('title', 'Promos & Discounts - Admin')
 @section('livePage', '1')
 
 @section('content')
 <div class="container-fluid py-4">
-    <x-page-header icon="fas fa-id-card" title="Discounts" subtitle="Authorized discounts (Senior Citizen, PWD, Student, etc.) - applied manually by the receptionist at billing after verifying an uploaded ID. Separate from Promotions.">
-        <x-slot:actions>
-            <a href="{{ route('admin.discounts.create') }}" class="btn btn-primary">
-                <i class="fas fa-plus"></i> Add Discount
-            </a>
-        </x-slot:actions>
-    </x-page-header>
+    @include('admin.promotions.partials.section-tabs', ['active' => 'discounts'])
 
     @if (session('success'))
         <div class="alert alert-success alert-dismissible fade show" role="alert">
@@ -21,32 +15,46 @@
     @endif
 
     <!-- Search and Filter -->
-    <x-card bodyClass="card-body" class="mb-4">
-        <form method="GET" action="{{ route('admin.discounts.index') }}"  class="row g-3">
-            <input type="hidden" name="view" value="{{ $view }}">
-            <div class="col-md-6">
-                <input type="text" name="search" class="form-control"
-                       placeholder="Search by name" value="{{ request('search') }}">
+    <x-card bodyClass="card-body" class="mb-3">
+        <form method="GET" action="{{ route('admin.discounts.index') }}" class="row g-2 align-items-end">
+            <div class="col-lg-4 col-md-6">
+                <label class="form-label small mb-1" for="discountSearch">Search</label>
+                <input type="search" name="search" id="discountSearch" class="form-control" placeholder="Discount name or description" value="{{ $filters['search'] }}">
             </div>
-            <div class="col-md-4">
-                <select name="status" class="form-control">
-                    <option value="">All Status</option>
-                    <option value="active" {{ request('status') === 'active' ? 'selected' : '' }}>Active</option>
-                    <option value="inactive" {{ request('status') === 'inactive' ? 'selected' : '' }}>Inactive</option>
+            <div class="col-lg-2 col-md-6">
+                <label class="form-label small mb-1" for="discountType">Type</label>
+                <select name="type" id="discountType" class="form-select">
+                    <option value="">Any</option>
+                    <option value="percentage" {{ $filters['type'] === 'percentage' ? 'selected' : '' }}>Percentage (%)</option>
+                    <option value="fixed" {{ $filters['type'] === 'fixed' ? 'selected' : '' }}>Fixed amount (₱)</option>
                 </select>
             </div>
-            <div class="col-md-2">
-                <button type="submit" class="btn btn-primary w-100">
-                    <i class="fas fa-search"></i> Search
-                </button>
+            <div class="col-lg-2 col-md-4">
+                <label class="form-label small mb-1" for="discountPeriod">Validity</label>
+                <select name="period" id="discountPeriod" class="form-select">
+                    <option value="">Any time</option>
+                    <option value="current" {{ $filters['period'] === 'current' ? 'selected' : '' }}>Valid today</option>
+                    <option value="upcoming" {{ $filters['period'] === 'upcoming' ? 'selected' : '' }}>Upcoming</option>
+                    <option value="expired" {{ $filters['period'] === 'expired' ? 'selected' : '' }}>Expired</option>
+                </select>
+            </div>
+            <div class="col-lg-2 col-md-4">
+                <label class="form-label small mb-1" for="discountStatus">Status</label>
+                <select name="status" id="discountStatus" class="form-select">
+                    <option value="">All</option>
+                    <option value="active" {{ $filters['status'] === 'active' ? 'selected' : '' }}>Active</option>
+                    <option value="inactive" {{ $filters['status'] === 'inactive' ? 'selected' : '' }}>Inactive</option>
+                    <option value="archived" {{ $filters['status'] === 'archived' ? 'selected' : '' }}>Archived</option>
+                </select>
+            </div>
+            <div class="col-lg-2 col-md-4 d-flex gap-2">
+                <button type="submit" class="btn btn-primary flex-grow-1"><i class="fas fa-search"></i> Search</button>
+                @if(array_filter($filters))
+                    <a href="{{ route('admin.discounts.index') }}" class="btn btn-outline-secondary" title="Clear filters" aria-label="Clear filters"><i class="fas fa-times"></i></a>
+                @endif
             </div>
         </form>
     </x-card>
-
-    <ul class="nav nav-tabs mb-0">
-        <li class="nav-item"><a class="nav-link {{ $view === 'active' ? 'active' : '' }}" href="{{ route('admin.discounts.index') }}">Active</a></li>
-        <li class="nav-item"><a class="nav-link {{ $view === 'archived' ? 'active' : '' }}" href="{{ route('admin.discounts.index', ['view' => 'archived']) }}"><i class="fas fa-box-archive"></i> Archived</a></li>
-    </ul>
 
     <x-card bodyClass="table-responsive">
         <table class="table table-hover mb-0">
@@ -93,7 +101,7 @@
                                         <i class="fas fa-box-open"></i></button>
                                 </form>
                             @else
-                                <form action="{{ route('admin.discounts.archive', $discount) }}" method="POST" class="d-inline" data-confirm="It is switched off and moves to the Archived tab, where it can be restored." data-confirm-title="Archive this discount?" data-confirm-button="Archive" data-confirm-variant="secondary">
+                                <form action="{{ route('admin.discounts.archive', $discount) }}" method="POST" class="d-inline" data-confirm="It is switched off and hidden from the list. Find it again with Status: Archived to restore it." data-confirm-title="Archive this discount?" data-confirm-button="Archive" data-confirm-variant="secondary">
                                     @csrf
                                     @method('PUT')
                                     <button type="submit" class="btn btn-outline-secondary btn-sm btn-icon" title="Archive" aria-label="Archive">

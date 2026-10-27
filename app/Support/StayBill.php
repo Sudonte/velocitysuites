@@ -19,7 +19,9 @@ use Illuminate\Support\Facades\DB;
  *   1. each room:   rate x nights                      (rounded to 2 decimals, per room)
  *   2. + paid amenities / services, + extra charges     (add-ons)
  *   3. - discount, taken from the WHOLE of (1) + (2)    (App\Support\BillDiscount) - and only once the guest's
- *                                                       discount ID is APPROVED; never before
+ *                                                       discount ID is APPROVED; never before. Without one, the stay's
+ *                                                       promotion may carry a discount instead: it comes off the RATE
+ *                                                       of the rooms of the promotion's room type only (Promotion::discountForRoom)
  *   4. = total;  - verified payments = balance
  * There is no tax/VAT/service fee anywhere in this hotel's billing.
  *
@@ -232,6 +234,11 @@ final class StayBill
         $idStatus = self::discountIdStatus($booking);
         $discount = $idStatus === 'approved' ? self::approvedDiscount($booking, $billing) : null;
         $discountAmount = round(BillDiscount::amount($discount, $roomCharge, $addOns), 2);
+        // No ID discount: the stay's promotion may carry one - taken off the rate of ITS room type's rooms only.
+        $promotion = $discount === null ? self::appliedPromotion($booking) : null;
+        if ($promotion) {
+            $discountAmount = min(self::promotionDiscount($promotion, $lines), $subtotal);
+        }
 
         // Paid in full at check-in => the discount was taken off THEN, once. It is never recalculated afterwards, so
         // an amenity or desk charge added during the stay is billed at full price and not discounted a second time.
@@ -254,12 +261,13 @@ final class StayBill
             $discountAmount = round((float) $billing->discount, 2);
             $discount = $discountAmount > 0 ? ($billing->discountApplied ?? $discount) : null;
         }
+        $discountName = $discountAmount > 0 ? ($discount?->name ?? $promotion?->promo_name) : null;
 
         $total = round(max(0.0, $subtotal - $discountAmount), 2);
         $paid = $booking->paidTotal();
 
         $breakdown = $settledAtCheckIn
-            ? self::receiptBreakdown($billing, $snapshot, $discount, $roomAtCheckIn, $amenityAtCheckIn, $discountAtCheckIn, $roomCharge, $amenityCharge, $amenityLines, $guestFee, $extraCharges, $extraChargesTotal, $discountAmount, $total, $paid)
+            ? self::receiptBreakdown($billing, $snapshot, $discount, $discountName, $roomAtCheckIn, $amenityAtCheckIn, $discountAtCheckIn, $roomCharge, $amenityCharge, $amenityLines, $guestFee, $extraCharges, $extraChargesTotal, $discountAmount, $total, $paid)
             : null;
 
         // The same figures stay by stay (the discount is the transaction's: one ID, one discount, taken off the whole bill).
@@ -311,7 +319,7 @@ final class StayBill
             'subtotal' => $subtotal,
             'discount_id_status' => $idStatus,
             'discount_id' => $discount?->id,
-            'discount_name' => $discount?->name,
+            'discount_name' => $discountName,
             'discount' => $discountAmount,
             'total' => $total,
             'total_paid' => $paid,
@@ -329,7 +337,7 @@ final class StayBill
      * @return array<string,mixed>
      */
     private static function receiptBreakdown(
-        Billing $billing, array $snapshot, ?Discount $discount, float $roomAtCheckIn, float $amenityAtCheckIn, float $discountAtCheckIn,
+        Billing $billing, array $snapshot, ?Discount $discount, ?string $discountName, float $roomAtCheckIn, float $amenityAtCheckIn, float $discountAtCheckIn,
         float $roomCharge, float $amenityCharge, array $amenityLines, float $guestFee, array $extraCharges, float $extraChargesTotal,
         float $discountAmount, float $total, float $paid,
     ): array {
@@ -357,7 +365,7 @@ final class StayBill
             'checkin' => [
                 'room_charge' => $roomAtCheckIn,
                 'booked_amenities' => $amenityAtCheckIn,
-                'discount_name' => $discountAtCheckIn > 0 ? $discount?->name : null,
+                'discount_name' => $discountAtCheckIn > 0 ? $discountName : null,
                 'discount_percent' => $discountAtCheckIn > 0 ? $percent : null,
                 'discount' => $discountAtCheckIn,
                 'grand_total' => $checkinTotal,
@@ -391,9 +399,10 @@ final class StayBill
      */
     private static function bookedRooms(Booking $booking, ?int $stayId = null, ?int $firstStayId = null): \Illuminate\Support\Collection
     {
-        $make = fn (float $rate, ?string $type) => (object) [
+        $make = fn (float $rate, ?string $type, $typeId = null) => (object) [
             'id' => null,
             'room_number' => null,
+            'room_type_id' => $typeId,
             'room_rate' => $rate,
             'roomType' => (object) ['name' => $type],
             'pivot' => null,
@@ -404,13 +413,13 @@ final class StayBill
         if ($booking->stayCount() > 1 && $lines->isNotEmpty()) {
             $mine = $booking->roomLines()->get()->filter(fn ($l) => ($l->stay_id ?? $firstStayId) === $stayId);
 
-            return $mine->flatMap(fn ($line) => array_fill(0, max(1, (int) $line->quantity), $make((float) $line->price_per_night, $line->room_type_name)))->values();
+            return $mine->flatMap(fn ($line) => array_fill(0, max(1, (int) $line->quantity), $make((float) $line->price_per_night, $line->room_type_name, $line->room_type_id)))->values();
         }
         if ($lines->isNotEmpty()) {
-            return $lines->flatMap(fn ($line) => array_fill(0, max(1, (int) $line['quantity']), $make((float) $line['price_per_night'], $line['room_type'] ?? null)))->values();
+            return $lines->flatMap(fn ($line) => array_fill(0, max(1, (int) $line['quantity']), $make((float) $line['price_per_night'], $line['room_type'] ?? null, $line['room_type_id'] ?? null)))->values();
         }
 
-        return collect(array_fill(0, max(1, (int) $booking->rooms_requested), $make((float) ($booking->roomType->rate ?? 0), $booking->roomType?->name)));
+        return collect(array_fill(0, max(1, (int) $booking->rooms_requested), $make((float) ($booking->roomType->rate ?? 0), $booking->roomType?->name, $booking->room_type_id)));
     }
 
     /** "1 night" / "5 nights" - one wording everywhere a night count is spoken. */
@@ -435,6 +444,21 @@ final class StayBill
         [$discount] = DiscountSelection::resolve($id, $holder->id_card_type ?? $booking->id_card_type, null, false);
 
         return $discount;
+    }
+
+    /** The promotion applied to this booking (copied from its reservation on conversion), if any. */
+    public static function appliedPromotion(Booking $booking): ?\App\Models\Promotion
+    {
+        return $booking->promotion_id ? \App\Models\Promotion::find($booking->promotion_id) : null;
+    }
+
+    /** A promotion's discount over the bill's room lines: each room of a covered type, its rate x nights. */
+    public static function promotionDiscount(\App\Models\Promotion $promotion, array $roomLines): float
+    {
+        return round(array_sum(array_map(
+            fn ($l) => $promotion->discountForRoom($l['room_type_id'], (float) $l['rate'], (int) $l['nights']),
+            $roomLines,
+        )), 2);
     }
 
     private static function amenityCharge(Booking $booking): float

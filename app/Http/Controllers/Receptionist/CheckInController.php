@@ -676,7 +676,7 @@ class CheckInController extends Controller
             'discount' => [
                 'requested' => (bool) ($locked->discount_requested || $holder->discount_requested),
                 'status' => $discountStatus,
-                'name' => $billing->discountApplied?->name,
+                'name' => $billing->discount_label,
                 'amount' => round((float) $billing->discount, 2),
                 'rejection_reason' => $discountStatus === 'rejected' ? $locked->discount_rejection_reason : null,
             ],

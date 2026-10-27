@@ -16,23 +16,47 @@ use Illuminate\View\View;
  */
 class DiscountManagementController extends Controller
 {
+    /**
+     * The Discounts tab of Promos & Discounts. Filters: name/description, percentage or fixed, when it is
+     * offered, and status - where "Archived" is a status choice (archived discounts are hidden otherwise).
+     */
     public function index(Request $request): View
     {
         $query = Discount::query();
-        $view = $request->get('view') === 'archived' ? 'archived' : 'active';
-        $view === 'archived' ? $query->archived() : $query->notArchived();
+        $filters = [
+            'search' => trim((string) $request->get('search', '')),
+            // an old ?view=archived link still lands on the archived list
+            'status' => (string) $request->get('status', $request->get('view') === 'archived' ? 'archived' : ''),
+            'type' => (string) $request->get('type', ''),
+            'period' => (string) $request->get('period', ''),
+        ];
 
-        if ($request->filled('search')) {
-            $query->where('name', 'like', '%' . $request->search . '%');
+        $filters['status'] === 'archived' ? $query->archived() : $query->notArchived();
+        if (in_array($filters['status'], ['active', 'inactive'], true)) {
+            $query->where('status', $filters['status']);
         }
 
-        if ($request->filled('status')) {
-            $query->where('status', $request->status);
+        if ($filters['search'] !== '') {
+            $search = $filters['search'];
+            $query->where(fn ($q) => $q->where('name', 'like', "%{$search}%")->orWhere('description', 'like', "%{$search}%"));
         }
+
+        if (in_array($filters['type'], ['percentage', 'fixed'], true)) {
+            $query->where('discount_type', $filters['type']);
+        }
+
+        $today = \App\Support\CheckInWindow::today()->toDateString();
+        match ($filters['period']) {
+            'current' => $query->where(fn ($q) => $q->whereNull('start_date')->orWhere('start_date', '<=', $today))
+                ->where(fn ($q) => $q->whereNull('end_date')->orWhere('end_date', '>=', $today)),
+            'upcoming' => $query->where('start_date', '>', $today),
+            'expired' => $query->where('end_date', '<', $today),
+            default => null,
+        };
 
         $discounts = $query->latest()->paginate(\App\Support\PerPage::resolve($request))->withQueryString();
 
-        return view('admin.discounts.index', compact('discounts', 'view'));
+        return view('admin.discounts.index', compact('discounts', 'filters'));
     }
 
     public function create(): View
@@ -87,13 +111,13 @@ class DiscountManagementController extends Controller
         return redirect()->route('admin.discounts.index')->with('success', "Discount {$newStatus}d successfully!");
     }
 
-    /** Archive instead of delete - it leaves the list and is switched off; restore from the Archived tab. */
+    /** Archive instead of delete - it leaves the list and is switched off; restore it from the Archived status filter. */
     public function archive(Discount $discount): \Illuminate\Http\RedirectResponse
     {
         $discount->archiveRecord();
         \App\Support\Activity::log('Archived discount', $this->archiveLabel($discount), $discount);
 
-        return redirect()->route('admin.discounts.index')->with('success', ucfirst('discount') . ' archived. You can restore it from the Archived tab.');
+        return redirect()->route('admin.discounts.index')->with('success', ucfirst('discount') . ' archived. Choose Status: Archived in the search to find and restore it.');
     }
 
     public function unarchive(Discount $discount): \Illuminate\Http\RedirectResponse
@@ -101,7 +125,7 @@ class DiscountManagementController extends Controller
         $discount->unarchive();
         \App\Support\Activity::log('Restored discount', $this->archiveLabel($discount), $discount);
 
-        return redirect()->route('admin.discounts.index', ['view' => 'archived'])->with('success', ucfirst('discount') . ' restored - it is inactive until you switch it on.');
+        return redirect()->route('admin.discounts.index', ['status' => 'archived'])->with('success', ucfirst('discount') . ' restored - it is inactive until you switch it on.');
     }
 
     private function archiveLabel(Discount $discount): string

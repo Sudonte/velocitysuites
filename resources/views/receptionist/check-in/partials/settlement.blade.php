@@ -25,7 +25,7 @@
             </div>
         @elseif($appliedPromotion)
             <div class="d-flex justify-content-between align-items-center">
-                <span><span class="badge bg-info text-dark">Promotion</span> {{ $appliedPromotion->promo_name }} - its amenities are included free</span>
+                <span><span class="badge bg-info text-dark">Promotion</span> {{ $appliedPromotion->promo_name }} - {{ $appliedPromotion->offerSummary() }}@if($stay['discount'] > 0) &middot; &minus;{{ $peso($stay['discount']) }}@endif</span>
                 <button type="button" class="btn btn-sm btn-outline-secondary" data-offer-action="promotion" data-promotion-id="">Remove</button>
             </div>
         @else
@@ -80,7 +80,7 @@
                         <label class="form-label small mb-1">Or apply a promotion</label>
                         <select class="form-select form-select-sm" data-offer-field="promotion_id">
                             @foreach($promotionChoices as $promo)
-                                <option value="{{ $promo->id }}">{{ $promo->promo_name }} - {{ $promo->amenities->map(fn ($a) => $a->pivot->quantity . ' x ' . $a->amenity_name)->implode(', ') }}</option>
+                                <option value="{{ $promo->id }}">{{ $promo->promo_name }} - {{ $promo->offerSummary() }}</option>
                             @endforeach
                         </select>
                     </div>
@@ -104,7 +104,7 @@
             @endforeach
         @endforeach
         @if($stay['discount'] > 0)
-            <div class="d-flex justify-content-between text-success"><span>Discount</span><span>&minus;{{ $peso($stay['discount']) }}</span></div>
+            <div class="d-flex justify-content-between text-success"><span>Discount{{ $stay['discount_name'] ? ' (' . $stay['discount_name'] . ')' : '' }}</span><span>&minus;{{ $peso($stay['discount']) }}</span></div>
         @endif
         <hr class="my-1">
         <div class="d-flex justify-content-between fw-bold"><span>Total</span><span>{{ $peso($payable) }}</span></div>

@@ -118,7 +118,7 @@ class GuestDashboardController extends Controller
             ->sortByDesc('created_at')->take(5)->values();
 
         // Active promotions
-        $activePromotions = Promotion::with('amenities')->where('status', 'active')
+        $activePromotions = Promotion::with(['amenities', 'roomType'])->where('status', 'active')->notArchived()
             ->runningOn(\App\Support\CheckInWindow::date())
             ->limit(3)
             ->get();

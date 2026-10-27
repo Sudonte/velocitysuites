@@ -1,10 +1,10 @@
 @extends('layouts.app')
 
-@section('title', 'Create Promotion - Admin')
+@section('title', 'Create Promo - Admin')
 
 @section('content')
 <div class="container-fluid py-4">
-    <x-page-header icon="fas fa-plus" title="Create New Promotion" />
+    <x-page-header icon="fas fa-plus" title="Create New Promo" />
 
     <div class="row">
         <div class="col-lg-8">
@@ -21,7 +21,7 @@
                     </div>
                 @endif
 
-                <form action="{{ route('admin.promotions.store') }}" method="POST" data-confirm="Its included amenities are granted when a reservation converts to a booking." data-confirm-title="Create this promotion?" data-confirm-button="Create Promotion" data-confirm-variant="success" enctype="multipart/form-data">
+                <form action="{{ route('admin.promotions.store') }}" method="POST" data-confirm="Its free amenities are added and its discount (if any) comes off the rate of its room type when the promo is applied to a stay." data-confirm-title="Create this promo?" data-confirm-button="Create Promotion" data-confirm-variant="success" enctype="multipart/form-data">
                     @csrf
 
                     <div class="form-group mb-3">
@@ -44,6 +44,8 @@
                     </div>
 
                     @include('admin.promotions.partials.amenity-picker', ['selectedAmenities' => []])
+
+                    @include('admin.promotions.partials.discount-fields', ['promotion' => null])
 
                     <div class="form-group mb-3">
                         <label for="room_type_id">Applicable Room Type</label>
@@ -100,18 +102,18 @@
                 <ul class="list-unstyled">
                     <li class="mb-3">
                         <i class="fas fa-spa text-brand"></i>
-                        <strong>Promotions are packages</strong>
-                        <p class="mb-0 ms-4 text-sm text-muted">Bundles free amenities with the stay, e.g. "Book a Deluxe, get 2 Breakfast Buffets". They're granted automatically when a reservation is converted to a booking and appear on the bill at ₱0.00.</p>
+                        <strong>Amenities, a discount, or both</strong>
+                        <p class="mb-0 ms-4 text-sm text-muted">E.g. "Book a Deluxe, get 2 Breakfast Buffets and 10% off". Free amenities appear on the bill at ₱0.00; the discount comes off the room rate.</p>
                     </li>
                     <li class="mb-3">
                         <i class="fas fa-id-card text-brand"></i>
-                        <strong>Looking for discounts?</strong>
-                        <p class="mb-0 ms-4 text-sm text-muted">Senior Citizen/PWD/Student discounts now live in the separate <a href="{{ route('admin.discounts.index') }}">Discounts</a> module.</p>
+                        <strong>ID discounts</strong>
+                        <p class="mb-0 ms-4 text-sm text-muted">Senior Citizen/PWD/Student discounts are on the <a href="{{ route('admin.discounts.index') }}">Discounts</a> tab. A stay gets an ID discount or a promo, not both.</p>
                     </li>
                     <li class="mb-3">
                         <i class="fas fa-bed text-brand"></i>
                         <strong>Room Type</strong>
-                        <p class="mb-0 ms-4 text-sm text-muted">Leave blank to apply to all rooms.</p>
+                        <p class="mb-0 ms-4 text-sm text-muted">Leave blank to apply to all rooms. With a room type set, the discount only comes off that room type's rate - other rooms on the same booking pay full price.</p>
                     </li>
                 </ul>
             </x-card>

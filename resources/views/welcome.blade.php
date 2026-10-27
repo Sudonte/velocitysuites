@@ -946,7 +946,11 @@
                                 <img src="{{ $promotion->image_url }}" alt="{{ $promotion->promo_name }}" class="promo-offer-img">
                             @endif
                             <div class="card-body p-4 d-flex flex-column">
-                                <span class="promo-offer-badge mb-3"><i class="fas fa-gift"></i> Free Add-Ons Included</span>
+                                @if($promotion->hasDiscount())
+                                    <span class="promo-offer-badge mb-3"><i class="fas fa-percent"></i> {{ $promotion->discountLabel() }}{{ $promotion->roomType ? ' ' . $promotion->roomType->name . ' rooms' : '' }}{{ $promotion->amenities->isNotEmpty() ? ' + free add-ons' : '' }}</span>
+                                @else
+                                    <span class="promo-offer-badge mb-3"><i class="fas fa-gift"></i> Free Add-Ons Included</span>
+                                @endif
                                 <h5 class="fw-bold">{{ $promotion->promo_name }}</h5>
                                 @if($promotion->description)
                                     <p class="text-muted small mb-2">{{ Str::limit($promotion->description, 90) }}</p>

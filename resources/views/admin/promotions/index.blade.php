@@ -1,19 +1,12 @@
 @extends('layouts.app')
 
-@section('title', 'Promotions - Admin')
+@section('title', 'Promos & Discounts - Admin')
 @section('livePage', '1')
 
 @section('content')
 <div class="container-fluid py-4">
-    <x-page-header icon="fas fa-tag" title="Promotions">
-        <x-slot:actions>
-            <a href="{{ route('admin.promotions.create') }}" class="btn btn-primary">
-                <i class="fas fa-plus"></i> Add Promotion
-            </a>
-        </x-slot:actions>
-    </x-page-header>
+    @include('admin.promotions.partials.section-tabs', ['active' => 'promos'])
 
-    <!-- Alerts -->
     @if (session('success'))
         <div class="alert alert-success alert-dismissible fade show" role="alert">
             <i class="fas fa-check-circle"></i> {{ session('success') }}
@@ -22,32 +15,57 @@
     @endif
 
     <!-- Search and Filter -->
-    <x-card bodyClass="card-body" class="mb-4">
-        <form method="GET" action="{{ route('admin.promotions.index') }}"  class="row g-3">
-            <input type="hidden" name="view" value="{{ $view }}">
-            <div class="col-md-6">
-                <input type="text" name="search" class="form-control"
-                       placeholder="Search by promo name" value="{{ request('search') }}">
+    <x-card bodyClass="card-body" class="mb-3">
+        <form method="GET" action="{{ route('admin.promotions.index') }}" class="row g-2 align-items-end">
+            <div class="col-lg-3 col-md-6">
+                <label class="form-label small mb-1" for="promoSearch">Search</label>
+                <input type="search" name="search" id="promoSearch" class="form-control" placeholder="Promo name or description" value="{{ $filters['search'] }}">
             </div>
-            <div class="col-md-4">
-                <select name="status" class="form-control">
-                    <option value="">All Status</option>
-                    <option value="active" {{ request('status') === 'active' ? 'selected' : '' }}>Active</option>
-                    <option value="inactive" {{ request('status') === 'inactive' ? 'selected' : '' }}>Inactive</option>
+            <div class="col-lg-2 col-md-6">
+                <label class="form-label small mb-1" for="promoRoomType">Room type</label>
+                <select name="room_type" id="promoRoomType" class="form-select">
+                    <option value="">Any</option>
+                    <option value="all" {{ $filters['room_type'] === 'all' ? 'selected' : '' }}>All room types only</option>
+                    @foreach($roomTypes as $type)
+                        <option value="{{ $type->id }}" {{ $filters['room_type'] === (string) $type->id ? 'selected' : '' }}>{{ $type->name }}</option>
+                    @endforeach
                 </select>
             </div>
-            <div class="col-md-2">
-                <button type="submit" class="btn btn-primary w-100">
-                    <i class="fas fa-search"></i> Search
-                </button>
+            <div class="col-lg-2 col-md-4">
+                <label class="form-label small mb-1" for="promoIncludes">Includes</label>
+                <select name="includes" id="promoIncludes" class="form-select">
+                    <option value="">Anything</option>
+                    <option value="amenities" {{ $filters['includes'] === 'amenities' ? 'selected' : '' }}>Amenities only</option>
+                    <option value="discount" {{ $filters['includes'] === 'discount' ? 'selected' : '' }}>Discount only</option>
+                    <option value="both" {{ $filters['includes'] === 'both' ? 'selected' : '' }}>Amenities + discount</option>
+                </select>
+            </div>
+            <div class="col-lg-2 col-md-4">
+                <label class="form-label small mb-1" for="promoPeriod">Period</label>
+                <select name="period" id="promoPeriod" class="form-select">
+                    <option value="">Any time</option>
+                    <option value="running" {{ $filters['period'] === 'running' ? 'selected' : '' }}>Running today</option>
+                    <option value="upcoming" {{ $filters['period'] === 'upcoming' ? 'selected' : '' }}>Upcoming</option>
+                    <option value="ended" {{ $filters['period'] === 'ended' ? 'selected' : '' }}>Ended</option>
+                </select>
+            </div>
+            <div class="col-lg-1 col-md-4">
+                <label class="form-label small mb-1" for="promoStatus">Status</label>
+                <select name="status" id="promoStatus" class="form-select">
+                    <option value="">All</option>
+                    <option value="active" {{ $filters['status'] === 'active' ? 'selected' : '' }}>Active</option>
+                    <option value="inactive" {{ $filters['status'] === 'inactive' ? 'selected' : '' }}>Inactive</option>
+                    <option value="archived" {{ $filters['status'] === 'archived' ? 'selected' : '' }}>Archived</option>
+                </select>
+            </div>
+            <div class="col-lg-2 col-md-12 d-flex gap-2">
+                <button type="submit" class="btn btn-primary flex-grow-1"><i class="fas fa-search"></i> Search</button>
+                @if(array_filter($filters))
+                    <a href="{{ route('admin.promotions.index') }}" class="btn btn-outline-secondary" title="Clear filters" aria-label="Clear filters"><i class="fas fa-times"></i></a>
+                @endif
             </div>
         </form>
     </x-card>
-
-    <ul class="nav nav-tabs mb-0">
-        <li class="nav-item"><a class="nav-link {{ $view === 'active' ? 'active' : '' }}" href="{{ route('admin.promotions.index') }}">Active</a></li>
-        <li class="nav-item"><a class="nav-link {{ $view === 'archived' ? 'active' : '' }}" href="{{ route('admin.promotions.index', ['view' => 'archived']) }}"><i class="fas fa-box-archive"></i> Archived</a></li>
-    </ul>
 
     <!-- Promotions Table -->
     <x-card bodyClass="table-responsive">
@@ -55,8 +73,8 @@
             <thead>
                 <tr>
                     <th>Promo Name</th>
-                    <th>Type</th>
-                    <th>Offer</th>
+                    <th>Free Amenities</th>
+                    <th>Discount</th>
                     <th>Room Type</th>
                     <th>Period</th>
                     <th>Status</th>
@@ -73,25 +91,20 @@
                             @endif
                         </td>
                         <td>
-                            @if($promotion->promo_type === 'amenity')
-                                <span class="badge bg-info"><i class="fas fa-spa"></i> Amenity</span>
-                            @else
-                                <span class="badge badge-brand"><i class="fas fa-percentage"></i> Discount</span>
-                            @endif
+                            <small>
+                                @forelse($promotion->amenities as $amenity)
+                                    {{ $amenity->pivot->quantity }}× {{ $amenity->amenity_name }}@if(!$loop->last), @endif
+                                @empty
+                                    <span class="text-muted">-</span>
+                                @endforelse
+                            </small>
                         </td>
                         <td>
-                            @if($promotion->promo_type === 'amenity')
-                                <small>
-                                    @forelse($promotion->amenities as $amenity)
-                                        {{ $amenity->pivot->quantity }}× {{ $amenity->amenity_name }}@if(!$loop->last), @endif
-                                    @empty
-                                        <span class="text-muted">No amenities set</span>
-                                    @endforelse
-                                </small>
-                            @elseif($promotion->discount_type === 'percentage')
-                                <span class="badge bg-info">{{ $promotion->discount_value }}% off</span>
+                            @if($promotion->hasDiscount())
+                                <span class="badge bg-info">{{ $promotion->discountLabel() }}</span>
+                                <br><small class="text-muted">{{ $promotion->roomType ? $promotion->roomType->name . ' rate only' : 'every room rate' }}</small>
                             @else
-                                <span class="badge bg-info">₱{{ number_format($promotion->discount_value, 2) }} off</span>
+                                <span class="text-muted">-</span>
                             @endif
                         </td>
                         <td>
@@ -127,7 +140,7 @@
                                         <i class="fas fa-box-open"></i></button>
                                 </form>
                             @else
-                                <form action="{{ route('admin.promotions.archive', $promotion) }}" method="POST" class="d-inline" data-confirm="It is switched off and moves to the Archived tab, where it can be restored." data-confirm-title="Archive this promotion?" data-confirm-button="Archive" data-confirm-variant="secondary">
+                                <form action="{{ route('admin.promotions.archive', $promotion) }}" method="POST" class="d-inline" data-confirm="It is switched off and hidden from the list. Find it again with Status: Archived to restore it." data-confirm-title="Archive this promotion?" data-confirm-button="Archive" data-confirm-variant="secondary">
                                     @csrf
                                     @method('PUT')
                                     <button type="submit" class="btn btn-outline-secondary btn-sm btn-icon" title="Archive" aria-label="Archive">
