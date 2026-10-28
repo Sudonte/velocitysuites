@@ -290,6 +290,24 @@ class ProfileController extends Controller
     }
 
     /**
+     * Remove the guest's profile picture (the app shows their initials again). The file goes with it; nothing else changes.
+     */
+    public function removePicture(): JsonResponse
+    {
+        $guest = auth()->user()->guest;
+        if (! $guest) {
+            return response()->json(['message' => 'No guest profile found for this account.'], 422);
+        }
+
+        if ($guest->profile_picture) {
+            Storage::disk('public')->delete($guest->profile_picture);
+            $guest->update(['profile_picture' => null]);
+        }
+
+        return response()->json(['message' => 'Profile photo removed.', 'guest' => $guest->fresh()]);
+    }
+
+    /**
      * Voluntary self-deactivation - sets users.status = 'deactivated' and
      * revokes every API token, but never touches guest/booking/reservation/
      * payment/notification data and never sets deleted_at/restore_deadline

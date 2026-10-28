@@ -117,6 +117,7 @@ Route::middleware(['auth.api', 'role:guest'])->group(function () {
     Route::middleware('log.activity')->group(function () {
         Route::put('/guest/profile', [ProfileController::class, 'update']);
         Route::post('/guest/profile/picture', [ProfileController::class, 'updatePicture']);
+        Route::delete('/guest/profile/picture', [ProfileController::class, 'removePicture']);
         Route::post('/guest/profile/email/request', [ProfileController::class, 'requestEmailChange'])->middleware('throttle:20,1');
         Route::post('/guest/profile/email/confirm', [ProfileController::class, 'confirmEmailChange'])->middleware('throttle:20,1');
         // In-app password change: needs the reset_token that /verify-reset-otp issues after a correct OTP.
