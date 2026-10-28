@@ -71,9 +71,9 @@ class PromoDiscountTest extends ApiFlowTestCase
         $bill = StayBill::forBooking($this->mixedBooking($standard->id, $deluxe->id, $promo->id), StayBill::PROJECTED);
 
         $this->assertSame(6000.0, (float) $bill['room_charge']);
-        $this->assertSame(400.0, (float) $bill['discount'], '10% of the Deluxe rate x 2 nights only - the Standard room pays full price');
+        $this->assertSame(400.0, (float) $bill['promo_discount'], '10% of the Deluxe rate x 2 nights only - the Standard room pays full price');
         $this->assertSame(5600.0, (float) $bill['total']);
-        $this->assertSame('Deluxe Days', $bill['discount_name']);
+        $this->assertSame('Deluxe Days', $bill['promo_name']);
     }
 
     public function test_a_rate_promo_comes_off_the_actual_rooms_own_rate_not_the_room_types(): void
@@ -93,7 +93,7 @@ class PromoDiscountTest extends ApiFlowTestCase
         $bill = StayBill::forBooking($booking->fresh(), StayBill::PROJECTED);
 
         $this->assertSame(7200.0, (float) $bill['room_charge'], '2,600 x 2 + 1,000 x 2');
-        $this->assertSame(520.0, (float) $bill['discount'], '10% of THAT room rate ₱2,600 x 2 nights - the Standard room is not discounted');
+        $this->assertSame(520.0, (float) $bill['promo_discount'], '10% of THAT room rate ₱2,600 x 2 nights - the Standard room is not discounted');
     }
 
     public function test_a_room_type_with_its_own_rate_is_discounted_on_that_rate(): void
@@ -110,7 +110,7 @@ class PromoDiscountTest extends ApiFlowTestCase
 
         $bill = StayBill::forBooking($booking->fresh(), StayBill::PROJECTED);
 
-        $this->assertSame(1500.0, (float) $bill['discount'], '₱500 off the 1-7 type rate ₱5,000 a night x 3 nights');
+        $this->assertSame(1500.0, (float) $bill['promo_discount'], '₱500 off the 1-7 type rate ₱5,000 a night x 3 nights');
         $this->assertSame(13500.0, (float) $bill['total']);
         $this->assertNotNull($small); // the other capacity type is untouched by this promo
     }
@@ -123,7 +123,7 @@ class PromoDiscountTest extends ApiFlowTestCase
 
         $bill = StayBill::forBooking($this->mixedBooking($standard->id, $deluxe->id, $promo->id), StayBill::PROJECTED);
 
-        $this->assertSame(1200.0, (float) $bill['discount'], '₱300 off each room per night: 2 rooms x 2 nights');
+        $this->assertSame(1200.0, (float) $bill['promo_discount'], '₱300 off each room per night: 2 rooms x 2 nights');
     }
 
     public function test_an_amenity_only_promo_takes_nothing_off(): void
@@ -134,8 +134,8 @@ class PromoDiscountTest extends ApiFlowTestCase
 
         $bill = StayBill::forBooking($this->mixedBooking($standard->id, $deluxe->id, $promo->id), StayBill::PROJECTED);
 
-        $this->assertSame(0.0, (float) $bill['discount']);
-        $this->assertNull($bill['discount_name']);
+        $this->assertSame(0.0, (float) $bill['promo_discount']);
+        $this->assertSame('Drinks', $bill['promo_name'], 'applied, but it takes no money off');
     }
 
     public function test_applying_a_promo_reprices_an_existing_bill_and_removing_it_restores_it(): void
@@ -145,20 +145,20 @@ class PromoDiscountTest extends ApiFlowTestCase
         $promo = $this->promo(['promo_name' => 'Deluxe Days', 'room_type_id' => $deluxe->id, 'discount_type' => 'percentage', 'discount_value' => 25]);
         $booking = $this->mixedBooking($standard->id, $deluxe->id, null);
         $billing = app(\App\Services\StayBillingService::class)->ensure($booking, StayBill::PROJECTED);
-        $this->assertSame(0.0, (float) $billing->fresh()->discount);
+        $this->assertSame(0.0, (float) $billing->fresh()->promo_discount);
 
         $offers = app(\App\Services\StayOffersService::class);
         $offers->applyPromotion($booking, $promo, [$standard->id, $deluxe->id]);
         $billing = $billing->fresh();
-        $this->assertSame(1000.0, (float) $billing->discount, '25% of ₱2,000 x 2 nights');
+        $this->assertSame(1000.0, (float) $billing->promo_discount, '25% of ₱2,000 x 2 nights');
         $this->assertSame(5000.0, (float) $billing->total_amount);
-        $this->assertSame('Deluxe Days', $billing->discount_label);
+        $this->assertSame('Deluxe Days', $billing->promo_label);
 
         $offers->clearPromotion($booking->fresh());
-        $this->assertSame(0.0, (float) $billing->fresh()->discount);
+        $this->assertSame(0.0, (float) $billing->fresh()->promo_discount);
     }
 
-    public function test_an_approved_id_discount_wins_and_the_promo_is_not_stacked(): void
+    public function test_a_promo_and_an_approved_id_discount_stack_the_promo_first(): void
     {
         $standard = $this->makeRoomTypeWithRooms('Standard', 1000);
         $deluxe = $this->makeRoomTypeWithRooms('Deluxe', 2000);
@@ -169,8 +169,11 @@ class PromoDiscountTest extends ApiFlowTestCase
 
         $bill = StayBill::forBooking($booking->fresh(), StayBill::PROJECTED);
 
-        $this->assertSame(1200.0, (float) $bill['discount'], '20% of the whole ₱6,000 bill, no promo on top');
+        $this->assertSame(3000.0, (float) $bill['promo_discount'], '50% off each room rate: (1,000 + 2,000) x 2 nights x 50%');
+        $this->assertSame(600.0, (float) $bill['discount'], '20% of what is left of the rooms (6,000 - 3,000), not of the full 6,000');
+        $this->assertSame(2400.0, (float) $bill['total']);
         $this->assertSame('Senior Citizen', $bill['discount_name']);
+        $this->assertSame($promo->promo_name, $bill['promo_name']);
     }
 
     /** A paid amenity on the booking, put on the bill at $at. */
@@ -194,7 +197,7 @@ class PromoDiscountTest extends ApiFlowTestCase
 
         // Not checked in yet: rooms ₱6,000 + booked breakfast ₱1,000 = ₱7,000 -> 10% = ₱700 (every room, not just Deluxe).
         $bill = StayBill::forBooking($booking->fresh(), StayBill::PROJECTED);
-        $this->assertSame(700.0, (float) $bill['discount']);
+        $this->assertSame(700.0, (float) $bill['promo_discount']);
         $this->assertSame(6300.0, (float) $bill['total']);
 
         // Checked in two hours ago; a ₱500 spa added since is charged in full - the discount stays on the pre-check-in total.
@@ -202,7 +205,7 @@ class PromoDiscountTest extends ApiFlowTestCase
         $this->amenityRow($booking, $guest->id, 'Spa', 500, now());
         $bill = StayBill::forBooking($booking->fresh(), StayBill::PROJECTED);
         $this->assertSame(7500.0, (float) $bill['subtotal']);
-        $this->assertSame(700.0, (float) $bill['discount'], 'the spa added after check-in is not discounted');
+        $this->assertSame(700.0, (float) $bill['promo_discount'], 'the spa added after check-in is not discounted');
         $this->assertSame(6800.0, (float) $bill['total']);
     }
 
@@ -211,11 +214,11 @@ class PromoDiscountTest extends ApiFlowTestCase
         $standard = $this->makeRoomTypeWithRooms('Standard', 1000);
         $deluxe = $this->makeRoomTypeWithRooms('Deluxe', 2000);
         $once = $this->promo(['promo_name' => 'Minus 1500', 'discount_type' => 'fixed', 'discount_value' => 1500, 'discount_applies_to' => 'total']);
-        $this->assertSame(1500.0, (float) StayBill::forBooking($this->mixedBooking($standard->id, $deluxe->id, $once->id), StayBill::PROJECTED)['discount'], 'once, not per room or night');
+        $this->assertSame(1500.0, (float) StayBill::forBooking($this->mixedBooking($standard->id, $deluxe->id, $once->id), StayBill::PROJECTED)['promo_discount'], 'once, not per room or night');
 
         $huge = $this->promo(['promo_name' => 'Minus 99999', 'discount_type' => 'fixed', 'discount_value' => 99999, 'discount_applies_to' => 'total']);
         $bill = StayBill::forBooking($this->mixedBooking($standard->id, $deluxe->id, $huge->id), StayBill::PROJECTED);
-        $this->assertSame(6000.0, (float) $bill['discount']);
+        $this->assertSame(6000.0, (float) $bill['promo_discount']);
         $this->assertSame(0.0, (float) $bill['total']);
     }
 
@@ -231,8 +234,10 @@ class PromoDiscountTest extends ApiFlowTestCase
             ->assertRedirect(route('admin.promotions.index'))->assertSessionHasNoErrors();
         $this->actingAs($admin)->post(route('admin.promotions.store'), $base + ['promo_name' => 'Both', 'has_discount' => 1, 'discount_applies_to' => 'total', 'discount_type' => 'fixed', 'discount_value' => 250, 'amenities' => [$amenity->id => 2]])
             ->assertSessionHasNoErrors();
+        // a NEW promo needs its value: free amenities alone are no longer enough
         $this->actingAs($admin)->post(route('admin.promotions.store'), $base + ['promo_name' => 'Free Only', 'has_discount' => 0, 'discount_type' => 'fixed', 'discount_value' => 99, 'amenities' => [$amenity->id => 1]])
-            ->assertSessionHasNoErrors();
+            ->assertSessionHasErrors('discount_value');
+        $this->assertNull(Promotion::where('promo_name', 'Free Only')->first());
 
         $this->assertSame('15% off the room rate', Promotion::where('promo_name', 'Only Off')->first()->discountLabel());
         $both = Promotion::where('promo_name', 'Both')->first();
@@ -240,9 +245,13 @@ class PromoDiscountTest extends ApiFlowTestCase
         $this->assertTrue($both->discountsTotal());
         $this->assertSame('₱250.00 off the total', $both->discountLabel());
         $this->assertSame(1, $both->amenities()->count());
-        $this->assertFalse(Promotion::where('promo_name', 'Free Only')->first()->hasDiscount(), 'switched off = no discount saved');
+        // an older promo with no value stays editable and display only
+        $old = $this->promo(['promo_name' => 'Old Bundle', 'promo_type' => 'amenity', 'room_type_id' => $deluxe->id]);
+        $this->assertFalse($old->hasDiscount());
+        $this->actingAs($admin)->get(route('admin.promotions.index'))->assertOk()->assertSee('Display only');
+        $this->actingAs($admin)->get(route('admin.promotions.edit', $old))->assertOk()->assertSee('display only');
 
-        $this->actingAs($admin)->post(route('admin.promotions.store'), $base + ['promo_name' => 'Nothing', 'has_discount' => 0])->assertSessionHasErrors('amenities');
+        $this->actingAs($admin)->post(route('admin.promotions.store'), $base + ['promo_name' => 'Nothing', 'has_discount' => 0])->assertSessionHasErrors('discount_value');
         $this->actingAs($admin)->post(route('admin.promotions.store'), $base + ['promo_name' => 'Too Much', 'has_discount' => 1, 'discount_applies_to' => 'rate', 'discount_type' => 'percentage', 'discount_value' => 120])->assertSessionHasErrors('discount_value');
         $this->actingAs($admin)->post(route('admin.promotions.store'), $base + ['promo_name' => 'No Choice', 'has_discount' => 1, 'discount_type' => 'percentage', 'discount_value' => 5])->assertSessionHasErrors('discount_applies_to');
     }

@@ -47,6 +47,7 @@ class RoomController extends Controller
         $roomTypes->getCollection()->transform(function (RoomType $roomType) use ($counts) {
             $roomType->available_count = $counts[$roomType->id] ?? 0;
             $roomType->is_fully_booked = $roomType->available_count <= 0;
+            $roomType->promos = $this->promosFor($roomType);
 
             return $roomType;
         });
@@ -70,6 +71,7 @@ class RoomController extends Controller
         $roomType->available_count = $availableCount;
         $roomType->is_fully_booked = $availableCount <= 0;
         $roomType->total_inventory = $this->availability->totalInventory($roomType);
+        $roomType->promos = $this->promosFor($roomType);
 
         $otherTypes = RoomType::where('status', 'active')
             ->where('id', '!=', $roomType->id)
@@ -80,6 +82,7 @@ class RoomController extends Controller
             ->map(function (RoomType $type) use ($otherCounts) {
                 $type->available_count = $otherCounts[$type->id] ?? 0;
                 $type->is_fully_booked = $type->available_count <= 0;
+                $type->promos = $this->promosFor($type);
 
                 return $type;
             })
@@ -92,6 +95,23 @@ class RoomController extends Controller
             'check_in' => $checkIn->toDateString(),
             'check_out' => $checkOut->toDateString(),
         ]);
+    }
+
+    /**
+     * The ACTIVE promos for this room type (switched on, inside their dates, on an active room type - or for every type): the
+     * badge on its card and the Promos section of its details. Each says what it does to THIS type's nightly rate.
+     *
+     * @return array<int,array<string,mixed>>
+     */
+    private function promosFor(RoomType $roomType): array
+    {
+        return \App\Models\Promotion::activeFor([$roomType->id])->map(function ($p) use ($roomType) {
+            $row = $p->snapshotRow();
+            $row['rate_after'] = $p->rateAfter($roomType->id, (float) $roomType->rate);
+            $row['amenities'] = $p->amenities->map(fn ($a) => $a->pivot->quantity . ' x ' . $a->amenity_name)->values()->all();
+
+            return $row;
+        })->values()->all();
     }
 
     /**

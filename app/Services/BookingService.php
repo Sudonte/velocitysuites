@@ -118,15 +118,12 @@ class BookingService
             ? $promotion->discountFor($lines->map(fn ($l) => ['room_type_id' => $l['room_type_id'], 'rate' => $l['rate'], 'nights' => $l['room_nights']])->all(), $roomCharge + $addOns)
             : 0.0;
 
-        $discount = $promoDiscount;
-
         // Statutory Senior Citizen / PWD discount: the value comes from the Discount module (the admin's row -
-        // 20% by law, RA 9994 / RA 10754), never from a number in code, and it applies to the WHOLE bill - room
-        // charges plus the paid amenities the guest selected - through the same function Billing / Check-out uses.
-        // A stay gets an ID discount or a promotion, never both.
-        if (! $promotion) {
-            $discount += $this->statutoryDiscountAmount($reservation, $roomCharge, $addOns);
-        }
+        // 20% by law, RA 9994 / RA 10754), never from a number in code. It stacks with the promo and is taken from what is
+        // left of the room charges after the promo plus the paid amenities the guest selected - the same function (and the
+        // same order) the Billing / Check-out uses.
+        $idDiscount = $this->statutoryDiscountAmount($reservation, max(0.0, $roomCharge - $promoDiscount), $addOns);
+        $discount = $promoDiscount + $idDiscount;
 
         $discount = min($discount, $roomCharge + $addOns);
 
@@ -303,7 +300,10 @@ class BookingService
             // The discount reaches the bill only once the guest's ID is APPROVED (Booking module). A pending or
             // rejected one leaves the bill whole - approval re-prices it (DiscountIdVerificationService).
             // A promotion's discount needs no ID, so it is on the bill from the start.
-            'discount' => $reservation->discount_verification_status === 'approved' ? $quote['discount'] : $quote['promo_discount'],
+            // The promo is its own line (promo_discount); the ID discount stacks on top of it.
+            'discount' => $reservation->discount_verification_status === 'approved' ? round($quote['discount'] - $quote['promo_discount'], 2) : 0,
+            'promo_discount' => $quote['promo_discount'],
+            'promotion_id' => $reservation->promotion_id,
             'discount_id' => $reservation->discount_verification_status === 'approved' ? $reservation->discount_id : null,
             'total_amount' => 0,
             'billing_status' => 'pending',

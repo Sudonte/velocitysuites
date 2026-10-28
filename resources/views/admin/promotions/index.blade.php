@@ -104,7 +104,8 @@
                                 <span class="badge bg-info">{{ $promotion->discountLabel() }}</span>
                                 <br><small class="text-muted">{{ $promotion->discountsTotal() ? 'before check-in' . ($promotion->roomType ? ', ' . $promotion->roomType->name . ' bookings' : '') : ($promotion->roomType ? $promotion->roomType->name . ' rooms only' : 'every room') }}</small>
                             @else
-                                <span class="text-muted">-</span>
+                                <span class="badge bg-warning text-dark" title="This promo has no discount value, so it takes no money off a bill. Edit it to add one.">Display only</span>
+                                <br><small class="text-muted">no discount value</small>
                             @endif
                         </td>
                         <td>

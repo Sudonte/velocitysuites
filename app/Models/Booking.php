@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\SnapshotsPromos;
 use App\Models\Concerns\HasStays;
 use App\Services\ReceiptService;
 use App\Support\PaymentMath;
@@ -12,7 +13,7 @@ use Illuminate\Support\Facades\DB;
 
 class Booking extends Model
 {
-    use HasFactory, SoftDeletes, HasStays;
+    use HasFactory, SoftDeletes, HasStays, SnapshotsPromos;
 
     /**
      * bookings.booking_status is a real DB ENUM - these are its exact
@@ -57,6 +58,9 @@ class Booking extends Model
         'id_card_type',
         'discount_id',
         'promotion_id',
+        'promo_snapshot',
+        'promotion_verified_by',
+        'promotion_verified_at',
         'id_card_image_path',
         'additional_guest_details',
         'discount_requested',
@@ -89,6 +93,8 @@ class Booking extends Model
         'checked_out_at' => 'datetime',
         'completed_at' => 'datetime',
         'discount_verified_at' => 'datetime',
+        'promo_snapshot' => 'array',
+        'promotion_verified_at' => 'datetime',
         'verified_at' => 'datetime',
         'hidden_at' => 'datetime',
         'no_show_at' => 'datetime',

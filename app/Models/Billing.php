@@ -28,6 +28,8 @@ class Billing extends Model
         'additional_guest_fee',
         'amenity_charge',
         'discount',
+        'promo_discount',
+        'promotion_id',
         'discount_id',
         'discount_verified_by',
         'discount_verified_at',
@@ -51,6 +53,7 @@ class Billing extends Model
         'checkin_settled_at' => 'datetime',
         'checkin_receipt_snapshot' => 'array',
         'discount' => 'decimal:2',
+        'promo_discount' => 'decimal:2',
         'total_amount' => 'decimal:2',
         'discount_verified_at' => 'datetime',
     ];
@@ -94,18 +97,25 @@ class Billing extends Model
         return $this->belongsTo(Discount::class, 'discount_id');
     }
 
-    /** The name of what the discount on this bill is: the ID discount, else the booking's promotion. */
+    /** The name of the ID discount on this bill (the promo is its own line: see promo_label). */
     public function getDiscountLabelAttribute(): ?string
     {
         if ((float) $this->discount <= 0) {
             return null;
         }
-        if ($this->discountApplied) {
-            return $this->discountApplied->name;
-        }
-        $promotionId = Booking::whereKey($this->booking_id)->value('promotion_id');
 
-        return $promotionId ? Promotion::whereKey($promotionId)->value('promo_name') : null;
+        return $this->discountApplied?->name;
+    }
+
+    /** The title of the promo that took money off this bill, if any. */
+    public function getPromoLabelAttribute(): ?string
+    {
+        if ((float) $this->promo_discount <= 0) {
+            return null;
+        }
+        $id = $this->promotion_id ?: Booking::whereKey($this->booking_id)->value('promotion_id');
+
+        return $id ? Promotion::whereKey($id)->value('promo_name') : null;
     }
 
     /**
@@ -150,7 +160,7 @@ class Billing extends Model
             + (float) $this->amenity_charge
             + $this->additional_charges_total;
 
-        return max(0, $baseTotal - (float) $this->discount);
+        return max(0, $baseTotal - (float) $this->promo_discount - (float) $this->discount);
     }
 
     /**
@@ -223,6 +233,8 @@ class Billing extends Model
 
         $this->room_charge = $bill['room_charge'];
         $this->discount = $bill['discount'];
+        $this->promo_discount = $bill['promo_discount'];
+        $this->promotion_id = $bill['promo_id'];
         $this->discount_id = $bill['discount_id'];
         if ($bill['discount_id'] === null) {
             $this->discount_verified_by = null;
@@ -241,7 +253,7 @@ class Billing extends Model
             + (float) $this->amenity_charge
             + $this->additional_charges_total;
 
-        $this->total_amount = max(0, $baseTotal - (float) $this->discount);
+        $this->total_amount = max(0, $baseTotal - (float) $this->promo_discount - (float) $this->discount);
         $this->save();
         $this->syncStatus();
     }

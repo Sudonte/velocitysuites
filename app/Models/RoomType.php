@@ -10,6 +10,12 @@ class RoomType extends Model
 {
     use HasFactory;
 
+    /** An edit to a room type (e.g. switched off) changes which promos are active. */
+    protected static function booted(): void
+    {
+        static::saved(fn () => Promotion::forgetActiveCatalog());
+    }
+
     protected $fillable = [
         'name',
         'rate',

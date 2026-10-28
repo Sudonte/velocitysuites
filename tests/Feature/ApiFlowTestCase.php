@@ -83,6 +83,7 @@ abstract class ApiFlowTestCase extends TestCase
             $table->id();
             $table->unsignedBigInteger('group_id')->nullable();
             $table->unsignedBigInteger('promotion_id')->nullable();
+            $table->json('promo_snapshot')->nullable();
             $table->string('idempotency_key')->nullable()->unique();
             $table->unsignedBigInteger('guest_id')->nullable();
             $table->string('guest_first_name')->nullable();
@@ -179,6 +180,9 @@ abstract class ApiFlowTestCase extends TestCase
             $table->id();
             $table->unsignedBigInteger('group_id')->nullable();
             $table->unsignedBigInteger('promotion_id')->nullable();
+            $table->json('promo_snapshot')->nullable();
+            $table->unsignedBigInteger('promotion_verified_by')->nullable();
+            $table->timestamp('promotion_verified_at')->nullable();
             $table->string('idempotency_key')->nullable()->unique();
             $table->unsignedBigInteger('reservation_id')->nullable()->unique();
             $table->unsignedBigInteger('guest_id')->nullable();
@@ -272,6 +276,8 @@ abstract class ApiFlowTestCase extends TestCase
             $table->decimal('additional_guest_fee', 10, 2)->default(0);
             $table->decimal('amenity_charge', 10, 2)->default(0);
             $table->decimal('discount', 10, 2)->default(0);
+            $table->decimal('promo_discount', 10, 2)->default(0);
+            $table->unsignedBigInteger('promotion_id')->nullable();
             $table->unsignedBigInteger('discount_id')->nullable();
             $table->unsignedBigInteger('discount_verified_by')->nullable();
             $table->timestamp('discount_verified_at')->nullable();

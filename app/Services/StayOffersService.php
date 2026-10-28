@@ -14,9 +14,10 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Validation\ValidationException;
 
 /**
- * Discount (ID) or promotion on a stay, chosen by a receptionist - on Create
- * Reservation, Create Booking, Walk-in Check-in and at check-in. A stay gets
- * one or the other, never both:
+ * Discount (ID) and promotion on a stay, chosen by a receptionist - on Create
+ * Reservation, Create Booking, Walk-in Check-in and at check-in. A stay may have BOTH
+ * (at most one promo, and one ID discount; the bill takes the promo off the room rate first,
+ * then the ID discount off what is left of the rooms plus the amenities):
  *  - Discount: the guest's ID photo (private disk, same as the guest's own
  *    online form) + the discount it earns; approval itself always goes
  *    through DiscountIdVerificationService.
@@ -54,13 +55,23 @@ class StayOffersService
         ];
     }
 
-    /** Promotions running on $day for any of these room types (null room type = all rooms). */
-    public function promotionsFor(array $roomTypeIds, Carbon $day)
+    /**
+     * Promotions the desk may verify for a transaction: the ones running on $day for its room types (null room type = all rooms),
+     * the ones running today, and - with $stay - the ones that were running when it was booked (honoured even if they have
+     * expired since).
+     */
+    public function promotionsFor(array $roomTypeIds, Carbon $day, Reservation|Booking|null $stay = null)
     {
-        return Promotion::with(['amenities', 'roomType'])->where('status', 'active')->notArchived()
-            ->runningOn($day)
-            ->where(fn ($q) => $q->whereNull('room_type_id')->orWhereIn('room_type_id', $roomTypeIds))
-            ->orderBy('promo_name')->get();
+        $ids = array_map('intval', $roomTypeIds);
+        $typeOk = fn ($p) => $p->room_type_id === null || in_array((int) $p->room_type_id, $ids, true);
+        $running = Promotion::with(['amenities', 'roomType'])->where('status', 'active')->notArchived()
+            ->where(fn ($q) => $q->where(fn ($d) => $d->runningOn($day))->orWhere(fn ($d) => $d->runningOn(\App\Support\CheckInWindow::date())))
+            ->where(fn ($q) => $q->whereNull('room_type_id')->orWhereIn('room_type_id', $ids))
+            ->get();
+        $snapshotIds = collect($stay?->promo_snapshot ?? ($stay instanceof Booking ? $stay->reservation?->promo_snapshot : null) ?? [])->pluck('id')->map(fn ($i) => (int) $i);
+        $remembered = $snapshotIds->isEmpty() ? collect() : Promotion::with(['amenities', 'roomType'])->whereIn('id', $snapshotIds)->get()->filter($typeOk);
+
+        return $running->concat($remembered)->unique('id')->sortBy('promo_name')->values();
     }
 
     /** Active discounts offered on $day (the receptionist's choice list). */
@@ -91,10 +102,9 @@ class StayOffersService
         }
     }
 
-    /** Store the requested discount and ID photo (pending review). Replaces any promotion. */
+    /** Store the requested discount and ID photo (pending review). A promo on the stay stays: they stack. */
     public function attachDiscount(Reservation|Booking $stay, int $discountId, ?UploadedFile $idPhoto): void
     {
-        $this->clearPromotion($stay);
         $path = $idPhoto ? $idPhoto->store('id-cards', 'local') : $stay->id_card_image_path;
         $discount = Discount::find($discountId);
 
@@ -108,27 +118,20 @@ class StayOffersService
     }
 
     /**
-     * Apply a promotion: its included amenities are added free (once) and its
-     * discount, if any, is priced into the bill. Not allowed alongside an
-     * approved ID discount.
+     * Apply (verify) a promotion: its included amenities are added free (once) and its
+     * discount, if any, is priced into the bill. One promo per transaction; it stacks with the ID discount.
+     * Recorded with the staff member who verified it and when.
      *
      * @throws ValidationException
      */
-    public function applyPromotion(Reservation|Booking $stay, Promotion $promotion, array $roomTypeIds): void
+    public function applyPromotion(Reservation|Booking $stay, Promotion $promotion, array $roomTypeIds, ?User $by = null): void
     {
-        if ($stay->discount_verification_status === 'approved') {
-            throw ValidationException::withMessages(['promotion_id' => 'This stay already has an approved ID discount - a promotion can\'t be added as well.']);
-        }
-        $running = $this->promotionsFor($roomTypeIds, Carbon::parse($stay->check_in))->contains('id', $promotion->id);
+        $running = $this->promotionsFor($roomTypeIds, Carbon::parse($stay->check_in), $stay)->contains('id', $promotion->id);
         if (! $running) {
-            throw ValidationException::withMessages(['promotion_id' => 'That promotion isn\'t running for this room type on the check-in date.']);
+            throw ValidationException::withMessages(['promotion_id' => 'That promotion isn\'t available for this transaction (it wasn\'t running for its room types when it was booked, and isn\'t today or on the check-in date).']);
         }
 
         $this->clearPromotion($stay);
-        // A promotion replaces a pending (not yet approved) discount request.
-        if ($stay->discount_requested && $stay->discount_verification_status !== 'approved') {
-            $stay->forceFill(['discount_requested' => false, 'discount_verification_status' => 'not_requested'])->save();
-        }
 
         $guestId = $stay->guest_id ?? ($stay instanceof Booking ? $stay->reservation?->guest_id : null);
         foreach ($promotion->amenities as $amenity) {
@@ -148,6 +151,10 @@ class StayOffersService
             ]);
         }
         $stay->forceFill(['promotion_id' => $promotion->id])->save();
+        if ($stay instanceof Booking) {
+            $by ??= auth()->user();
+            $stay->forceFill(['promotion_verified_by' => $by?->id, 'promotion_verified_at' => now()])->save();
+        }
         $this->reprice($stay);
     }
 
@@ -164,6 +171,9 @@ class StayOffersService
                 : $q->where('booking_id', $stay->id)->orWhere('reservation_id', $stay->reservation_id ?? 0))
             ->delete();
         $stay->forceFill(['promotion_id' => null])->save();
+        if ($stay instanceof Booking) {
+            $stay->forceFill(['promotion_verified_by' => null, 'promotion_verified_at' => null])->save();
+        }
         $this->reprice($stay);
     }
 

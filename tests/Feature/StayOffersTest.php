@@ -93,7 +93,7 @@ class StayOffersTest extends ApiFlowTestCase
         $this->assertNull($booking->promotion_id);
     }
 
-    public function test_promotion_refused_once_a_discount_is_approved(): void
+    public function test_a_promotion_can_be_added_next_to_an_approved_discount(): void
     {
         $rt = $this->makeRoomTypeWithRooms('Family', 3000, 4, 3);
         $promo = $this->promotion($rt->id);
@@ -101,7 +101,9 @@ class StayOffersTest extends ApiFlowTestCase
             'check_in' => today()->addDays(3), 'check_out' => today()->addDays(4), 'adults' => 1, 'children' => 0, 'number_of_guests' => 1,
             'booking_status' => Booking::STATUS_ACTIVE, 'payment_method' => 'cash', 'discount_verification_status' => 'approved']);
 
-        $this->expectException(\Illuminate\Validation\ValidationException::class);
         app(\App\Services\StayOffersService::class)->applyPromotion($booking, $promo, [$rt->id]);
+        $this->assertSame($promo->id, (int) $booking->fresh()->promotion_id, 'they stack: the promo is recorded beside the approved ID discount');
+        $this->assertSame('approved', $booking->fresh()->discount_verification_status);
+        $this->assertNotNull($booking->fresh()->promotion_verified_at);
     }
 }

@@ -58,6 +58,7 @@ class TestAccountClassificationIntegrityTest extends TestCase
         Schema::create('reservations', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('promotion_id')->nullable();
+            $table->json('promo_snapshot')->nullable();
             $table->unsignedBigInteger('guest_id')->nullable();
             $table->unsignedBigInteger('room_type_id');
             $table->unsignedTinyInteger('rooms_requested')->default(1);
@@ -85,6 +86,7 @@ class TestAccountClassificationIntegrityTest extends TestCase
         Schema::create('bookings', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('promotion_id')->nullable();
+            $table->json('promo_snapshot')->nullable();
             $table->boolean('is_test_booking')->default(false);
             $table->unsignedBigInteger('reservation_id')->nullable();
             $table->unsignedBigInteger('guest_id')->nullable();

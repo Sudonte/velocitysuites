@@ -224,7 +224,7 @@ class GuestPayRemainingBalanceTest extends ApiFlowTestCase
 
         // Applied (by the desk): the quote and what the server charges move together - 10% off the room rate.
         $r->forceFill(['promotion_id' => $promo->id])->save();
-        $this->assertEquals(200.0, $r->fresh()->discount_preview['discount']);
+        $this->assertEquals(200.0, $r->fresh()->discount_preview['promo_discount']);
         $this->assertEquals(1800.0, $r->fresh()->total_amount_due);
         $this->assertAccepted($this->pay($user, $r, 'partial', 800));
     }

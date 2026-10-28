@@ -686,6 +686,14 @@ class CheckInController extends Controller
                 'amount' => round((float) $billing->discount, 2),
                 'rejection_reason' => $discountStatus === 'rejected' ? $locked->discount_rejection_reason : null,
             ],
+            // The promo the desk verified (one at most), frozen with the rest: its pesos off the room rate, and who verified it when.
+            'promo' => [
+                'id' => $billing->promotion_id,
+                'name' => $billing->promo_label,
+                'amount' => round((float) $billing->promo_discount, 2),
+                'verified_by' => $locked->promotion_verified_by ? \App\Models\User::whereKey($locked->promotion_verified_by)->value('first_name') : null,
+                'verified_at' => $locked->promotion_verified_at?->toIso8601String(),
+            ],
             // The bill's make-up at this moment, frozen: check-out never re-prices (or re-discounts) any of it.
             'room_charge' => round((float) $billing->room_charge, 2),
             'amenity_charge' => round((float) $billing->amenity_charge, 2),
@@ -732,7 +740,7 @@ class CheckInController extends Controller
                 : ($booking->reservation?->id_card_image_path ? route('receptionist.reservations.id-card', $booking->reservation) : null),
             'discountChoices' => $this->discountIds->choices($booking),
             'claimedDiscount' => $this->discountIds->claimed($booking),
-            'promotionChoices' => $offers->promotionsFor($roomTypeIds, \Carbon\Carbon::parse($booking->check_in)),
+            'promotionChoices' => $offers->promotionsFor($roomTypeIds, \Carbon\Carbon::parse($booking->check_in), $booking),
             'appliedPromotion' => $booking->promotion_id ? \App\Models\Promotion::find($booking->promotion_id) : null,
         ];
     }
@@ -770,6 +778,8 @@ class CheckInController extends Controller
             'room_charge' => (float) $stay['room_charge'],
             'discount' => (float) $stay['discount'],
             'discount_name' => $stay['discount_name'],
+            'promo_discount' => (float) $stay['promo_discount'],
+            'promo_name' => $stay['promo_name'],
             'total' => $payable,
             'paid' => $paid,
             'balance_due' => max(0, round($payable - $paid, 2)),
@@ -792,8 +802,6 @@ class CheckInController extends Controller
                 return response()->json(['message' => 'Upload a photo of the guest\'s ID first.', 'errors' => ['id_document' => ['Upload a photo of the guest\'s ID first.']]], 422);
             }
             $offers->attachDiscount($booking, (int) $validated['discount_id'], $request->file('id_document'));
-        } elseif ($booking->promotion_id) {
-            $offers->clearPromotion($booking);
         }
         $this->discountIds->approve($booking->fresh(), (int) $validated['discount_id'], auth()->user());
 
@@ -810,7 +818,7 @@ class CheckInController extends Controller
         return response()->json(['message' => 'Discount ID rejected.']);
     }
 
-    /** Apply (or, with no promotion_id, remove) a promotion from the Check In panel - only without an approved ID discount. */
+    /** Verify (or, with no promotion_id, remove) the promo from the Check In panel: one per transaction, stacking with the ID discount. */
     public function applyPromotion(Request $request, Booking $booking)
     {
         abort_unless($booking->booking_status === Booking::STATUS_ACTIVE, 422, 'Only a confirmed booking that has not checked in can be changed here.');

@@ -43,6 +43,7 @@ class ReceiptNumberBackfillCommandTest extends TestCase
         Schema::create('bookings', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('promotion_id')->nullable();
+            $table->json('promo_snapshot')->nullable();
             $table->string('booking_status')->default('COMPLETED_BOOKING');
             $table->boolean('is_test_booking')->default(false);
             $table->timestamp('deleted_at')->nullable();

@@ -6,7 +6,7 @@
 --}}
 @php $peso = fn ($v) => '₱' . number_format((float) $v, 2); @endphp
 <div id="checkInStepBill">
-    <h6 class="mb-2"><i class="fas fa-percent"></i> 1. Charges - Discount or Promotion</h6>
+    <h6 class="mb-2"><i class="fas fa-percent"></i> 1. Charges - ID Discount and Promo</h6>
     <div class="border rounded p-2 mb-3" id="checkInOfferBox"
          data-approve-url="{{ route('receptionist.check-in.discount.approve', $booking) }}"
          data-reject-url="{{ route('receptionist.check-in.discount.reject', $booking) }}"
@@ -23,11 +23,6 @@
                 <span><span class="badge bg-success">Discount approved</span> {{ $stay['discount_name'] ?? $claimedDiscount?->name }} &middot; &minus;{{ $peso($stay['discount']) }}</span>
                 @if($idCardUrl)<a href="{{ $idCardUrl }}" target="_blank" rel="noopener" class="small">View ID</a>@endif
             </div>
-        @elseif($appliedPromotion)
-            <div class="d-flex justify-content-between align-items-center">
-                <span><span class="badge bg-info text-dark">Promotion</span> {{ $appliedPromotion->promo_name }} - {{ $appliedPromotion->offerSummary() }}@if($stay['discount'] > 0) &middot; &minus;{{ $peso($stay['discount']) }}@endif</span>
-                <button type="button" class="btn btn-sm btn-outline-secondary" data-offer-action="promotion" data-promotion-id="">Remove</button>
-            </div>
         @else
             @if($discountRequested && $hasIdPhoto)
                 <p class="small mb-2">
@@ -36,9 +31,9 @@
                     @if($idCardUrl)<a href="{{ $idCardUrl }}" target="_blank" rel="noopener">Open the ID photo</a>@endif
                 </p>
             @elseif($discountStatus === 'rejected')
-                <p class="small mb-2"><span class="badge bg-danger">ID rejected</span> No discount applies. You can upload a new ID photo or apply a promotion.</p>
+                <p class="small mb-2"><span class="badge bg-danger">ID rejected</span> No ID discount applies. You can upload a new ID photo.</p>
             @else
-                <p class="small text-muted mb-2">No discount requested. Upload the guest's ID to apply one, or apply a promotion instead.</p>
+                <p class="small text-muted mb-2">No ID discount requested. Upload the guest's ID to apply one (optional).</p>
             @endif
 
             {{-- Inputs on one row, actions on their own row below so they always fit inside the panel. --}}
@@ -73,20 +68,32 @@
                 </div>
             @endif
 
-            @if($promotionChoices->isNotEmpty())
-                <hr class="my-2">
-                <div class="row g-2 align-items-end">
-                    <div class="col-sm-9">
-                        <label class="form-label small mb-1">Or apply a promotion</label>
-                        <select class="form-select form-select-sm" data-offer-field="promotion_id">
-                            @foreach($promotionChoices as $promo)
-                                <option value="{{ $promo->id }}">{{ $promo->promo_name }} - {{ $promo->offerSummary() }}</option>
-                            @endforeach
-                        </select>
-                    </div>
-                    <div class="col-sm-3"><button type="button" class="btn btn-sm btn-outline-primary w-100" data-offer-action="promotion">Apply</button></div>
+        @endif
+
+        {{-- The promo: at most one per transaction, verified here, and it stacks with the ID discount above. --}}
+        <hr class="my-2">
+        <div class="small fw-semibold mb-1"><i class="fas fa-tag"></i> Promo <span class="text-muted fw-normal">(optional, one per transaction)</span></div>
+        @if($appliedPromotion)
+            <div class="d-flex justify-content-between align-items-center">
+                <span><span class="badge bg-info text-dark">Promo verified</span> {{ $appliedPromotion->promo_name }} &middot; {{ $appliedPromotion->discountLabel() ?? $appliedPromotion->offerSummary() }}@if($stay['promo_discount'] > 0) &middot; &minus;{{ $peso($stay['promo_discount']) }}@endif
+                    @if($stay['promo_verified_by'])<span class="text-muted">&middot; by {{ $stay['promo_verified_by'] }}@if($stay['promo_verified_at']), {{ \Carbon\Carbon::parse($stay['promo_verified_at'])->timezone('Asia/Manila')->format('M d, g:i A') }}@endif</span>@endif</span>
+                <button type="button" class="btn btn-sm btn-outline-secondary" data-offer-action="promotion" data-promotion-id="">Remove</button>
+            </div>
+        @endif
+        @if($promotionChoices->isNotEmpty() && ! $appliedPromotion)
+            <div class="row g-2 align-items-end">
+                <div class="col-sm-9">
+                    <label class="form-label small mb-1">Promos this guest is eligible for</label>
+                    <select class="form-select form-select-sm" data-offer-field="promotion_id">
+                        @foreach($promotionChoices as $promo)
+                            <option value="{{ $promo->id }}">{{ $promo->promo_name }} - {{ $promo->offerSummary() }}</option>
+                        @endforeach
+                    </select>
                 </div>
-            @endif
+                <div class="col-sm-3"><button type="button" class="btn btn-sm btn-outline-primary w-100" data-offer-action="promotion">Verify</button></div>
+            </div>
+        @elseif($promotionChoices->isEmpty())
+            <p class="small text-muted mb-0">No promo is running for this transaction's room types.</p>
         @endif
     </div>
 
@@ -97,14 +104,17 @@
                 <div class="fw-semibold mt-1">Stay {{ $section['position'] }} &middot; {{ \Carbon\Carbon::parse($section['check_in'])->format('M d') }} &rarr; {{ \Carbon\Carbon::parse($section['check_out'])->format('M d, Y') }} ({{ \App\Support\StayBill::nightsLabel($section['nights']) }})</div>
             @endif
             @foreach($section['rooms'] as $line)
-                <div class="d-flex justify-content-between"><span>{{ $line['room_type'] ?? 'Room' }} &middot; {{ $peso($line['rate']) }} &times; {{ \App\Support\StayBill::nightsLabel($line['nights']) }}</span><span>{{ $peso($line['subtotal']) }}</span></div>
+                <div class="d-flex justify-content-between"><span>{{ $line['room_type'] ?? 'Room' }} &middot; @if(($line['promo_off'] ?? 0) > 0){{ $peso($line['rate']) }} &rarr; {{ $peso($line['rate_after_promo']) }} per night (Promo) &times; {{ \App\Support\StayBill::nightsLabel($line['nights']) }}@else{{ $peso($line['rate']) }} &times; {{ \App\Support\StayBill::nightsLabel($line['nights']) }}@endif</span><span>{{ $peso($line['subtotal'] - ($line['promo_off'] ?? 0)) }}</span></div>
             @endforeach
             @foreach($section['amenity_lines'] as $a)
                 <div class="d-flex justify-content-between"><span>{{ $a['amenity_name'] }} &times; {{ $a['quantity'] }}@if(! empty($a['room_label'])) <small class="text-muted">&middot; {{ $a['room_label'] }}</small>@endif</span><span>{{ $a['subtotal'] > 0 ? $peso($a['subtotal']) : 'Free' }}</span></div>
             @endforeach
         @endforeach
+        @if($stay['promo_discount'] > 0)
+            <div class="d-flex justify-content-between text-success"><span>Promo{{ $stay['promo_name'] ? ': ' . $stay['promo_name'] : '' }}</span><span>&minus;{{ $peso($stay['promo_discount']) }}</span></div>
+        @endif
         @if($stay['discount'] > 0)
-            <div class="d-flex justify-content-between text-success"><span>Discount{{ $stay['discount_name'] ? ' (' . $stay['discount_name'] . ')' : '' }}</span><span>&minus;{{ $peso($stay['discount']) }}</span></div>
+            <div class="d-flex justify-content-between text-success"><span>Discount{{ $stay['discount_name'] ? ' (' . $stay['discount_name'] . ')' : '' }} <small class="text-muted">on {{ $stay['discount_covers'] }}</small></span><span>&minus;{{ $peso($stay['discount']) }}</span></div>
         @endif
         <hr class="my-1">
         <div class="d-flex justify-content-between fw-bold"><span>Total</span><span>{{ $peso($payable) }}</span></div>

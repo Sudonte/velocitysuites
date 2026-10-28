@@ -102,7 +102,7 @@ class CheckInSettlementTest extends ApiFlowTestCase
         // The panel shows the room's own rate, and its price check for that room: 2 x 1300 = 2600, less 10% of THAT rate = 2340.
         $this->actingAs($desk)->get(route('receptionist.check-in.panel', $booking))->assertOk()->assertSee('data-rate="1300"', false);
         $this->actingAs($desk)->postJson(route('receptionist.check-in.quote', $booking), ['room_ids' => [(string) $rt->id => [$room->id]]])
-            ->assertOk()->assertJsonPath('room_charge', 2600)->assertJsonPath('discount', 260)->assertJsonPath('balance_due', 2340);
+            ->assertOk()->assertJsonPath('room_charge', 2600)->assertJsonPath('promo_discount', 260)->assertJsonPath('balance_due', 2340);
 
         // Paying the booked-rate price (1800) is refused; the actual room's price goes through.
         $this->actingAs($desk)->postJson(route('receptionist.check-in.store', $booking), $this->checkInPayload($rt, $room, ['payment_method' => 'cash', 'amount_received' => 1800]))->assertStatus(422);
@@ -110,7 +110,7 @@ class CheckInSettlementTest extends ApiFlowTestCase
 
         $billing = $booking->fresh()->billing()->first();
         $this->assertEquals(2600.0, (float) $billing->room_charge);
-        $this->assertEquals(260.0, (float) $billing->discount);
+        $this->assertEquals(260.0, (float) $billing->promo_discount);
         $this->assertEquals(2340.0, (float) $billing->checkin_settled_total);
         $this->assertEqualsWithDelta(2340, $booking->fresh()->paidTotal(), 0.01);
     }
@@ -318,10 +318,10 @@ class CheckInSettlementTest extends ApiFlowTestCase
         $booking = Booking::first();
         $billing = $booking->billing()->first();
         $this->assertSame($promo->id, (int) $booking->promotion_id);
-        $this->assertEquals(160.0, (float) $billing->discount);
+        $this->assertEquals(160.0, (float) $billing->promo_discount);
         $this->assertEquals(1440.0, (float) $billing->total_amount);
         $this->assertEqualsWithDelta(1440, $booking->paidTotal(), 0.01);
-        $this->assertEquals('Walk-in 10', $billing->checkin_receipt_snapshot['discount']['name']);
+        $this->assertEquals('Walk-in 10', $billing->checkin_receipt_snapshot['promo']['name']);
     }
 
     public function test_walk_in_bills_the_picked_rooms_own_rate(): void

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\SnapshotsPromos;
 use App\Support\PaymentMath;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use App\Models\Concerns\HasStays;
@@ -9,7 +10,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class Reservation extends Model
 {
-    use HasFactory, HasStays;
+    use HasFactory, HasStays, SnapshotsPromos;
 
     /**
      * reservations.status is a real DB ENUM (renamed 2026-09-02, directly
@@ -70,6 +71,7 @@ class Reservation extends Model
         'id_card_type',
         'discount_id',
         'promotion_id',
+        'promo_snapshot',
         'id_card_image_path',
         'additional_guest_details',
         'verified_at',
@@ -95,6 +97,7 @@ class Reservation extends Model
     }
 
     protected $casts = [
+        'promo_snapshot' => 'array',
         'check_in' => 'datetime',
         'check_out' => 'datetime',
         'discount_requested' => 'boolean',
@@ -129,7 +132,7 @@ class Reservation extends Model
      */
     protected $hidden = ['roomLines'];
 
-    protected $appends = ['discount_preview', 'payment_deadline', 'room_lines', 'deposit_cap', 'hidden_by_guest', 'discount_rejection_reason', 'group_reservation_ids'];
+    protected $appends = ['discount_preview', 'payment_deadline', 'room_lines', 'available_promos', 'deposit_cap', 'hidden_by_guest', 'discount_rejection_reason', 'group_reservation_ids'];
 
     /** The other stays booked together with this one (their reservation ids, by check-in), or [] when it is not part of a group. */
     public function getGroupReservationIdsAttribute(): array
@@ -450,6 +453,7 @@ class Reservation extends Model
         if ($this->booking && $this->booking->billing) {
             return [
                 'room_charge' => (float) $this->booking->billing->room_charge,
+                'promo_discount' => (float) $this->booking->billing->promo_discount,
                 'discount' => (float) $this->booking->billing->discount,
                 'total' => (float) $this->booking->billing->total_amount,
             ];
@@ -459,8 +463,38 @@ class Reservation extends Model
             return null;
         }
 
-        // the app's shape stays as it was (promo_discount is internal to ensureBilling)
-        return \Illuminate\Support\Arr::except(app(\App\Services\BookingService::class)->quoteRoomCharge($this), ['promo_discount']);
+        // the promo and the ID discount are separate lines (the ID one is taken from what the promo leaves of the rooms, plus amenities)
+        $quote = app(\App\Services\BookingService::class)->quoteRoomCharge($this);
+        $quote['discount'] = round($quote['discount'] - $quote['promo_discount'], 2);
+
+        return $quote;
+    }
+
+    /**
+     * Every promo this reservation can use (the ones running when it was booked, the ones running today for its room types, and the
+     * applied one), each with the saving it would give - listed on the guest's screens as "to be verified at check-in".
+     *
+     * @return array<int,array<string,mixed>>
+     */
+    public function getAvailablePromosAttribute(): array
+    {
+        try {
+            $lines = collect($this->room_lines)->map(fn ($l) => [
+                'room_type_id' => $l['room_type_id'], 'rate' => (float) $l['price_per_night'],
+                'nights' => max(1, (int) ($l['nights'] ?? 1)) * max(1, (int) ($l['quantity'] ?? 1)),
+            ])->all();
+            if ($lines === [] && $this->room_type_id) {
+                $lines = [['room_type_id' => (string) $this->room_type_id, 'rate' => (float) ($this->roomType->rate ?? 0), 'nights' => max(1, (int) $this->number_of_nights) * max(1, (int) $this->rooms_requested)]];
+            }
+            $applied = $this->promotion_id ? Promotion::find($this->promotion_id) : null;
+            $over = in_array($this->status, [self::STATUS_CANCELLED, self::STATUS_REJECTED, self::STATUS_CONVERTED], true);
+
+            return Promotion::availableRows($lines, $over ? [] : ($this->promo_snapshot ?? []), $applied, $over);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('Available promos skipped: '.$e->getMessage());
+
+            return [];
+        }
     }
 
     /**

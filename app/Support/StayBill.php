@@ -18,12 +18,12 @@ use Illuminate\Support\Facades\DB;
  * Order of the maths, always:
  *   1. each room:   rate x nights                      (rounded to 2 decimals, per room)
  *   2. + paid amenities / services, + extra charges     (add-ons)
- *   3. - discount, taken from the WHOLE of (1) + (2)    (App\Support\BillDiscount) - and only once the guest's
- *                                                       discount ID is APPROVED; never before. Without one, the stay's
- *                                                       promotion may carry a discount instead: off the RATE of the rooms
- *                                                       of its room type only, or off the total from BEFORE check-in
- *                                                       (Promotion::discountFor)
- *   4. = total;  - verified payments = balance
+ *   3. - promo: the one promo the desk verified takes money off the nightly RATE of the rooms of ITS room type only
+ *                (percent or fixed per room per night, never below 0) - never amenities, other charges or other room types
+ *   4. - ID discount, taken from (room charges AFTER the promo) + the amenities, and only once the guest's discount ID is
+ *                APPROVED (App\Support\BillDiscount). Charges the desk adds (damages, ...) are never discounted.
+ *   5. + other charges (extra guest fee, desk charges) at full price
+ *   6. = total;  - verified payments = balance
  * There is no tax/VAT/service fee anywhere in this hotel's billing.
  *
  * Nights are the BOOKED nights, CALENDAR days in Asia/Manila, minimum 1: check-in Oct 5 -> check-out Oct 6 is 1
@@ -234,43 +234,58 @@ final class StayBill
 
         $idStatus = self::discountIdStatus($booking);
         $discount = $idStatus === 'approved' ? self::approvedDiscount($booking, $billing) : null;
-        $discountAmount = round(BillDiscount::amount($discount, $roomCharge, $addOns), 2);
-        // No ID discount: the stay's promotion may carry one - off the rate of ITS room type's rooms, or off the total
-        // from BEFORE check-in (rooms + amenities booked up to check-in; never what is added during the stay or at check-out).
-        $promotion = $discount === null ? self::appliedPromotion($booking) : null;
+
+        // The promo the desk verified for this transaction (one at most): off the RATE of its room type's rooms only, or - the older
+        // "off the total" kind - off the total from BEFORE check-in. It stacks with the ID discount, which is taken from what is
+        // left of the rooms plus the amenities (other charges are never discounted).
+        $promotion = self::appliedPromotion($booking);
+        $promoAmount = 0.0;
         if ($promotion) {
             $beforeCheckIn = round($roomCharge + self::amenitiesBeforeCheckIn($booking, $billing, $amenityRows, $amenityCharge), 2);
-            $discountAmount = min($promotion->discountFor($lines, $beforeCheckIn), $subtotal);
+            $promoAmount = round(min($promotion->discountFor($lines, $beforeCheckIn), $promotion->discountsTotal() ? $subtotal : $roomCharge), 2);
         }
+        $discountAmount = round(BillDiscount::amount($discount, max(0.0, $roomCharge - $promoAmount), $amenityCharge), 2);
 
-        // Paid in full at check-in => the discount was taken off THEN, once. It is never recalculated afterwards, so
+        // Paid in full at check-in => the discounts were taken off THEN, once. They are never recalculated afterwards, so
         // an amenity or desk charge added during the stay is billed at full price and not discounted a second time.
         $settledAtCheckIn = CheckInSettlement::settledAt($billing) !== null;
         $snapshot = $settledAtCheckIn ? (array) ($billing->checkin_receipt_snapshot ?? []) : [];
         $amenityAtCheckIn = 0.0;
         $roomAtCheckIn = $scheduledRoomCharge;
         $discountAtCheckIn = 0.0;
+        $promoAtCheckIn = 0.0;
         if ($settledAtCheckIn) {
             $amenityAtCheckIn = isset($snapshot['amenity_charge'])
                 ? round((float) $snapshot['amenity_charge'], 2)
                 : round(array_sum(array_map(fn ($l) => $l['on_checkin_bill'] ? $l['subtotal'] : 0.0, $amenityLines)), 2);
             $roomAtCheckIn = isset($snapshot['room_charge']) ? round((float) $snapshot['room_charge'], 2) : $scheduledRoomCharge;
             $discountAtCheckIn = round((float) ($snapshot['discount']['amount'] ?? $billing->discount), 2);
+            $promoAtCheckIn = round((float) ($snapshot['promo']['amount'] ?? $billing->promo_discount), 2);
             $discountAmount = min($discountAtCheckIn, $subtotal);
+            $promoAmount = min($promoAtCheckIn, $subtotal);
             $discount ??= $billing->discountApplied;
         }
         if ($stayEnded && $billing) {
-            // Settled: the discount is the amount that was actually taken off, whatever the Discount module says today.
+            // Settled: the discounts are the amounts that were actually taken off, whatever the Discount module says today.
             $discountAmount = round((float) $billing->discount, 2);
+            $promoAmount = round((float) $billing->promo_discount, 2);
             $discount = $discountAmount > 0 ? ($billing->discountApplied ?? $discount) : null;
         }
-        $discountName = $discountAmount > 0 ? ($discount?->name ?? $promotion?->promo_name) : null;
+        // an older bill folded the promo into its single "discount": it keeps reading as that promo
+        $legacyPromoDiscount = $discount === null && $promoAmount <= 0 && $discountAmount > 0 && $promotion !== null;
+        $promoName = $promoAmount > 0 && $promotion ? $promotion->promo_name : null;
+        $promoLines = self::promoLines($promotion, $lines, $promoAmount > 0);
+        foreach ($lines as $i => $line) {
+            $lines[$i]['rate_after_promo'] = $promoLines[$i]['rate_after'] ?? $line['rate'];
+            $lines[$i]['promo_off'] = $promoLines[$i]['off'] ?? 0.0;
+        }
+        $discountName = $discountAmount > 0 ? ($discount?->name ?? ($legacyPromoDiscount ? $promotion?->promo_name : null)) : null;
 
-        $total = round(max(0.0, $subtotal - $discountAmount), 2);
+        $total = round(max(0.0, $subtotal - $promoAmount - $discountAmount), 2);
         $paid = $booking->paidTotal();
 
         $breakdown = $settledAtCheckIn
-            ? self::receiptBreakdown($billing, $snapshot, $discount, $discountName, $roomAtCheckIn, $amenityAtCheckIn, $discountAtCheckIn, $roomCharge, $amenityCharge, $amenityLines, $guestFee, $extraCharges, $extraChargesTotal, $discountAmount, $total, $paid)
+            ? self::receiptBreakdown($billing, $snapshot, $discount, $discountName, $roomAtCheckIn, $amenityAtCheckIn, $discountAtCheckIn, $promoAtCheckIn, $promoName, $roomCharge, $amenityCharge, $amenityLines, $guestFee, $extraCharges, $extraChargesTotal, $discountAmount, $total, $paid)
             : null;
 
         // The same figures stay by stay (the discount is the transaction's: one ID, one discount, taken off the whole bill).
@@ -324,6 +339,18 @@ final class StayBill
             'discount_id' => $discount?->id,
             'discount_name' => $discountName,
             'discount' => $discountAmount,
+            // what the ID discount was taken from: the rooms after the promo and the amenities (never the desk's other charges)
+            'discount_covers' => 'rooms and amenities',
+            'discount_base' => round(max(0.0, $roomCharge - $promoAmount) + $amenityCharge, 2),
+            'promo_id' => $promotion && ! $legacyPromoDiscount ? $promotion->id : null,
+            'promo_name' => $promoName ?? ($promotion && ! $legacyPromoDiscount ? $promotion->promo_name : null),
+            'promo_label' => $promotion?->discountLabel(),
+            'promo_discount' => $promoAmount,
+            'promo_status' => $promotion && ! $legacyPromoDiscount ? 'applied' : 'to_be_verified',
+            'promo_verified_at' => $booking->promotion_verified_at?->toIso8601String(),
+            'promo_verified_by' => $booking->promotion_verified_by ? \App\Models\User::whereKey($booking->promotion_verified_by)->value('first_name') : null,
+            'promo_lines' => array_values(array_filter($promoLines, fn ($l) => $l['off'] > 0)),
+            'available_promos' => self::availablePromos($booking, $lines, $promotion && ! $legacyPromoDiscount ? $promotion : null),
             'total' => $total,
             'total_paid' => $paid,
             'balance' => round(max(0.0, $total - $paid), 2),
@@ -341,11 +368,11 @@ final class StayBill
      */
     private static function receiptBreakdown(
         Billing $billing, array $snapshot, ?Discount $discount, ?string $discountName, float $roomAtCheckIn, float $amenityAtCheckIn, float $discountAtCheckIn,
-        float $roomCharge, float $amenityCharge, array $amenityLines, float $guestFee, array $extraCharges, float $extraChargesTotal,
-        float $discountAmount, float $total, float $paid,
+        float $promoAtCheckIn, ?string $promoName, float $roomCharge, float $amenityCharge, array $amenityLines, float $guestFee, array $extraCharges, float $extraChargesTotal,
+        $discountAmount, float $total, float $paid,
     ): array {
         $checkinSubtotal = round($roomAtCheckIn + $amenityAtCheckIn, 2);
-        $checkinTotal = round(max(0.0, $checkinSubtotal - $discountAtCheckIn), 2);
+        $checkinTotal = round(max(0.0, $checkinSubtotal - $promoAtCheckIn - $discountAtCheckIn), 2);
         $paidAtCheckIn = round((float) ($snapshot['total_paid'] ?? $billing->checkin_settled_total ?? $checkinTotal), 2);
 
         $newAmenities = array_values(array_map(fn ($l) => [
@@ -371,6 +398,8 @@ final class StayBill
                 'discount_name' => $discountAtCheckIn > 0 ? $discountName : null,
                 'discount_percent' => $discountAtCheckIn > 0 ? $percent : null,
                 'discount' => $discountAtCheckIn,
+                'promo_name' => $promoAtCheckIn > 0 ? $promoName : null,
+                'promo' => $promoAtCheckIn,
                 'grand_total' => $checkinTotal,
                 'amount_paid' => $paidAtCheckIn,
                 'paid_in_full' => $paidAtCheckIn + 0.004 >= $checkinTotal,
@@ -423,6 +452,59 @@ final class StayBill
         }
 
         return collect(array_fill(0, max(1, (int) $booking->rooms_requested), $make((float) ($booking->roomType->rate ?? 0), $booking->roomType?->name, $booking->room_type_id)));
+    }
+
+    /**
+     * The promo on each room line: the nightly rate before and after it, and the pesos off the line (rate difference x nights).
+     * Index = the room line's index in $lines. A promo that took nothing off (not a rate promo, or another room type) leaves 0.
+     *
+     * @return array<int,array<string,mixed>>
+     */
+    private static function promoLines(?\App\Models\Promotion $promotion, array $lines, bool $applies): array
+    {
+        $out = [];
+        foreach ($lines as $i => $l) {
+            $rate = (float) $l['rate'];
+            $after = $promotion && $applies ? $promotion->rateAfter($l['room_type_id'], $rate) : round($rate, 2);
+            $out[$i] = [
+                'room_type' => $l['room_type'],
+                'room_type_id' => $l['room_type_id'],
+                'room_number' => $l['room_number'],
+                'rate' => round($rate, 2),
+                'rate_after' => $after,
+                'nights' => (int) $l['nights'],
+                'off' => round(($rate - $after) * (int) $l['nights'], 2),
+            ];
+        }
+
+        return $out;
+    }
+
+    /**
+     * EVERY promo this transaction can use: the ones remembered when it was booked (honoured even after they expired), the ones
+     * running today for its room types, and the one applied. Each with the saving it would give (an estimate, never subtracted
+     * until the desk verifies it) and whether it is the applied one. Finished stays list only the applied promo.
+     *
+     * @return array<int,array<string,mixed>>
+     */
+    public static function availablePromos(Booking $booking, array $lines, ?\App\Models\Promotion $applied): array
+    {
+        try {
+            return self::collectAvailablePromos($booking, $lines, $applied);
+        } catch (\Throwable $e) {
+            // this list is information for the guest and the desk: it must never stop a bill from being read
+            \Illuminate\Support\Facades\Log::warning('Available promos skipped: '.$e->getMessage());
+
+            return [];
+        }
+    }
+
+    private static function collectAvailablePromos(Booking $booking, array $lines, ?\App\Models\Promotion $applied): array
+    {
+        $over = in_array($booking->booking_status, [Booking::STATUS_COMPLETED, Booking::STATUS_CANCELLED], true);
+        $snapshot = $over ? [] : ($booking->promo_snapshot ?? $booking->reservation?->promo_snapshot ?? []);
+
+        return \App\Models\Promotion::availableRows($lines, $snapshot, $applied, $over);
     }
 
     /** "1 night" / "5 nights" - one wording everywhere a night count is spoken. */

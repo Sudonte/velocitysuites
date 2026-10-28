@@ -234,15 +234,16 @@ class DiscountValidityAndWholeBillTest extends ApiFlowTestCase
         $this->assertEquals((float) $billing->fresh()->discount, $summary['discount']);
     }
 
-    public function test_billing_applies_the_discount_to_extra_charges_too_through_the_same_function(): void
+    public function test_the_discount_covers_rooms_and_amenities_but_never_the_other_charges(): void
     {
         $d = $this->discount('Senior Citizen', ['value' => 20]);
         [, $billing] = $this->billedBooking($d, [500]);
         $this->approveId($billing, $d, $this->staff('receptionist'));
-        $billing->update(['additional_guest_fee' => 100]); // room 2000 + amenities 500 + extra-guest fee 100 = 2600
+        $billing->update(['additional_guest_fee' => 100]); // room 2000 + amenities 500, plus 100 of other charges added at full price
         $billing->fresh()->syncFromStayBill($billing->booking); // re-priced through the one StayBill calculation
-        $this->assertEquals(520.00, (float) $billing->fresh()->discount);
-        $this->assertEquals(BillDiscount::amount($d, 2000, 600), (float) $billing->fresh()->discount);
+        $this->assertEquals(500.00, (float) $billing->fresh()->discount, '20% of rooms + amenities (2,500); the 100 is not discounted');
+        $this->assertEquals(BillDiscount::amount($d, 2000, 500), (float) $billing->fresh()->discount);
+        $this->assertEquals(2100.00, (float) $billing->fresh()->total_amount, '2,500 - 500 + 100 at full price');
     }
 
     public function test_bill_discount_function_edge_cases_and_no_vat(): void

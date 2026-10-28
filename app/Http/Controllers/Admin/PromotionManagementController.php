@@ -131,6 +131,12 @@ class PromotionManagementController extends Controller
 
         $included = collect($validated['amenities'] ?? [])->filter(fn ($qty) => (int) $qty > 0);
         $hasDiscount = (bool) ($validated['has_discount'] ?? false);
+        if ($promotion === null && ! $hasDiscount) {
+            // a NEW promo needs its value: that is what the bill takes off (older promos without one stay display only)
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'discount_value' => 'Enter the discount on the room rate: a new promo needs a value (a percent of the nightly rate, or a fixed peso amount off it).',
+            ]);
+        }
         if ($included->isEmpty() && ! $hasDiscount) {
             throw \Illuminate\Validation\ValidationException::withMessages([
                 'amenities' => 'Add at least one amenity or a discount to this promotion.',

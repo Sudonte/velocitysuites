@@ -299,7 +299,7 @@ class ThreeReceiptsTest extends ApiFlowTestCase
             $last = -1;
             // Check-in is numbered in the order it is shown: the bill first, then guest details, rooms and payment.
             $needles = $name === 'Check-in'
-                ? ['1. Charges - Discount or Promotion', '2. Payment Summary', 'Remaining Balance', 'Amount to Pay', '3. Guest & Booking Info', '4. Room Assignment', '5. Payment Input']
+                ? ['1. Charges - ID Discount and Promo', '2. Payment Summary', 'Remaining Balance', 'Amount to Pay', '3. Guest & Booking Info', '4. Room Assignment', '5. Payment Input']
                 : ['1. Guest & Booking Info', '4. Payment Summary', 'Remaining Balance', 'Amount to Pay'];
             foreach ($needles as $needle) {
                 $at = strpos($html, $needle);
