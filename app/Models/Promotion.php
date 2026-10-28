@@ -248,6 +248,31 @@ class Promotion extends Model
             })->values()->all();
     }
 
+    /**
+     * What a guest's screens need about promos on one transaction: every promo it can use (each with an estimated saving), which one the
+     * desk applied and what it took off. Before the desk verifies a promo nothing is subtracted.
+     *
+     * @param  array<int,array<string,mixed>>  $lines  room_type_id, rate, nights (rooms x nights)
+     * @return array<string,mixed>
+     */
+    public static function infoFor(array $lines, array $snapshot, ?Promotion $applied, bool $over = false): array
+    {
+        $off = $applied ? $applied->discountFor($lines, 0.0) : 0.0;
+
+        return [
+            'available' => static::availableRows($lines, $snapshot, $applied, $over),
+            'applied_id' => $applied?->id,
+            'applied_title' => $applied?->promo_name,
+            'promo_discount' => $applied && ! $applied->discountsTotal() ? $off : 0.0,
+            'status' => $applied ? 'applied' : 'to_be_verified',
+        ];
+    }
+
+    public static function emptyInfo(): array
+    {
+        return ['available' => [], 'applied_id' => null, 'applied_title' => null, 'promo_discount' => 0.0, 'status' => 'to_be_verified'];
+    }
+
     /** The nightly rate of one room of $roomTypeId after this promo (never below zero; other room types are unchanged). */
     public function rateAfter($roomTypeId, float $rate): float
     {

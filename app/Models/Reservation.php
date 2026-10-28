@@ -132,7 +132,7 @@ class Reservation extends Model
      */
     protected $hidden = ['roomLines'];
 
-    protected $appends = ['discount_preview', 'payment_deadline', 'room_lines', 'available_promos', 'deposit_cap', 'hidden_by_guest', 'discount_rejection_reason', 'group_reservation_ids'];
+    protected $appends = ['discount_preview', 'payment_deadline', 'room_lines', 'promo_info', 'deposit_cap', 'hidden_by_guest', 'discount_rejection_reason', 'group_reservation_ids'];
 
     /** The other stays booked together with this one (their reservation ids, by check-in), or [] when it is not part of a group. */
     public function getGroupReservationIdsAttribute(): array
@@ -476,7 +476,7 @@ class Reservation extends Model
      *
      * @return array<int,array<string,mixed>>
      */
-    public function getAvailablePromosAttribute(): array
+    public function getPromoInfoAttribute(): array
     {
         try {
             $lines = collect($this->room_lines)->map(fn ($l) => [
@@ -489,11 +489,11 @@ class Reservation extends Model
             $applied = $this->promotion_id ? Promotion::find($this->promotion_id) : null;
             $over = in_array($this->status, [self::STATUS_CANCELLED, self::STATUS_REJECTED, self::STATUS_CONVERTED], true);
 
-            return Promotion::availableRows($lines, $over ? [] : ($this->promo_snapshot ?? []), $applied, $over);
+            return Promotion::infoFor($lines, $over ? [] : ($this->promo_snapshot ?? []), $applied, $over);
         } catch (\Throwable $e) {
             \Illuminate\Support\Facades\Log::warning('Available promos skipped: '.$e->getMessage());
 
-            return [];
+            return Promotion::emptyInfo();
         }
     }
 

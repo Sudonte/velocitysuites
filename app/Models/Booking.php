@@ -127,6 +127,7 @@ class Booking extends Model
     protected $appends = [
         'display_status',
         'room_lines',
+        'promo_info',
         'hidden_by_guest',
         'group_booking_ids',
     ];
@@ -384,6 +385,28 @@ class Booking extends Model
                 'assigned_room_numbers' => $assignedNumbers,
             ];
         })->values()->all();
+    }
+
+    /** Every promo this transaction can use and the one the desk applied - see Promotion::infoFor(). Display only until the desk verifies one. */
+    public function getPromoInfoAttribute(): array
+    {
+        try {
+            $lines = collect($this->room_lines)->map(fn ($l) => [
+                'room_type_id' => $l['room_type_id'], 'rate' => (float) $l['price_per_night'],
+                'nights' => max(1, (int) ($l['nights'] ?? 1)) * max(1, (int) ($l['quantity'] ?? 1)),
+            ])->all();
+            if ($lines === [] && $this->room_type_id) {
+                $lines = [['room_type_id' => (string) $this->room_type_id, 'rate' => (float) ($this->roomType->rate ?? 0), 'nights' => max(1, (int) $this->number_of_nights) * max(1, (int) $this->rooms_requested)]];
+            }
+            $applied = $this->promotion_id ? Promotion::find($this->promotion_id) : null;
+            $over = in_array($this->booking_status, [self::STATUS_COMPLETED, self::STATUS_CANCELLED], true);
+
+            return Promotion::infoFor($lines, $over ? [] : ($this->promo_snapshot ?? $this->reservation?->promo_snapshot ?? []), $applied, $over);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('Promo info skipped: '.$e->getMessage());
+
+            return Promotion::emptyInfo();
+        }
     }
 
     /**

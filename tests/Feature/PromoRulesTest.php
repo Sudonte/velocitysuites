@@ -292,7 +292,7 @@ class PromoRulesTest extends ApiFlowTestCase
         ReservationRoomLine::create(['reservation_id' => $reservation->id, 'room_type_id' => $deluxe->id, 'room_type_name' => 'Deluxe', 'quantity' => 1, 'price_per_night' => 3500, 'number_of_nights' => 2, 'subtotal' => 7000]);
 
         $this->assertSame([$promo->id], collect($reservation->fresh()->promo_snapshot)->pluck('id')->all());
-        $available = $reservation->fresh()->available_promos;
+        $available = $reservation->fresh()->promo_info['available'];
         $this->assertSame(['Running'], array_column($available, 'title'));
         $this->assertSame(700.0, (float) $available[0]['estimated_saving'], 'an estimate for the guest to read, not subtracted');
         $this->assertFalse($available[0]['applied']);
