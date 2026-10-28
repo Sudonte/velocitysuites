@@ -26,9 +26,17 @@
             <span>{{ $peso($c['amount']) }}</span>
         </div>
     @endforeach
+    @if(($stay['promo_discount'] ?? 0) > 0)
+        <div class="d-flex justify-content-between mb-1 text-success">
+            <span>Promo applied: {{ $stay['promo_name'] }}</span>
+            <span>&minus;{{ $peso($stay['promo_discount']) }}</span>
+        </div>
+    @elseif(! empty($stay['available_promos']))
+        <div class="small text-muted mb-1">Promos available for your rooms (to be verified at check-in): {{ implode(', ', array_column($stay['available_promos'], 'title')) }}</div>
+    @endif
     @if($stay['discount'] > 0)
         <div class="d-flex justify-content-between mb-1 text-success">
-            <span>Discount{{ $stay['discount_name'] ? ' (' . $stay['discount_name'] . ')' : '' }}</span>
+            <span>Discount{{ $stay['discount_name'] ? ' (' . $stay['discount_name'] . ')' : '' }} <small class="text-muted">on rooms and amenities</small></span>
             <span>&minus;{{ $peso($stay['discount']) }}</span>
         </div>
     @endif

@@ -376,6 +376,22 @@ class CheckInController extends Controller
             abort(422, 'This booking has been archived and can no longer be checked in.');
         }
 
+        // Several date ranges ticked together (?stays=1,2): one room-assignment section per range, checked in as one step.
+        $selectedIds = collect(explode(',', (string) $request->input('stays')))->map(fn ($v) => (int) trim($v))->filter()->unique()->values();
+        $checkInStays = collect([$checkInStay]);
+        if ($selectedIds->count() > 1) {
+            $picked = $selectedIds->map(function (int $id) use ($booking) {
+                $st = $this->stayForCheckIn($booking, $id);
+
+                return $st && (int) $st->id === $id ? $st : null;
+            });
+            if ($picked->contains(null)) {
+                abort(422, 'One of the selected date ranges cannot be checked in.');
+            }
+            $checkInStays = $picked->sortBy('position')->values();
+            $checkInStay = $checkInStays->first();
+        }
+
         $booking->load(['reservation.guest.user', 'guest.user', 'roomType', 'rooms']);
         // One entry per distinct room type THIS STAY needs rooms for (its own room lines, or a single legacy entry) - see
         // RoomAvailabilityService::assignableRoomsByLine()'s own doc.
@@ -393,6 +409,23 @@ class CheckInController extends Controller
         $bookingStays = $booking->stayList();
         $firstCheckIn = $booking->booking_status === Booking::STATUS_ACTIVE;
         $panelCapacity = \App\Support\GuestCapacity::range($this->capacityLinesFor($booking, $checkInStay));
+        // Each ticked range: its own room lines and the rooms free for its dates. The guests must fit every range's rooms.
+        $stayPanels = null;
+        if ($checkInStays->count() > 1) {
+            $stayPanels = $checkInStays->map(function ($st) use ($booking) {
+                $lines = $this->availability->linesOfStay($booking, $st);
+
+                return [
+                    'stay' => $st,
+                    'roomLines' => $lines->isNotEmpty()
+                        ? $lines->map(fn ($l) => ['room_type_id' => (string) $l->room_type_id, 'room_type' => $l->room_type_name, 'quantity' => (int) $l->quantity])->values()->all()
+                        : [['room_type_id' => (string) $booking->room_type_id, 'room_type' => $booking->roomType->name ?? 'N/A', 'quantity' => $booking->rooms_requested]],
+                    'assignable' => $this->availability->assignableRoomsByLine($booking, $st),
+                ];
+            })->all();
+            $ranges = $checkInStays->map(fn ($st) => \App\Support\GuestCapacity::range($this->capacityLinesFor($booking, $st)));
+            $panelCapacity = ['min' => (int) $ranges->max('min'), 'max' => (int) $ranges->min('max')] + $panelCapacity;
+        }
         $assignedRoomIds = [];
         $assignedRoomIdsByType = [];
         $accountGuest = $booking->account_guest;
@@ -407,7 +440,7 @@ class CheckInController extends Controller
 
         return view('receptionist.check-in.partials.panel', array_merge(compact(
             'booking', 'assignableRoomsByLine', 'roomLines', 'assignedRoomIds', 'assignedRoomIdsByType', 'accountGuest',
-            'checkInStay', 'bookingStays', 'firstCheckIn', 'panelCapacity'
+            'checkInStay', 'bookingStays', 'firstCheckIn', 'panelCapacity', 'checkInStays', 'stayPanels'
         ), $this->settlement($booking)));
     }
 
@@ -460,6 +493,24 @@ class CheckInController extends Controller
         // The first stay to arrive settles the whole transaction's bill; the stays after it only get their rooms.
         $firstCheckIn = $booking->booking_status === Booking::STATUS_ACTIVE;
 
+        // Several date ranges ticked together: each one is checked in with its own rooms (stay_ids[] + rooms[<stay>][<room type>][]),
+        // all or nothing, and the first of them settles the bill.
+        $checkInStays = collect([$checkInStay]);
+        $severalStays = false;
+        if (count((array) $request->input('stay_ids', [])) > 1) {
+            $checkInStays = collect((array) $request->input('stay_ids'))->map(fn ($id) => (int) $id)->unique()->map(function (int $id) use ($booking) {
+                $stay = $this->stayForCheckIn($booking, $id);
+
+                return $stay && (int) $stay->id === $id && $booking->stateOf($stay) === 'upcoming' ? $stay : null;
+            });
+            if ($checkInStays->contains(null)) {
+                return response()->json(['message' => 'One of the selected date ranges cannot be checked in (it is already in the house, or finished).'], 422);
+            }
+            $checkInStays = $checkInStays->sortBy('position')->values();
+            $severalStays = $checkInStays->count() > 1;
+            $checkInStay = $checkInStays->first();
+        }
+
         // A requested discount must be decided (approved or rejected) first: the bill is settled from it.
         $holder = $booking->reservation ?? $booking;
         if ($firstCheckIn && ($booking->discount_requested || $holder->discount_requested) && \App\Support\StayBill::discountIdStatus($booking) === 'pending') {
@@ -494,9 +545,11 @@ class CheckInController extends Controller
             // independently; a single-room-type booking simply has one
             // group). Replaces the old flat room_ids[] shape, which assumed
             // every booking only ever needed one room type.
-            'room_ids' => 'required|array|min:1',
-            'room_ids.*' => 'required|array',
-            'room_ids.*.*' => 'required|integer|distinct',
+            // One date range: room_ids[<room type>][]. Several ticked together: rooms[<stay>][<room type>][] (a room may be
+            // used again by another range - the ranges are on different nights).
+            ...($severalStays
+                ? ['rooms' => 'required|array|min:2', 'rooms.*' => 'required|array', 'rooms.*.*' => 'required|array', 'rooms.*.*.*' => 'required|integer']
+                : ['room_ids' => 'required|array|min:1', 'room_ids.*' => 'required|array', 'room_ids.*.*' => 'required|integer|distinct']),
             // Check-in settles the bill: the full balance is paid now (no partial payment), or - when a discount
             // left the guest overpaid - the change is handed back. A fully paid stay just confirms.
         ] + \App\Support\DeskPayment::rules() + [
@@ -507,15 +560,29 @@ class CheckInController extends Controller
 
         $children = (int) ($validated['children'] ?? 0);
 
-        // This stay's own rooms must hold the guests who are checking in to it - the rooms picked, each with its own
+        // Each date range checked in: the rooms picked for it.
+        $assignments = $severalStays
+            ? $checkInStays->map(fn ($st) => ['stay' => $st, 'room_ids' => $validated['rooms'][$st->id] ?? []])->all()
+            : [['stay' => $checkInStay, 'room_ids' => $validated['room_ids']]];
+        foreach ($assignments as $a) {
+            if ($a['room_ids'] === []) {
+                $message = 'Pick the rooms for every date range you are checking in (Stay ' . $a['stay']->position . ' has none).';
+
+                return response()->json(['message' => $message, 'errors' => ['rooms' => [$message]]], 422);
+            }
+        }
+
+        // Each stay's own rooms must hold the guests who are checking in to it - the rooms picked, each with its own
         // capacity (a room may hold more or fewer than its type); the booked lines when none can be read.
-        $pickedRooms = Room::with('roomType')->whereIn('id', collect($validated['room_ids'])->flatten()->map(fn ($id) => (int) $id)->all())->get();
-        $capacityError = \App\Support\GuestCapacity::error(
-            $pickedRooms->isNotEmpty() ? \App\Support\GuestCapacity::linesForRooms($pickedRooms) : $this->capacityLinesFor($booking, $checkInStay),
-            (int) $validated['adults'] + $children
-        );
-        if ($capacityError !== null) {
-            return response()->json(['message' => $capacityError, 'errors' => ['adults' => [$capacityError]]], 422);
+        foreach ($assignments as $a) {
+            $pickedRooms = Room::with('roomType')->whereIn('id', collect($a['room_ids'])->flatten()->map(fn ($id) => (int) $id)->all())->get();
+            $capacityError = \App\Support\GuestCapacity::error(
+                $pickedRooms->isNotEmpty() ? \App\Support\GuestCapacity::linesForRooms($pickedRooms) : $this->capacityLinesFor($booking, $a['stay']),
+                (int) $validated['adults'] + $children
+            );
+            if ($capacityError !== null) {
+                return response()->json(['message' => $capacityError, 'errors' => ['adults' => [$capacityError]]], 422);
+            }
         }
 
         $currentAddress = ($validated['current_address_same_as_permanent'] ?? false)
@@ -525,18 +592,23 @@ class CheckInController extends Controller
         try {
             $rooms = null;
             $settled = null;
-            DB::transaction(function () use ($request, $booking, $validated, $children, $currentAddress, $checkInStay, $firstCheckIn, &$rooms, &$settled) {
+            DB::transaction(function () use ($request, $booking, $validated, $children, $currentAddress, $assignments, $firstCheckIn, &$rooms, &$settled) {
                 // Rooms first, then settle on the bill as of check-in (every stay's booked nights) priced on the rooms actually
                 // given - a room may charge its own rate, and a promotion's discount comes off that rate. Only the FIRST stay to
                 // arrive settles: the whole transaction is paid for then, and the stays after it just get their rooms.
-                $rooms = $this->availability->assignRoomsForLines($booking, $validated['room_ids'], $checkInStay);
-
-                foreach ($rooms as $room) {
-                    $room->update(['status' => 'occupied']);
+                $rooms = collect();
+                foreach ($assignments as $a) {
+                    $given = $this->availability->assignRoomsForLines($booking, $a['room_ids'], $a['stay']);
+                    foreach ($given as $room) {
+                        $room->update(['status' => 'occupied']);
+                    }
+                    $rooms = $rooms->concat($given);
                 }
 
-                $settled = $firstCheckIn ? $this->settleAtCheckIn($booking, $validated, $request->file('gcash_receipt')) : ['paid_now' => 0.0, 'change' => 0.0];
-                $booking->recordStayCheckIn($checkInStay);
+                $settled = $firstCheckIn ? $this->settleAtCheckIn($booking, $validated, $request->file('gcash_receipt'), paymentOptional: true) : ['paid_now' => 0.0, 'change' => 0.0];
+                foreach ($assignments as $a) {
+                    $booking->recordStayCheckIn($a['stay']);
+                }
 
                 $booking->update([
                     'guest_first_name' => $validated['guest_first_name'],
@@ -582,7 +654,7 @@ class CheckInController extends Controller
 
         Activity::log(
             'Checked in guest',
-            "Booking #{$booking->id}" . ($booking->hasSeveralStays() ? " (stay {$checkInStay->position})" : '') . " - {$booking->guest_display_name} to " . $rooms->pluck('room_number')->implode(', '),
+            "Booking #{$booking->id}" . ($booking->hasSeveralStays() ? ' (stay ' . $checkInStays->pluck('position')->implode(' + ') . ')' : '') . " - {$booking->guest_display_name} to " . $rooms->pluck('room_number')->unique()->implode(', '),
             $booking
         );
 
@@ -598,7 +670,8 @@ class CheckInController extends Controller
 
     /**
      * Settle the stay at check-in (inside the check-in transaction):
-     *  - balance owed  -> the full balance must be paid now (cash with enough received, or GCash with a reference);
+     *  - balance owed  -> on a booking's Check-In form payment is OPTIONAL: ₱0 is fine (the balance is then due at check-out), or
+     *                     part/all of it now. A walk-in (no booking beforehand) still pays the full balance now;
      *  - fully paid    -> nothing to pay;
      *  - overpaid (a discount approved after the guest paid) -> the change must be confirmed as handed back, and is
      *    recorded as a negative "change returned" payment so every total stays right.
@@ -607,7 +680,7 @@ class CheckInController extends Controller
      * @return array{paid_now: float, change: float}
      * @throws ValidationException
      */
-    private function settleAtCheckIn(Booking $booking, array $validated, ?\Illuminate\Http\UploadedFile $gcashReceipt = null): array
+    private function settleAtCheckIn(Booking $booking, array $validated, ?\Illuminate\Http\UploadedFile $gcashReceipt = null, bool $paymentOptional = false): array
     {
         $locked = Booking::whereKey($booking->id)->lockForUpdate()->firstOrFail();
         $locked->unsetRelation('billing');
@@ -620,26 +693,35 @@ class CheckInController extends Controller
         $base = $locked->reservation_id ? ['reservation_id' => $locked->reservation_id] : ['booking_id' => $locked->id];
         if ($balance > 0.004) {
             $method = $validated['payment_method'] ?? null;
-            if (! $method || $method === 'none') {
-                throw ValidationException::withMessages(['payment_method' => 'The guest must pay the full balance of ₱' . number_format($balance, 2) . ' to check in.']);
-            }
-            if ($method === 'cash') {
-                $received = (float) ($validated['amount_received'] ?? 0);
-                if ($received + 0.004 < $balance) {
+            if (! $paymentOptional) {
+                if (! $method || $method === 'none') {
+                    throw ValidationException::withMessages(['payment_method' => 'The guest must pay the full balance of ₱' . number_format($balance, 2) . ' to check in.']);
+                }
+                if ($method === 'cash' && (float) ($validated['amount_received'] ?? 0) + 0.004 < $balance) {
                     throw ValidationException::withMessages(['amount_received' => 'The amount paid must cover the full balance of ₱' . number_format($balance, 2) . ' - partial payment isn\'t accepted at check-in.']);
                 }
-                $tender = \App\Support\CashTender::resolve('cash', $balance, $received);
-                \App\Support\DeskPayment::record($locked, 'cash', $balance, [
+                if ($method === 'gcash' && abs((float) ($validated['gcash_amount'] ?? 0) - $balance) > 0.004) {
+                    throw ValidationException::withMessages(['gcash_amount' => 'The GCash amount must be the full balance of ₱' . number_format($balance, 2) . ' - partial payment isn\'t accepted at check-in.']);
+                }
+            }
+            // Payment at check-in is OPTIONAL. Nothing paid now is fine: the whole balance is then due at check-out, and
+            // Receipt 2 says so. A guest may also pay part (or all) of it now; the most that can be taken is the balance.
+            if ($method === 'cash') {
+                $received = (float) ($validated['amount_received'] ?? 0);
+                $applied = round(min($received, $balance), 2);
+                $tender = \App\Support\CashTender::resolve('cash', $applied, $received);
+                \App\Support\DeskPayment::record($locked, 'cash', $applied, [
                     'cash_received' => $tender['cash_received'], 'change_given' => $tender['change_given'],
                     'reference_number' => 'CHECKIN-' . $locked->id . '-' . now()->format('YmdHis'),
                 ]);
                 $change = (float) $tender['change_given'];
-            } else {
+                $paidNow = $applied;
+            } elseif ($method === 'gcash') {
                 $reference = trim((string) ($validated['gcash_reference'] ?? ''));
                 $amount = round((float) ($validated['gcash_amount'] ?? 0), 2);
                 $errors = [];
-                if (abs($amount - $balance) > 0.004) {
-                    $errors['gcash_amount'] = 'The GCash amount must be the full balance of ₱' . number_format($balance, 2) . ' - partial payment isn\'t accepted at check-in.';
+                if ($amount > $balance + 0.004) {
+                    $errors['gcash_amount'] = 'The GCash amount can\'t be more than the balance of ₱' . number_format($balance, 2) . '.';
                 }
                 if ($reference === '') {
                     $errors['gcash_reference'] = 'Enter the GCash reference number of the guest\'s payment.';
@@ -650,9 +732,9 @@ class CheckInController extends Controller
                 if ($errors) {
                     throw ValidationException::withMessages($errors);
                 }
-                \App\Support\DeskPayment::record($locked, 'gcash', $balance, ['reference_number' => $reference], $gcashReceipt);
+                \App\Support\DeskPayment::record($locked, 'gcash', $amount, ['reference_number' => $reference], $gcashReceipt);
+                $paidNow = $amount;
             }
-            $paidNow = $balance;
         } elseif ($balance < -0.004) {
             $change = round(-$balance, 2);
             if (empty($validated['change_returned'])) {
@@ -671,7 +753,10 @@ class CheckInController extends Controller
         $holder = $locked->reservation ?? $locked;
         $discountStatus = $locked->discount_verification_status ?: 'not_requested';
         $receiptNumber = $billing->issueCheckinReceipt([
-            'settlement_type' => $paidNow <= 0.004 ? 'full_confirmation' : ($paid > 0.004 ? 'partial_to_full' : 'full_payment'),
+            // nothing collected here while a balance remains = "pay at check-out" (Receipt 2 shows the balance due then)
+            'settlement_type' => $paidNow <= 0.004
+                ? ($payable - $paid > 0.004 ? 'pay_at_checkout' : 'full_confirmation')
+                : ($paid + $paidNow + 0.004 < $payable ? 'partial_at_checkin' : ($paid > 0.004 ? 'partial_to_full' : 'full_payment')),
             'amount_settled' => round($paidNow, 2),
             'payment_method' => $paidNow > 0.004 ? ($validated['payment_method'] ?? null) : null,
             'change_returned' => round($change, 2),
@@ -705,7 +790,7 @@ class CheckInController extends Controller
         app(\App\Services\ReceiptSnapshotService::class)->issueCheckinPayment($locked->fresh(), $billing->fresh(), auth()->id());
 
         if ($paidNow > 0) {
-            \App\Support\Activity::log('Payment at check-in', "Booking #{$locked->id} - ₱" . number_format($paidNow, 2) . ' (' . ($validated['payment_method'] ?? 'cash') . ') - paid in full', $locked);
+            \App\Support\Activity::log('Payment at check-in', "Booking #{$locked->id} - ₱" . number_format($paidNow, 2) . ' (' . ($validated['payment_method'] ?? 'cash') . ')' . ($paid + $paidNow + 0.004 >= $payable ? ' - paid in full' : ' - the rest is due at check-out'), $locked);
         }
 
         return ['paid_now' => $paidNow, 'change' => $change, 'receipt_number' => $receiptNumber];

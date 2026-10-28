@@ -17,7 +17,7 @@
 @endphp
 <div class="border rounded p-2" data-desk-payment data-mode="{{ $mode }}" data-due="{{ $due }}" @isset($containerId) id="{{ $containerId }}" @endisset>
     <p class="mb-2 {{ $due === null ? 'd-none' : '' }}" data-due-row>
-        {{ $mode === 'full' ? 'Amount due now (in full)' : 'Total' }}: <strong data-due-label>₱{{ number_format((float) $due, 2) }}</strong>
+        {{ $mode === 'full' ? 'Amount due now (in full)' : ($dueLabel ?? 'Total') }}: <strong data-due-label>₱{{ number_format((float) $due, 2) }}</strong>
     </p>
     <div class="btn-group btn-group-sm mb-2 flex-wrap" role="group" aria-label="Payment method">
         @if($mode === 'optional')

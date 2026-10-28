@@ -87,6 +87,10 @@ class ReceiptService
             // preview (a receipt only ever renders post-payment, so this is
             // never actually null in practice for a real receipt).
             'discount' => (float) ($billing?->discount ?? 0),
+            // the promo is its own line next to the ID discount
+            'promo_discount' => (float) ($billing?->promo_discount ?? 0),
+            'promo_name' => $billing?->promo_label,
+            'discount_name' => $billing?->discount_label,
         ];
     }
 
@@ -450,6 +454,9 @@ class ReceiptService
             // above - a Billing's discount is fixed once billed, not a
             // per-payment-event fact that needs its own frozen snapshot.
             'discount' => $liveSummary['discount'],
+            'promo_discount' => $liveSummary['promo_discount'],
+            'promo_name' => $liveSummary['promo_name'],
+            'discount_name' => $liveSummary['discount_name'],
         ];
 
         return [$paymentSummary, $paymentTransactionsForReceipt];
@@ -485,6 +492,9 @@ class ReceiptService
                 'payment_percentage' => 100,
                 'official_receipt_available' => $paymentSummary['official_receipt_available'],
                 'discount' => (float) ($checkinSettlement['discount']['amount'] ?? 0),
+                'discount_name' => $checkinSettlement['discount']['name'] ?? null,
+                'promo_discount' => (float) ($checkinSettlement['promo']['amount'] ?? 0),
+                'promo_name' => $checkinSettlement['promo']['name'] ?? null,
             ];
             $upTo = [];
             foreach ($paymentTransactionsForReceipt as $row) {

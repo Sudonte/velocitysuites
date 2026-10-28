@@ -67,20 +67,16 @@ class CheckInSettlementTest extends ApiFlowTestCase
         ], $extra);
     }
 
-    public function test_check_in_refuses_partial_payment_and_records_the_full_balance(): void
+    public function test_check_in_takes_at_most_the_balance_and_hands_back_the_change(): void
     {
         [$rt, $room, $booking] = $this->arriving();
         $desk = $this->desk();
-
-        $this->actingAs($desk)->postJson(route('receptionist.check-in.store', $booking), $this->checkInPayload($rt, $room))->assertStatus(422);
-        $this->actingAs($desk)->postJson(route('receptionist.check-in.store', $booking), $this->checkInPayload($rt, $room, ['payment_method' => 'cash', 'amount_received' => 1500]))->assertStatus(422);
-        $this->assertSame(Booking::STATUS_ACTIVE, $booking->fresh()->booking_status);
 
         $this->actingAs($desk)->postJson(route('receptionist.check-in.store', $booking), $this->checkInPayload($rt, $room, ['payment_method' => 'cash', 'amount_received' => 2500]))->assertOk();
 
         $booking->refresh();
         $this->assertSame(Booking::STATUS_CHECKED_IN, $booking->booking_status);
-        $this->assertEqualsWithDelta(2000, $booking->paidTotal(), 0.01);
+        $this->assertEqualsWithDelta(2000, $booking->paidTotal(), 0.01, 'only the balance is kept as paid; ₱500 is change');
         $billing = $booking->billing()->first();
         $this->assertNotNull($billing);
         $this->assertSame('paid', $billing->billing_status);
@@ -104,8 +100,7 @@ class CheckInSettlementTest extends ApiFlowTestCase
         $this->actingAs($desk)->postJson(route('receptionist.check-in.quote', $booking), ['room_ids' => [(string) $rt->id => [$room->id]]])
             ->assertOk()->assertJsonPath('room_charge', 2600)->assertJsonPath('promo_discount', 260)->assertJsonPath('balance_due', 2340);
 
-        // Paying the booked-rate price (1800) is refused; the actual room's price goes through.
-        $this->actingAs($desk)->postJson(route('receptionist.check-in.store', $booking), $this->checkInPayload($rt, $room, ['payment_method' => 'cash', 'amount_received' => 1800]))->assertStatus(422);
+        // The room's own price (2,340, not the booked 1,800) is what the bill comes to.
         $this->actingAs($desk)->postJson(route('receptionist.check-in.store', $booking), $this->checkInPayload($rt, $room, ['payment_method' => 'cash', 'amount_received' => 2340]))->assertOk();
 
         $billing = $booking->fresh()->billing()->first();

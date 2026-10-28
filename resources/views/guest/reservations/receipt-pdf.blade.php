@@ -92,7 +92,8 @@
             <tbody>
                 @if(($h['kind'] ?? null) === 'checkout_final')
                     <tr><td>Room charges (booked nights)</td><td>{!! $peso($h['room_charges'] ?? 0) !!}</td></tr>
-                    @if(($h['discount'] ?? 0) > 0.004)<tr><td>Discount</td><td>-{!! $peso($h['discount']) !!}</td></tr>@endif
+                    @if(($h['promo'] ?? 0) > 0.004)<tr><td>Promo applied: {{ $h['promo_name'] ?? '' }}</td><td>-{!! $peso($h['promo']) !!}</td></tr>@endif
+                    @if(($h['discount'] ?? 0) > 0.004)<tr><td>Discount{{ ! empty($h['discount_name']) ? ' ('.$h['discount_name'].')' : '' }} on rooms and amenities</td><td>-{!! $peso($h['discount']) !!}</td></tr>@endif
                     @foreach($h['amenities_by_room'] ?? [] as $group)
                         @foreach($group['items'] as $item)
                             <tr><td>{{ $group['room'] ? 'Room '.$group['room'] : ($group['label'] ?? 'All rooms') }}: {{ $item['name'] }} x{{ $item['quantity'] }}</td><td>{!! $peso($item['subtotal']) !!}</td></tr>

@@ -242,7 +242,9 @@ document.addEventListener('DOMContentLoaded', function () {
         modal.show();
 
         try {
-            const response = await fetch(buildUrl(urls.panel, activeBookingId) + (activeStayId ? '?stay=' + encodeURIComponent(activeStayId) : ''), {
+            // one date range: ?stay=<id>; several ticked together: ?stays=<id>,<id>
+            const stayQuery = !activeStayId ? '' : (String(activeStayId).includes(',') ? '?stays=' : '?stay=') + encodeURIComponent(activeStayId);
+            const response = await fetch(buildUrl(urls.panel, activeBookingId) + stayQuery, {
                 headers: { 'X-Requested-With': 'XMLHttpRequest' },
             });
             if (!response.ok) {
@@ -262,11 +264,20 @@ document.addEventListener('DOMContentLoaded', function () {
         if (btn) openCheckInPanel(btn.dataset.bookingId, btn.dataset.stayId);
     });
 
-    // A booking with several stays: pick which stay to check in (reloads the panel for that stay).
+    // A booking with several date ranges: tick one, several or all of them, then "Use selection" reloads the panel for those
+    // ranges (one room-assignment section each; they are checked in together).
     content.addEventListener('click', function (e) {
-        const pick = e.target.closest('[data-checkin-stay]');
-        if (pick && !pick.disabled) openCheckInPanel(activeBookingId, pick.dataset.checkinStay);
+        if (e.target.closest('#checkInStayAll')) {
+            content.querySelectorAll('[data-checkin-stay-check]:not(:disabled)').forEach(c => { c.checked = true; });
+            return;
+        }
+        if (e.target.closest('#checkInStayApply')) {
+            const ids = Array.from(content.querySelectorAll('[data-checkin-stay-check]:checked')).map(c => c.value);
+            if (!ids.length) { alert('Tick at least one date range to check in.'); return; }
+            openCheckInPanel(activeBookingId, ids.join(','));
+        }
     });
+    const severalStaysTicked = () => String(activeStayId || '').includes(',');
 
     // Walk-in Check-in redirects here with ?open={booking} so the Guest
     // Details + Assign Room panel opens immediately - no need to hunt the
@@ -300,6 +311,8 @@ document.addEventListener('DOMContentLoaded', function () {
     async function quoteRooms() {
         const area = document.getElementById('checkInPayArea');
         if (!area) return;
+        // Several date ranges at once: the exact price is worked out by the server at check-in (payment is optional anyway).
+        if (severalStaysTicked()) return;
         const selects = Array.from(content.querySelectorAll('select.room-select'));
         if (!selects.length || selects.some(s => !s.value)) return;
         const fd = new FormData();
@@ -325,7 +338,7 @@ document.addEventListener('DOMContentLoaded', function () {
             if (pay) window.syncDeskPayment(pay);
             const moved = Math.abs(before - q.balance_due) > 0.004;
             note.classList.toggle('d-none', !moved);
-            if (moved) note.textContent = 'Priced on the rooms picked: total ' + peso(q.total) + (q.discount > 0 ? ' after ' + peso(q.discount) + ' off' + (q.discount_name ? ' (' + q.discount_name + ')' : '') : '') + '.';
+            if (moved) note.textContent = 'Priced on the rooms picked: total ' + peso(q.total) + (q.promo_discount > 0 ? ', promo ' + peso(q.promo_discount) + ' off' + (q.promo_name ? ' (' + q.promo_name + ')' : '') : '') + (q.discount > 0 ? ', ' + peso(q.discount) + ' off' + (q.discount_name ? ' (' + q.discount_name + ')' : '') : '') + '.';
         } catch (err) { /* the server still checks the amount on submit */ }
     }
 
@@ -335,10 +348,11 @@ document.addEventListener('DOMContentLoaded', function () {
         if (!e.target.classList.contains('room-select')) return;
         quoteRooms();
 
+        // a room can be picked once per date range (another range is on other nights, so it may use the same room)
         const allSelects = content.querySelectorAll('.room-select');
-        const chosen = Array.from(allSelects).map(s => s.value).filter(Boolean);
-
         allSelects.forEach(select => {
+            const sameRange = Array.from(allSelects).filter(o => (o.dataset.stayId || '') === (select.dataset.stayId || ''));
+            const chosen = sameRange.map(o => o.value).filter(Boolean);
             Array.from(select.options).forEach(option => {
                 if (!option.value) return;
                 const chosenElsewhere = chosen.includes(option.value) && select.value !== option.value;
@@ -484,14 +498,24 @@ document.addEventListener('DOMContentLoaded', function () {
         // needs rooms for, matching CheckInController::store()'s
         // room_ids[<room_type_id>][] validation shape.
         const roomIds = {};
+        const roomsByStay = {};
         form.querySelectorAll('select.room-select').forEach(function (select) {
             const typeId = select.dataset.roomTypeId;
+            if (select.dataset.stayId) { // several date ranges: rooms[<stay>][<room type>][]
+                roomsByStay[select.dataset.stayId] = roomsByStay[select.dataset.stayId] || {};
+                (roomsByStay[select.dataset.stayId][typeId] = roomsByStay[select.dataset.stayId][typeId] || []).push(select.value);
+                return;
+            }
             if (!roomIds[typeId]) roomIds[typeId] = [];
             roomIds[typeId].push(select.value);
         });
         // Multipart, so a GCash receipt photo can go with it.
         const fd = new FormData();
-        if (activeStayId) fd.append('stay_id', activeStayId);
+        if (severalStaysTicked()) {
+            String(activeStayId).split(',').forEach(function (id) { fd.append('stay_ids[]', id); });
+        } else if (activeStayId) {
+            fd.append('stay_id', activeStayId);
+        }
         ['guest_first_name', 'guest_middle_name', 'guest_last_name', 'checkin_permanent_address', 'checkin_current_address',
          'checkin_contact_number', 'adults', 'children', 'amount_received', 'gcash_amount', 'gcash_reference'].forEach(function (name) {
             const el = form.querySelector('[name="' + name + '"]');
@@ -506,6 +530,11 @@ document.addEventListener('DOMContentLoaded', function () {
         fd.append('change_returned', change && change.checked ? '1' : '0');
         Object.keys(roomIds).forEach(function (typeId) {
             roomIds[typeId].forEach(function (id) { fd.append('room_ids[' + typeId + '][]', id); });
+        });
+        Object.keys(roomsByStay).forEach(function (stayId) {
+            Object.keys(roomsByStay[stayId]).forEach(function (typeId) {
+                roomsByStay[stayId][typeId].forEach(function (id) { fd.append('rooms[' + stayId + '][' + typeId + '][]', id); });
+            });
         });
 
         try {

@@ -132,6 +132,102 @@ class StaysLifecycleTest extends ApiFlowTestCase
         $this->assertSame(StayBill::NO_REFUND_NOTE, $receipt3->snapshot['highlight']['no_refund_note']);
     }
 
+    /** Several date ranges ticked together: stay_ids[] + rooms[<stay>][<room type>][]. */
+    private function checkInTogether(User $desk, Booking $booking, array $stays, array $roomsByStay, array $payment = []): \Illuminate\Testing\TestResponse
+    {
+        return $this->actingAs($desk)->postJson(route('receptionist.check-in.store', $booking), array_merge([
+            'stay_ids' => array_map(fn ($st) => $st->id, $stays), 'rooms' => $roomsByStay,
+            'guest_first_name' => 'Ana', 'guest_last_name' => 'Cruz', 'checkin_permanent_address' => '1 Test St', 'current_address_same_as_permanent' => true,
+            'checkin_contact_number' => '09171234567', 'adults' => 2, 'children' => 0,
+        ], $payment));
+    }
+
+    public function test_two_date_ranges_are_checked_in_together_with_nothing_paid_and_the_balance_is_due_at_check_out(): void
+    {
+        [, $desk, $booking, $deluxeRoom, $suiteRoom] = $this->twoStayBooking();
+        [$stay1, $stay2] = $booking->stayList()->all();
+
+        // No payment method at all: payment at check-in is optional (₱1,000 was paid when booking; the bill is ₱3,000).
+        $this->checkInTogether($desk, $booking, [$stay1, $stay2], [
+            $stay1->id => [(string) $deluxeRoom->room_type_id => [$deluxeRoom->id]],
+            $stay2->id => [(string) $suiteRoom->room_type_id => [$suiteRoom->id]],
+        ])->assertOk();
+
+        $booking = $booking->fresh();
+        $this->assertSame(Booking::STATUS_CHECKED_IN, $booking->booking_status);
+        $this->assertSame('in_house', $booking->stateOf($booking->stayList()[0]));
+        $this->assertSame('in_house', $booking->stateOf($booking->stayList()[1]));
+        $this->assertSame('occupied', $deluxeRoom->fresh()->status);
+        $this->assertSame('occupied', $suiteRoom->fresh()->status);
+        $this->assertEqualsWithDelta(1000.0, $booking->paidTotal(), 0.01, 'nothing was collected at check-in');
+        $this->assertEqualsWithDelta(3000.0, (float) $booking->billing()->first()->total_amount, 0.01);
+
+        // Receipt 2 is still issued, once, and says the rest is due at check-out.
+        $receipt2 = Receipt::where('booking_id', $booking->id)->where('receipt_type', Receipt::CHECKIN_PAYMENT)->get();
+        $this->assertCount(1, $receipt2);
+        $this->assertSame('pay_at_checkout', $receipt2[0]->snapshot['checkin_settlement']['settlement_type']);
+        $this->assertEquals(2000.0, $receipt2[0]->snapshot['highlight']['remaining_balance']);
+        $this->assertSame('Due at check-out', $receipt2[0]->snapshot['highlight']['amount_to_pay_note']);
+        $this->assertCount(2, $receipt2[0]->snapshot['stays']);
+    }
+
+    public function test_every_ticked_range_needs_its_rooms_and_nothing_is_checked_in_when_one_is_missing(): void
+    {
+        [, $desk, $booking, $deluxeRoom] = $this->twoStayBooking();
+        [$stay1, $stay2] = $booking->stayList()->all();
+
+        $this->checkInTogether($desk, $booking, [$stay1, $stay2], [
+            $stay1->id => [(string) $deluxeRoom->room_type_id => [$deluxeRoom->id]],
+        ])->assertStatus(422);
+
+        $booking = $booking->fresh();
+        $this->assertSame(Booking::STATUS_ACTIVE, $booking->booking_status, 'all or nothing');
+        $this->assertSame('available', $deluxeRoom->fresh()->status);
+        $this->assertSame(0, DB::table('booking_rooms')->where('booking_id', $booking->id)->count());
+    }
+
+    public function test_the_panel_lists_the_date_ranges_as_tick_boxes_and_a_room_section_for_each_ticked_one(): void
+    {
+        [, $desk, $booking] = $this->twoStayBooking();
+        [$stay1, $stay2] = $booking->stayList()->all();
+
+        $one = $this->actingAs($desk)->get(route('receptionist.check-in.panel', $booking) . '?stay=' . $stay1->id)->assertOk()->getContent();
+        $this->assertStringContainsString('data-checkin-stay-check', $one);
+        $this->assertStringContainsString('name="room_ids[', $one, 'one range: the usual room fields');
+        $this->assertStringNotContainsString('name="rooms[', $one);
+
+        $both = $this->actingAs($desk)->get(route('receptionist.check-in.panel', $booking) . '?stays=' . $stay1->id . ',' . $stay2->id)->assertOk()->getContent();
+        $this->assertStringContainsString('name="rooms[' . $stay1->id . ']', $both);
+        $this->assertStringContainsString('name="rooms[' . $stay2->id . ']', $both);
+        $this->assertStringContainsString('data-stay-rooms="' . $stay2->id . '"', $both);
+    }
+
+    public function test_a_part_payment_at_check_in_is_taken_and_the_rest_is_due_at_check_out_where_only_the_full_balance_is_accepted(): void
+    {
+        [, $desk, $booking, $deluxeRoom, $suiteRoom] = $this->twoStayBooking();
+        [$stay1, $stay2] = $booking->stayList()->all();
+
+        $this->checkInTogether($desk, $booking, [$stay1, $stay2], [
+            $stay1->id => [(string) $deluxeRoom->room_type_id => [$deluxeRoom->id]],
+            $stay2->id => [(string) $suiteRoom->room_type_id => [$suiteRoom->id]],
+        ], ['payment_method' => 'cash', 'amount_received' => 500])->assertOk();
+        $booking = $booking->fresh();
+        $this->assertEqualsWithDelta(1500.0, $booking->paidTotal(), 0.01, '1,000 earlier + 500 now');
+        $this->assertSame('partial_at_checkin', Receipt::where('booking_id', $booking->id)->where('receipt_type', Receipt::CHECKIN_PAYMENT)->firstOrFail()->snapshot['checkin_settlement']['settlement_type']);
+
+        // Check-out: nothing completes until the WHOLE remaining balance (1,500) is paid at once.
+        $this->actingAs($desk)->putJson(route('receptionist.check-out.rooms.checkout-many', $booking), ['all' => 1])->assertOk()->assertJsonPath('final', true);
+        $billing = $booking->fresh()->billing()->first();
+        $this->actingAs($desk)->postJson(route('receptionist.billing.payment.store', $billing), ['payment_method' => 'cash', 'amount_paid' => 0])->assertStatus(422);
+        $this->actingAs($desk)->postJson(route('receptionist.billing.payment.store', $billing), ['payment_method' => 'cash', 'amount_paid' => 700, 'amount_received' => 700])->assertStatus(422);
+        $this->assertSame(Booking::STATUS_CHECKED_IN, $booking->fresh()->booking_status, 'still checked in: no partial payment completes it');
+        $this->assertEqualsWithDelta(1500.0, $booking->fresh()->paidTotal(), 0.01);
+
+        $this->actingAs($desk)->postJson(route('receptionist.billing.payment.store', $billing), ['payment_method' => 'cash', 'amount_paid' => 1500, 'amount_received' => 1500])->assertSuccessful();
+        $this->assertSame(Booking::STATUS_COMPLETED, $booking->fresh()->booking_status);
+        $this->assertEqualsWithDelta(3000.0, $booking->fresh()->paidTotal(), 0.01);
+    }
+
     public function test_the_stay_bill_prices_every_stay_on_its_own_nights_and_lists_them_separately(): void
     {
         [, , $booking] = $this->twoStayBooking();

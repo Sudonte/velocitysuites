@@ -120,7 +120,7 @@
         <div class="d-flex justify-content-between fw-bold"><span>Total</span><span>{{ $peso($payable) }}</span></div>
         <div class="d-flex justify-content-between"><span>Already paid</span><span>{{ $peso($paidSoFar) }}</span></div>
         @if($balanceDue > 0)
-            <div class="d-flex justify-content-between fw-bold text-danger"><span>To pay now (in full)</span><span>{{ $peso($balanceDue) }}</span></div>
+            <div class="d-flex justify-content-between fw-bold text-danger"><span>Balance (pay now, or at check-out)</span><span>{{ $peso($balanceDue) }}</span></div>
         @elseif($changeDue > 0)
             <div class="d-flex justify-content-between fw-bold text-primary"><span>Change to hand back</span><span>{{ $peso($changeDue) }}</span></div>
             <div class="d-flex justify-content-between text-muted"><span>Kept as paid (the actual total)</span><span>{{ $peso($payable) }}</span></div>
@@ -134,9 +134,9 @@
             <span class="fs-5 fw-bold {{ $balanceDue > 0 ? 'text-danger' : 'text-success' }}">{{ $peso($balanceDue) }}</span>
         </div>
         <div class="d-flex justify-content-between align-items-center mt-1">
-            <span class="fw-semibold text-uppercase small">Amount to Pay</span>
+            <span class="fw-semibold text-uppercase small">Amount to Pay (due at check-out if not paid now)</span>
             <span class="fs-4 fw-bold text-brand">{{ $peso($balanceDue) }}</span>
         </div>
     </div>
-    <p class="text-muted small mb-0"><i class="fas fa-info-circle"></i> The full balance is paid at check-in. Anything added during the stay is paid at check-out.</p>
+    <p class="text-muted small mb-0"><i class="fas fa-info-circle"></i> Paying at check-in is optional. Whatever is not paid now - and anything added during the stay - is paid in full at check-out.</p>
 </div>

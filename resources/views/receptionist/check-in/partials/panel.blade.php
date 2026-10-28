@@ -18,20 +18,25 @@
         </div>
     </div>
 
-    {{-- One booking, several stays: each stay is checked in on its own (its own rooms). The first one to arrive settles the whole bill. --}}
+    {{-- One booking, several date ranges (stays): tick one, several or all of them to check in together. The first to arrive settles the whole bill. --}}
     @if($bookingStays->count() > 1)
         <div class="border rounded p-2 mb-3" id="checkInStayPicker">
-            <div class="small fw-semibold mb-1"><i class="fas fa-layer-group"></i> This booking has {{ $bookingStays->count() }} stays - check in one at a time</div>
-            <div class="d-flex flex-wrap gap-2">
+            <div class="small fw-semibold mb-1"><i class="fas fa-layer-group"></i> This booking has {{ $bookingStays->count() }} date ranges - tick the ones checking in now</div>
+            <div class="d-flex flex-column gap-1">
                 @foreach($bookingStays as $s)
                     @php $state = $booking->stateOf($s); @endphp
-                    <button type="button" class="btn btn-sm {{ $s->id === $checkInStay->id ? 'btn-primary' : 'btn-outline-secondary' }}"
-                            data-checkin-stay="{{ $s->id }}" @disabled($state !== 'upcoming')>
-                        Stay {{ $s->position }} &middot; {{ $s->check_in->format('M d') }} &rarr; {{ $s->check_out->format('M d') }}
-                        @if($state === 'in_house') <span class="badge bg-success">In house</span>
-                        @elseif($state === 'checked_out') <span class="badge bg-secondary">Done</span>@endif
-                    </button>
+                    <label class="form-check mb-0 small">
+                        <input type="checkbox" class="form-check-input" data-checkin-stay-check value="{{ $s->id }}"
+                               {{ $checkInStays->contains('id', $s->id) ? 'checked' : '' }} @disabled($state !== 'upcoming')>
+                        <span class="form-check-label">Stay {{ $s->position }} &middot; {{ $s->check_in->format('M d') }} &rarr; {{ $s->check_out->format('M d, Y') }} ({{ \App\Support\StayBill::nightsLabel(max(1, $s->check_in->diffInDays($s->check_out))) }})
+                            @if($state === 'in_house') <span class="badge bg-success">In house</span>
+                            @elseif($state === 'checked_out') <span class="badge bg-secondary">Done</span>@endif</span>
+                    </label>
                 @endforeach
+            </div>
+            <div class="d-flex gap-2 mt-2">
+                <button type="button" class="btn btn-sm btn-outline-secondary" id="checkInStayAll">Select all</button>
+                <button type="button" class="btn btn-sm btn-primary" id="checkInStayApply">Use selection</button>
             </div>
         </div>
     @endif
@@ -40,13 +45,13 @@
     <div class="alert {{ $stayPayment['state'] === 'paid' ? 'alert-success' : ($stayPayment['state'] === 'overpaid' ? 'alert-primary' : 'alert-light border') }} py-2 small mb-3">
         <span class="badge {{ $stayPayment['badge'] }}">{{ $stayPayment['state'] === 'overpaid' ? 'Overpaid' : $stayPayment['label'] }}</span>
         @if($stayPayment['state'] === 'paid')
-            Paid in full when booking (₱{{ number_format($stayPayment['paid'], 2) }}) - nothing to collect at check-in.
+            Paid in full when booking (₱{{ number_format($stayPayment['paid'], 2) }}) - nothing to collect.
         @elseif($stayPayment['state'] === 'overpaid')
             Paid ₱{{ number_format($stayPayment['paid'], 2) }} but the total is now ₱{{ number_format($stayPayment['total'], 2) }} - <strong>return ₱{{ number_format($stayPayment['excess'], 2) }}</strong> to the guest. Only the actual total is kept as paid.
         @elseif($stayPayment['state'] === 'partial')
-            Paid ₱{{ number_format($stayPayment['paid'], 2) }} of ₱{{ number_format($stayPayment['total'], 2) }} - ₱{{ number_format($stayPayment['balance'], 2) }} is paid at check-in.
+            Paid ₱{{ number_format($stayPayment['paid'], 2) }} of ₱{{ number_format($stayPayment['total'], 2) }} - ₱{{ number_format($stayPayment['balance'], 2) }} can be paid now (optional) or at check-out.
         @else
-            Nothing paid yet - the full ₱{{ number_format($stayPayment['total'], 2) }} is paid at check-in.
+            Nothing paid yet - the ₱{{ number_format($stayPayment['total'], 2) }} can be paid now (optional) or in full at check-out.
         @endif
     </div>
 
@@ -55,9 +60,16 @@
         // enough free inventory - a shortfall in ANY one line blocks the
         // whole check-in the same way a shortfall in the single legacy
         // room type used to (never partially assignable).
-        $shortfallLine = collect($roomLines)->first(
-            fn ($line) => ($assignableRoomsByLine[(string) $line['room_type_id']] ?? collect())->count() < $line['quantity']
-        );
+        $shortfallLine = null;
+        foreach ($stayPanels ?? [['stay' => $checkInStay, 'roomLines' => $roomLines, 'assignable' => $assignableRoomsByLine]] as $panelStay) {
+            foreach ($panelStay['roomLines'] as $line) {
+                $free = ($panelStay['assignable'][(string) $line['room_type_id']] ?? collect())->count();
+                if ($free < $line['quantity']) {
+                    $shortfallLine = $line + ['free' => $free, 'stay_position' => $panelStay['stay']->position];
+                    break 2;
+                }
+            }
+        }
     @endphp
 
     {{-- Early check-in is allowed for now (temporarily relaxed per request -
@@ -66,10 +78,10 @@
          that date check here (and in CheckInController::store()) if this
          needs to be restricted again later. --}}
     @if($shortfallLine)
-        @php $freeCount = ($assignableRoomsByLine[(string) $shortfallLine['room_type_id']] ?? collect())->count(); @endphp
+        @php $freeCount = $shortfallLine['free']; @endphp
         <div class="alert alert-warning mb-0">
             <i class="fas fa-exclamation-triangle"></i>
-            This {{ $bookingStays->count() > 1 ? 'stay' : 'booking' }} needs {{ $shortfallLine['quantity'] }} {{ $shortfallLine['room_type'] }} room(s), but only {{ $freeCount }} {{ $freeCount === 1 ? 'is' : 'are' }} currently free for these dates.
+            {{ $bookingStays->count() > 1 ? 'Stay ' . $shortfallLine['stay_position'] : 'This booking' }} needs {{ $shortfallLine['quantity'] }} {{ $shortfallLine['room_type'] }} room(s), but only {{ $freeCount }} {{ $freeCount === 1 ? 'is' : 'are' }} currently free for these dates.
         </div>
     @else
         <form id="checkInForm" data-confirm="The selected rooms will be marked occupied and the stay starts now." data-confirm-title="Complete check-in for {{ $booking->guest_display_name }}?" data-confirm-button="Confirm Check-in" data-confirm-variant="success" data-guest-capacity data-capacity-min="{{ $panelCapacity['min'] }}" data-capacity-max="{{ $panelCapacity['max'] }}">
@@ -161,44 +173,18 @@
                         <i class="fas fa-circle-info"></i> Already assigned ahead of arrival - confirm below, or change the selection if needed.
                     </div>
                 @endif
-                @foreach($roomLines as $line)
-                    @php
-                        $typeId = (string) $line['room_type_id'];
-                        $roomsOfType = $assignableRoomsByLine[$typeId] ?? collect();
-                    @endphp
-                    <div class="mb-3">
-                        <p class="mb-1 fw-bold">
-                            {{ $line['room_type'] }}
-                            @if($line['quantity'] > 1)
-                                <span class="badge bg-secondary">{{ $line['quantity'] }} needed</span>
-                            @endif
-                        </p>
-                        <div id="roomSelectRows-{{ $typeId }}">
-                            @php $preselectedForType = $assignedRoomIdsByType[$typeId] ?? []; @endphp
-                            @for ($i = 0; $i < $line['quantity']; $i++)
-                                @php $preselected = $preselectedForType[$i] ?? null; @endphp
-                                <div class="room-select-row mb-2">
-                                    {{-- Starts disabled - Step 2 is hidden until "Next" passes
-                                         Step 1's validation. A disabled control is reliably
-                                         excluded from constraint validation (unlike relying on
-                                         display:none, which Chrome still tries to focus/report
-                                         on and throws "is not focusable", silently aborting the
-                                         Next click handler). Re-enabled in JS right before Step
-                                         2 is revealed - see index.blade.php's checkInNextBtn
-                                         handler. --}}
-                                    <select name="room_ids[{{ $typeId }}][]" class="form-select room-select" data-room-type-id="{{ $typeId }}" required disabled>
-                                        <option value="">-- Select an available room --</option>
-                                        @foreach($roomsOfType as $room)
-                                            <option value="{{ $room->id }}" data-rate="{{ (float) $room->room_rate }}" {{ (int) $preselected === $room->id ? 'selected' : '' }}>Room {{ $room->room_number }}@if($room->has_capacity_override) &middot; {{ $room->capacity_label }}@endif @if($room->has_rate_override) &middot; ₱{{ number_format((float) $room->room_rate, 2) }}/night @endif</option>
-                                        @endforeach
-                                    </select>
-                                </div>
-                            @endfor
+                @if($stayPanels)
+                    @foreach($stayPanels as $sp)
+                        <div class="border rounded p-2 mb-3" data-stay-rooms="{{ $sp['stay']->id }}">
+                            <div class="fw-semibold mb-2"><i class="fas fa-calendar-alt"></i> Stay {{ $sp['stay']->position }} &middot; {{ $sp['stay']->check_in->format('M d') }} &rarr; {{ $sp['stay']->check_out->format('M d, Y') }}</div>
+                            @include('receptionist.check-in.partials.room-assignment-group', ['roomLines' => $sp['roomLines'], 'assignable' => $sp['assignable'], 'preselectedByType' => [], 'namePrefix' => 'rooms[' . $sp['stay']->id . ']', 'stayId' => $sp['stay']->id])
                         </div>
-                    </div>
-                @endforeach
+                    @endforeach
+                @else
+                    @include('receptionist.check-in.partials.room-assignment-group', ['roomLines' => $roomLines, 'assignable' => $assignableRoomsByLine, 'preselectedByType' => $assignedRoomIdsByType, 'namePrefix' => 'room_ids', 'stayId' => null])
+                @endif
                 <p class="text-muted small mt-2 mb-0">
-                    <i class="fas fa-info-circle"></i> Only rooms of the matching type, free for the full stay, are listed in each dropdown. Each room can only be picked once.
+                    <i class="fas fa-info-circle"></i> Only rooms of the matching type, free for the full stay, are listed in each dropdown. Each room can only be picked once per date range.
                 </p>
 
                 <h6 class="mt-3 mb-2"><i class="fas fa-money-bill-wave"></i> 5. Payment Input</h6>
@@ -207,11 +193,12 @@
                 @else
                     {{-- All three states are on the page: once every room is picked the panel asks the server for the bill priced on
                          THOSE rooms (CheckInController::quote - a room may charge its own rate, and a promotion's discount follows it)
-                         and shows the one that applies. Full payment only - the server refuses anything less. --}}
+                         and shows the one that applies. Payment is optional - the server takes nothing, part, or all of the balance (never more). --}}
                     <div id="checkInPayArea" data-quote-url="{{ route('receptionist.check-in.quote', $booking) }}">
                         <div class="alert alert-info py-1 px-2 small mb-2 d-none" data-quote-note></div>
                         <div data-pay-state="due" class="{{ $balanceDue > 0 ? '' : 'd-none' }}">
-                            @include('receptionist.partials.desk-payment-fields', ['due' => $balanceDue, 'mode' => 'full', 'disabled' => true, 'containerId' => 'checkInPayment'])
+                            <p class="small text-muted mb-2"><i class="fas fa-info-circle"></i> Payment now is <strong>optional</strong>. With no payment the check-in still goes through; Receipt 2 then shows the whole balance as due at check-out, where it must be paid in full.</p>
+                            @include('receptionist.partials.desk-payment-fields', ['due' => $balanceDue, 'mode' => 'optional', 'dueLabel' => 'Balance', 'disabled' => true, 'containerId' => 'checkInPayment'])
                         </div>
                         <div data-pay-state="change" class="alert alert-primary py-2 mb-0 {{ $balanceDue <= 0 && $changeDue > 0 ? '' : 'd-none' }}">
                             <div class="form-check mb-0">

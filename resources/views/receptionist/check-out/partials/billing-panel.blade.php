@@ -81,6 +81,12 @@
                     </tr>
                 @endforeach
                 @if($rb)
+                    @if(($rb['checkin']['promo'] ?? 0) > 0)
+                        <tr>
+                            <td>Less: Promo{{ $rb['checkin']['promo_name'] ? ' ('.$rb['checkin']['promo_name'].')' : '' }}</td>
+                            <td class="text-end text-success">-{{ $peso($rb['checkin']['promo']) }}</td>
+                        </tr>
+                    @endif
                     @if($rb['checkin']['discount'] > 0)
                         <tr>
                             <td>Less: Discount{{ $rb['checkin']['discount_name'] ? ' ('.$rb['checkin']['discount_name'].')' : '' }}</td>
@@ -95,11 +101,19 @@
                         <td>Paid at Check-in <span class="badge {{ $rb['checkin']['paid_in_full'] ? 'bg-success' : 'bg-warning text-dark' }}">{{ $rb['checkin']['status'] }}</span></td>
                         <td class="text-end">{{ $peso($rb['checkin']['amount_paid']) }}</td>
                     </tr>
-                @elseif($billing->discount > 0)
+                @elseif($billing->promo_discount > 0 || $billing->discount > 0)
+                    @if($billing->promo_discount > 0)
+                    <tr>
+                        <td>Less: Promo{{ $billing->promo_label ? ' ('.$billing->promo_label.')' : '' }}</td>
+                        <td class="text-end text-success">-{{ $peso($billing->promo_discount) }}</td>
+                    </tr>
+                    @endif
+                    @if($billing->discount > 0)
                     <tr>
                         <td>Less: Discount{{ $billing->discount_label ? ' ('.$billing->discount_label.')' : '' }}</td>
                         <td class="text-end text-success">-{{ $peso($billing->discount) }}</td>
                     </tr>
+                    @endif
                 @endif
             </table>
             </div>

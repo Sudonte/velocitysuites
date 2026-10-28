@@ -21,6 +21,12 @@
             <td class="text-end">{{ $peso($c['booked_amenities']) }}</td>
         </tr>
     @endif
+    @if(($c['promo'] ?? 0) > 0)
+        <tr>
+            <td>Promo applied @if($c['promo_name'])<span class="text-muted">({{ $c['promo_name'] }})</span>@endif</td>
+            <td class="text-end text-success">-{{ $peso($c['promo']) }}</td>
+        </tr>
+    @endif
     @if($c['discount'] > 0)
         <tr>
             <td>Discount @if($c['discount_name'])<span class="text-muted">({{ $c['discount_name'] }}@if($c['discount_percent'] !== null), {{ rtrim(rtrim(number_format($c['discount_percent'], 2), '0'), '.') }}%@endif)</span>@endif</td>

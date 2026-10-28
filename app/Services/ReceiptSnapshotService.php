@@ -67,7 +67,10 @@ class ReceiptSnapshotService
             'total_paid' => $paid,
             'remaining_balance' => $remaining,
             'amount_to_pay' => $remaining,
-            'amount_to_pay_note' => $remaining <= 0.004 ? 'Fully paid' : 'To be paid at check-out',
+            'amount_to_pay_note' => $remaining <= 0.004 ? 'Fully paid' : 'Due at check-out',
+            // what was taken off at check-in, frozen: the promo and the ID discount are separate lines
+            'promo' => $settle['promo'] ?? null,
+            'discount' => $settle['discount'] ?? null,
         ];
 
         return $this->store($booking, Receipt::CHECKIN_PAYMENT, $billing->checkin_receipt_number, $payload, $by, $total, $paid, $remaining);
@@ -125,7 +128,7 @@ class ReceiptSnapshotService
                 'check_in' => $section['check_in'],
                 'check_out' => $section['check_out'],
                 'nights' => $section['nights'],
-                'rooms' => array_map(fn ($r) => ['room_number' => $r['room_number'], 'room_type' => $r['room_type'], 'rate' => $r['rate'], 'nights' => $r['nights'], 'subtotal' => $r['subtotal']], $section['rooms']),
+                'rooms' => array_map(fn ($r) => ['room_number' => $r['room_number'], 'room_type' => $r['room_type'], 'rate' => $r['rate'], 'rate_after_promo' => $r['rate_after_promo'] ?? $r['rate'], 'promo_off' => $r['promo_off'] ?? 0, 'nights' => $r['nights'], 'subtotal' => $r['subtotal']], $section['rooms']),
                 'amenities' => array_map(fn ($a) => ['name' => $a['amenity_name'], 'quantity' => $a['quantity'], 'unit_price' => $a['unit_price'], 'subtotal' => $a['subtotal'], 'room' => $a['room_label'] ?? null], $section['amenity_lines']),
                 'subtotal' => $section['subtotal'],
             ], $stay['stays'] ?? []),
@@ -135,7 +138,12 @@ class ReceiptSnapshotService
             'room_charges' => round((float) ($stay['room_charge'] ?? 0), 2),
             'amenities_total' => round((float) ($stay['amenity_charge'] ?? 0), 2),
             'additional_charges_total' => round((float) ($stay['additional_charges_total'] ?? 0), 2),
+            'promo' => round((float) ($stay['promo_discount'] ?? 0), 2),
+            'promo_name' => $stay['promo_name'] ?? null,
             'discount' => round((float) ($stay['discount'] ?? 0), 2),
+            'discount_name' => $stay['discount_name'] ?? null,
+            'discount_covers' => $stay['discount_covers'] ?? 'rooms and amenities',
+            'available_promos' => $stay['available_promos'] ?? [],
             'grand_total' => $grand,
             'paid_receipt_1' => $fromR1,
             'paid_receipt_2' => $fromR2,

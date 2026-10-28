@@ -403,7 +403,7 @@ final class StayBill
                 'grand_total' => $checkinTotal,
                 'amount_paid' => $paidAtCheckIn,
                 'paid_in_full' => $paidAtCheckIn + 0.004 >= $checkinTotal,
-                'status' => $paidAtCheckIn + 0.004 >= $checkinTotal ? 'PAID IN FULL' : 'PARTIALLY PAID',
+                'status' => $paidAtCheckIn + 0.004 >= $checkinTotal ? 'PAID IN FULL' : ($paidAtCheckIn <= 0.004 ? 'NOTHING PAID YET' : 'PARTIALLY PAID'),
             ],
             'after_checkin' => [
                 'amenities' => $newAmenities,
