@@ -5,9 +5,9 @@ namespace Tests\Feature;
 use App\Models\User;
 
 /**
- * Managers see room revenue, ADR and RevPAR [REQ050, REQ061], but never the
- * Admin-only cash figures: Payments Collected and Other Charges - on the
- * dashboard, the report page or the report data.
+ * Managers see room revenue, ADR and RevPAR on the dashboard [REQ050, REQ061] without the cash figures. Their
+ * report is the same hotel report the Admin has - Payments Collected and Other Charges included - but never the
+ * Admin-only activity logs.
  */
 class ManagerNoRevenueTest extends ApiFlowTestCase
 {
@@ -28,16 +28,16 @@ class ManagerNoRevenueTest extends ApiFlowTestCase
         ]);
     }
 
-    public function test_manager_report_has_room_revenue_but_no_cash_figures(): void
+    public function test_manager_report_has_the_hotel_revenue_but_no_activity_logs(): void
     {
         $response = $this->actingAs($this->manager())->get(route('manager.reports.index'));
 
         $response->assertOk()
-            ->assertSee('Room Revenue')->assertSee('RevPAR')
-            ->assertDontSee('Payments Collected')->assertDontSee('Other Charges')
+            ->assertSee('Room Revenue')->assertSee('RevPAR')->assertSee('Payments Collected')->assertSee('Other charges')
+            ->assertDontSee('Activity Logs')->assertViewMissing('activityLogs')
             ->assertViewHas('report', fn ($r) => array_key_exists('room_revenue', $r['summary'])
-                && ! array_key_exists('payments_collected', $r['summary'])
-                && ! array_key_exists('other_charges', $r['summary']));
+                && array_key_exists('payments_collected', $r['summary'])
+                && array_key_exists('other_charges', $r['summary']));
     }
 
     public function test_manager_dashboard_has_room_revenue_but_no_cash_figures(): void

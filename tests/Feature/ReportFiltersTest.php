@@ -49,9 +49,9 @@ class ReportFiltersTest extends ApiFlowTestCase
         $this->actingAs($manager)->get(route('manager.reports.index'))
             ->assertOk()
             ->assertViewHas('report', fn ($r) => $r['summary']['reservations'] === 3
-                // Every room type is listed (not a top-5); managers get no cash figures.
+                // Every room type is listed (not a top-5); managers get the hotel's revenue, payments included.
                 && collect($r['roomTypeRows'])->pluck('name')->sort()->values()->all() === ['Deluxe', 'Suite']
-                && ! array_key_exists('payments_collected', $r['summary']));
+                && array_key_exists('payments_collected', $r['summary']));
 
         $this->get(route('manager.reports.index', ['room_type_id' => $deluxe->id]))
             ->assertOk()->assertViewHas('report', fn ($r) => $r['summary']['reservations'] === 2)
@@ -76,5 +76,28 @@ class ReportFiltersTest extends ApiFlowTestCase
         $this->actingAs($admin)->get(route('admin.reports.index', ['payment_method' => 'gcash']))
             ->assertOk()
             ->assertViewHas('filters', fn ($f) => $f['payment_method'] === 'gcash');
+    }
+
+    public function test_manager_gets_the_same_hotel_report_with_revenue_but_no_activity_logs(): void
+    {
+        $manager = $this->user('manager');
+
+        $this->actingAs($manager)->get(route('manager.reports.index', ['payment_method' => 'cash']))
+            ->assertOk()
+            ->assertViewHas('report', fn ($r) => array_key_exists('payments_collected', $r['summary']) && array_key_exists('other_charges', $r['summary']))
+            ->assertViewHas('filters', fn ($f) => $f['payment_method'] === 'cash')
+            ->assertSee('Payments Collected')->assertSee('id="reportPaymentMethod"', false)
+            ->assertDontSee('Activity Logs')->assertViewMissing('activityLogs');
+    }
+
+    public function test_printed_reports_are_hotel_performance_only_without_activity_logs(): void
+    {
+        $report = app(\App\Services\HotelReportService::class)->build(today()->startOfMonth(), today(), null, null, \App\Services\HotelReportService::REVENUE_ALL);
+        foreach (['admin.reports.export-pdf', 'manager.reports.export-pdf'] as $view) {
+            $html = view($view, ['report' => $report, 'periodLabel' => 'This month', 'generatedAt' => now()])->render();
+            $this->assertStringContainsString('Occupancy', $html, $view);
+            $this->assertStringContainsString('Payments Collected', $html, $view);
+            $this->assertStringNotContainsString('Activity', $html, $view);
+        }
     }
 }

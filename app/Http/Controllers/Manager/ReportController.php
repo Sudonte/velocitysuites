@@ -20,9 +20,10 @@ class ReportController extends Controller
     }
 
     /**
-     * Manager report: occupancy, arrivals/departures, reservations, every
-     * room type and every guest for the selected filters (period, room
-     * type). Never includes revenue - that's Admin only.
+     * The hotel report - the Manager's: occupancy, arrivals/departures, bookings, every room type and guest,
+     * cancellations and no-shows, and the revenue (room revenue, ADR, RevPAR, other charges, payments collected)
+     * for the selected filters (period, room type, payment method) - the same hotel report the System Administrator
+     * sees, without the activity log and account information, which are the administrator's alone.
      */
     public function index(Request $request): View
     {
@@ -44,6 +45,9 @@ class ReportController extends Controller
         $periodLabel = $filters['from']->format('M d, Y') . ' - ' . $filters['to']->format('M d, Y');
         if ($filters['room_type_id']) {
             $periodLabel .= ' | ' . RoomType::whereKey($filters['room_type_id'])->value('name');
+        }
+        if ($filters['payment_method']) {
+            $periodLabel .= ' | ' . ($filters['payment_method'] === 'gcash' ? 'GCash' : 'Cash') . ' payments';
         }
 
         $pdf = Pdf::loadView('manager.reports.export-pdf', [
@@ -85,7 +89,7 @@ class ReportController extends Controller
     /** Cached briefly (keyed by every filter) and shared by the screen and the PDF. */
     private function reportData(array $filters): array
     {
-        return Cache::remember('manager_report:v4:' . ReportFilters::cacheKey($filters), now()->addSeconds(60),
-            fn () => $this->reports->build($filters['from'], $filters['to'], $filters['room_type_id'], null, HotelReportService::REVENUE_ROOMS));
+        return Cache::remember('manager_report:v5:' . ReportFilters::cacheKey($filters), now()->addSeconds(60),
+            fn () => $this->reports->build($filters['from'], $filters['to'], $filters['room_type_id'], $filters['payment_method'], HotelReportService::REVENUE_ALL));
     }
 }

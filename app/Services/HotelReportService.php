@@ -29,8 +29,8 @@ use Illuminate\Support\Facades\DB;
  * Every figure respects the period and room-type filters and excludes
  * confirmed test accounts.
  *
- * Revenue levels: REVENUE_ALL (Admin: room revenue, ADR, RevPAR, other
- * charges, payments collected), REVENUE_ROOMS (Manager: room revenue, ADR,
+ * Revenue levels: REVENUE_ALL (Admin and Manager: room revenue, ADR, RevPAR, other
+ * charges, payments collected), REVENUE_ROOMS (room revenue, ADR,
  * RevPAR only), REVENUE_NONE.
  */
 class HotelReportService
@@ -113,7 +113,7 @@ class HotelReportService
                 'revpar' => $availableTotal > 0 ? round($roomRevenue / $availableTotal, 2) : 0.0,
             ];
         }
-        // Admin only - managers never receive these.
+        // The full revenue picture (Admin and Manager hotel reports).
         if ($revenue === self::REVENUE_ALL) {
             $summary += [
                 'other_charges' => $this->otherCharges($from, $to, $roomTypeId),

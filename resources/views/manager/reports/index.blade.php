@@ -4,7 +4,7 @@
 
 @section('content')
 <div class="container-fluid py-4 report-page">
-    <x-page-header icon="fas fa-file-pdf" title="Manager Reports">
+    <x-page-header icon="fas fa-file-pdf" title="Hotel Reports" subtitle="Occupancy, bookings, revenue, room types and guests for the selected period.">
         <x-slot:actions>
             {{-- Real formatted PDF document (dompdf, branded with the
                  Velocity Suites logo) - a plain window.print() of this
@@ -16,7 +16,7 @@
         </x-slot:actions>
     </x-page-header>
 
-    @include('partials.report-filters', ['route' => 'manager.reports.index'])
+    @include('partials.report-filters', ['route' => 'manager.reports.index', 'showPaymentMethod' => true])
 
     @include('reports.partials.screen-body', ['report' => $report, 'withRevenue' => true])
 
