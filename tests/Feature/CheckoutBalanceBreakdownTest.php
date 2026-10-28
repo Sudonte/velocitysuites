@@ -108,21 +108,24 @@ class CheckoutBalanceBreakdownTest extends ApiFlowTestCase
         $this->assertEquals(0.0, $r['balance_due']);
     }
 
-    public function test_discount_with_amenities_charges_only_the_amenities_at_full_price(): void
+    public function test_the_discount_covers_an_amenity_added_after_check_in(): void
     {
         $b = $this->checkedIn(true);
         $this->amenity($b, 'Extra Towel', 2, 50);
         $bill = $this->bill($b);
 
-        $this->assertEquals(400.0, $bill['discount'], 'the discount is not taken again off the later amenity');
-        $this->assertEquals(1700.0, $bill['total']);
-        $this->assertEquals(100.0, $bill['balance']);
+        // 20% of the rooms (2,000) was taken at check-in; the later amenity (100) is covered too: 20% of 2,100 = 420
+        $this->assertEquals(420.0, $bill['discount'], 'the ID discount covers the amenity added later');
+        $this->assertEquals(1680.0, $bill['total']);
+        $this->assertEquals(80.0, $bill['balance']);
         $r = $bill['receipt_breakdown'];
+        $this->assertEquals(400.0, $r['checkin']['discount'], 'the check-in summary stays as it was');
         $this->assertEquals(100.0, $r['after_checkin']['amenities_total']);
+        $this->assertEquals(20.0, $r['after_checkin']['discount_on_amenities']);
         $this->assertSame('Extra Towel', $r['after_checkin']['amenities'][0]['name']);
-        $this->assertEquals(100.0, $r['remaining_balance']);
-        $this->assertEquals(1700.0, $r['final_grand_total']);
-        $this->assertEquals(100.0, $r['balance_due']);
+        $this->assertEquals(80.0, $r['remaining_balance']);
+        $this->assertEquals(1680.0, $r['final_grand_total']);
+        $this->assertEquals(80.0, $r['balance_due']);
     }
 
     public function test_discount_with_amenities_and_desk_charges_balance_is_their_sum(): void
@@ -132,13 +135,13 @@ class CheckoutBalanceBreakdownTest extends ApiFlowTestCase
         $b->billing()->first()->additionalCharges()->create(['description' => 'Broken lamp', 'amount' => 300]);
         $bill = $this->bill($b);
 
-        $this->assertEquals(400.0, $bill['discount']);
-        $this->assertEquals(400.0, $bill['balance']);
+        $this->assertEquals(420.0, $bill['discount'], 'the desk charge is not discounted; the amenity is');
+        $this->assertEquals(380.0, $bill['balance']);
         $r = $bill['receipt_breakdown'];
         $this->assertEquals(300.0, $r['after_checkin']['charges_total']);
-        $this->assertEquals(400.0, $r['after_checkin']['subtotal']);
-        $this->assertEquals(400.0, $r['remaining_balance']);
-        $this->assertEquals(2000.0, $r['final_grand_total']);
+        $this->assertEquals(380.0, $r['after_checkin']['subtotal']);
+        $this->assertEquals(380.0, $r['remaining_balance']);
+        $this->assertEquals(1980.0, $r['final_grand_total']);
         $this->assertEqualsWithDelta($r['checkin']['grand_total'] + $r['remaining_balance'], $r['final_grand_total'], 0.001);
         $this->assertEqualsWithDelta($r['final_grand_total'] - $r['total_paid'], $r['balance_due'], 0.001);
     }

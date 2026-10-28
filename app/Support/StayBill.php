@@ -261,9 +261,14 @@ final class StayBill
             $roomAtCheckIn = isset($snapshot['room_charge']) ? round((float) $snapshot['room_charge'], 2) : $scheduledRoomCharge;
             $discountAtCheckIn = round((float) ($snapshot['discount']['amount'] ?? $billing->discount), 2);
             $promoAtCheckIn = round((float) ($snapshot['promo']['amount'] ?? $billing->promo_discount), 2);
-            $discountAmount = min($discountAtCheckIn, $subtotal);
             $promoAmount = min($promoAtCheckIn, $subtotal);
             $discount ??= $billing->discountApplied;
+            // The ID discount covers every amenity the desk approved - those asked for after check-in too - so its amount follows the
+            // rooms (after the promo) plus the amenities now on the bill; the other charges stay out of it. Without a discount record
+            // to recompute from (removed since), the amount taken at check-in stands.
+            $discountAmount = $discount !== null
+                ? round(BillDiscount::amount($discount, max(0.0, $roomCharge - $promoAmount), $amenityCharge), 2)
+                : min($discountAtCheckIn, $subtotal);
         }
         if ($stayEnded && $billing) {
             // Settled: the discounts are the amounts that were actually taken off, whatever the Discount module says today.
@@ -382,13 +387,14 @@ final class StayBill
         // There is no stay-length adjustment any more (booked nights are always billed), so this is 0 for every new stay. It only
         // catches an older settled bill that was once priced on the nights stayed: whatever its total holds beyond the check-in
         // bill and the lines listed is shown as one plain "Adjustment" charge so the receipt still adds up.
-        $legacy = round(($roomCharge - $roomAtCheckIn) - ($discountAmount - $discountAtCheckIn) + $guestFee, 2);
+        $discountOnAdded = round(max(0.0, $discountAmount - $discountAtCheckIn), 2);
+        $legacy = round(($roomCharge - $roomAtCheckIn) + $guestFee, 2);
         $chargeLines = array_map(fn ($c) => ['name' => $c['description'], 'quantity' => 1, 'unit_price' => $c['amount'], 'subtotal' => $c['amount']], $extraCharges);
         if (abs($legacy) >= 0.005) {
             $chargeLines[] = ['name' => 'Adjustment', 'quantity' => 1, 'unit_price' => $legacy, 'subtotal' => $legacy];
         }
         $chargesTotal = round($extraChargesTotal + (abs($legacy) >= 0.005 ? $legacy : 0.0), 2);
-        $afterSubtotal = round($newAmenitiesTotal + $chargesTotal, 2);
+        $afterSubtotal = round($newAmenitiesTotal - $discountOnAdded + $chargesTotal, 2);
         $percent = $discount && $discount->discount_type === 'percentage' ? (float) $discount->value : null;
 
         return [
@@ -408,6 +414,9 @@ final class StayBill
             'after_checkin' => [
                 'amenities' => $newAmenities,
                 'amenities_total' => $newAmenitiesTotal,
+                // the ID discount on those added amenities (it covers every approved amenity)
+                'discount_on_amenities' => $discountOnAdded,
+                'discount_name' => $discountOnAdded > 0 ? $discountName : null,
                 'charges' => $chargeLines,
                 'charges_total' => $chargesTotal,
                 'subtotal' => $afterSubtotal,

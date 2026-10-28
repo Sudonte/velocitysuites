@@ -55,6 +55,12 @@
     @empty
         <tr><td colspan="2" class="text-muted">No additional charges</td></tr>
     @endforelse
+    @if(($a['discount_on_amenities'] ?? 0) > 0)
+        <tr>
+            <td>Discount on added amenities @if(!empty($a['discount_name']))<span class="text-muted">({{ $a['discount_name'] }})</span>@endif</td>
+            <td class="text-end text-success">-{{ $peso($a['discount_on_amenities']) }}</td>
+        </tr>
+    @endif
     <tr class="small text-muted">
         <td class="ps-3">Amenity requests</td>
         <td class="text-end">{{ $peso($a['amenities_total']) }}</td>

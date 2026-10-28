@@ -44,7 +44,7 @@
     <div class="card mb-3 border-secondary">
         <div class="card-header bg-light d-flex justify-content-between align-items-center">
             <strong><i class="fas fa-lock"></i> 2. Check-in Billing</strong>
-            <span class="badge bg-secondary">Read-only{{ $settledAtCheckIn ? ' - discounted' : '' }}</span>
+            <span class="badge bg-secondary">Read-only</span>
         </div>
         <div class="card-body py-2">
             <p class="small text-muted mb-2">
@@ -117,7 +117,7 @@
                 @endif
             </table>
             </div>
-            <p class="small text-muted mb-0"><i class="fas fa-percentage"></i> The discount applies to the check-in bill only. Check-out charges below are never discounted.</p>
+            <p class="small text-muted mb-0"><i class="fas fa-percentage"></i> The ID discount covers the rooms and every amenity on the bill, including amenities added during the stay. Other charges are never discounted.</p>
         </div>
     </div>
 
@@ -136,10 +136,10 @@
     <div class="card mb-3 border-primary">
         <div class="card-header d-flex justify-content-between align-items-center">
             <strong><i class="fas fa-pen-to-square"></i> 3. Check-out Charges</strong>
-            <span class="badge bg-primary">Editable - no discount</span>
+            <span class="badge bg-primary">Editable</span>
         </div>
         <div class="card-body py-2">
-            <h6 class="small text-uppercase text-muted"><i class="fas fa-spa"></i> Approved amenities{{ $settledAtCheckIn ? ' added during the stay' : '' }}</h6>
+            <h6 class="small text-uppercase text-muted"><i class="fas fa-spa"></i> Approved amenities{{ $settledAtCheckIn ? ' added during the stay (the ID discount applies)' : '' }}</h6>
             <div class="table-responsive">
             <table class="table table-sm table-borderless align-middle mb-3">
                 <colgroup><col><col style="width: 5rem;"><col style="width: 9rem;"></colgroup>
@@ -157,6 +157,12 @@
                         <tr class="fw-semibold border-top">
                             <td colspan="2">Amenities total</td>
                             <td class="text-end">{{ $peso($addedAmenities->sum(fn ($r) => $r->charge * $r->quantity)) }}</td>
+                        </tr>
+                    @endif
+                    @if(($rb['after_checkin']['discount_on_amenities'] ?? 0) > 0)
+                        <tr>
+                            <td colspan="2">Less: Discount on these amenities{{ !empty($rb['after_checkin']['discount_name']) ? ' ('.$rb['after_checkin']['discount_name'].')' : '' }}</td>
+                            <td class="text-end text-success">-{{ $peso($rb['after_checkin']['discount_on_amenities']) }}</td>
                         </tr>
                     @endif
                 </tbody>

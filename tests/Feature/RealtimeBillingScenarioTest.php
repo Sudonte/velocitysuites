@@ -122,8 +122,8 @@ class RealtimeBillingScenarioTest extends ApiFlowTestCase
         $this->assertSame(1, $this->noteCount($guest, 'Amenity Request Approved'));
         $view = $this->guestView($guest, $booking);
         $rb = $view['stay_bill']['receipt_breakdown'];
-        $this->assertEquals(200.0, $rb['remaining_balance'], 'the approved amenity is the remaining balance - and is NOT discounted');
-        $this->assertEquals(1800.0, $rb['final_grand_total']);
+        $this->assertEquals(160.0, $rb['remaining_balance'], 'the approved amenity (200) is the remaining balance, less the 20% ID discount on it');
+        $this->assertEquals(1760.0, $rb['final_grand_total']);
         $this->assertSame('Breakfast', $rb['after_checkin']['amenities'][0]['name']);
         $this->assertEquals(200.0, $view['stay_bill']['additional_amenities_total']);
 
@@ -133,37 +133,38 @@ class RealtimeBillingScenarioTest extends ApiFlowTestCase
         $this->assertCount(1, $view['stay_bill']['requested_amenities']);
         $this->assertSame(['Massage', 'rejected', 'Spa is closed'], [$view['stay_bill']['requested_amenities'][0]['amenity_name'], $view['stay_bill']['requested_amenities'][0]['status'], $view['stay_bill']['requested_amenities'][0]['reason']]);
         $this->assertEquals(100.0, $view['stay_bill']['requested_amenities'][0]['subtotal']);
-        $this->assertEquals(200.0, $view['stay_bill']['receipt_breakdown']['remaining_balance'], 'a rejected request is never counted');
+        $this->assertEquals(160.0, $view['stay_bill']['receipt_breakdown']['remaining_balance'], 'a rejected request is never counted');
 
-        // 4. the desk adds a charge at check-out: no discount on it
+        // 4. the desk adds a charge at check-out: it is paid in full (no discount on it)
         $billing = $booking->fresh()->billing()->firstOrFail();
         $this->actingAs($desk)->postJson(route('receptionist.billing.additional-charge.store', $billing), ['description' => 'Broken lamp', 'amount' => 300, 'category' => 'damage'])->assertSuccessful();
         $this->assertSame(1, $this->noteCount($guest, 'Additional Charge Added'));
         $rb = $this->guestView($guest, $booking)['stay_bill']['receipt_breakdown'];
-        $this->assertEquals(500.0, $rb['remaining_balance']);
-        $this->assertEquals(2100.0, $rb['final_grand_total']);
-        $this->assertEquals(500.0, $rb['balance_due']);
-        $this->assertEquals(400.0, $rb['checkin']['discount'], 'the discount stays what it was at check-in');
+        $this->assertEquals(460.0, $rb['remaining_balance']);
+        $this->assertEquals(2060.0, $rb['final_grand_total']);
+        $this->assertEquals(460.0, $rb['balance_due']);
+        $this->assertEquals(400.0, $rb['checkin']['discount'], 'the check-in summary keeps what was taken at check-in');
+        $this->assertEquals(40.0, $rb['after_checkin']['discount_on_amenities'], 'the ID discount covers the approved amenity');
 
         // editing then removing a charge also tells the guest
         $charge = $billing->fresh()->additionalCharges()->firstOrFail();
         $this->actingAs($desk)->putJson(route('receptionist.billing.additional-charge.update', $charge), ['description' => 'Broken lamp', 'amount' => 350, 'category' => 'damage'])->assertSuccessful();
         $this->assertSame(1, $this->noteCount($guest, 'Bill Updated'));
-        $this->assertEquals(550.0, $this->guestView($guest, $booking)['stay_bill']['receipt_breakdown']['remaining_balance']);
+        $this->assertEquals(510.0, $this->guestView($guest, $booking)['stay_bill']['receipt_breakdown']['remaining_balance']);
         $this->actingAs($desk)->putJson(route('receptionist.billing.additional-charge.update', $charge), ['description' => 'Broken lamp', 'amount' => 300, 'category' => 'damage'])->assertSuccessful();
 
         // 5. check-out on the scheduled day + payment of exactly what is left
         Carbon::setTestNow(now()->addDays(2)->setTime(11, 0));
         $this->actingAs($desk)->putJson(route('receptionist.check-out.rooms.checkout-many', $booking->fresh()), ['all' => 1])->assertOk();
-        $this->actingAs($desk)->postJson(route('receptionist.billing.payment.store', $billing->fresh()), ['payment_method' => 'cash', 'amount_paid' => 500, 'amount_received' => 500])->assertSuccessful();
+        $this->actingAs($desk)->postJson(route('receptionist.billing.payment.store', $billing->fresh()), ['payment_method' => 'cash', 'amount_paid' => 460, 'amount_received' => 460])->assertSuccessful();
 
         $view = $this->guestView($guest, $booking);
         $this->assertSame(Booking::STATUS_COMPLETED, $view['booking_status']);
         $rb = $view['stay_bill']['receipt_breakdown'];
         $this->assertEquals(1600.0, $rb['checkin']['grand_total']);
-        $this->assertEquals(500.0, $rb['remaining_balance']);
-        $this->assertEquals(2100.0, $rb['final_grand_total']);
-        $this->assertEquals(2100.0, $rb['total_paid']);
+        $this->assertEquals(460.0, $rb['remaining_balance']);
+        $this->assertEquals(2060.0, $rb['final_grand_total']);
+        $this->assertEquals(2060.0, $rb['total_paid']);
         $this->assertEquals(0.0, $rb['balance_due']);
         $this->assertEquals(0.0, $view['payment_summary']['remaining_balance']);
         $this->assertNotEmpty(Notification::where('user_id', $guest->id)->whereNotNull('receipt_number')->get(), 'the final receipt notification reaches the guest');

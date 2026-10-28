@@ -210,6 +210,8 @@ class ReceiptService
                     ? PaymentMath::normalizePercentage($booking->selected_payment_percentage)
                     : 100,
                 'issued_at' => $payment->verified_at?->toIso8601String(),
+                // how it was paid (cash / gcash): the list says "Paid online" or "Paid in cash" beside the amount
+                'payment_method' => $payment->payment_method,
             ];
         }
 
@@ -225,6 +227,7 @@ class ReceiptService
                 'amount' => (float) ($snapshot['amount_settled'] ?? 0),
                 'payment_percentage' => 100,
                 'issued_at' => $snapshot['settled_at'] ?? $billing->checkin_settled_at?->toIso8601String(),
+                'payment_method' => ((float) ($snapshot['amount_settled'] ?? 0)) > 0.004 ? ($snapshot['payment_method'] ?? null) : null,
             ];
         }
 
@@ -238,6 +241,9 @@ class ReceiptService
                 'amount' => (float) $billing->total_amount,
                 'payment_percentage' => 100,
                 'issued_at' => $billing->updated_at?->toIso8601String(),
+                'payment_method' => null,
+                // the final receipt says whether anything is still owed
+                'fully_paid' => PaymentMath::remainingBalance((float) $billing->total_amount, PaymentMath::totalPaid($this->chronologicalPayments($booking))) <= 0.004,
             ];
         }
 
@@ -270,7 +276,7 @@ class ReceiptService
         if ($stored) {
             $booking = Booking::find($stored->booking_id);
 
-            return $booking && $this->ownedBy($booking, $guest) ? $stored->snapshot + $this->liveExtras($booking) : null;
+            return $booking && $this->ownedBy($booking, $guest) ? self::normalizeStored($stored->snapshot) + $this->liveExtras($booking) : null;
         }
 
         if (str_starts_with($receiptNumber, 'PR-') || str_starts_with($receiptNumber, 'FR-')) {
@@ -334,6 +340,24 @@ class ReceiptService
         }
 
         return null;
+    }
+
+    /**
+     * A stored receipt is read as it was issued, except for its shape: the highlight's money figures are always plain numbers (the
+     * 1.68.0 check-in receipt stored its promo and ID discount as {name, amount} objects, which the app cannot read as an amount).
+     * Only the shape is repaired - on the way out, never in the stored row - and no figure changes.
+     */
+    public static function normalizeStored(array $snapshot): array
+    {
+        foreach (['promo', 'discount'] as $key) {
+            $value = $snapshot['highlight'][$key] ?? null;
+            if (is_array($value)) {
+                $snapshot['highlight'][$key.'_name'] ??= $value['name'] ?? null;
+                $snapshot['highlight'][$key] = round((float) ($value['amount'] ?? 0), 2);
+            }
+        }
+
+        return $snapshot;
     }
 
     /**

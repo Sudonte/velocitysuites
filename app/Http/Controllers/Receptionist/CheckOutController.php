@@ -719,6 +719,16 @@ class CheckOutController extends Controller
      */
     public function storeAdditionalCharge(Request $request, Billing $billing)
     {
+        // An amenity from the amenity list is not an "other charge": it is an approved amenity on the stay, so the guest's ID discount
+        // covers it. Damages, lost items and the like are the other kind and are paid in full.
+        if ($request->input('kind') === 'amenity') {
+            return $this->storeAmenityOnBill($request, $billing);
+        }
+        $named = trim((string) $request->input('description'));
+        if ($named !== '' && \App\Models\Amenity::whereRaw('LOWER(amenity_name) = ?', [mb_strtolower($named)])->exists()) {
+            return response()->json(['message' => '"' . $named . '" is on the amenity list. Add it as an Amenity so the ID discount covers it - Other charges are paid in full.'], 422);
+        }
+
         $validated = $request->validate([
             'description' => 'nullable|string',
             'quantity' => 'nullable|integer|min:1|max:999',
@@ -769,6 +779,29 @@ class CheckOutController extends Controller
         }
 
         return $this->chargesTableResponse($billing);
+    }
+
+    /** Add an amenity from the list to the stay (approved, staff-added), then re-price the open bill; the panel is reloaded. */
+    private function storeAmenityOnBill(Request $request, Billing $billing)
+    {
+        if ($billing->isClosed()) {
+            return response()->json(['message' => 'Cannot add charges to a bill that is already checked out.'], 422);
+        }
+        $data = $request->validate([
+            'amenity_id' => 'required|integer|exists:amenities,id',
+            'quantity' => 'required|integer|min:1|max:999',
+        ]);
+        $booking = $billing->booking;
+        $response = app(\App\Http\Controllers\Receptionist\ReceptionistController::class)->amenitiesStore(
+            Request::create('/', 'POST', ['items' => [['amenity_id' => (int) $data['amenity_id'], 'quantity' => (int) $data['quantity']]]]),
+            $booking
+        );
+        if ($response->getStatusCode() >= 400) {
+            return $response;
+        }
+        $billing->refresh();
+
+        return response()->json(['reload' => true, 'running_total' => $billing->running_total, 'message' => 'Amenity added to the bill.']);
     }
 
     /**

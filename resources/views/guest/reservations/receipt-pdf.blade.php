@@ -83,7 +83,7 @@
 
     @foreach(($storedReceipts ?? collect()) as $stored)
         @php
-            $h = $stored->snapshot['highlight'] ?? [];
+            $h = \App\Services\ReceiptService::normalizeStored((array) $stored->snapshot)['highlight'] ?? [];
             $titles = [1 => 'Payment verified', 2 => 'Check-in', 3 => 'Check-out (final)'];
             $peso = fn ($v) => '&#8369;' . number_format((float) $v, 2);
         @endphp

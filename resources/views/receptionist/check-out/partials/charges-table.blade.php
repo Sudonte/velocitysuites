@@ -1,6 +1,6 @@
 @php $editable = ! $billing->isClosed(); @endphp
 <div class="d-flex justify-content-between align-items-center mb-2">
-    <h6 class="mb-0"><i class="fas fa-plus-circle"></i> Additional / Other / Damage Charges</h6>
+    <h6 class="mb-0"><i class="fas fa-plus-circle"></i> Other Charges (damage, lost items - full price)</h6>
     @if($editable)
         <button type="button" class="btn btn-outline-primary btn-sm" id="showAddChargeFormBtn">
             <i class="fas fa-plus"></i> Add Charge
@@ -9,8 +9,24 @@
 </div>
 
 @if($editable)
+    @php $paidAmenities = \App\Models\Amenity::where('status', 'active')->where('charge', '>', 0)->orderBy('amenity_name')->get(['id', 'amenity_name', 'charge']); @endphp
     <form id="addChargeForm" class="row g-2 mb-3 d-none align-items-end">
-        <div class="col-md-3">
+        <div class="col-12">
+            <label class="form-label small mb-1" for="chargeKind">What are you adding?</label>
+            <select name="kind" id="chargeKind" class="form-select form-select-sm">
+                <option value="other">Other charge (damage, lost item, etc.) - paid in full</option>
+                <option value="amenity">Amenity (from the amenity list) - the ID discount applies</option>
+            </select>
+        </div>
+        <div class="col-12 d-none" data-kind-field="amenity">
+            <label class="form-label small mb-1" for="chargeAmenity">Amenity</label>
+            <select name="amenity_id" id="chargeAmenity" class="form-select form-select-sm" disabled>
+                @foreach($paidAmenities as $a)
+                    <option value="{{ $a->id }}" data-price="{{ $a->charge }}">{{ $a->amenity_name }} - &#8369;{{ number_format((float) $a->charge, 2) }}</option>
+                @endforeach
+            </select>
+        </div>
+        <div class="col-md-3" data-kind-field="other">
             <label class="form-label small mb-1" for="chargeCategory">Type</label>
             <select name="category" id="chargeCategory" class="form-select form-select-sm" required>
                 @foreach(\App\Models\AdditionalCharge::categories() as $value => $label)
@@ -18,7 +34,7 @@
                 @endforeach
             </select>
         </div>
-        <div class="col-md-3">
+        <div class="col-md-3" data-kind-field="other">
             <label class="form-label small mb-1" for="chargeDescription">Description</label>
             <input type="text" name="description" id="chargeDescription" class="form-control form-control-sm" placeholder="e.g. Broken remote">
         </div>
@@ -26,7 +42,7 @@
             <label class="form-label small mb-1" for="chargeQty">Qty</label>
             <input type="number" step="1" min="1" max="999" name="quantity" id="chargeQty" class="form-control form-control-sm text-end" value="1" required>
         </div>
-        <div class="col-8 col-md-2">
+        <div class="col-8 col-md-2" data-kind-field="other">
             <label class="form-label small mb-1" for="chargeUnit">Unit price</label>
             <input type="number" step="0.01" min="0.01" name="unit_price" id="chargeUnit" class="form-control form-control-sm text-end" placeholder="0.00" required>
         </div>

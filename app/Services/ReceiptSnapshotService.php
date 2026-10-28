@@ -69,8 +69,11 @@ class ReceiptSnapshotService
             'amount_to_pay' => $remaining,
             'amount_to_pay_note' => $remaining <= 0.004 ? 'Fully paid' : 'Due at check-out',
             // what was taken off at check-in, frozen: the promo and the ID discount are separate lines
-            'promo' => $settle['promo'] ?? null,
-            'discount' => $settle['discount'] ?? null,
+            // numbers, like every other highlight figure (the app reads them as amounts); the names ride beside them
+            'promo' => round((float) ($settle['promo']['amount'] ?? 0), 2),
+            'promo_name' => $settle['promo']['name'] ?? null,
+            'discount' => round((float) ($settle['discount']['amount'] ?? 0), 2),
+            'discount_name' => $settle['discount']['name'] ?? null,
         ];
 
         return $this->store($booking, Receipt::CHECKIN_PAYMENT, $billing->checkin_receipt_number, $payload, $by, $total, $paid, $remaining);

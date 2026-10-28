@@ -536,7 +536,8 @@ document.addEventListener('DOMContentLoaded', function () {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload),
                 });
-                document.getElementById('chargesTableContainer').innerHTML = data.html;
+                if (data.reload) { await reloadBillingPanel(); return; }
+            document.getElementById('chargesTableContainer').innerHTML = data.html;
                 document.getElementById('runningTotalDisplay').textContent = '₱' + Number(data.running_total).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); updateDueAtCheckOut(data.running_total);
             } catch (err) {
                 showBillingError(err.message);
@@ -561,11 +562,31 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     });
 
+    // Amenity vs Other charge: an amenity is picked from the list (the ID discount covers it); an other charge is typed in (full price).
+    function syncChargeKind() {
+        const kind = document.getElementById('chargeKind');
+        if (!kind) return;
+        const isAmenity = kind.value === 'amenity';
+        document.querySelectorAll('#addChargeForm [data-kind-field="amenity"]').forEach(el => el.classList.toggle('d-none', !isAmenity));
+        document.querySelectorAll('#addChargeForm [data-kind-field="other"]').forEach(el => el.classList.toggle('d-none', isAmenity));
+        document.getElementById('chargeAmenity').disabled = !isAmenity;
+        document.getElementById('chargeUnit').required = !isAmenity;
+        document.getElementById('chargeUnit').disabled = isAmenity;
+        document.getElementById('chargeCategory').disabled = isAmenity;
+        document.getElementById('chargeDescription').disabled = isAmenity;
+        document.getElementById('chargeQty').dispatchEvent(new Event('input', { bubbles: true }));
+    }
+    billingPanelContent.addEventListener('change', function (e) {
+        if (e.target.id === 'chargeKind' || e.target.id === 'chargeAmenity') syncChargeKind();
+    });
+
     // Line total preview while typing (quantity x unit price); the server computes the real total.
     billingPanelContent.addEventListener('input', function (e) {
         if (e.target.id !== 'chargeQty' && e.target.id !== 'chargeUnit') return;
         const q = parseFloat(document.getElementById('chargeQty').value) || 0;
-        const u = parseFloat(document.getElementById('chargeUnit').value) || 0;
+        const isAmenity = document.getElementById('chargeKind') && document.getElementById('chargeKind').value === 'amenity';
+        const pick = document.getElementById('chargeAmenity');
+        const u = isAmenity && pick && pick.selectedOptions[0] ? parseFloat(pick.selectedOptions[0].dataset.price) || 0 : parseFloat(document.getElementById('chargeUnit').value) || 0;
         document.getElementById('chargeLineTotal').textContent = '₱' + (q * u).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     });
 
