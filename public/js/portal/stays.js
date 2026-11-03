@@ -22,7 +22,7 @@
         if (bs === 'COMPLETED_BOOKING') return { label: 'Completed', cls: 'gray', key: 'completed' };
         if (bs === 'CHECKED_IN') return { label: 'Checked in', cls: 'ok', key: 'checkedin' };
         if (bs === 'ACTIVE_BOOKING') {
-            if (!b.verified_at) return { label: 'Pending', cls: 'wait', key: 'pending', note: 'Waiting for front desk verification' };
+            if (!b.verified_at) return { label: 'Awaiting verification', cls: 'wait', key: 'pending', note: 'Waiting for front desk verification' };
             return { label: 'Confirmed', cls: 'ok', key: 'confirmed' };
         }
         if (rs === 'CONVERTED_TO_BOOKING') return { label: 'Confirmed', cls: 'ok', key: 'confirmed' };
@@ -102,6 +102,21 @@
         if (reservation) return { a: 'FRONT_DESK', text: 'Pay at the hotel' };
         return { a: 'FRONT_DESK', text: 'Balance of ' + VS.money(m.remaining) + ' is paid at the front desk' };
     };
+    /** The app's ReservationEditPolicy.canEdit: a plain reservation still awaiting review that has not used its one edit. */
+    S.canEdit = function (x) {
+        var it = x.it;
+        return x.kind === 'reservation' && !it.booking && it.status !== 'CONVERTED_TO_BOOKING' && /AWAITING|TO_BE_CONVERTED/.test(it.status || '') && !it.edited_at && !it.hidden_by_guest;
+    };
+    /** The app's TransactionActions.canCancel / cancelBlockedReason. */
+    S.cancelRule = function (x) {
+        var it = x.it, b = x.kind === 'reservation' ? it.booking : it, key = S.status(it, x.kind).key;
+        if (/cancelled|rejected|completed|noshow/.test(key)) return { can: false, reason: '' };
+        if (key === 'checkedin') return { can: false, reason: 'Your stay has started' };
+        var verified = !!(b ? b.verified_at : it.verified_at);
+        if (x.kind === 'reservation' && !it.booking && key === 'pending') return { can: true };
+        if (key === 'pending' && !verified && !(x.kind === 'reservation' && it.status === 'CONVERTED_TO_BOOKING')) return { can: true };
+        return { can: false, reason: 'Verified by the front desk \u2014 contact us to make changes' };
+    };
     S.appKind = function (x) { return (x.kind === 'booking' || x.it.booking) ? 'booking' : 'reservation'; };
     S.appCategory = function (x) {
         var st = appStatus(x);
@@ -170,7 +185,7 @@
                 '<div class="d-flex justify-content-between align-items-start gap-2"><div><div class="fw-bold">' + VS.esc(id) + '</div><div class="text-muted small">' + VS.esc(dates(it)) + '</div><div class="small">' + VS.esc(S.firstRoomTypes(it)) + '</div></div>' +
                 '<span class="vs-chip ' + s.cls + '">' + s.label + '</span></div>' +
                 (s.note ? '<div class="small text-muted mt-1">' + VS.esc(s.note) + '</div>' : '') +
-                (function () { if (r.historical) return ''; var pa = S.payAction(x); return pa.a === 'PAY_NOW' ? '<div class="mt-2"><span class="btn btn-velocity btn-sm" data-pay="' + pa.href + '">Pay now</span></div>' : pa.a === 'NONE' ? '' : '<div class="small text-muted mt-2"><i class="fas fa-circle-info me-1"></i>' + VS.esc(pa.text) + '</div>'; })() +
+                (function () { if (r.historical) return ''; var ed = S.canEdit(x) ? '<span class="btn btn-outline-velocity btn-sm ms-2" role="link" tabindex="0" data-edit-link="/guest/reserve/' + it.id + '/edit">Edit</span>' : ''; var pa = S.payAction(x); return pa.a === 'PAY_NOW' ? '<div class="mt-2"><span class="btn btn-velocity btn-sm" data-pay="' + pa.href + '">Pay now</span>' + ed + '</div>' : pa.a === 'NONE' ? (ed ? '<div class="mt-2">' + ed + '</div>' : '') : '<div class="small text-muted mt-2"><i class="fas fa-circle-info me-1"></i>' + VS.esc(pa.text) + ed + '</div>'; })() +
                 '<div class="row text-center g-2 mt-2"><div class="col-4"><div class="small text-muted">Total</div><div class="vs-num fw-bold">' + VS.money(m.total) + '</div></div><div class="col-4"><div class="small text-muted">Paid</div><div class="vs-num fw-bold">' + VS.money(m.paid) + '</div></div><div class="col-4"><div class="small text-muted">Balance</div><div class="vs-num fw-bold">' + VS.money(m.remaining) + '</div></div></div></a>';
         }
         function paint() {
@@ -190,6 +205,7 @@
             host.innerHTML = list.length ? list.map(card).join('')
                 : VS.empty('fa-suitcase', filtered ? T.match : T.empty, filtered ? (st.status && !q && !st.room ? T.none[st.status] : 'Try another transaction number, room type, or date.') : T.none.all, filtered ? '<button class="btn btn-light btn-sm" data-clear2>Clear filters</button>' : '<a class="btn btn-velocity" href="/rooms">Browse rooms</a>');
             var c2 = host.querySelector('[data-clear2]'); if (c2) c2.onclick = clear;
+            host.querySelectorAll('[data-edit-link]').forEach(function (a) { var go = function (e) { e.stopPropagation(); e.preventDefault(); window.location.href = a.getAttribute('data-edit-link'); }; a.addEventListener('click', go); a.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') go(e); }); });
             host.querySelectorAll('[data-pay]').forEach(function (b) { b.addEventListener('click', function (e) { e.preventDefault(); e.stopPropagation(); window.location.href = b.getAttribute('data-pay'); }); });
             VS.reveal(host);
         }
@@ -412,7 +428,10 @@
             if (pa.a === 'PAY_NOW') actions.push('<a class="btn btn-velocity" href="' + pa.href + '">Pay now</a>');
             else if (pa.a === 'UNDER_REVIEW' || pa.a === 'FRONT_DESK') actions.push('<span class="small text-muted align-self-center"><i class="fas fa-circle-info me-1"></i>' + VS.esc(pa.text) + '</span>');
             if ((b || kind === 'booking') && /CHECKED_IN/.test((b || it).booking_status || '')) actions.push('<a class="btn btn-outline-velocity" href="#vsAmenityReq" data-open-amenity>Request amenities</a>');
-            if (!/cancelled|rejected|completed|checkedin|noshow/.test(st.key)) actions.push('<button class="btn btn-outline-danger" id="vsCancelBtn">Cancel ' + kind + '</button>');
+            if (S.canEdit({ kind: kind, it: it })) actions.push('<a class="btn btn-outline-velocity" href="/guest/reserve/' + it.id + '/edit">Edit</a>');
+            var cr = S.cancelRule({ kind: kind, it: it });
+            if (cr.can) actions.push('<button class="btn btn-outline-danger" id="vsCancelBtn">Cancel ' + kind + '</button>');
+            else if (cr.reason) actions.push('<span class="small text-muted align-self-center"><i class="fas fa-circle-info me-1"></i>' + VS.esc(cr.reason) + '</span>');
             if (/cancelled|rejected|completed|noshow/.test(st.key)) actions.push('<button class="btn btn-outline-danger" id="vsDeleteBtn">Delete</button>');
             host.innerHTML = '<section class="vs-card"><div class="d-flex justify-content-between align-items-start gap-2"><div><h1 class="h4 fw-bold mb-1">' + VS.esc(title) + '</h1><div class="text-muted small">Created ' + VS.esc(VS.dateTime(it.created_at)) + '</div><div class="mt-1">' + VS.esc(line) + '</div></div><span class="vs-chip ' + st.cls + '">' + st.label + '</span></div>' +
                 (actions.length ? '<div class="d-flex flex-wrap gap-2 mt-3">' + actions.join('') + '</div>' : '') + '</section>' +
@@ -433,7 +452,7 @@
             var cancel = host.querySelector('#vsCancelBtn'), del = host.querySelector('#vsDeleteBtn');
             if (cancel) cancel.onclick = function () {
                 var paid = S.money(it).paid > 0.009;
-                VS.confirm({ title: 'Cancel this ' + kind + '?', message: paid ? 'A payment was already made. Cancelling does not refund what was already paid.' : 'This cannot be undone.', confirmText: 'Cancel ' + kind, cancelText: 'Keep it', danger: true }).then(function (yes) {
+                VS.confirm({ title: 'Cancel ' + idLabel(it, kind) + '?', message: paid ? 'The ' + VS.money(S.money(it).paid) + ' you paid is non-refundable.' : 'You can book again at any time.', confirmText: 'Cancel ' + kind, cancelText: 'Keep ' + kind, danger: true }).then(function (yes) {
                     if (!yes) return;
                     VS.busy(cancel, function () { return VS.api('/guest/' + (kind === 'reservation' ? 'reservations' : 'bookings') + '/' + it.id + '/cancel', { method: 'PUT' }); }).then(function (r) {
                         if (!r) return; if (r.ok) { VS.toast('Cancelled.', 'success'); load(); } else VS.toast(r.message, 'danger');

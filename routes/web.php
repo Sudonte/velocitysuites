@@ -469,6 +469,7 @@ Route::middleware(['auth', 'account.status', 'log.activity', 'no.cache'])->group
         Route::get('/rooms', [\App\Http\Controllers\Guest\PortalController::class, 'rooms'])->name('rooms');
         Route::get('/calendar', [\App\Http\Controllers\Guest\PortalController::class, 'calendar'])->name('calendar');
         Route::get('/book/new', [\App\Http\Controllers\Guest\PortalController::class, 'bookingWizard'])->name('book.new');
+        Route::get('/reserve/{id}/edit', [\App\Http\Controllers\Guest\PortalController::class, 'reservationEdit'])->whereNumber('id')->name('reserve.edit');
         Route::get('/reserve/new', [\App\Http\Controllers\Guest\PortalController::class, 'reservationWizard'])->name('reserve.new');
         Route::get('/pay/{kind}/{id}', [\App\Http\Controllers\Guest\PortalController::class, 'pay'])->whereIn('kind', ['booking', 'reservation'])->whereNumber('id')->name('pay');
         Route::get('/history', [\App\Http\Controllers\Guest\PortalController::class, 'history'])->name('history');

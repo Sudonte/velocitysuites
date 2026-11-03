@@ -13,8 +13,8 @@
     <form id="vsStayFilters" class="vs-card" novalidate>
         <div class="row g-2 align-items-end">
             <div class="col-12 col-lg-4"><label class="form-label small fw-semibold" for="sq">Search</label><input class="form-control" id="sq" name="q" type="search" placeholder="Transaction number, room type or date"></div>
-            <div class="col-6 col-lg-2"><label class="form-label small fw-semibold" for="ss">Status</label><select class="form-select" id="ss" name="status"></select></div>
-            <div class="col-6 col-lg-2"><label class="form-label small fw-semibold" for="so">Sort by</label><select class="form-select" id="so" name="sort"><option value="newest">Newest first</option><option value="oldest">Oldest first</option></select></div>
+            <div class="col-12 col-sm-6 col-lg-2"><label class="form-label small fw-semibold" for="ss">Status</label><select class="form-select" id="ss" name="status"></select></div>
+            <div class="col-12 col-sm-6 col-lg-2"><label class="form-label small fw-semibold" for="so">Sort by</label><select class="form-select" id="so" name="sort"><option value="newest">Newest first</option><option value="oldest">Oldest first</option></select></div>
             <div class="col-8 col-lg-3"><label class="form-label small fw-semibold" for="sr">Room type</label><select class="form-select" id="sr" name="room"><option value="">All room types</option></select></div>
             <div class="col-4 col-lg-1"><button type="button" class="btn btn-light w-100" data-clear>Clear</button></div>
         </div>

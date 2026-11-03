@@ -338,4 +338,21 @@ class GuestParityV3Test extends TestCase
         }
         $this->assertStringNotContainsString('data-edit', $js, 'no per-section Edit buttons any more');
     }
+
+    // ================================================================ stabilization pass
+
+    public function test_edit_reservation_page_cancel_rule_and_wording_follow_the_app(): void
+    {
+        [$user] = $this->guest();
+        $this->get('/guest/reserve/5/edit')->assertRedirect(route('login'));
+        $this->actingAs($user)->get(route('guest.reserve.edit', 5))->assertOk()->assertSee('Edit reservation #5', false)->assertSee("VSWizard.init(document.getElementById('vsWizRoot'), 'reservation', 5)", false);
+        $js = file_get_contents(public_path('js/portal/wizard.js'));
+        foreach (['/guest/reservations/\' + editId', "method: 'PUT', body: editBody()", '/id-card', '/switch-to-', 'Reservation updated', 'Already edited', 'This reservation can no longer be edited'] as $n) {
+            $this->assertStringContainsString($n, $js, $n);
+        }
+        $stays = file_get_contents(public_path('js/portal/stays.js'));
+        foreach (['S.canEdit = function', 'S.cancelRule = function', 'Verified by the front desk \u2014 contact us to make changes', 'Your stay has started', "'Keep ' + kind", 'is non-refundable.', 'You can book again at any time.', "label: 'Awaiting verification'"] as $n) {
+            $this->assertStringContainsString($n, $stays, $n);
+        }
+    }
 }

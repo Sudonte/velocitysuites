@@ -1,12 +1,13 @@
 @extends('layouts.portal')
 
-@section('title', ($mode === 'booking' ? 'New booking' : 'New reservation') . ' - Velocity Suites')
+@php $editId = $editId ?? null; @endphp
+@section('title', ($editId ? 'Edit reservation' : ($mode === 'booking' ? 'New booking' : 'New reservation')) . ' - Velocity Suites')
 
 @section('content')
 <div class="container pb-5" id="vsWizRoot">
     <div class="vs-head" id="vsWizTop">
-        <h1>{{ $mode === 'booking' ? 'New booking' : 'New reservation' }}</h1>
-        <p>{{ $mode === 'booking' ? 'Book and pay now. The front desk verifies your payment.' : 'Reserve a room now and pay later.' }}</p>
+        <h1>{{ $editId ? 'Edit reservation #' . $editId : ($mode === 'booking' ? 'New booking' : 'New reservation') }}</h1>
+        <p>{{ $editId ? 'You can edit a reservation once, while it is still pending.' : ($mode === 'booking' ? 'Book and pay now. The front desk verifies your payment.' : 'Reserve a room now and pay later.') }}</p>
         <div class="vs-stepline" id="vsWizLine" aria-live="polite"></div>
         <ol class="vs-steps" id="vsWizBar" aria-hidden="true"></ol>
     </div>
@@ -24,7 +25,7 @@
 <script src="{{ asset('js/portal/pay.js') }}?v={{ filemtime(public_path('js/portal/pay.js')) }}"></script>
 <script src="{{ asset('js/portal/wizard.js') }}?v={{ filemtime(public_path('js/portal/wizard.js')) }}"></script>
 <script>
-    VSWizard.init(document.getElementById('vsWizRoot'), '{{ $mode }}');
+    VSWizard.init(document.getElementById('vsWizRoot'), '{{ $mode }}', {{ $editId ? (int) $editId : 'null' }});
     // the same totals on small screens: mirror the side summary into the pinned bar
     new MutationObserver(function () { document.getElementById('vsWizSummaryMobile').innerHTML = document.getElementById('vsWizSummary').innerHTML; })
         .observe(document.getElementById('vsWizSummary'), { childList: true, subtree: true });

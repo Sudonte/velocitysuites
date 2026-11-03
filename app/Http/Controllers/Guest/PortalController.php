@@ -40,6 +40,12 @@ class PortalController extends Controller
         return view('portal.wizard', ['mode' => 'reservation']);
     }
 
+    /** The app's one-time Edit reservation: the same wizard, filled in from the reservation, saved with PUT /api/guest/reservations/{id}. */
+    public function reservationEdit(int $id): View
+    {
+        return view('portal.wizard', ['mode' => 'reservation', 'editId' => $id]);
+    }
+
     public function stays(): View
     {
         return view('portal.stays');

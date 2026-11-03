@@ -517,7 +517,11 @@ class Reservation extends Model
             return null;
         }
 
-        if ($this->payments()->where('payment_status', 'completed')->exists()) {
+        // Uses the already-loaded payments when a list eager-loaded them (no query per reservation); same answer either way.
+        $paid = $this->relationLoaded('payments')
+            ? $this->payments->contains(fn ($p) => $p->payment_status === 'completed')
+            : $this->payments()->where('payment_status', 'completed')->exists();
+        if ($paid) {
             return null;
         }
 

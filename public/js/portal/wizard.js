@@ -38,8 +38,9 @@
     function nights(s) { return Math.max(1, VS.nights(s.check_in, s.check_out)); }
     function overlap(a, b) { return a.check_in < b.check_out && b.check_in < a.check_out; }
 
-    W.init = function (root, mode) {
+    W.init = function (root, mode, editId) {
         var S = newState(mode);
+        var DK = KEY + mode + (editId ? '_edit' + editId : '');
         var stepsDef = mode === 'booking'
             ? ['Dates and rooms', 'Amenities', 'Representative', 'Guests', 'ID verification', 'Review and bill summary']
             : ['Dates and rooms', 'Amenities', 'Representative', 'Guests', 'ID verification', 'Payment method', 'Review and bill summary'];
@@ -49,11 +50,11 @@
 
         // restore a draft after a refresh
         try {
-            var saved = JSON.parse(sessionStorage.getItem(KEY + mode) || 'null');
+            var saved = editId ? null : JSON.parse(sessionStorage.getItem(DK) || 'null');
             if (saved && saved.stays) { var keep = S.idFile; S = Object.assign(S, saved); S.idFile = keep; }
         } catch (e) { /* no draft */ }
         var pre = new URLSearchParams(window.location.search);
-        function save() { var c = Object.assign({}, S); delete c.idFile; sessionStorage.setItem(KEY + mode, JSON.stringify(c)); }
+        function save() { var c = Object.assign({}, S); delete c.idFile; sessionStorage.setItem(DK, JSON.stringify(c)); }
 
         // ---- data
         function roomsFor(ci, co) {
@@ -335,7 +336,7 @@
                 sel.value = S.discount_id || ''; toggle();
             });
             function toggle() { up.classList.toggle('d-none', !sel.value); paintPrev(); }
-            sel.onchange = function () { S.discount_id = sel.value; if (!sel.value) S.idFile = null; save(); toggle(); };
+            sel.onchange = function () { S.discount_id = sel.value; if (!sel.value) { S.idFile = null; S.hasId = false; } save(); toggle(); };
             function paintPrev() {
                 var f = pending || S.idFile;
                 if (!f) { prev.innerHTML = ''; return; }
@@ -353,7 +354,7 @@
             }
             main.querySelector('#idCam').onchange = pick; main.querySelector('#idFile').onchange = pick;
             bindNav(function () {
-                if (sel.value && !S.idFile) { VS.confirm({ title: 'No ID photo yet', message: 'The discount is verified at check-in. Without an ID photo it cannot be claimed in advance. Continue without it?', confirmText: 'Continue' }).then(function (yes) { if (yes) go(5); }); return; }
+                if (sel.value && !S.idFile && !S.hasId) { VS.confirm({ title: 'No ID photo yet', message: 'The discount is verified at check-in. Without an ID photo it cannot be claimed in advance. Continue without it?', confirmText: 'Continue' }).then(function (yes) { if (yes) go(5); }); return; }
                 go(5);
             });
         }
@@ -435,17 +436,51 @@
             return fd;
         }
 
+
+        function editBody() {
+            var b = { stays: S.stays.map(function (s, i) { return { check_in: s.check_in, check_out: s.check_out,
+                    rooms: stayRooms(s).map(function (r) { return { room_type_id: r.id, quantity: r.qty }; }),
+                    amenities: (S.amenities[i] || []).map(function (a) { return { amenity_id: a.amenity_id, quantity: a.quantity, room_type_id: a.room_type_id, room_slot: a.room_slot }; }) }; }),
+                adults: S.adults, children: S.minors.length, guest_first_name: S.rep.first, guest_last_name: S.rep.last,
+                additional_guests: S.minors.map(function (age, i) { return { name: 'Child ' + (i + 1), age: age, relationship: 'Child' }; }) };
+            if (S.rep.middle) b.guest_middle_name = S.rep.middle;
+            if (S.discount_id) { b.discount_id = +S.discount_id; var d = (cache.discounts || []).find(function (x) { return x.id == S.discount_id; }); if (d) b.id_card_type = d.name; }
+            else { b.id_card_type = 'None'; if (editInfo && editInfo.id_card_image_path) b.remove_id_card = true; }
+            return b;
+        }
+        function saveEdit(btn) {
+            VS.confirm({ title: 'Save your changes?', message: 'You can edit a reservation only once. After this it cannot be edited again.', confirmText: 'Save changes' }).then(function (yes) {
+                if (!yes) return;
+                VS.busy(btn, function () {
+                    return VS.api('/guest/reservations/' + editId, { method: 'PUT', body: editBody() }).then(function (r) {
+                        if (!r.ok) return r;
+                        var steps = Promise.resolve(r);
+                        if (S.idFile) steps = steps.then(function () { var fd = new FormData(); fd.append('id_card', S.idFile, S.idFile.name || 'id.jpg'); return VS.api('/guest/reservations/' + editId + '/id-card', { method: 'POST', body: fd }); }).then(function (u) { return u.ok ? r : u; });
+                        if (S.payment_method !== S.origMethod) steps = steps.then(function (prev) { if (!prev.ok) return prev; return VS.api('/guest/reservations/' + editId + '/switch-to-' + (S.payment_method === 'gcash' ? 'gcash' : 'cash'), { method: 'PUT' }).then(function (u) { return u.ok ? r : u; }); });
+                        return steps;
+                    });
+                }).then(function (r) {
+                    if (!r) return;
+                    if (!r.ok) { errorBox(r.message); return; }
+                    sessionStorage.removeItem(DK); window.__vsLeavingOk = true;
+                    main.innerHTML = '<div class="text-center py-4"><div class="vs-success"><i class="fas fa-check"></i></div><h2 class="h4 fw-bold mt-3">Reservation updated</h2><p class="text-muted">Reservation #' + VS.esc(editId) + ' was saved. It cannot be edited again.</p><a class="btn btn-velocity" href="/guest/reservations/' + VS.esc(editId) + '">View reservation</a></div>';
+                    bar.parentNode.classList.add('d-none'); sum.parentNode.classList.add('d-none'); root.querySelector('#vsWizSummaryM').classList.add('d-none');
+                });
+            });
+        }
+
         function submit(btn) {
             btn = btn.currentTarget || main.querySelector('#wSubmit');
             if (!main.querySelector('#wTerms').checked) { VS.fieldError(main.querySelector('#wTerms'), 'Accept the terms to continue.'); return; }
             if (mode === 'booking') { startPayment(); return; }
+            if (editId) { saveEdit(btn); return; }
             VS.confirm({ title: 'Confirm reservation?', message: 'Your reservation will be sent to the front desk.', confirmText: 'Confirm reservation' }).then(function (yes) {
                 if (!yes) return;
                 var fd = payload(); fd.append('payment_method', S.payment_method);
                 VS.busy(btn, function () { return VS.api('/guest/reservations', { method: 'POST', body: fd }); }).then(function (r) {
                     if (!r) return;
                     if (!r.ok) { errorBox(r.message); return; }
-                    sessionStorage.removeItem(KEY + mode);
+                    sessionStorage.removeItem(DK);
                     var res = r.data.reservation || r.data;
                     main.innerHTML = '<div class="text-center py-4"><div class="vs-success"><i class="fas fa-check"></i></div><h2 class="h4 fw-bold mt-3">Reservation confirmed</h2><p class="text-muted">Reservation #' + VS.esc(res.id) + ' is with the front desk.' +
                         (S.payment_method === 'gcash' ? ' Complete your GCash payment from your reservation using Pay now.' : ' Pay at the hotel when you arrive.') + '</p><a class="btn btn-velocity" href="/guest/reservations/' + VS.esc(res.id) + '">View reservation</a></div>';
@@ -467,7 +502,7 @@
                 submit: function (f) {
                     var fd = payload(); fd.append('payment_method', 'gcash'); fd.append('amount_paid', f.amount); fd.append('selected_payment_percentage', f.percent);
                     fd.append('gcash_number', f.gcash_number); fd.append('reference_number', f.reference_number); fd.append('receipt', f.receipt, f.receipt.name || 'receipt.jpg');
-                    return VS.api('/guest/bookings', { method: 'POST', body: fd }).then(function (res) { if (res.ok) { sessionStorage.removeItem(KEY + mode); window.__vsLeavingOk = true; } return res; });
+                    return VS.api('/guest/bookings', { method: 'POST', body: fd }).then(function (res) { if (res.ok) { sessionStorage.removeItem(DK); window.__vsLeavingOk = true; } return res; });
                 },
                 success: function (data) { var b = data.booking || data; return '<a class="btn btn-velocity" href="/guest/bookings/' + VS.esc(b.id) + '">View booking</a>'; }
             });
@@ -507,6 +542,30 @@
             S.draft.check_out = S.draft.check_in ? (pre.get('check_out') && pre.get('check_out') > S.draft.check_in ? pre.get('check_out') : VS.addDays(S.draft.check_in, 1)) : '';
             S.presetRoom = +presetRoom;
         }
+
+        // ---- Edit reservation (the app's one-time edit): fill the wizard from the reservation, save with PUT
+        var editInfo = null;
+        function fetchEdit() {
+            main.innerHTML = VS.skeleton(5);
+            return VS.api('/guest/reservations/' + editId).then(function (r) {
+                var back = '<a class="btn btn-light" href="/guest/reservations">Back to Booking &amp; Reservation</a>';
+                if (!r.ok) { main.innerHTML = VS.errorState(r.status === 404 || r.status === 403 ? 'We could not find that reservation.' : r.message) + '<div class="text-center">' + back + '</div>'; return Promise.reject('stop'); }
+                var it = r.data, awaiting = /AWAITING|TO_BE_CONVERTED/.test(it.status || '');
+                if (it.booking || !awaiting) { main.innerHTML = '<div class="vs-empty"><i class="fas fa-circle-info"></i><h3 class="h6 fw-bold">This reservation can no longer be edited</h3><p class="text-muted">Only a pending reservation can be edited.</p>' + back + '</div>'; return Promise.reject('stop'); }
+                if (it.edited_at) { main.innerHTML = '<div class="vs-empty"><i class="fas fa-circle-info"></i><h3 class="h6 fw-bold">Already edited</h3><p class="text-muted">This reservation has already been modified and cannot be edited again.</p>' + back + '</div>'; return Promise.reject('stop'); }
+                editInfo = it;
+                S.stays = (it.stays || []).map(function (s) { var rooms = {}; (s.rooms || []).forEach(function (rm) { rooms[rm.room_type_id] = (rooms[rm.room_type_id] || 0) + rm.quantity; }); return { check_in: s.check_in, check_out: s.check_out, rooms: rooms }; });
+                S.amenities = {}; (it.stays || []).forEach(function (s, i) { S.amenities[i] = (s.amenities || []).filter(function (a) { return a.amenity_id; }).map(function (a) { return { amenity_id: +a.amenity_id, quantity: a.quantity, room_type_id: a.room_type_id != null ? +a.room_type_id : null, room_slot: a.room_slot != null ? +a.room_slot : null }; }); });
+                S.adults = Math.max(1, +it.adults || 1);
+                S.minors = (it.additional_guest_details || it.additional_guests || []).map(function (g) { return g.age != null ? +g.age : null; });
+                S.rep = { who: 'other', first: it.guest_first_name || '', middle: it.guest_middle_name || '', last: it.guest_last_name || '' };
+                S.discount_id = it.discount_id ? String(it.discount_id) : ''; S.hasId = !!(it.discount_id && (it.id_card_image_path || it.has_id_card || it.id_card_type && it.id_card_type !== 'None'));
+                S.payment_method = it.payment_method === 'gcash' ? 'gcash' : 'cash'; S.origMethod = S.payment_method;
+                return loadProfile().then(function (p) { if (p && p.first_name && p.first_name === S.rep.first && (p.last_name || '') === S.rep.last) S.rep.who = 'owner'; });
+            });
+        }
+        var ready = editId ? fetchEdit() : Promise.resolve();
+
         // ---- start: the dates and rooms picked on the Rooms page or the landing page (kept up to 30 minutes, also through sign-in)
         var fromSel = null;
         if (pre.get('sel') && !S.stays.length && !S.draft.check_in) {
@@ -517,13 +576,13 @@
         frame();
         loadAmenities(); loadDiscounts();
         // make sure type info is known for restored stays before the first render
-        Promise.all(S.stays.map(function (s) { return roomsFor(s.check_in, s.check_out); })).then(function () {
+        ready.then(function () { return Promise.all(S.stays.map(function (s) { return roomsFor(s.check_in, s.check_out); })); }).then(function () {
             if (S.step > stepsDef.length - 1) S.step = 0;
             render(); frame();
             if (fromSel) applySelection(fromSel);
             if (S.presetRoom && S.draft.check_in) { var id = S.presetRoom; delete S.presetRoom; roomsFor(S.draft.check_in, S.draft.check_out).then(function (list) { if (list && list.some(function (t) { return t.id === id && t.available_count > 0; })) { S.draft.rooms[id] = 1; paintRooms(); } }); }
         });
-        window.addEventListener('beforeunload', function (e) { if (S.stays.length && !window.__vsLeavingOk) { e.preventDefault(); e.returnValue = ''; } });
+        window.addEventListener('beforeunload', function (e) { if (S.stays.length && !window.__vsLeavingOk && !(editId && !editInfo)) { e.preventDefault(); e.returnValue = ''; } });
         W.state = function () { return S; };
     };
 })();
