@@ -166,10 +166,10 @@ class GuestParityV3Test extends TestCase
             $this->assertStringContainsString($needle, $html, $needle);
         }
         $js = file_get_contents(public_path('js/portal/account.js'));
-        foreach (['Personal information', 'Contact information', "title: 'Address'", 'Change password', 'data-edit', 'data-cancel', 'Save changes', "'Save your changes?'",
+        foreach (['Personal information', 'Contact information', "card('Address'", 'Change password', 'Save changes', "'Save these changes?'",
             'First name is required', 'Last name is required', 'Date of birth is required', 'You must be at least 18 years old to create an account.', 'Passwords do not match',
             'Use at least 8 characters with a letter and a number', 'Strength: Weak', 'Strength: Strong', '1 Verify', '2 New password', '3 Done', 'Password updated', 'Profile updated successfully.',
-            '/guest/profile/email/request', '/guest/profile/email/confirm', '/guest/password/change', '/verify-reset-otp', 'Remove your profile photo?'] as $needle) {
+            '/guest/profile/email/request', '/guest/password/change', '/verify-reset-otp', 'Remove your profile photo?'] as $needle) {
             $this->assertStringContainsString($needle, $js, $needle);
         }
         // the old layout's logout form id no longer exists - the password step logs out through the header's form
@@ -280,5 +280,62 @@ class GuestParityV3Test extends TestCase
         // a transaction page needs its owner: a visitor goes to sign in and another guest cannot read it through the API
         $this->get('/guest/bookings/99')->assertRedirect(route('login'));
         $this->get('/guest/receipts/SR-20261028-000154')->assertRedirect(route('login'));
+    }
+
+    // ================================================================ Edit profile: one combined save
+
+    public function test_the_combined_save_counts_the_thirty_days_once_and_saves_all_three_sections_together(): void
+    {
+        [$user, $h] = $this->guest();
+        $body = ['first_name' => 'Anna', 'last_name' => 'Cruz', 'middle_name' => 'M', 'gender' => 'female', 'date_of_birth' => '1992-03-04',
+            'mobile_number' => '+6591234567', 'country' => 'Singapore', 'address' => 'Singapore', 'region' => null, 'province' => null, 'city' => null, 'barangay' => null, 'street' => null, 'zip_code' => null];
+        $this->putJson('/api/guest/profile/all', $body, $h)->assertOk()
+            ->assertJsonPath('user.first_name', 'Anna')->assertJsonPath('guest.mobile_number', '+6591234567')->assertJsonPath('guest.country', 'Singapore')
+            ->assertJsonPath('profile_update.can_update', false);
+        // the wait started once, for the whole save; a second save is refused with the app's date message and changes nothing
+        $this->putJson('/api/guest/profile/all', ['first_name' => 'Other', 'last_name' => 'Name'] , $h)->assertStatus(422)
+            ->assertJsonFragment(['message' => 'You can update your profile again on '.now()->addDays(30)->format('F j, Y').'.']);
+        $this->assertSame('Anna', $user->refresh()->first_name);
+        $this->assertSame(1, DB::table('guests')->where('user_id', $user->id)->whereNotNull('profile_last_updated_at')->count());
+    }
+
+    public function test_one_refused_field_in_the_combined_save_saves_nothing_and_does_not_start_the_wait(): void
+    {
+        [$user, $h] = $this->guest();
+        DB::table('guests')->insert(['user_id' => 998, 'mobile_number' => '09175559999', 'created_at' => now(), 'updated_at' => now()]);
+        $this->putJson('/api/guest/profile/all', ['first_name' => 'Changed', 'last_name' => 'Cruz', 'mobile_number' => '09175559999'], $h)->assertStatus(422)
+            ->assertJsonPath('errors.mobile_number.0', 'This mobile number is already registered to another account.');
+        $this->assertSame('Ana', $user->refresh()->first_name, 'the name of the other section was not saved');
+        $this->assertNull(DB::table('guests')->where('user_id', $user->id)->value('profile_last_updated_at'));
+        $this->putJson('/api/guest/profile/all', ['first_name' => '', 'last_name' => 'Cruz'], $h)->assertStatus(422)->assertJsonValidationErrors('first_name');
+    }
+
+    public function test_a_combined_save_with_an_email_change_needs_the_right_code_and_a_wrong_code_saves_nothing(): void
+    {
+        [$user, $h] = $this->guest('Correct123');
+        $new = 'fresh'.uniqid().'@example.test';
+        $this->postJson('/api/guest/profile/email/request', ['new_email' => $new, 'current_password' => 'Correct123'], $h)->assertOk();
+        DB::table('email_change_requests')->where('user_id', $user->id)->update(['otp' => Hash::make('654321')]);
+        $base = ['first_name' => 'Changed', 'last_name' => 'Cruz', 'mobile_number' => '09170000009'];
+
+        $this->putJson('/api/guest/profile/all', $base + ['email_otp' => '111111'], $h)->assertStatus(422)->assertJsonPath('errors.email_otp.0', 'Invalid verification code.');
+        $fresh = $user->refresh();
+        $this->assertSame('Ana', $fresh->first_name, 'a wrong code rolls the whole save back');
+        $this->assertNotSame($new, $fresh->email);
+        $this->assertNull(DB::table('guests')->where('user_id', $user->id)->value('profile_last_updated_at'), 'and does not start the wait');
+        $this->assertSame('09170000001', DB::table('guests')->where('user_id', $user->id)->value('mobile_number'));
+
+        $this->putJson('/api/guest/profile/all', $base + ['email_otp' => '654321'], $h)->assertOk()->assertJsonPath('email_changed', true)->assertJsonPath('user.email', $new);
+        $this->assertSame('Changed', $user->refresh()->first_name);
+        $this->assertSame($new, $user->email);
+    }
+
+    public function test_the_edit_profile_page_is_one_button_and_one_save_bar(): void
+    {
+        $js = file_get_contents(public_path('js/portal/account.js'));
+        foreach (['id="pEdit"', 'Edit profile', 'id="pSave"', 'id="pCancel"', "/guest/profile/all", "'Save these changes?'", 'You can edit your profile again after 30 days.', 'Nothing was saved.', 'Confirm your password', 'Profile updated successfully.', 'You can edit your profile again on '] as $needle) {
+            $this->assertStringContainsString($needle, $js, $needle);
+        }
+        $this->assertStringNotContainsString('data-edit', $js, 'no per-section Edit buttons any more');
     }
 }

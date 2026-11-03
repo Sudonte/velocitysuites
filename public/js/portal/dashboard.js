@@ -39,6 +39,16 @@
         return '<a class="d-flex justify-content-between align-items-center gap-2 py-2 border-bottom text-decoration-none" style="color:inherit" href="' + linkOf(x) + '"><div><div class="fw-semibold">' + VS.esc(S.idLabel(x.it, x.kind)) + '</div><div class="small text-muted">' + VS.esc(S.dates(x.it)) + '</div></div>' +
             '<div class="text-end"><span class="vs-chip ' + st.cls + '">' + st.label + '</span><div class="small vs-num">' + (m.remaining > 0.009 ? VS.money(m.remaining) + ' due' : 'Paid') + '</div></div></a>';
     }
+    /** One row per transaction that still owes money: Pay now (GCash reservation), Payment under review, or Pay at the hotel / front desk. */
+    function payRows(list) {
+        var rows = list.map(function (x) { return { x: x, pa: S.payAction(x) }; }).filter(function (r) { return r.pa.a !== 'NONE'; }).slice(0, 6);
+        if (!rows.length) return '';
+        return '<hr class="vs-rule">' + rows.map(function (r) {
+            var m = S.money(r.x.it);
+            return '<div class="d-flex justify-content-between align-items-center gap-2 py-1"><a class="text-decoration-none" style="color:inherit" href="' + linkOf(r.x) + '"><div class="fw-semibold">' + VS.esc(S.idLabel(r.x.it, r.x.kind)) + '</div><div class="small text-muted vs-num">' + VS.money(m.remaining) + ' due</div></a>' +
+                (r.pa.a === 'PAY_NOW' ? '<a class="btn btn-velocity btn-sm" href="' + r.pa.href + '">Pay now</a>' : '<span class="small text-muted text-end">' + VS.esc(r.pa.text) + '</span>') + '</div>';
+        }).join('');
+    }
     function card(title, html, extra) { return '<section class="vs-card vs-reveal" ' + (extra || '') + '><h2>' + title + '</h2>' + html + '</section>'; }
 
     D.page = function (root, firstName) {
@@ -98,7 +108,7 @@
 
                 var live = items.filter(function (x) { return !/cancelled|rejected/.test(keyOf(x)); });
                 var paid = live.reduce(function (a, x) { return a + S.money(x.it).paid; }, 0), wait = live.reduce(function (a, x) { return a + S.money(x.it).waiting; }, 0), due = live.filter(function (x) { return !/completed/.test(keyOf(x)); }).reduce(function (a, x) { return a + S.money(x.it).remaining; }, 0);
-                html += card('Payment status', '<div class="vs-row"><span>Paid (verified)</span><span>' + VS.money(paid) + '</span></div><div class="vs-row"><span>Waiting for verification</span><span>' + VS.money(wait) + '</span></div><div class="vs-row vs-strong"><span>Balance due</span><span>' + VS.money(due) + '</span></div>');
+                html += card('Payment status', '<div class="vs-row"><span>Paid (verified)</span><span>' + VS.money(paid) + '</span></div><div class="vs-row"><span>Waiting for verification</span><span>' + VS.money(wait) + '</span></div><div class="vs-row vs-strong"><span>Balance due</span><span>' + VS.money(due) + '</span></div>' + payRows(live));
 
                 var pr = rs[2].ok ? (rs[2].data.user || {}) : {}, g = rs[2].ok ? (rs[2].data.guest || {}) : {};
                 var comp = S.completeness(pr, g), pct = comp.pct;

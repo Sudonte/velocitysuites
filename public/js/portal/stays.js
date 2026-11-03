@@ -92,6 +92,16 @@
         if (missing.length === 1) line = missing[0]; else if (missing.length === 2) line = missing[0] + ' and ' + missing[1]; else if (missing.length > 2) line = missing[0] + ', ' + missing[1] + ' and ' + (missing.length - 2) + ' more';
         return { pct: Math.floor((list.length - missing.length) * 100 / list.length), line: line ? 'Add ' + line + ' to complete your profile' : null };
     };
+    /** The app's PaymentEligibility.payActionFor: NONE | PAY_NOW | UNDER_REVIEW | FRONT_DESK (and whether cash reservations say "Pay at the hotel"). */
+    S.payAction = function (x) {
+        var it = x.it, m = S.money(it), key = S.status(it, x.kind).key;
+        if (/cancelled|rejected|completed|noshow/.test(key) || m.remaining <= 0.009) return { a: 'NONE' };
+        if (m.waiting > 0.009) return { a: 'UNDER_REVIEW', text: 'Payment under review' };
+        var reservation = x.kind === 'reservation' && !it.booking && it.status !== 'CONVERTED_TO_BOOKING';
+        if (reservation && it.payment_method === 'gcash') return { a: 'PAY_NOW', href: '/guest/pay/reservation/' + it.id, text: 'Pay now' };
+        if (reservation) return { a: 'FRONT_DESK', text: 'Pay at the hotel' };
+        return { a: 'FRONT_DESK', text: 'Balance of ' + VS.money(m.remaining) + ' is paid at the front desk' };
+    };
     S.appKind = function (x) { return (x.kind === 'booking' || x.it.booking) ? 'booking' : 'reservation'; };
     S.appCategory = function (x) {
         var st = appStatus(x);
@@ -160,6 +170,7 @@
                 '<div class="d-flex justify-content-between align-items-start gap-2"><div><div class="fw-bold">' + VS.esc(id) + '</div><div class="text-muted small">' + VS.esc(dates(it)) + '</div><div class="small">' + VS.esc(S.firstRoomTypes(it)) + '</div></div>' +
                 '<span class="vs-chip ' + s.cls + '">' + s.label + '</span></div>' +
                 (s.note ? '<div class="small text-muted mt-1">' + VS.esc(s.note) + '</div>' : '') +
+                (function () { if (r.historical) return ''; var pa = S.payAction(x); return pa.a === 'PAY_NOW' ? '<div class="mt-2"><span class="btn btn-velocity btn-sm" data-pay="' + pa.href + '">Pay now</span></div>' : pa.a === 'NONE' ? '' : '<div class="small text-muted mt-2"><i class="fas fa-circle-info me-1"></i>' + VS.esc(pa.text) + '</div>'; })() +
                 '<div class="row text-center g-2 mt-2"><div class="col-4"><div class="small text-muted">Total</div><div class="vs-num fw-bold">' + VS.money(m.total) + '</div></div><div class="col-4"><div class="small text-muted">Paid</div><div class="vs-num fw-bold">' + VS.money(m.paid) + '</div></div><div class="col-4"><div class="small text-muted">Balance</div><div class="vs-num fw-bold">' + VS.money(m.remaining) + '</div></div></div></a>';
         }
         function paint() {
@@ -179,6 +190,7 @@
             host.innerHTML = list.length ? list.map(card).join('')
                 : VS.empty('fa-suitcase', filtered ? T.match : T.empty, filtered ? (st.status && !q && !st.room ? T.none[st.status] : 'Try another transaction number, room type, or date.') : T.none.all, filtered ? '<button class="btn btn-light btn-sm" data-clear2>Clear filters</button>' : '<a class="btn btn-velocity" href="/rooms">Browse rooms</a>');
             var c2 = host.querySelector('[data-clear2]'); if (c2) c2.onclick = clear;
+            host.querySelectorAll('[data-pay]').forEach(function (b) { b.addEventListener('click', function (e) { e.preventDefault(); e.stopPropagation(); window.location.href = b.getAttribute('data-pay'); }); });
             VS.reveal(host);
         }
         function clear() { state[tab] = { status: '', q: '', sort: 'newest', room: '' }; writeForm(); paint(); }
@@ -396,8 +408,9 @@
             var title = idLabel(it, kind) + (kind === 'reservation' && b ? ' · Booking #' + b.id : '');
             var line = st.key === 'cancelled' ? 'This transaction was cancelled' : st.key === 'rejected' ? 'This transaction was not accepted' : st.key === 'noshow' ? 'Marked as a no-show' : st.key === 'completed' ? 'Checked out' : st.key === 'checkedin' ? 'Checked in' : st.note || (st.key === 'confirmed' ? 'Confirmed' : 'Waiting for front desk verification');
             var actions = [];
-            var canPay = (kind === 'reservation') && it.payment_method === 'gcash' && !/CANCELLED|REJECTED/.test(it.status || '') && m.remaining > 0.009 && !(b && /CHECKED_IN|COMPLETED|CANCELLED|NO_SHOW/.test(b.booking_status || ''));
-            if (canPay) actions.push('<a class="btn btn-velocity" href="/guest/pay/reservation/' + it.id + '">Pay now</a>');
+            var pa = S.payAction({ kind: kind, it: it });
+            if (pa.a === 'PAY_NOW') actions.push('<a class="btn btn-velocity" href="' + pa.href + '">Pay now</a>');
+            else if (pa.a === 'UNDER_REVIEW' || pa.a === 'FRONT_DESK') actions.push('<span class="small text-muted align-self-center"><i class="fas fa-circle-info me-1"></i>' + VS.esc(pa.text) + '</span>');
             if ((b || kind === 'booking') && /CHECKED_IN/.test((b || it).booking_status || '')) actions.push('<a class="btn btn-outline-velocity" href="#vsAmenityReq" data-open-amenity>Request amenities</a>');
             if (!/cancelled|rejected|completed|checkedin|noshow/.test(st.key)) actions.push('<button class="btn btn-outline-danger" id="vsCancelBtn">Cancel ' + kind + '</button>');
             if (/cancelled|rejected|completed|noshow/.test(st.key)) actions.push('<button class="btn btn-outline-danger" id="vsDeleteBtn">Delete</button>');

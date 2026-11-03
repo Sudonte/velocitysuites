@@ -263,6 +263,47 @@ class ProfileController extends Controller
     }
 
     /**
+     * The website's "Edit profile" saves Personal information, Contact information and Address in ONE request. It does not
+     * re-implement anything: it runs update() (the very same validation, hierarchy check and 30-day wait, counted once for
+     * the whole save) and, when the guest also changed their email, then confirmChange() with the emailed code - all inside one
+     * transaction, so a refused field or a wrong code saves nothing at all. The email address itself is never taken from the
+     * request: it is only changed by requestEmailChange() + the code (the password was checked there).
+     */
+    public function updateAll(Request $request): JsonResponse
+    {
+        $request->validate(['email_otp' => 'nullable|string|size:6']);
+        $otp = $request->input('email_otp');
+
+        DB::beginTransaction();
+        try {
+            $response = $this->update($request);
+            if ($response->getStatusCode() >= 400) {
+                DB::rollBack();
+
+                return $response;
+            }
+
+            $payload = $response->getData(true);
+            if ($otp) {
+                $result = $this->emailChange->confirmChange(auth()->user(), $otp);
+                if (! $result['success']) {
+                    DB::rollBack();
+
+                    return response()->json(['message' => $result['message'], 'errors' => ['email_otp' => [$result['message']]]], 422);
+                }
+                $payload['user'] = auth()->user()->fresh();
+                $payload['email_changed'] = true;
+            }
+            DB::commit();
+
+            return response()->json($payload);
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            throw $e;
+        }
+    }
+
+    /**
      * Upload/replace the guest's profile picture. Unlike the ID card scan
      * (see Api\ReservationController::uploadIdCard), an avatar is fine on
      * the public disk - it's meant to be shown around the app, not kept

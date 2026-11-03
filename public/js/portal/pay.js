@@ -36,6 +36,7 @@
     };
 
     var QR = '/images/gcash-official-qr.jpg';
+    var HOTEL_NUMBER = '0976 078 0583';
 
     /**
      * ctx: { total, paid, discountPending, depositCap, kindLabel ('New booking' | 'Reservation #12'), lines: [{label, amount}],
@@ -46,6 +47,7 @@
         var range = P.range(ctx.total, ctx.paid || 0, ctx.discountPending, ctx.depositCap);
         var st = { step: 0, percent: null, number: '', ref: '', receipt: null, key: 'pay' + Date.now().toString(36) };
         var names = ['Check amount', 'Send via GCash', 'Enter reference', 'Upload receipt', 'Submit'];
+        var submitting = false;
 
         function head(title, sub) { return '<h2 class="vs-section-title">' + title + '</h2>' + (sub ? '<p class="text-muted">' + sub + '</p>' : '') + '<div id="vsPayErr" aria-live="polite"></div>'; }
         function err(m) { VS.alertBox('vsPayErr', m); }
@@ -56,7 +58,7 @@
             var blocked = P.blockedMessage(range);
             host.innerHTML = head('Review billing', ctx.kindLabel) +
                 '<div class="vs-card"><h3 class="h6 fw-bold">What you’re paying for</h3>' + (ctx.lines || []).map(function (l) { return '<div class="vs-row"><span>' + VS.esc(l.label) + '</span><span>' + VS.money(l.amount) + '</span></div>'; }).join('') +
-                '<hr class="vs-rule"><div class="vs-row vs-strong"><span>Grand total</span><span>' + VS.money(range.total) + '</span></div>' +
+                (ctx.notes || []).map(function (n) { return '<div class="small text-muted mt-1">' + VS.esc(n) + '</div>'; }).join('') + '<hr class="vs-rule"><div class="vs-row vs-strong"><span>Grand total</span><span>' + VS.money(range.total) + '</span></div>' +
                 (range.paid > 0 ? '<div class="vs-row"><span>Paid so far</span><span>' + VS.money(range.paid) + '</span></div><div class="vs-row vs-strong"><span>Remaining balance</span><span>' + VS.money(range.remaining) + '</span></div>' : '') + '</div>' +
                 (blocked ? '<div class="alert alert-info vs-alert">' + VS.esc(blocked) + '</div><a class="btn btn-light" href="javascript:history.back()">Back</a>' :
                     '<div class="vs-card"><h3 class="h6 fw-bold">How much do you want to pay now?</h3><p class="text-muted small">You can pay 20% to 50% of the grand total online. The rest is paid at the hotel.</p><div id="vsPct" class="row g-2">' +
@@ -88,8 +90,15 @@
         }
         function s2() {
             host.innerHTML = bar() + head('Send via GCash') + '<div class="vs-card text-center"><img src="' + QR + '" alt="Official Velocity Suites GCash QR code" style="max-width:260px;width:100%;border-radius:12px">' +
-                '<p class="mt-2 mb-1"><a href="' + QR + '" download="velocity-suites-gcash-qr.jpg">Save the QR code</a></p></div>' +
+                '<p class="mt-2 mb-1"><a href="' + QR + '" download="velocity-suites-gcash-qr.jpg">Save the QR code</a></p>' +
+                '<div class="vs-row justify-content-center gap-3 mt-2" id="vsHotelNo"><span>Hotel GCash number</span><span class="d-inline-flex align-items-center gap-2"><strong class="vs-num" id="vsHotelNoText">' + HOTEL_NUMBER + '</strong><button type="button" class="btn btn-sm btn-outline-velocity" id="vsCopyNo" aria-label="Copy the hotel GCash number">Copy</button></span></div><div class="small text-success" id="vsCopied" role="status" aria-live="polite"></div></div>' +
                 '<div class="vs-card"><h3 class="h6 fw-bold">How to pay</h3><ol class="mb-0 ps-3"><li>Open the GCash app and tap Scan QR.</li><li>Scan the code above, or save it to your photos first.</li><li>Pay exactly <strong class="vs-num">' + VS.money(amount()) + '</strong>.</li><li>Keep your receipt, then continue to enter your details and upload it.</li></ol></div>' + nav();
+            var cp = host.querySelector('#vsCopyNo');
+            cp.onclick = function () {
+                var txt = HOTEL_NUMBER.replace(/\s/g, ''), done = function () { host.querySelector('#vsCopied').textContent = 'GCash number copied'; };
+                if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(done, function () { host.querySelector('#vsCopied').textContent = 'Select and copy: ' + HOTEL_NUMBER; });
+                else host.querySelector('#vsCopied').textContent = 'Select and copy: ' + HOTEL_NUMBER;
+            };
             wire(function () { st.step = 2; gcash(); });
         }
         function fmtRef(v) { v = v.replace(/\D/g, '').slice(0, 13); return [v.slice(0, 3), v.slice(3, 7), v.slice(7)].filter(Boolean).join(' '); }
@@ -109,7 +118,12 @@
         function s4() {
             host.innerHTML = bar() + head('Upload your receipt', 'A screenshot or photo of your GCash receipt (JPG or PNG).') + '<div class="vs-card"><input class="form-control" type="file" id="gFile" accept="image/jpeg,image/png"><div id="gPrev" class="mt-3"></div></div>' + nav();
             var f = host.querySelector('#gFile'), prev = host.querySelector('#gPrev');
-            function paint() { prev.innerHTML = st.receipt ? '<img src="' + URL.createObjectURL(st.receipt) + '" alt="Your GCash receipt" class="rounded-3" style="max-width:100%;max-height:360px"><div class="small text-muted mt-1">' + VS.esc(st.receipt.name) + '</div>' : ''; }
+            function paint() {
+                prev.innerHTML = st.receipt ? '<img src="' + URL.createObjectURL(st.receipt) + '" alt="GCash receipt preview" class="rounded-3" style="max-width:100%;max-height:360px"><div class="small text-muted mt-1">' + VS.esc(st.receipt.name) + '</div><div class="d-flex gap-2 mt-2"><button type="button" class="btn btn-sm btn-outline-velocity" id="gReplace">Replace</button><button type="button" class="btn btn-sm btn-light" id="gRemove">Remove</button></div>' : '<p class="text-muted small mb-0">No receipt attached yet. Upload a screenshot of your GCash receipt to continue.</p>';
+                var rp = prev.querySelector('#gReplace'), rm = prev.querySelector('#gRemove');
+                if (rp) rp.onclick = function () { f.click(); };
+                if (rm) rm.onclick = function () { st.receipt = null; f.value = ''; paint(); };
+            }
             paint();
             f.onchange = function () {
                 var file = f.files[0]; if (!file) return; VS.clearErrors(host);
@@ -124,7 +138,7 @@
                 '<div class="vs-row"><span>Amount</span><span>' + VS.money(amount()) + '</span></div><div class="vs-row"><span>Payment type</span><span>Partial payment (' + st.percent + '%)</span></div><div class="vs-row"><span>GCash number</span><span>+63 ' + VS.esc(st.number) + '</span></div>' +
                 '<div class="vs-row"><span>Reference number</span><span>' + VS.esc(fmtRef(st.ref)) + '</span></div><div class="vs-row"><span>Receipt</span><span>' + VS.esc(st.receipt.name) + '</span></div></div>' + nav('Submit payment');
             wire(function (btn) {
-                VS.confirm({ title: 'Submit payment?', message: 'You are sending ' + VS.money(amount()) + ' by GCash for verification.', confirmText: 'Submit payment' }).then(function (yes) {
+                VS.confirm({ title: 'Submit payment of ' + VS.money(amount()) + '?', message: 'Double-check your reference number and receipt. This can\u2019t be undone.', confirmText: 'Yes, submit', cancelText: 'Cancel' }).then(function (yes) {
                     if (!yes) return;
                     VS.busy(btn, function () { return ctx.submit({ percent: st.percent, amount: amount(), gcash_number: st.number, reference_number: st.ref, receipt: st.receipt, key: st.key }); }).then(function (r) {
                         if (!r) return;

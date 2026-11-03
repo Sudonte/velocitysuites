@@ -116,6 +116,8 @@ Route::middleware(['auth.api', 'role:guest'])->group(function () {
     // every reservation/room/notification GET the app makes.
     Route::middleware('log.activity')->group(function () {
         Route::put('/guest/profile', [ProfileController::class, 'update']);
+        // The website's combined "Edit profile" save (additive): the same rules as the line above, plus an optional email code, atomically.
+        Route::put('/guest/profile/all', [ProfileController::class, 'updateAll']);
         Route::post('/guest/profile/picture', [ProfileController::class, 'updatePicture']);
         Route::delete('/guest/profile/picture', [ProfileController::class, 'removePicture']);
         Route::post('/guest/profile/email/request', [ProfileController::class, 'requestEmailChange'])->middleware('throttle:20,1');

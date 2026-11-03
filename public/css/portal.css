@@ -289,3 +289,22 @@ button.vs-cal-day:hover { background: var(--vs-red-soft); }
 button.vs-cal-day.picked { background: var(--primary-color, var(--vs-red)); color: #fff; }
 button.vs-cal-day.picked i { background: #fff; }
 .vs-sec-head h2 { font-size: 1.05rem; font-weight: 700; color: var(--primary-color, var(--vs-red)); }
+
+/* Edit profile: one bar to start, one sticky bar to save */
+.vs-editbar { padding: .7rem .9rem; margin-bottom: 1rem; border-radius: 12px; background: var(--surface-color, #fff); border: 1px solid var(--border-color, var(--vs-line)); }
+.vs-editbar.is-locked { background: var(--vs-amber-soft); color: var(--vs-amber); border-color: transparent; }
+.vs-savebar { position: sticky; bottom: 0; z-index: 20; margin: 0 -.25rem; padding: .75rem .25rem; background: var(--surface-color, #fff); border-top: 1px solid var(--border-color, var(--vs-line)); box-shadow: 0 -6px 16px rgba(20, 20, 30, .08); }
+.vs-savebar-in { display: flex; align-items: center; gap: .75rem; flex-wrap: wrap; }
+.vs-savebar-in .btn { min-width: 8rem; }
+@media (max-width: 575px) { .vs-savebar-in > div { width: 100%; } .vs-savebar-in .btn { flex: 1; } }
+.vs-changes { list-style: none; padding: 0; margin: 0 0 .75rem; }
+.vs-changes li { display: flex; justify-content: space-between; gap: 1rem; padding: .35rem 0; border-bottom: 1px solid var(--border-color, var(--vs-line)); }
+.vs-ch-l { color: var(--vs-muted); }
+.vs-ch-v { text-align: right; overflow-wrap: anywhere; }
+
+/* profile gender radios and the hotel GCash number */
+#pg .form-check { display: inline-flex; align-items: center; gap: .45rem; padding-left: 0; margin: 0; }
+#pg .form-check-input { float: none; margin: 0; flex: 0 0 auto; }
+#pg .form-check-label { margin: 0; }
+#vsHotelNo { flex-wrap: wrap; text-align: center; }
+#vsHotelNo > span:first-child { flex-basis: 100%; }
