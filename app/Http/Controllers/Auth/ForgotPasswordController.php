@@ -49,6 +49,12 @@ class ForgotPasswordController extends Controller
         return view('auth.forgot-password');
     }
 
+    /** The staff reset-request form (managers and receptionists are reset by the System Administrator, not by a code). */
+    public function showStaffForm()
+    {
+        return view('auth.forgot-password-staff');
+    }
+
     public function sendResetLink(Request $request)
     {
         $request->validate(['email' => 'required|email']);
