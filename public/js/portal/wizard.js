@@ -1,0 +1,497 @@
+/*
+ * New booking (6 steps) and new reservation (7 steps) on the web - the same steps, rules and wording as the app. Rooms and rates
+ * come from GET /api/rooms, amenities from GET /api/amenities, discounts from GET /api/discounts, and the request goes to the app's
+ * own POST /api/guest/reservations (a booking continues to the payment page, which posts to /api/guest/bookings).
+ */
+(function () {
+    'use strict';
+    var VS = window.VS;
+    var W = window.VSWizard = {};
+    var MAX_STAYS = 6;
+    var KEY = 'vs_wizard_';
+
+    // ---------------------------------------------------------------- image helper (camera or file, max 1600px, JPEG 80%)
+
+    VS.compressImage = function (file) {
+        return new Promise(function (resolve) {
+            if (!/^image\//.test(file.type) || file.type === 'image/gif') { resolve(file); return; }
+            var img = new Image(), url = URL.createObjectURL(file);
+            img.onload = function () {
+                var max = 1600, w = img.naturalWidth, h = img.naturalHeight, s = Math.min(1, max / Math.max(w, h));
+                var c = document.createElement('canvas'); c.width = Math.round(w * s); c.height = Math.round(h * s);
+                c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+                URL.revokeObjectURL(url);
+                c.toBlob(function (b) { resolve(b ? new File([b], (file.name || 'photo').replace(/\.\w+$/, '') + '.jpg', { type: 'image/jpeg' }) : file); }, 'image/jpeg', 0.8);
+            };
+            img.onerror = function () { URL.revokeObjectURL(url); resolve(file); };
+            img.src = url;
+        });
+    };
+
+    // ---------------------------------------------------------------- state
+
+    function newState(mode) {
+        return { mode: mode, step: 0, stays: [], draft: { check_in: '', check_out: '', rooms: {}, editing: null }, amenities: {}, // amenities[stayIndex] = [{amenity_id, quantity, room_type_id, room_slot}]
+            rep: { who: 'owner', first: '', middle: '', last: '' }, adults: 1, minors: [], discount_id: '', idFile: null, payment_method: '', key: 'k' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8) };
+    }
+
+    function nights(s) { return Math.max(1, VS.nights(s.check_in, s.check_out)); }
+    function overlap(a, b) { return a.check_in < b.check_out && b.check_in < a.check_out; }
+
+    W.init = function (root, mode) {
+        var S = newState(mode);
+        var stepsDef = mode === 'booking'
+            ? ['Dates and rooms', 'Amenities', 'Representative', 'Guests', 'ID verification', 'Review and bill summary']
+            : ['Dates and rooms', 'Amenities', 'Representative', 'Guests', 'ID verification', 'Payment method', 'Review and bill summary'];
+        var cache = { rooms: {}, amenities: null, discounts: null, profile: null };
+        var main = root.querySelector('#vsWizMain'), bar = root.querySelector('#vsWizBar'), line = root.querySelector('#vsWizLine'), sum = root.querySelector('#vsWizSummary');
+        var earliest = VS.addDays(VS.today(), 2);
+
+        // restore a draft after a refresh
+        try {
+            var saved = JSON.parse(sessionStorage.getItem(KEY + mode) || 'null');
+            if (saved && saved.stays) { var keep = S.idFile; S = Object.assign(S, saved); S.idFile = keep; }
+        } catch (e) { /* no draft */ }
+        var pre = new URLSearchParams(window.location.search);
+        function save() { var c = Object.assign({}, S); delete c.idFile; sessionStorage.setItem(KEY + mode, JSON.stringify(c)); }
+
+        // ---- data
+        function roomsFor(ci, co) {
+            var k = ci + '|' + co;
+            if (cache.rooms[k]) return Promise.resolve(cache.rooms[k]);
+            return VS.api('/rooms', { query: { check_in: ci, check_out: co } }).then(function (r) {
+                if (!r.ok) return null;
+                var list = r.data.room_types.data || r.data.room_types;
+                cache.rooms[k] = list; return list;
+            });
+        }
+        function allTypes() { // type info (rate, capacity, name) from any date range
+            var map = {}; Object.keys(cache.rooms).forEach(function (k) { cache.rooms[k].forEach(function (t) { map[t.id] = t; }); }); return map;
+        }
+        function loadAmenities() {
+            if (cache.amenities) return Promise.resolve(cache.amenities);
+            return VS.api('/amenities', { query: { pricing_type: 'paid' } }).then(function (r) { cache.amenities = r.ok ? r.data : []; return cache.amenities; });
+        }
+        function loadDiscounts() {
+            if (cache.discounts) return Promise.resolve(cache.discounts);
+            return VS.api('/discounts').then(function (r) { cache.discounts = r.ok ? r.data : []; return cache.discounts; });
+        }
+        function loadProfile() {
+            if (cache.profile) return Promise.resolve(cache.profile);
+            return VS.api('/guest/profile').then(function (r) { cache.profile = r.ok ? (r.data.user || r.data) : {}; return cache.profile; });
+        }
+
+        // ---- money (same arithmetic the server uses: rooms x booked nights, plus paid amenities)
+        function stayRooms(s) { return Object.keys(s.rooms).map(function (id) { return { id: +id, qty: s.rooms[id] }; }).filter(function (x) { return x.qty > 0; }); }
+        function roomsTotal(types) {
+            return S.stays.reduce(function (sum, s) { return sum + stayRooms(s).reduce(function (a, r) { return a + (types[r.id] ? Number(types[r.id].rate) * nights(s) * r.qty : 0); }, 0); }, 0);
+        }
+        function amenitiesTotal() {
+            var by = {}; (cache.amenities || []).forEach(function (a) { by[a.id] = a; });
+            var t = 0; Object.keys(S.amenities).forEach(function (i) { (S.amenities[i] || []).forEach(function (a) { t += (by[a.amenity_id] ? Number(by[a.amenity_id].charge) : 0) * a.quantity; }); }); return t;
+        }
+        function paintSummary() {
+            var types = allTypes(), r = roomsTotal(types), a = amenitiesTotal();
+            sum.innerHTML = '<div class="vs-row"><span>Rooms</span><span>' + VS.money(r) + '</span></div><div class="vs-row"><span>Amenities</span><span>' + VS.money(a) + '</span></div>' +
+                '<div class="vs-row vs-strong"><span>Grand total</span><span class="vs-pay">' + VS.money(r + a) + '</span></div>';
+        }
+
+        // ---- frame
+        function frame() {
+            bar.innerHTML = stepsDef.map(function (_, i) { return '<li class="' + (i < S.step ? 'done' : i === S.step ? 'now' : '') + '"></li>'; }).join('');
+            line.textContent = 'Step ' + (S.step + 1) + ' of ' + stepsDef.length + ' · ' + stepsDef[S.step];
+            save(); paintSummary();
+        }
+        function go(n) {
+            S.step = n; frame(); render();
+            var top = root.getBoundingClientRect().top + window.pageYOffset - 70; window.scrollTo({ top: top, behavior: VS.reducedMotion ? 'auto' : 'smooth' });
+        }
+        function nav(opts) {
+            return '<div class="d-flex justify-content-between mt-4 gap-2">' + (S.step > 0 ? '<button class="btn btn-light" data-back>Back</button>' : '<a class="btn btn-light" href="/rooms">Cancel</a>') +
+                '<button class="btn btn-velocity" data-next>' + (opts && opts.label || 'Continue') + '</button></div>';
+        }
+        function bindNav(onNext) {
+            var n = main.querySelector('[data-next]'), b = main.querySelector('[data-back]');
+            if (b) b.onclick = function () { go(S.step - 1); };
+            if (n) n.onclick = function () { onNext(n); };
+        }
+        function errorBox(msg) { var e = main.querySelector('#vsStepErr'); if (e) VS.alertBox(e, msg); if (msg && e) e.scrollIntoView({ block: 'center', behavior: VS.reducedMotion ? 'auto' : 'smooth' }); }
+
+        function render() { [stepStays, stepAmenities, stepRep, stepGuests, stepId].concat(mode === 'reservation' ? [stepPaymentMethod] : []).concat([stepReview])[S.step](); }
+
+        // ================================================= STEP 1 - dates and rooms
+        function stepStays() {
+            var d = S.draft;
+            main.innerHTML = '<h2 class="vs-section-title">Dates and rooms</h2><p class="text-muted">Choose your check-in and check-out dates to see available rooms. You can add more than one date range.</p><div id="vsStepErr"></div>' +
+                '<div id="vsStayList"></div><section class="vs-card" id="vsEditor"></section>' + nav();
+            paintStays(); paintEditor();
+            bindNav(function () {
+                var cur = S.draft;
+                if (cur.check_in && Object.keys(cur.rooms).some(function (k) { return cur.rooms[k] > 0; })) { errorBox('Confirm this stay first, or clear its rooms.'); return; }
+                if (!S.stays.length) { errorBox('Add at least one stay: choose dates and rooms, then confirm it.'); return; }
+                go(1);
+            });
+        }
+
+        function paintStays() {
+            var host = main.querySelector('#vsStayList'), types = allTypes();
+            if (!S.stays.length) { host.innerHTML = ''; return; }
+            host.innerHTML = '<h3 class="h6 fw-bold">Your stays</h3>' + S.stays.map(function (s, i) {
+                var rooms = stayRooms(s).map(function (r) { return (types[r.id] ? types[r.id].name : 'Room') + ' × ' + r.qty; }).join(', ');
+                return '<div class="vs-card py-2 d-flex align-items-center gap-2 flex-wrap"><div class="flex-grow-1"><strong>' + VS.esc(VS.date(s.check_in)) + ' → ' + VS.esc(VS.date(s.check_out)) + '</strong> · ' + VS.plural(nights(s), 'night') +
+                    '<div class="text-muted small">' + VS.esc(rooms) + '</div></div><button class="btn btn-sm btn-outline-velocity" data-edit="' + i + '">Edit</button><button class="btn btn-sm btn-light" data-remove="' + i + '">Remove</button></div>';
+            }).join('') + '<div class="vs-row vs-strong"><span>Total for all stays</span><span>' + VS.money(roomsTotal(types)) + '</span></div>';
+            host.querySelectorAll('[data-edit]').forEach(function (b) { b.onclick = function () {
+                var s = S.stays[+b.dataset.edit]; S.draft = { check_in: s.check_in, check_out: s.check_out, rooms: JSON.parse(JSON.stringify(s.rooms)), editing: +b.dataset.edit }; save(); paintEditor();
+                main.querySelector('#vsEditor').scrollIntoView({ behavior: VS.reducedMotion ? 'auto' : 'smooth' });
+            }; });
+            host.querySelectorAll('[data-remove]').forEach(function (b) { b.onclick = function () {
+                var i = +b.dataset.remove, s = S.stays[i];
+                VS.confirm({ title: 'Remove ' + VS.date(s.check_in) + ' → ' + VS.date(s.check_out) + '?', message: 'Its dates, rooms and amenities are removed from this booking.', confirmText: 'Remove', danger: true }).then(function (yes) {
+                    if (!yes) return; S.stays.splice(i, 1); delete S.amenities[i]; reindexAmenities(i); S.draft.editing = null; save(); frame(); paintStays(); paintEditor();
+                });
+            }; });
+        }
+        function reindexAmenities(removed) { var n = {}; Object.keys(S.amenities).forEach(function (k) { k = +k; if (k < removed) n[k] = S.amenities[k]; else if (k > removed) n[k - 1] = S.amenities[k]; }); S.amenities = n; }
+
+        function paintEditor() {
+            var d = S.draft, host = main.querySelector('#vsEditor');
+            var title = d.editing != null ? 'Edit ' + VS.date(S.stays[d.editing].check_in) + ' → ' + VS.date(S.stays[d.editing].check_out) : (S.stays.length ? 'Add another date' : 'Choose dates and rooms');
+            host.innerHTML = '<h3 class="h6 fw-bold">' + VS.esc(title) + '</h3><div class="row g-3 mb-2"><div class="col-6"><label class="form-label small fw-semibold" for="wIn">Check-in</label><input type="date" class="form-control" id="wIn" min="' + earliest + '" value="' + VS.esc(d.check_in) + '"></div>' +
+                '<div class="col-6"><label class="form-label small fw-semibold" for="wOut">Check-out</label><input type="date" class="form-control" id="wOut" min="' + VS.addDays(d.check_in || earliest, 1) + '" value="' + VS.esc(d.check_out) + '"></div></div><div id="vsDateErr"></div><div id="vsRoomPick"></div>';
+            var ci = host.querySelector('#wIn'), co = host.querySelector('#wOut');
+            function changed() {
+                VS.clearErrors(host);
+                if (ci.value && ci.value < earliest) { VS.fieldError(ci, 'The earliest check-in is ' + VS.date(earliest) + '.'); d.check_in = ''; return; }
+                d.check_in = ci.value; if (ci.value) { co.min = VS.addDays(ci.value, 1); if (co.value && co.value <= ci.value) co.value = ''; }
+                d.check_out = co.value;
+                if (d.check_in && d.check_out && d.check_out <= d.check_in) { VS.fieldError(co, 'Check-out must be after check-in.'); d.check_out = ''; }
+                d.rooms = {}; save(); paintRooms();
+            }
+            ci.onchange = changed; co.onchange = changed;
+            paintRooms();
+        }
+
+        function paintRooms() {
+            var d = S.draft, host = main.querySelector('#vsRoomPick');
+            if (!d.check_in || !d.check_out) { host.innerHTML = '<p class="text-muted mb-0">Pick both dates to see the rooms.</p>'; return; }
+            host.innerHTML = VS.skeleton(3);
+            roomsFor(d.check_in, d.check_out).then(function (list) {
+                if (!list) { host.innerHTML = VS.errorState('We could not load the rooms.', 'vsRoomsRetry'); host.querySelector('#vsRoomsRetry').onclick = paintRooms; return; }
+                var others = S.stays.filter(function (s, i) { return i !== d.editing && overlap(s, d); });
+                function usedElsewhere(typeId) { return others.reduce(function (a, s) { return a + (s.rooms[typeId] || 0); }, 0); }
+                var rows = list.map(function (t) {
+                    var free = Math.max(0, (t.available_count || 0) - usedElsewhere(t.id)), qty = d.rooms[t.id] || 0;
+                    var promo = (t.promos || []).length ? '<span class="vs-chip ms-1"><i class="fas fa-tag"></i> ' + VS.plural(t.promos.length, 'promo') + '</span>' : '';
+                    return '<div class="vs-card py-2 d-flex gap-3 align-items-center" data-type="' + t.id + '"><img src="' + VS.esc(t.image_url) + '" alt="" style="width:84px;height:64px;object-fit:cover;border-radius:10px">' +
+                        '<div class="flex-grow-1"><div class="fw-bold">' + VS.esc(t.name) + promo + '</div><div class="small text-muted">' + VS.esc(window.VSRooms.facts(t)) + '</div><div class="vs-num fw-semibold">' + VS.money(t.rate) + ' <span class="text-muted small fw-normal">per night</span></div>' +
+                        '<div class="small ' + (free ? 'text-success' : 'text-danger') + '">' + (free ? VS.plural(free, 'room') + ' available' : 'Fully booked') + '</div></div>' +
+                        '<div class="d-flex align-items-center gap-2"><button class="btn btn-sm btn-outline-velocity" data-dec aria-label="Fewer ' + VS.esc(t.name) + ' rooms"' + (qty ? '' : ' disabled') + '>−</button><span class="vs-num fw-bold" style="min-width:1.5rem;text-align:center">' + qty + '</span><button class="btn btn-sm btn-velocity" data-inc aria-label="More ' + VS.esc(t.name) + ' rooms"' + (qty >= free ? ' disabled' : '') + '>+</button></div></div>';
+                }).join('');
+                var n = nights(d), preview = list.reduce(function (a, t) { return a + (d.rooms[t.id] || 0) * Number(t.rate) * n; }, 0);
+                host.innerHTML = rows + '<div class="d-flex justify-content-between align-items-center flex-wrap gap-2"><div class="vs-num fw-bold">' + VS.plural(n, 'night') + ' · ' + VS.money(preview) + '</div>' +
+                    '<div class="d-flex gap-2">' + (d.editing != null ? '<button class="btn btn-light" id="wCancelEdit">Cancel edit</button>' : '') + '<button class="btn btn-velocity" id="wConfirm">' + (d.editing != null ? 'Save this stay' : 'Confirm this stay') + '</button></div></div>';
+                host.querySelectorAll('[data-type]').forEach(function (row) {
+                    var id = row.dataset.type;
+                    var t = list.find(function (x) { return x.id == id; });
+                    var free = Math.max(0, (t.available_count || 0) - usedElsewhere(t.id));
+                    row.querySelector('[data-inc]').onclick = function () { d.rooms[id] = Math.min(free, (d.rooms[id] || 0) + 1); save(); paintRooms(); };
+                    row.querySelector('[data-dec]').onclick = function () { d.rooms[id] = Math.max(0, (d.rooms[id] || 0) - 1); if (!d.rooms[id]) delete d.rooms[id]; save(); paintRooms(); };
+                });
+                var ce = host.querySelector('#wCancelEdit'); if (ce) ce.onclick = function () { S.draft = { check_in: '', check_out: '', rooms: {}, editing: null }; save(); paintEditor(); };
+                host.querySelector('#wConfirm').onclick = confirmStay;
+            });
+        }
+
+        function confirmStay() {
+            var d = S.draft; errorBox('');
+            if (!d.check_in || !d.check_out) { VS.alertBox('vsDateErr', 'Choose valid check-in and check-out dates for this stay first.'); return; }
+            if (!Object.keys(d.rooms).some(function (k) { return d.rooms[k] > 0; })) { VS.alertBox('vsDateErr', 'Choose at least one room for this stay.'); return; }
+            var dup = S.stays.findIndex(function (s, i) { return i !== d.editing && s.check_in === d.check_in && s.check_out === d.check_out; });
+            if (dup >= 0) { VS.alertBox('vsDateErr', 'You already added a stay for ' + VS.date(d.check_in) + ' – ' + VS.date(d.check_out) + '. Pick different dates or add rooms to that stay.'); return; }
+            if (S.stays.length >= MAX_STAYS && d.editing == null) { VS.alertBox('vsDateErr', 'You can book up to ' + MAX_STAYS + ' stays together.'); return; }
+            var stay = { check_in: d.check_in, check_out: d.check_out, rooms: JSON.parse(JSON.stringify(d.rooms)) };
+            if (d.editing != null) { S.stays[d.editing] = stay; delete S.amenities[d.editing]; } else S.stays.push(stay);
+            S.draft = { check_in: '', check_out: '', rooms: {}, editing: null };
+            VS.toast('Stay added.', 'success'); save(); frame(); paintStays(); paintEditor();
+        }
+
+        // ================================================= STEP 2 - amenities per room
+        function stepAmenities() {
+            main.innerHTML = '<h2 class="vs-section-title">Amenities</h2><p class="text-muted">Add paid amenities to a room if you want them. You can also request them later during your stay.</p><div id="vsStepErr"></div><div id="vsAmenHost">' + VS.skeleton(4) + '</div>' + nav();
+            bindNav(function () { go(2); });
+            loadAmenities().then(function (list) {
+                var host = main.querySelector('#vsAmenHost'), types = allTypes();
+                if (!list.length) { host.innerHTML = '<p class="text-muted">No paid amenities are offered right now.</p>'; return; }
+                host.innerHTML = S.stays.map(function (s, i) {
+                    var slots = []; stayRooms(s).forEach(function (r) { for (var k = 1; k <= r.qty; k++) slots.push({ type: r.id, slot: k }); });
+                    return '<div class="vs-card"><h3 class="h6 fw-bold">' + VS.esc(VS.date(s.check_in)) + ' → ' + VS.esc(VS.date(s.check_out)) + '</h3>' + slots.map(function (sl) {
+                        var tn = types[sl.type] ? types[sl.type].name : 'Room';
+                        return '<details class="mb-2"><summary class="fw-semibold">' + VS.esc(tn) + ' (room ' + sl.slot + ')<span class="text-muted small ms-2" data-sum="' + i + '-' + sl.type + '-' + sl.slot + '"></span></summary><div class="mt-2">' + list.map(function (a) {
+                            return '<div class="d-flex align-items-center gap-2 py-1" data-am="' + i + '|' + sl.type + '|' + sl.slot + '|' + a.id + '"><div class="flex-grow-1">' + VS.esc(a.amenity_name) + ' <span class="text-muted small">' + VS.money(a.charge) + '</span></div>' +
+                                '<button class="btn btn-sm btn-outline-velocity" data-d aria-label="Fewer ' + VS.esc(a.amenity_name) + '">−</button><span class="vs-num fw-bold" data-q style="min-width:1.5rem;text-align:center">0</span><button class="btn btn-sm btn-velocity" data-u aria-label="More ' + VS.esc(a.amenity_name) + '">+</button></div>';
+                        }).join('') + '</div></details>';
+                    }).join('') + '</div>';
+                }).join('');
+                function qtyOf(i, t, sl, id) { var f = (S.amenities[i] || []).find(function (x) { return x.room_type_id == t && x.room_slot == sl && x.amenity_id == id; }); return f ? f.quantity : 0; }
+                function setQty(i, t, sl, id, q) {
+                    var arr = S.amenities[i] = S.amenities[i] || []; var idx = arr.findIndex(function (x) { return x.room_type_id == t && x.room_slot == sl && x.amenity_id == id; });
+                    if (q <= 0) { if (idx >= 0) arr.splice(idx, 1); } else if (idx >= 0) arr[idx].quantity = q; else arr.push({ amenity_id: +id, quantity: q, room_type_id: +t, room_slot: +sl });
+                    save();
+                }
+                function totalFor(id) { var n = 0; Object.keys(S.amenities).forEach(function (i) { (S.amenities[i] || []).forEach(function (x) { if (x.amenity_id == id) n += x.quantity; }); }); return n; }
+                host.querySelectorAll('[data-am]').forEach(function (row) {
+                    var p = row.dataset.am.split('|'), i = +p[0], t = p[1], sl = p[2], id = p[3], a = list.find(function (x) { return x.id == id; });
+                    function paint() { row.querySelector('[data-q]').textContent = qtyOf(i, t, sl, id); paintSummary(); }
+                    row.querySelector('[data-u]').onclick = function () {
+                        if (!a.is_unlimited && totalFor(id) + 1 > a.quantity) { VS.toast('Only ' + a.quantity + ' of ' + a.amenity_name + ' left.', 'warning'); return; }
+                        setQty(i, t, sl, id, qtyOf(i, t, sl, id) + 1); paint();
+                    };
+                    row.querySelector('[data-d]').onclick = function () { setQty(i, t, sl, id, qtyOf(i, t, sl, id) - 1); paint(); };
+                    row.querySelector('[data-q]').textContent = qtyOf(i, t, sl, id);
+                });
+                paintSummary();
+            });
+        }
+
+        // ================================================= STEP 3 - representative
+        function stepRep() {
+            main.innerHTML = '<h2 class="vs-section-title">Who can check in?</h2><p class="text-muted">Choose Account owner if you will personally handle the transaction at the hotel. Choose Someone else if another person will represent your booking.</p><div id="vsStepErr"></div>' +
+                '<div class="vs-card"><div class="form-check mb-2"><input class="form-check-input" type="radio" name="who" id="whoOwner" value="owner"><label class="form-check-label fw-semibold" for="whoOwner">Account owner</label></div>' +
+                '<div class="form-check mb-3"><input class="form-check-input" type="radio" name="who" id="whoOther" value="other"><label class="form-check-label fw-semibold" for="whoOther">Someone else</label></div>' +
+                '<div class="row g-3"><div class="col-md-4"><label class="form-label small fw-semibold" for="rF">First name</label><input class="form-control" id="rF" maxlength="100"></div><div class="col-md-4"><label class="form-label small fw-semibold" for="rM">Middle name <span class="text-muted fw-normal">(optional)</span></label><input class="form-control" id="rM" maxlength="100"></div><div class="col-md-4"><label class="form-label small fw-semibold" for="rL">Last name</label><input class="form-control" id="rL" maxlength="100"></div></div>' +
+                '<p class="text-muted small mt-3 mb-0">The person checking in presents 1 valid ID at the front desk.</p></div>' + nav();
+            var who = main.querySelectorAll('[name=who]'), f = main.querySelector('#rF'), m = main.querySelector('#rM'), l = main.querySelector('#rL');
+            loadProfile().then(function (p) {
+                S.owner = { first: p.first_name || '', middle: p.middle_name || '', last: p.last_name || '' };
+                apply();
+            });
+            function apply() {
+                var owner = S.rep.who === 'owner';
+                who.forEach(function (r) { r.checked = r.value === S.rep.who; });
+                [f, m, l].forEach(function (i) { i.readOnly = owner; });
+                if (owner && S.owner) { f.value = S.owner.first; m.value = S.owner.middle; l.value = S.owner.last; } else { f.value = S.rep.first; m.value = S.rep.middle; l.value = S.rep.last; }
+            }
+            who.forEach(function (r) { r.onchange = function () { S.rep.who = r.value; if (r.value === 'other') { S.rep.first = ''; S.rep.middle = ''; S.rep.last = ''; } apply(); save(); }; });
+            [f, m, l].forEach(function (i) { i.oninput = function () { if (S.rep.who === 'other') { S.rep.first = f.value; S.rep.middle = m.value; S.rep.last = l.value; save(); } }; });
+            apply();
+            bindNav(function () {
+                VS.clearErrors(main);
+                var first = f.value.trim(), last = l.value.trim(), ok = true;
+                if (!first) { VS.fieldError(f, 'Enter the first name.'); ok = false; }
+                if (!last) { VS.fieldError(l, 'Enter the last name.'); ok = false; }
+                if (!ok) return;
+                S.rep.first = first; S.rep.middle = m.value.trim(); S.rep.last = last;
+                if (S.rep.who === 'other') {
+                    VS.confirm({ title: 'Someone else will check in', message: first + ' ' + last + ' will present 1 valid ID at the front desk. Continue?', confirmText: 'Continue' }).then(function (yes) { if (yes) go(3); });
+                } else go(3);
+            });
+        }
+
+        // ================================================= STEP 4 - guests
+        function capacity() {
+            var types = allTypes();
+            return Math.min.apply(null, S.stays.map(function (s) { return stayRooms(s).reduce(function (a, r) { return a + (types[r.id] ? types[r.id].capacity * r.qty : 0); }, 0); }));
+        }
+        function stepGuests() {
+            var cap = capacity();
+            if (S.adults + S.minors.length > cap) { S.adults = Math.max(1, cap - S.minors.length); S.minors = S.minors.slice(0, Math.max(0, cap - S.adults)); }
+            main.innerHTML = '<h2 class="vs-section-title">Guests</h2><p class="text-muted">Adults and minors together must fit the rooms you chose in every stay (up to <strong>' + cap + '</strong>).</p><div id="vsStepErr"></div>' +
+                '<div class="vs-card"><div class="d-flex align-items-center justify-content-between py-2"><span class="fw-semibold">Adults</span><span><button class="btn btn-sm btn-outline-velocity" id="aDec" aria-label="Fewer adults">−</button><span class="vs-num fw-bold mx-3" id="aVal"></span><button class="btn btn-sm btn-velocity" id="aInc" aria-label="More adults">+</button></span></div>' +
+                '<div class="d-flex align-items-center justify-content-between py-2"><span class="fw-semibold">Minors</span><span><button class="btn btn-sm btn-outline-velocity" id="mDec" aria-label="Fewer minors">−</button><span class="vs-num fw-bold mx-3" id="mVal"></span><button class="btn btn-sm btn-velocity" id="mInc" aria-label="More minors">+</button></span></div>' +
+                '<div id="mAges" class="row g-2 mt-1"></div><p class="text-muted small mt-2 mb-0" id="gHint"></p></div>' + nav();
+            function paint() {
+                main.querySelector('#aVal').textContent = S.adults; main.querySelector('#mVal').textContent = S.minors.length;
+                var total = S.adults + S.minors.length;
+                main.querySelector('#aDec').disabled = S.adults <= 1; main.querySelector('#aInc').disabled = total >= cap;
+                main.querySelector('#mDec').disabled = !S.minors.length; main.querySelector('#mInc').disabled = total >= cap;
+                main.querySelector('#gHint').textContent = VS.plural(total, 'guest') + ' of ' + cap + '. A minor is a child aged 0 to 7; enter each child’s age.';
+                main.querySelector('#mAges').innerHTML = S.minors.map(function (a, i) { return '<div class="col-6 col-md-3"><label class="form-label small fw-semibold" for="age' + i + '">Child ' + (i + 1) + ' age</label><input class="form-control" id="age' + i + '" type="number" inputmode="numeric" min="0" max="7" value="' + (a == null ? '' : a) + '"></div>'; }).join('');
+                main.querySelectorAll('#mAges input').forEach(function (inp, i) { inp.oninput = function () { S.minors[i] = inp.value === '' ? null : +inp.value; save(); }; });
+                save();
+            }
+            main.querySelector('#aInc').onclick = function () { S.adults++; paint(); }; main.querySelector('#aDec').onclick = function () { S.adults--; paint(); };
+            main.querySelector('#mInc').onclick = function () { S.minors.push(null); paint(); }; main.querySelector('#mDec').onclick = function () { S.minors.pop(); paint(); };
+            paint();
+            bindNav(function () {
+                VS.clearErrors(main); var ok = true;
+                main.querySelectorAll('#mAges input').forEach(function (inp, i) {
+                    var v = inp.value; if (v === '' || +v < 0 || +v > 7 || !/^\d+$/.test(v)) { VS.fieldError(inp, 'Enter an age from 0 to 7.'); ok = false; }
+                });
+                if (ok) go(4);
+            });
+        }
+
+        // ================================================= STEP 5 - ID verification
+        function stepId() {
+            main.innerHTML = '<h2 class="vs-section-title">ID verification</h2><p class="text-muted">Optional. If you are a Senior Citizen or a person with a disability, upload a valid ID to claim the discount. The front desk verifies it at check-in.</p><div id="vsStepErr"></div>' +
+                '<div class="vs-card"><label class="form-label fw-semibold" for="idDisc">Discount</label><select class="form-select mb-3" id="idDisc"><option value="">No discount</option></select>' +
+                '<div id="idUp" class="d-none"><div class="d-flex flex-wrap gap-2 mb-2"><label class="btn btn-outline-velocity mb-0" for="idCam"><i class="fas fa-camera me-1"></i>Take a photo</label><label class="btn btn-outline-velocity mb-0" for="idFile"><i class="fas fa-image me-1"></i>Choose from gallery</label></div>' +
+                '<input type="file" id="idCam" accept="image/*" capture="environment" class="d-none"><input type="file" id="idFile" accept="image/*" class="d-none">' +
+                '<p class="text-muted small">Make sure all four corners and the text are clear.</p><div id="idPrev"></div></div></div>' + nav();
+            var sel = main.querySelector('#idDisc'), up = main.querySelector('#idUp'), prev = main.querySelector('#idPrev'), pending = null;
+            loadDiscounts().then(function (list) {
+                list.forEach(function (d) { var o = document.createElement('option'); o.value = d.id; o.textContent = d.name + (d.discount_type === 'percentage' ? ' (' + Number(d.value) + '%)' : ''); sel.appendChild(o); });
+                sel.value = S.discount_id || ''; toggle();
+            });
+            function toggle() { up.classList.toggle('d-none', !sel.value); paintPrev(); }
+            sel.onchange = function () { S.discount_id = sel.value; if (!sel.value) S.idFile = null; save(); toggle(); };
+            function paintPrev() {
+                var f = pending || S.idFile;
+                if (!f) { prev.innerHTML = ''; return; }
+                var url = URL.createObjectURL(f);
+                prev.innerHTML = '<img src="' + url + '" alt="Your ID photo" class="rounded-3 mb-2" style="max-width:100%;max-height:300px">' + (pending ?
+                    '<div class="d-flex gap-2"><button class="btn btn-velocity" id="idUse">Use photo</button><button class="btn btn-light" id="idRetake">Retake</button></div>' : '<div class="small text-success mb-2"><i class="fas fa-circle-check me-1"></i>ID photo attached.</div><button class="btn btn-sm btn-light" id="idRemove">Remove photo</button>');
+                var u = prev.querySelector('#idUse'); if (u) u.onclick = function () { S.idFile = pending; pending = null; paintPrev(); };
+                var r = prev.querySelector('#idRetake'); if (r) r.onclick = function () { pending = null; paintPrev(); };
+                var x = prev.querySelector('#idRemove'); if (x) x.onclick = function () { S.idFile = null; paintPrev(); };
+            }
+            function pick(e) {
+                var file = e.target.files[0]; e.target.value = ''; if (!file) return;
+                if (!/^image\//.test(file.type)) { VS.alertBox('vsStepErr', 'Choose a photo (JPG or PNG).'); return; }
+                VS.compressImage(file).then(function (c) { pending = c; paintPrev(); });
+            }
+            main.querySelector('#idCam').onchange = pick; main.querySelector('#idFile').onchange = pick;
+            bindNav(function () {
+                if (sel.value && !S.idFile) { VS.confirm({ title: 'No ID photo yet', message: 'The discount is verified at check-in. Without an ID photo it cannot be claimed in advance. Continue without it?', confirmText: 'Continue' }).then(function (yes) { if (yes) go(5); }); return; }
+                go(5);
+            });
+        }
+
+        // ================================================= STEP 6 (reservation) - payment method
+        function stepPaymentMethod() {
+            main.innerHTML = '<h2 class="vs-section-title">Payment method</h2><p class="text-muted">Choose how you would like to pay for this reservation.</p><div id="vsStepErr"></div><div class="vs-card">' +
+                ['cash', 'gcash'].map(function (m) {
+                    return '<div class="form-check mb-3"><input class="form-check-input" type="radio" name="pm" id="pm_' + m + '" value="' + m + '"' + (S.payment_method === m ? ' checked' : '') + '><label class="form-check-label" for="pm_' + m + '"><span class="fw-semibold">' + (m === 'cash' ? 'Cash' : 'GCash') + '</span><br><span class="text-muted small">' +
+                        (m === 'cash' ? 'Pay at the hotel through walk-in payment. No online payment is required at this time.' : 'You can complete your GCash payment later by selecting Pay now from your reservation.') + '</span></label></div>';
+                }).join('') + '</div>' + nav();
+            main.querySelectorAll('[name=pm]').forEach(function (r) { r.onchange = function () { S.payment_method = r.value; save(); }; });
+            bindNav(function () { if (!S.payment_method) { errorBox('Choose a payment method.'); return; } go(6); });
+        }
+
+        // ================================================= LAST STEP - review and bill summary
+        function expectedDiscount(types, base) {
+            var d = (cache.discounts || []).find(function (x) { return x.id == S.discount_id; });
+            if (!d || !S.idFile) return null;
+            var off = d.discount_type === 'percentage' ? base * Number(d.value) / 100 : Math.min(base, Number(d.value));
+            return { name: d.name, amount: off };
+        }
+        function promoNotes(types) {
+            var by = {};
+            S.stays.forEach(function (s) { stayRooms(s).forEach(function (r) { var t = types[r.id]; (t && t.promos || []).forEach(function (p) {
+                var off = p.rate_after != null ? Math.max(0, Number(t.rate) - Number(p.rate_after)) * nights(s) * r.qty : 0; by[p.id] = by[p.id] || { p: p, save: 0 }; by[p.id].save += off; }); }); });
+            return Object.keys(by).map(function (k) { return by[k]; });
+        }
+        function stepReview() {
+            main.innerHTML = '<h2 class="vs-section-title">Review and bill summary</h2><p class="text-muted">Check everything before you confirm.</p><div id="vsStepErr"></div><div id="vsRev">' + VS.skeleton(6) + '</div>';
+            Promise.all([loadAmenities(), loadDiscounts()]).then(function () {
+                var types = allTypes(), host = main.querySelector('#vsRev'), amenBy = {}; (cache.amenities || []).forEach(function (a) { amenBy[a.id] = a; });
+                var r = roomsTotal(types), a = amenitiesTotal();
+                var staysHtml = S.stays.map(function (s, i) {
+                    var lines = stayRooms(s).map(function (rm) { var t = types[rm.id] || { name: 'Room', rate: 0 }; return '<div class="vs-row"><span>' + VS.esc(t.name) + ' × ' + rm.qty + ' <span class="small">(' + VS.money(t.rate) + ' × ' + VS.plural(nights(s), 'night') + ')</span></span><span>' + VS.money(Number(t.rate) * nights(s) * rm.qty) + '</span></div>'; }).join('');
+                    var am = (S.amenities[i] || []).map(function (x) { var am = amenBy[x.amenity_id] || { amenity_name: 'Amenity', charge: 0 }; var t = types[x.room_type_id]; return '<div class="vs-row vs-sub"><span>' + VS.esc(am.amenity_name) + ' × ' + x.quantity + (t ? ' <span class="small">(' + VS.esc(t.name) + ' room ' + x.room_slot + ')</span>' : '') + '</span><span>' + VS.money(am.charge * x.quantity) + '</span></div>'; }).join('');
+                    return '<div class="vs-card"><h3 class="h6 fw-bold">' + VS.esc(VS.date(s.check_in)) + ' → ' + VS.esc(VS.date(s.check_out)) + ' · ' + VS.plural(nights(s), 'night') + '</h3>' + lines + am + '</div>';
+                }).join('');
+                var ed = expectedDiscount(types, r + a), promos = promoNotes(types);
+                var guests = S.adults + S.minors.length, repName = [S.rep.first, S.rep.middle, S.rep.last].filter(Boolean).join(' ');
+                host.innerHTML = staysHtml +
+                    '<div class="vs-card"><h3 class="h6 fw-bold">Details</h3><div class="vs-row"><span>Representative</span><span>' + VS.esc(repName) + (S.rep.who === 'other' ? ' (must present 1 valid ID)' : '') + '</span></div>' +
+                    '<div class="vs-row"><span>Guests</span><span>' + VS.plural(S.adults, 'adult') + (S.minors.length ? ', ' + VS.plural(S.minors.length, 'minor') : '') + '</span></div>' +
+                    (mode === 'reservation' ? '<div class="vs-row"><span>Payment method</span><span>' + (S.payment_method === 'gcash' ? 'GCash' : 'Cash') + '</span></div>' : '') +
+                    (S.discount_id ? '<div class="vs-row"><span>ID discount</span><span>' + VS.esc(((cache.discounts || []).find(function (x) { return x.id == S.discount_id; }) || {}).name || '') + (S.idFile ? ' · ID photo attached' : ' · no ID photo') + '</span></div>' : '') + '</div>' +
+                    '<div class="vs-card"><h3 class="h6 fw-bold">Bill summary</h3><div class="vs-row"><span>Room charges</span><span>' + VS.money(r) + '</span></div><div class="vs-row"><span>Amenities</span><span>' + VS.money(a) + '</span></div><hr class="vs-rule">' +
+                    '<div class="vs-row vs-strong"><span>Grand total</span><span>' + VS.money(r + a) + '</span></div>' +
+                    (ed ? '<p class="text-muted small mt-2 mb-0">Expected discount (' + VS.esc(ed.name) + '): −' + VS.money(ed.amount) + '. It is verified at check-in and is not subtracted yet.</p>' : '') + '</div>' +
+                    (promos.length ? '<div class="vs-card"><h3 class="h6 fw-bold">Promos for your rooms (verified at check-in)</h3>' + promos.map(function (x) { return '<div class="vs-row"><span>' + VS.esc(x.p.title) + ' · ' + VS.esc(x.p.label || '') + '</span><span></span></div>' + (x.save > 0 ? '<div class="text-muted small">Estimated saving ' + VS.money(x.save) + '. Not subtracted until the front desk verifies it.</div>' : ''); }).join('') + '</div>' : '') +
+                    '<div class="vs-card"><div class="form-check"><input class="form-check-input" type="checkbox" id="wTerms"><label class="form-check-label fw-normal" for="wTerms">I have read and accepted the <a href="#" id="wTermsLink">Terms and cancellation policy</a>.</label></div></div>' +
+                    '<div class="d-flex justify-content-between mt-3 gap-2"><button class="btn btn-light" data-back>Back</button><button class="btn btn-velocity" id="wSubmit" data-busy-text="' + (mode === 'booking' ? 'Please wait' : 'Confirming') + '">' + (mode === 'booking' ? 'Continue to payment' : 'Confirm reservation') + '</button></div>';
+                host.querySelector('[data-back]').onclick = function () { go(S.step - 1); };
+                host.querySelector('#wTermsLink').onclick = function (e) {
+                    e.preventDefault();
+                    VS.confirm({ title: 'Terms and cancellation policy', html: '<div class="vs-terms">' + root.querySelector('#vsPolicyText').innerHTML + '</div>', confirmText: 'I agree', cancelText: 'Close' }).then(function (yes) { if (yes) host.querySelector('#wTerms').checked = true; });
+                };
+                host.querySelector('#wSubmit').onclick = submit;
+            });
+        }
+
+        function payload() {
+            var types = allTypes();
+            var fd = new FormData();
+            S.stays.forEach(function (s, i) {
+                fd.append('stays[' + i + '][check_in]', s.check_in); fd.append('stays[' + i + '][check_out]', s.check_out);
+                stayRooms(s).forEach(function (r, k) { fd.append('stays[' + i + '][rooms][' + k + '][room_type_id]', r.id); fd.append('stays[' + i + '][rooms][' + k + '][quantity]', r.qty); });
+                (S.amenities[i] || []).forEach(function (a, k) {
+                    fd.append('stays[' + i + '][amenities][' + k + '][amenity_id]', a.amenity_id); fd.append('stays[' + i + '][amenities][' + k + '][quantity]', a.quantity);
+                    fd.append('stays[' + i + '][amenities][' + k + '][room_type_id]', a.room_type_id); fd.append('stays[' + i + '][amenities][' + k + '][room_slot]', a.room_slot);
+                });
+            });
+            fd.append('adults', S.adults); fd.append('children', S.minors.length);
+            fd.append('guest_first_name', S.rep.first); fd.append('guest_last_name', S.rep.last); if (S.rep.middle) fd.append('guest_middle_name', S.rep.middle);
+            S.minors.forEach(function (age, i) {
+                fd.append('additional_guests[' + i + '][name]', 'Child ' + (i + 1)); fd.append('additional_guests[' + i + '][age]', age); fd.append('additional_guests[' + i + '][relationship]', 'Child');
+            });
+            if (S.discount_id) { fd.append('discount_id', S.discount_id); var d = (cache.discounts || []).find(function (x) { return x.id == S.discount_id; }); if (d) fd.append('id_card_type', d.name); if (S.idFile) fd.append('id_card_image', S.idFile, S.idFile.name || 'id.jpg'); }
+            fd.append('idempotency_key', S.key);
+            return fd;
+        }
+
+        function submit(btn) {
+            btn = btn.currentTarget || main.querySelector('#wSubmit');
+            if (!main.querySelector('#wTerms').checked) { VS.fieldError(main.querySelector('#wTerms'), 'Accept the terms to continue.'); return; }
+            if (mode === 'booking') { startPayment(); return; }
+            VS.confirm({ title: 'Confirm reservation?', message: 'Your reservation will be sent to the front desk.', confirmText: 'Confirm reservation' }).then(function (yes) {
+                if (!yes) return;
+                var fd = payload(); fd.append('payment_method', S.payment_method);
+                VS.busy(btn, function () { return VS.api('/guest/reservations', { method: 'POST', body: fd }); }).then(function (r) {
+                    if (!r) return;
+                    if (!r.ok) { errorBox(r.message); return; }
+                    sessionStorage.removeItem(KEY + mode);
+                    var res = r.data.reservation || r.data;
+                    main.innerHTML = '<div class="text-center py-4"><div class="vs-success"><i class="fas fa-check"></i></div><h2 class="h4 fw-bold mt-3">Reservation confirmed</h2><p class="text-muted">Reservation #' + VS.esc(res.id) + ' is with the front desk.' +
+                        (S.payment_method === 'gcash' ? ' Complete your GCash payment from your reservation using Pay now.' : ' Pay at the hotel when you arrive.') + '</p><a class="btn btn-velocity" href="/guest/reservations/' + VS.esc(res.id) + '">View reservation</a></div>';
+                    bar.parentNode.classList.add('d-none'); sum.parentNode.classList.add('d-none'); root.querySelector('#vsWizSummaryM').classList.add('d-none');
+                });
+            });
+        }
+
+
+        // a booking is paid first: Review Billing and the GCash steps run on this page, and the booking is created with its payment
+        function startPayment() {
+            var types = allTypes(), r = roomsTotal(types), a = amenitiesTotal(), total = r + a, ed = expectedDiscount(types, total);
+            var pending = !!(S.discount_id && S.idFile), cap = pending ? Math.min(total * 0.5, total - (ed ? ed.amount : 0)) : null;
+            root.querySelector('#vsWizTop').classList.add('d-none'); sum.parentNode.classList.add('d-none'); root.querySelector('#vsWizSummaryM').classList.add('d-none');
+            window.VSPay.run(main, {
+                total: total, paid: 0, discountPending: pending, depositCap: cap, kindLabel: 'New booking',
+                lines: [{ label: 'Room charges', amount: r }, { label: 'Amenities', amount: a }],
+                onCancel: function () { root.querySelector('#vsWizTop').classList.remove('d-none'); sum.parentNode.classList.remove('d-none'); root.querySelector('#vsWizSummaryM').classList.remove('d-none'); go(S.step); },
+                submit: function (f) {
+                    var fd = payload(); fd.append('payment_method', 'gcash'); fd.append('amount_paid', f.amount); fd.append('selected_payment_percentage', f.percent);
+                    fd.append('gcash_number', f.gcash_number); fd.append('reference_number', f.reference_number); fd.append('receipt', f.receipt, f.receipt.name || 'receipt.jpg');
+                    return VS.api('/guest/bookings', { method: 'POST', body: fd }).then(function (res) { if (res.ok) { sessionStorage.removeItem(KEY + mode); window.__vsLeavingOk = true; } return res; });
+                },
+                success: function (data) { var b = data.booking || data; return '<a class="btn btn-velocity" href="/guest/bookings/' + VS.esc(b.id) + '">View booking</a>'; }
+            });
+        }
+
+        // booking payment page reads this state
+        W.draftForPayment = function () { return { fd: payload(), total: roomsTotal(allTypes()) + amenitiesTotal() }; };
+
+        // ---- start: preselect a room from the Room Details link
+        var presetRoom = pre.get('room');
+        if (presetRoom && !S.stays.length && !S.draft.check_in) {
+            S.draft.check_in = pre.get('check_in') && pre.get('check_in') >= earliest ? pre.get('check_in') : '';
+            S.draft.check_out = S.draft.check_in ? (pre.get('check_out') && pre.get('check_out') > S.draft.check_in ? pre.get('check_out') : VS.addDays(S.draft.check_in, 1)) : '';
+            S.presetRoom = +presetRoom;
+        }
+        frame();
+        loadAmenities(); loadDiscounts();
+        // make sure type info is known for restored stays before the first render
+        Promise.all(S.stays.map(function (s) { return roomsFor(s.check_in, s.check_out); })).then(function () {
+            if (S.step > stepsDef.length - 1) S.step = 0;
+            render(); frame();
+            if (S.presetRoom && S.draft.check_in) { var id = S.presetRoom; delete S.presetRoom; roomsFor(S.draft.check_in, S.draft.check_out).then(function (list) { if (list && list.some(function (t) { return t.id === id && t.available_count > 0; })) { S.draft.rooms[id] = 1; paintRooms(); } }); }
+        });
+        window.addEventListener('beforeunload', function (e) { if (S.stays.length && !window.__vsLeavingOk) { e.preventDefault(); e.returnValue = ''; } });
+        W.state = function () { return S; };
+    };
+})();
