@@ -20,7 +20,7 @@ class GuestWebAndStaffCheckInRulesTest extends ApiFlowTestCase
         }
         // the rooms page's script clamps the picker to today + 2 days (hotel time), exactly the rule the API enforces
         $script = file_get_contents(public_path('js/portal/rooms.js'));
-        $this->assertStringContainsString('VS.addDays(today, 2)', $script);
+        $this->assertStringContainsString('VS.addDays(VS.today(), 2)', $script);
     }
 
     public function test_the_guest_booking_pages_start_from_the_earliest_check_in_and_the_api_refuses_an_earlier_one(): void

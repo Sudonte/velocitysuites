@@ -17,17 +17,28 @@
         return (n.length <= 2 ? n[0] + '*' : n[0] + '***' + n[n.length - 1]) + '@' + p[1];
     }
 
-    function toSession(token) {
+    function toSession(token, remember) {
         return fetch('/auth/portal-session', {
             method: 'POST', credentials: 'same-origin',
             headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': VS.csrf() },
-            body: JSON.stringify({ token: token })
+            body: JSON.stringify({ token: token, remember: !!remember })
         }).then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); });
     }
 
+    // rooms picked before signing in (kept 30 minutes): after sign-in the wizard opens with them filled in
+    function selectionTarget() {
+        try {
+            var v = JSON.parse(localStorage.getItem('vs_selection') || 'null');
+            if (v && v.intent && v.ts && Date.now() - v.ts <= 30 * 60 * 1000) return '/guest/' + (v.intent === 'reserve' ? 'reserve' : 'book') + '/new?sel=1';
+        } catch (e) { /* none */ }
+        return null;
+    }
+    A.selectionTarget = selectionTarget;
+
     function enter(token, box) {
-        return toSession(token).then(function (r) {
-            if (r.ok) { window.location.href = r.d.redirect || '/guest/dashboard'; return true; }
+        var rm = document.getElementById('remember');
+        return toSession(token, rm && rm.checked).then(function (r) {
+            if (r.ok) { window.location.href = selectionTarget() || r.d.redirect || '/guest/dashboard'; return true; }
             VS.alertBox(box, r.d && r.d.message ? r.d.message : 'Sign-in could not be completed. Please try again.');
             return false;
         });
@@ -152,7 +163,7 @@
             e.preventDefault();
             VS.clearErrors(form); VS.alertBox(box, '');
             var bad = false;
-            if (!EMAIL_RE.test(email.value.trim())) { VS.fieldError(email, 'Enter a valid email address.'); bad = true; }
+            if (!EMAIL_RE.test(email.value.trim())) { VS.fieldError(email.closest('.input-group') || email, 'Enter a valid email address.'); bad = true; }
             if (!pass.value) { VS.fieldError(pass.closest('.input-group') || pass, 'Enter your password.'); bad = true; }
             if (bad) return;
             VS.busy(btn, function () {
@@ -181,7 +192,7 @@
                 if (r.status === 403 && /guest accounts only/i.test(r.message || '')) {
                     // a staff account: its sign-in is the website's own
                     var f = document.createElement('form'); f.method = 'POST'; f.action = '/login';
-                    [['_token', VS.csrf()], ['email', email.value.trim()], ['password', pass.value]].forEach(function (p) { var i = document.createElement('input'); i.type = 'hidden'; i.name = p[0]; i.value = p[1]; f.appendChild(i); });
+                    [['_token', VS.csrf()], ['email', email.value.trim()], ['password', pass.value]].concat($('#remember', form) && $('#remember', form).checked ? [['remember', 'on']] : []).forEach(function (p) { var i = document.createElement('input'); i.type = 'hidden'; i.name = p[0]; i.value = p[1]; f.appendChild(i); });
                     document.body.appendChild(f); f.submit(); return;
                 }
                 VS.alertBox(box, r.message || 'We could not sign you in. Please try again.');
@@ -292,15 +303,40 @@
             hint.textContent = v ? 'Age: ' + ageOf(v) : '';
         });
 
+        var back = $('[data-back]', root), next = $('[data-next]', root), submitBtn = $('#vsRegSubmit', root), barFill = $('.progress-bar', bar);
         function show(n) {
             cur = n;
             steps.forEach(function (s, i) { s.classList.toggle('d-none', i !== n); });
-            bar.innerHTML = names.map(function (_, i) { return '<li class="' + (i < n ? 'done' : i === n ? 'now' : '') + '"></li>'; }).join('');
+            barFill.style.width = Math.round((n + 1) / names.length * 100) + '%';
+            bar.setAttribute('aria-valuenow', n + 1);
             line.textContent = 'Step ' + (n + 1) + ' of ' + names.length + ' · ' + names[n];
+            back.disabled = n === 0;
+            next.classList.toggle('d-none', n === names.length - 1);
+            submitBtn.classList.toggle('d-none', n !== names.length - 1);
             VS.alertBox(alertId, '');
             var first = steps[n].querySelector('input,select'); if (first) first.focus({ preventScroll: true });
             window.scrollTo({ top: 0, behavior: VS.reducedMotion ? 'auto' : 'smooth' });
         }
+
+        // floating labels: the label rests inside the box and floats up once the box has a value, focus, or a hint
+        function floatify() {
+            form.querySelectorAll('.form-group').forEach(function (g) {
+                var lab = g.querySelector(':scope > label[for]'), ctl = lab && g.querySelector(':scope > .form-control, :scope > .form-select');
+                if (!ctl || ctl.type === 'file' || ctl.type === 'checkbox' || ctl.type === 'radio') return;
+                g.classList.add('vs-float');
+            });
+        }
+        function refreshFloat() {
+            form.querySelectorAll('.vs-float').forEach(function (g) {
+                var ctl = g.querySelector(':scope > .form-control, :scope > .form-select');
+                var up = ctl.tagName === 'SELECT' || ctl.type === 'date' || !!ctl.value || document.activeElement === ctl || !!ctl.getAttribute('placeholder');
+                g.classList.toggle('is-up', up);
+            });
+        }
+        floatify(); refreshFloat();
+        form.addEventListener('focusin', refreshFloat); form.addEventListener('focusout', refreshFloat);
+        form.addEventListener('input', refreshFloat); form.addEventListener('change', refreshFloat);
+        setInterval(refreshFloat, 500);   // the address lists fill boxes without an input event
 
         function req(el, msg) { if (!el.value.trim()) { VS.fieldError(el, msg); return false; } return true; }
 
@@ -327,6 +363,17 @@
             }
             return ok;
         }
+
+        form.addEventListener('input', function (e) { var t = e.target; if (t.classList.contains('is-invalid')) { t.classList.remove('is-invalid'); var fb = t.closest('.vs-float,.form-group,.input-group'); fb = fb && fb.querySelector('.vs-fb'); if (fb) fb.remove(); } });
+        form.addEventListener('focusout', function (e) {
+            var t = e.target, id = t.id, msg = '';
+            if (!t.value || !t.value.trim() && id !== 'password') { if (!t.value && ['first_name', 'last_name', 'email', 'mobile_number', 'password'].indexOf(id) < 0) return; }
+            if (id === 'email' && t.value && !EMAIL_RE.test(t.value.trim())) msg = 'Enter a valid email address.';
+            if (id === 'password_confirmation' && t.value && t.value !== f('password').value) msg = 'The passwords do not match.';
+            if (id === 'date_of_birth' && t.value && ageOf(t.value) < 18) msg = 'You must be 18 or older to create an account.';
+            if (id === 'first_name' && form.dataset.touched && !t.value.trim()) msg = 'Enter your first name.';
+            if (msg) VS.fieldError(t, msg);
+        });
 
         function composeAddress() {
             var v = function (n) { var e = form.querySelector('[name="' + n + '"]:not(:disabled)'); return e ? e.value.trim() : ''; };
@@ -370,7 +417,7 @@
         });
         root.querySelectorAll('[data-back]').forEach(function (b) { b.addEventListener('click', function () { show(cur - 1); }); });
         form.addEventListener('keydown', function (e) {
-            if (e.key === 'Enter' && e.target.tagName === 'INPUT' && e.target.type !== 'file') { e.preventDefault(); var n = steps[cur].querySelector('[data-next]'); if (n) n.click(); }
+            if (e.key === 'Enter' && e.target.tagName === 'INPUT' && e.target.type !== 'file') { e.preventDefault(); var n = cur === names.length - 1 ? submitBtn : next; if (n) n.click(); }
         });
 
         $('#vsPhoto', root).addEventListener('change', function (e) {
@@ -386,7 +433,7 @@
             VS.confirm({ title: 'Terms and agreement', html: '<div class="vs-terms">' + $('#vsTermsText', root).innerHTML + '</div>', confirmText: 'I agree', cancelText: 'Close' }).then(function (yes) { if (yes) f('terms').checked = true; });
         });
 
-        var submit = $('#vsRegSubmit', root);
+        var submit = submitBtn;
         submit.addEventListener('click', function () {
             VS.clearErrors(steps[5]); VS.alertBox(alertId, '');
             if (!f('terms').checked) { VS.fieldError(f('terms'), 'Accept the terms to continue.'); return; }
@@ -422,7 +469,7 @@
                     var up = photo ? (function () { var fd = new FormData(); fd.append('profile_picture', photo); return fetch('/api/guest/profile/picture', { method: 'POST', headers: { Authorization: 'Bearer ' + token, Accept: 'application/json' }, body: fd }).catch(function () {}); })() : Promise.resolve();
                     up.then(function () { return toSession(token); }).then(function (s) {
                         if (!s.ok) { VS.alertBox('vsCAlert', 'Your account was created. Please sign in.'); return; }
-                        panel.innerHTML = '<div class="text-center py-3"><div class="vs-success"><i class="fas fa-check"></i></div><h1 class="h4 fw-bold mt-3">Your account is ready</h1><p class="text-muted">Welcome to Velocity Suites, ' + VS.esc(data.first_name) + '.</p><a class="btn btn-velocity" href="' + VS.esc(s.d.redirect || '/guest/dashboard') + '">Go to my dashboard</a></div>';
+                        panel.innerHTML = '<div class="text-center py-3"><div class="vs-success"><i class="fas fa-check"></i></div><h1 class="h4 fw-bold mt-3">Your account is ready</h1><p class="text-muted">Welcome to Velocity Suites, ' + VS.esc(data.first_name) + '.</p><a class="btn btn-velocity" href="' + VS.esc(selectionTarget() || s.d.redirect || '/guest/dashboard') + '">' + (selectionTarget() ? 'Continue with my rooms' : 'Go to my dashboard') + '</a></div>';
                     });
                 });
             };

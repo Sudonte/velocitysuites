@@ -476,6 +476,30 @@
         // booking payment page reads this state
         W.draftForPayment = function () { return { fd: payload(), total: roomsTotal(allTypes()) + amenitiesTotal() }; };
 
+        // Availability is checked again here: counts are lowered to what is free now, and the stay is added for the guest to review.
+        function applySelection(sv) {
+            var note = '';
+            if (sv.expired) { note = 'Your room selection expired. Choose your dates and rooms again.'; }
+            else if (sv.check_in < earliest || sv.check_out <= sv.check_in) { note = 'Those dates can no longer be booked (the earliest check-in is ' + VS.date(earliest) + '). Choose new dates.'; }
+            if (note) { window.VSRooms.clearSelection(); VS.alertBox('vsStepErr', note, 'warning'); return; }
+            roomsFor(sv.check_in, sv.check_out).then(function (list) {
+                if (!list) { VS.alertBox('vsStepErr', 'We could not check availability. Please choose your rooms again.', 'warning'); return; }
+                var rooms = {}, lowered = false;
+                Object.keys(sv.rooms).forEach(function (id) {
+                    var t = list.filter(function (x) { return String(x.id) === String(id); })[0];
+                    var free = t && !t.is_fully_booked ? Math.max(0, t.available_count || 0) : 0, want = sv.rooms[id], got = Math.min(want, free);
+                    if (got < want) lowered = true;
+                    if (got > 0) rooms[id] = got;
+                });
+                window.VSRooms.clearSelection();
+                if (!Object.keys(rooms).length) { VS.alertBox('vsStepErr', 'Those rooms are no longer available for ' + VS.date(sv.check_in) + ' to ' + VS.date(sv.check_out) + '. Choose other dates or rooms.', 'warning'); return; }
+                S.stays.push({ check_in: sv.check_in, check_out: sv.check_out, rooms: rooms });
+                save(); frame(); paintStays(); paintEditor();
+                if (lowered) VS.alertBox('vsStepErr', 'Some rooms were no longer available, so we lowered your selection to what is free now. Review it below.', 'warning');
+                else VS.toast('Your rooms are added. Review them, then continue.', 'success');
+            });
+        }
+
         // ---- start: preselect a room from the Room Details link
         var presetRoom = pre.get('room');
         if (presetRoom && !S.stays.length && !S.draft.check_in) {
@@ -483,12 +507,20 @@
             S.draft.check_out = S.draft.check_in ? (pre.get('check_out') && pre.get('check_out') > S.draft.check_in ? pre.get('check_out') : VS.addDays(S.draft.check_in, 1)) : '';
             S.presetRoom = +presetRoom;
         }
+        // ---- start: the dates and rooms picked on the Rooms page or the landing page (kept up to 30 minutes, also through sign-in)
+        var fromSel = null;
+        if (pre.get('sel') && !S.stays.length && !S.draft.check_in) {
+            var sv = window.VSRooms && window.VSRooms.loadSelection();
+            if (sv && sv.check_in && sv.rooms && Object.keys(sv.rooms).length) fromSel = sv;
+            else if (pre.get('sel')) fromSel = { expired: true };
+        }
         frame();
         loadAmenities(); loadDiscounts();
         // make sure type info is known for restored stays before the first render
         Promise.all(S.stays.map(function (s) { return roomsFor(s.check_in, s.check_out); })).then(function () {
             if (S.step > stepsDef.length - 1) S.step = 0;
             render(); frame();
+            if (fromSel) applySelection(fromSel);
             if (S.presetRoom && S.draft.check_in) { var id = S.presetRoom; delete S.presetRoom; roomsFor(S.draft.check_in, S.draft.check_out).then(function (list) { if (list && list.some(function (t) { return t.id === id && t.available_count > 0; })) { S.draft.rooms[id] = 1; paintRooms(); } }); }
         });
         window.addEventListener('beforeunload', function (e) { if (S.stays.length && !window.__vsLeavingOk) { e.preventDefault(); e.returnValue = ''; } });

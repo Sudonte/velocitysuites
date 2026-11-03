@@ -26,7 +26,7 @@ class PortalSessionController extends Controller
             return response()->json(['message' => 'Sign-in could not be completed. Please sign in again.'], 401);
         }
 
-        Auth::login($user);
+        Auth::login($user, $request->boolean('remember'));
         $request->session()->regenerate();
         PortalToken::adopt($plain, $user);
 

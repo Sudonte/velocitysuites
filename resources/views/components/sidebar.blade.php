@@ -486,17 +486,23 @@
             </ul>
         @elseif(auth()->user()->role === 'guest')
             <ul class="nav flex-column">
-                <li><a href="{{ route('guest.dashboard') }}" class="nav-link {{ request()->routeIs('guest.dashboard') ? 'active' : '' }}" title="Dashboard">
+                <li><a href="{{ route('guest.dashboard') }}" class="nav-link {{ request()->routeIs('guest.dashboard') ? 'active' : '' }}" title="Dashboard" @if(request()->routeIs('guest.dashboard')) aria-current="page" @endif>
                     <i class="fas fa-home"></i> <span class="link-text">Dashboard</span>
                 </a></li>
-                <li><a href="{{ route('guest.reservations.index') }}" class="nav-link {{ request()->routeIs('guest.reservations.*') ? 'active' : '' }}" title="My Reservations">
-                    <i class="fas fa-calendar-alt"></i> <span class="link-text">My Reservations</span>
+                <li><a href="{{ route('guest.rooms') }}" class="nav-link {{ request()->routeIs('guest.rooms') ? 'active' : '' }}" title="Room Browsing" @if(request()->routeIs('guest.rooms')) aria-current="page" @endif>
+                    <i class="fas fa-door-open"></i> <span class="link-text">Room Browsing</span>
                 </a></li>
-                <li><a href="{{ route('public.rooms.index') }}" class="nav-link {{ request()->routeIs('public.rooms.*') ? 'active' : '' }}" title="Book Room">
-                    <i class="fas fa-door-open"></i> <span class="link-text">Book Room</span>
+                <li><a href="{{ route('guest.reservations.index') }}" class="nav-link {{ request()->routeIs('guest.reservations.*', 'guest.bookings.*', 'guest.book.new', 'guest.reserve.new', 'guest.pay', 'guest.receipts.*') ? 'active' : '' }}" title="Booking &amp; Reservation" @if(request()->routeIs('guest.reservations.*', 'guest.bookings.*', 'guest.book.new', 'guest.reserve.new', 'guest.pay', 'guest.receipts.*')) aria-current="page" @endif>
+                    <i class="fas fa-calendar-alt"></i> <span class="link-text">Booking &amp; Reservation</span>
                 </a></li>
-                <li><a href="{{ route('guest.payments.index') }}" class="nav-link {{ request()->routeIs('guest.payments.*') ? 'active' : '' }}" title="Payments">
-                    <i class="fas fa-money-bill"></i> <span class="link-text">Payments</span>
+                <li><a href="{{ route('guest.history') }}" class="nav-link {{ request()->routeIs('guest.history') ? 'active' : '' }}" title="Transaction History" @if(request()->routeIs('guest.history')) aria-current="page" @endif>
+                    <i class="fas fa-clock-rotate-left"></i> <span class="link-text">Transaction History</span>
+                </a></li>
+                <li><a href="{{ route('guest.profile.show') }}" class="nav-link {{ request()->routeIs('guest.profile.*') ? 'active' : '' }}" title="Profile Management" @if(request()->routeIs('guest.profile.*')) aria-current="page" @endif>
+                    <i class="fas fa-user-gear"></i> <span class="link-text">Profile Management</span>
+                </a></li>
+                <li><a href="#" class="nav-link" title="Log out" data-bs-toggle="modal" data-bs-target="#logoutConfirmModal">
+                    <i class="fas fa-sign-out-alt"></i> <span class="link-text">Log out</span>
                 </a></li>
             </ul>
         @endif

@@ -28,22 +28,135 @@
             : '<span class="vs-chip ok vs-room-avail">' + VS.plural(rt.available_count, 'room') + ' available</span>';
     }
 
-    /** One room card; `search` is the query string (dates) carried to the details page. */
-    R.card = function (rt, search) {
+    // ---- the selection: dates + how many rooms of each type, kept for 30 minutes (also through sign-in) ----
+
+    var SEL_KEY = 'vs_selection', SEL_TTL = 30 * 60 * 1000;
+    R.loadSelection = function () {
+        try {
+            var v = JSON.parse(localStorage.getItem(SEL_KEY) || 'null');
+            if (!v || !v.ts || Date.now() - v.ts > SEL_TTL) { localStorage.removeItem(SEL_KEY); return null; }
+            return v;
+        } catch (e) { return null; }
+    };
+    R.saveSelection = function (v) { v.ts = Date.now(); try { localStorage.setItem(SEL_KEY, JSON.stringify(v)); } catch (e) { /* storage off */ } };
+    R.clearSelection = function () { try { localStorage.removeItem(SEL_KEY); } catch (e) { /* ignore */ } };
+
+    var MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    function shortDate(iso) { var p = String(iso).split('-'); return MONTHS[+p[1] - 1] + ' ' + (+p[2]); }
+
+    function stepperInner(rt, qty, max) {
+        if (max <= 0) return '';
+        var atLimit = qty >= max;
+        return '<span class="vs-qty-label" id="qtyl' + rt.id + '">Rooms</span><div class="vs-qty" role="group" aria-labelledby="qtyl' + rt.id + '">' +
+            '<button type="button" class="btn btn-sm btn-outline-velocity" data-dec="' + rt.id + '" aria-label="Fewer ' + VS.esc(rt.name) + ' rooms"' + (qty ? '' : ' disabled') + '>\u2212</button>' +
+            '<output class="vs-num fw-bold" aria-live="polite">' + qty + '</output>' +
+            '<button type="button" class="btn btn-sm btn-outline-velocity" data-inc="' + rt.id + '" aria-label="More ' + VS.esc(rt.name) + ' rooms"' + (atLimit ? ' disabled' : '') + '>+</button></div>' +
+            '<div class="vs-qty-msg small" role="status">' + (atLimit ? 'Only ' + VS.plural(max, 'room') + ' available for these dates.' : '') + '</div>';
+    }
+
+    /** One room card; `search` is the query string (dates) carried to the details page; `sel` (optional) adds the quantity stepper. */
+    R.card = function (rt, search, sel) {
         var best = (rt.promos || []).filter(function (p) { return p.rate_after != null && Number(p.rate_after) < Number(rt.rate); })
             .sort(function (a, b) { return a.rate_after - b.rate_after; })[0];
         var price = best
             ? '<s>' + VS.money(rt.rate) + '</s>' + VS.money(best.rate_after)
             : VS.money(rt.rate);
         var href = '/rooms/' + rt.id + (search ? '?' + search : '');
-        return '<div class="col-sm-6 col-lg-4"><article class="vs-room vs-reveal">' +
+        var step = sel ? '<div class="vs-stepper" data-stepper="' + rt.id + '">' + stepperInner(rt, sel.qty(rt.id), sel.max(rt)) + '</div>' : '';
+        return '<div class="col-sm-6 col-lg-4"><article class="vs-room vs-reveal" data-room="' + rt.id + '">' +
             '<a class="vs-room-photo" href="' + href + '" aria-label="' + VS.esc(rt.name) + ' details">' +
             '<img src="' + VS.esc(rt.image_url) + '" alt="' + VS.esc(rt.name) + '" loading="lazy">' + availChip(rt) + promoBadge(rt) + '</a>' +
             '<div class="vs-room-body"><h3>' + VS.esc(rt.name) + '</h3>' +
             '<div class="vs-room-facts">' + VS.esc(facts(rt)) + '</div>' +
-            '<div class="vs-room-price">' + price + ' <small>per night</small></div>' +
+            '<div class="vs-room-price">' + price + ' <small>per night</small></div>' + step +
             '<a class="btn btn-outline-velocity mt-auto" href="' + href + '">View details</a>' +
             '</div></article></div>';
+    };
+
+    /**
+     * The dates and the room counts. cfg: { ci, co (date inputs), signed (bool) }.
+     * sel.sync(list) clamps counts to what the dates allow, sel.bind(grid) wires the steppers, the sticky bar follows the counts.
+     */
+    R.selection = function (cfg) {
+        var saved = R.loadSelection() || {};
+        var earliest = VS.addDays(VS.today(), 2);
+        var st = { check_in: saved.check_in && saved.check_in >= earliest ? saved.check_in : earliest, check_out: '', rooms: saved.rooms || {}, types: saved.types || {} };
+        st.check_out = saved.check_out && saved.check_out > st.check_in ? saved.check_out : VS.addDays(st.check_in, 1);
+        cfg.ci.min = earliest; cfg.ci.value = st.check_in; cfg.co.min = VS.addDays(st.check_in, 1); cfg.co.value = st.check_out;
+        var list = [], bar = null, sel = {};
+
+        function persist(intent) { var v = { check_in: st.check_in, check_out: st.check_out, rooms: st.rooms, types: st.types }; if (intent) v.intent = intent; R.saveSelection(v); }
+        sel.qty = function (id) { return st.rooms[id] || 0; };
+        sel.max = function (rt) { return rt.is_fully_booked ? 0 : Math.max(0, rt.available_count || 0); };
+        sel.dates = function () { return { check_in: st.check_in, check_out: st.check_out }; };
+
+        sel.sync = function (rooms) {
+            list = rooms;
+            var changed = false;
+            Object.keys(st.rooms).forEach(function (id) {
+                var rt = rooms.filter(function (r) { return String(r.id) === String(id); })[0];
+                var max = rt ? sel.max(rt) : 0;
+                if (st.rooms[id] > max) { changed = true; if (max > 0) st.rooms[id] = max; else delete st.rooms[id]; }
+            });
+            rooms.forEach(function (r) { if (st.rooms[r.id]) st.types[r.id] = { name: r.name, rate: Number(r.rate) }; });
+            persist(); paintBar();
+            return changed;
+        };
+
+        function totals() {
+            var ids = Object.keys(st.rooms).filter(function (id) { return st.rooms[id] > 0; });
+            var n = Math.max(1, VS.nights(st.check_in, st.check_out)), rooms = 0, money = 0;
+            ids.forEach(function (id) { rooms += st.rooms[id]; money += st.rooms[id] * ((st.types[id] || {}).rate || 0) * n; });
+            return { types: ids.length, rooms: rooms, money: money };
+        }
+
+        function ensureBar() {
+            if (bar) return bar;
+            bar = document.createElement('div'); bar.className = 'vs-selbar'; bar.setAttribute('role', 'region'); bar.setAttribute('aria-label', 'Your room selection'); bar.hidden = true;
+            bar.innerHTML = '<div class="vs-selbar-in"><div class="vs-selbar-text" aria-live="polite"></div><div class="vs-selbar-actions"><button type="button" class="btn btn-velocity" data-go="book">Book now</button><button type="button" class="btn btn-outline-velocity" data-go="reserve">Reserve</button></div></div>';
+            document.body.appendChild(bar);
+            bar.querySelectorAll('[data-go]').forEach(function (b) { b.addEventListener('click', function () { go(b.dataset.go); }); });
+            return bar;
+        }
+        function paintBar() {
+            var t = totals(), b = ensureBar();
+            b.hidden = t.rooms === 0;
+            document.body.classList.toggle('vs-has-selbar', t.rooms > 0);
+            b.querySelector('.vs-selbar-text').innerHTML = '<strong>' + VS.plural(t.types, 'room type') + ' \u00b7 ' + VS.plural(t.rooms, 'room') + '</strong> \u00b7 ' + shortDate(st.check_in) + ' \u2192 ' + shortDate(st.check_out) + ' \u00b7 <span class="vs-num fw-bold">' + VS.money(t.money) + '</span>';
+        }
+
+        function promptSignIn(intent) {
+            var wrap = document.createElement('div'); wrap.className = 'modal fade'; wrap.tabIndex = -1; wrap.setAttribute('aria-labelledby', 'vsSiTitle');
+            wrap.innerHTML = '<div class="modal-dialog modal-dialog-centered"><div class="modal-content"><div class="modal-header border-0 pb-0"><h2 class="modal-title h5 fw-bold" id="vsSiTitle">Sign in to continue</h2><button class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>' +
+                '<div class="modal-body">Sign in or create an account to ' + (intent === 'reserve' ? 'reserve' : 'book') + ' these rooms. We will keep your dates and rooms for 30 minutes.</div>' +
+                '<div class="modal-footer border-0 pt-0"><button class="btn btn-light" data-bs-dismiss="modal">Cancel</button><a class="btn btn-outline-velocity" href="/register">Create account</a><a class="btn btn-velocity" href="/login">Sign in</a></div></div></div>';
+            document.body.appendChild(wrap);
+            var m = new bootstrap.Modal(wrap); m.show(); wrap.addEventListener('hidden.bs.modal', function () { wrap.remove(); });
+        }
+        function go(intent) {
+            var t = totals(); if (!t.rooms) return;
+            persist(intent);
+            if (cfg.signed) window.location.href = '/guest/' + (intent === 'reserve' ? 'reserve' : 'book') + '/new?sel=1';
+            else promptSignIn(intent);
+        }
+
+        sel.bind = function (grid) {
+            grid.addEventListener('click', function (e) {
+                var btn = e.target.closest('[data-inc],[data-dec]'); if (!btn) return;
+                var id = btn.dataset.inc || btn.dataset.dec, rt = list.filter(function (r) { return String(r.id) === String(id); })[0]; if (!rt) return;
+                var q = sel.qty(rt.id) + (btn.dataset.inc ? 1 : -1);
+                q = Math.max(0, Math.min(sel.max(rt), q));
+                if (q) { st.rooms[rt.id] = q; st.types[rt.id] = { name: rt.name, rate: Number(rt.rate) }; } else delete st.rooms[rt.id];
+                var host = grid.querySelector('[data-stepper="' + rt.id + '"]');
+                host.innerHTML = stepperInner(rt, q, sel.max(rt));
+                var again = host.querySelector(btn.dataset.inc ? '[data-inc]' : '[data-dec]'); if (again && !again.disabled) again.focus();
+                persist(); paintBar();
+            });
+        };
+
+        sel.setDates = function (ci, co) { st.check_in = ci; st.check_out = co; persist(); paintBar(); };
+        sel.paintBar = paintBar;
+        return sel;
     };
 
     R.load = function (query) {
@@ -54,15 +167,54 @@
         });
     };
 
-    /** Featured rooms on the landing page: the same rooms the app lists, in the same order. */
-    R.featured = function (el) {
+    /** Featured rooms on the landing page: the same rooms the app lists, with the dates and a room count on each card. */
+    R.featured = function (el, opts) {
+        opts = opts || {};
+        var datesHost = document.getElementById('vsFeaturedDates');
         el.innerHTML = '<div class="col-12">' + VS.skeleton(3) + '</div>';
-        R.load({}).then(function (res) {
-            if (res.error) { el.innerHTML = '<div class="col-12">' + VS.errorState(res.error, 'vsFeaturedRetry') + '</div>'; var b = document.getElementById('vsFeaturedRetry'); if (b) b.onclick = function () { R.featured(el); }; return; }
-            if (!res.rooms.length) { el.innerHTML = '<div class="col-12">' + VS.empty('fa-bed', 'No rooms right now', 'Please check back later.') + '</div>'; return; }
-            el.innerHTML = res.rooms.slice(0, 6).map(function (rt) { return R.card(rt); }).join('');
-            VS.reveal(el);
-        });
+        var sel = null;
+        if (datesHost) {
+            datesHost.innerHTML = R.dateRow('fi');
+            sel = R.selection({ ci: datesHost.querySelector('[data-ci]'), co: datesHost.querySelector('[data-co]'), signed: !!opts.signed });
+            sel.bind(el);
+        }
+        function run() {
+            var q = sel ? sel.dates() : {};
+            el.innerHTML = '<div class="col-12">' + VS.skeleton(3) + '</div>';
+            R.load(q).then(function (res) {
+                if (res.error) { el.innerHTML = '<div class="col-12">' + VS.errorState(res.error, 'vsFeaturedRetry') + '</div>'; var b = document.getElementById('vsFeaturedRetry'); if (b) b.onclick = run; return; }
+                if (!res.rooms.length) { el.innerHTML = '<div class="col-12">' + VS.empty('fa-bed', 'No rooms right now', 'Please check back later.') + '</div>'; return; }
+                if (sel) sel.sync(res.rooms);
+                el.innerHTML = res.rooms.slice(0, 6).map(function (rt) { return R.card(rt, sel ? new URLSearchParams(sel.dates()).toString() : '', sel); }).join('');
+                VS.reveal(el);
+            });
+        }
+        if (datesHost) R.bindDates(datesHost, sel, run);
+        run();
+    };
+
+    /** The check-in / check-out pair (same rules as the app: earliest check-in is two days from today, at least one night). */
+    R.dateRow = function (p) {
+        return '<div class="row g-2 align-items-start vs-daterow"><div class="col-6 col-md-3"><label class="form-label small fw-semibold" for="' + p + 'In">Check-in</label><input type="date" class="form-control" id="' + p + 'In" data-ci></div>' +
+            '<div class="col-6 col-md-3"><label class="form-label small fw-semibold" for="' + p + 'Out">Check-out</label><input type="date" class="form-control" id="' + p + 'Out" data-co></div>' +
+            '<div class="col-12 col-md-6 small text-muted pt-md-4" data-nights aria-live="polite"></div></div>';
+    };
+    /** Keeps the two dates valid, tells how many nights, and calls `run` when a valid pair is chosen. */
+    R.bindDates = function (host, sel, run) {
+        var ci = host.querySelector('[data-ci]'), co = host.querySelector('[data-co]'), n = host.querySelector('[data-nights]');
+        var earliest = VS.addDays(VS.today(), 2);
+        function nights() { n.textContent = VS.plural(Math.max(1, VS.nights(ci.value, co.value)), 'night') + ' \u00b7 the earliest check-in is ' + VS.date(earliest); }
+        function check(from) {
+            VS.clearErrors(host);
+            if (from === 'in' && ci.value && ci.value >= earliest && (!co.value || co.value <= ci.value)) co.value = VS.addDays(ci.value, 1);
+            if (ci.value) co.min = VS.addDays(ci.value, 1);
+            if (!ci.value || ci.value < earliest) { VS.fieldError(ci, 'The earliest check-in is ' + VS.date(earliest) + '.'); return false; }
+            if (!co.value || co.value <= ci.value) { VS.fieldError(co, 'Stay at least 1 night: check-out must be after check-in.'); return false; }
+            nights(); return true;
+        }
+        function change(from) { if (check(from)) { if (sel) sel.setDates(ci.value, co.value); run(); } }
+        ci.addEventListener('change', function () { change('in'); }); co.addEventListener('change', function () { change('out'); });
+        nights();
     };
 
     // ---- Room Details ----
@@ -127,11 +279,11 @@
     R.page = function (root) {
         var grid = root.querySelector('#vsRoomGrid');
         var form = root.querySelector('#vsRoomFilters');
+        var signed = root.dataset.signed === '1';
         var state = { sort: 'name' };
-        var today = VS.today();
-        var minIn = VS.addDays(today, 2);
         var ci = form.querySelector('[name=check_in]'), co = form.querySelector('[name=check_out]');
-        ci.min = minIn; co.min = VS.addDays(minIn, 1);
+        var sel = R.selection({ ci: ci, co: co, signed: signed });
+        sel.bind(grid);
 
         function read() {
             var q = {};
@@ -145,34 +297,40 @@
             list = list.slice().sort(function (a, b) {
                 return state.sort === 'price_asc' ? a.rate - b.rate : state.sort === 'price_desc' ? b.rate - a.rate : a.name.localeCompare(b.name);
             });
-            var search = new URLSearchParams(read()).toString();
-            grid.innerHTML = list.length ? list.map(function (r) { return R.card(r, search); }).join('')
+            var search = new URLSearchParams(sel.dates()).toString();
+            grid.innerHTML = list.length ? list.map(function (r) { return R.card(r, search, sel); }).join('')
                 : '<div class="col-12">' + VS.empty('fa-bed', 'No rooms match', 'Try other dates or clear the filters.') + '</div>';
             VS.reveal(grid);
         }
         var cache = [];
         function run() {
             var q = read();
-            if (q.check_in && q.check_in < minIn) { VS.fieldError(ci, 'The earliest check-in is ' + VS.date(minIn) + '.'); return; }
+            var earliest = VS.addDays(VS.today(), 2);
             VS.clearErrors(form);
-            if (q.check_in && q.check_out && q.check_out <= q.check_in) { VS.fieldError(co, 'Check-out must be after check-in.'); return; }
+            if (!q.check_in || q.check_in < earliest) { VS.fieldError(ci, 'The earliest check-in is ' + VS.date(earliest) + '.'); return; }
+            if (!q.check_out || q.check_out <= q.check_in) { VS.fieldError(co, 'Stay at least 1 night: check-out must be after check-in.'); return; }
+            sel.setDates(q.check_in, q.check_out);
             grid.innerHTML = '<div class="col-12">' + VS.skeleton(4) + '</div>';
             R.load(q).then(function (res) {
                 if (res.error) { grid.innerHTML = '<div class="col-12">' + VS.errorState(res.error, 'vsRoomsRetry') + '</div>'; document.getElementById('vsRoomsRetry').onclick = run; return; }
                 cache = res.rooms;
                 var names = Array.from(new Set(cache.map(function (r) { return r.name; })));
-                var sel = form.elements.room_type, cur = sel.value;
-                sel.innerHTML = '<option value="">All room types</option>' + names.map(function (n) { return '<option>' + VS.esc(n) + '</option>'; }).join('');
-                sel.value = cur;
+                var sl = form.elements.room_type, cur = sl.value;
+                sl.innerHTML = '<option value="">All room types</option>' + names.map(function (n) { return '<option>' + VS.esc(n) + '</option>'; }).join('');
+                sl.value = cur;
+                var clamped = sel.sync(cache);
                 paint(cache);
+                var note = root.querySelector('#vsSelNote');
+                if (note) note.innerHTML = clamped ? '<div class="alert alert-warning vs-alert mb-3" role="status">Some rooms are not available for these dates, so we lowered your selection.</div>' : '';
             });
         }
         form.addEventListener('submit', function (e) { e.preventDefault(); run(); });
         form.elements.sort.addEventListener('change', function () { state.sort = this.value; paint(cache); });
         form.elements.room_type.addEventListener('change', function () { paint(cache); });
         form.elements.only_available.addEventListener('change', function () { paint(cache); });
-        form.querySelector('[data-clear]').addEventListener('click', function () { form.reset(); run(); });
-        ci.addEventListener('change', function () { if (ci.value) { co.min = VS.addDays(ci.value, 1); if (co.value && co.value <= ci.value) co.value = VS.addDays(ci.value, 1); } });
+        form.querySelector('[data-clear]').addEventListener('click', function () { form.reset(); sel.setDates(VS.addDays(VS.today(), 2), VS.addDays(VS.today(), 3)); ci.value = VS.addDays(VS.today(), 2); co.value = VS.addDays(VS.today(), 3); run(); });
+        ci.addEventListener('change', function () { if (ci.value) { co.min = VS.addDays(ci.value, 1); if (!co.value || co.value <= ci.value) co.value = VS.addDays(ci.value, 1); run(); } });
+        co.addEventListener('change', function () { run(); });
         run();
     };
 })();

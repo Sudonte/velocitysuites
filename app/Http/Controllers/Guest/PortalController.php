@@ -20,6 +20,11 @@ class PortalController extends Controller
         return view('portal.dashboard');
     }
 
+    public function rooms(): View
+    {
+        return view('portal.rooms');
+    }
+
     public function bookingWizard(): View
     {
         return view('portal.wizard', ['mode' => 'booking']);

@@ -220,6 +220,7 @@
         if (!el) return;
         el.classList.add('is-invalid');
         var fb = el.nextElementSibling && el.nextElementSibling.classList.contains('vs-fb') ? el.nextElementSibling : null;
+        if (!fb && el.parentElement && el.parentElement.querySelector(':scope > .vs-fb')) fb = el.parentElement.querySelector(':scope > .vs-fb');
         if (!fb) { fb = document.createElement('div'); fb.className = 'invalid-feedback vs-fb'; el.insertAdjacentElement('afterend', fb); }
         fb.textContent = message;
         fb.style.display = 'block';

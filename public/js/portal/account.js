@@ -27,28 +27,7 @@
             var u = all.filter(function (n) { return !n.is_read; }).length;
             root.querySelector('#vsNoteCount').textContent = u ? u + ' unread' : 'All caught up';
         }
-        function target(n) {
-            if (n.receipt_number) return { href: '/guest/receipts/' + encodeURIComponent(n.receipt_number), label: 'View receipt' };
-            if (n.reference_id && /booking|payment|reservation|amenity|receipt/.test(catOf(n))) return { href: '/guest/reservations/' + n.reference_id, label: 'View transaction' };
-            return null;
-        }
-        function open(n) {
-            if (!n) return;
-            var t = target(n);
-            var html = '<p>' + VS.esc(n.message).replace(/\n/g, '<br>') + '</p><div class="small text-muted">' + VS.esc(VS.dateTime(n.created_at)) + '</div>';
-            if (!n.is_read) { n.is_read = true; VS.api('/notifications/' + n.id + '/read', { method: 'PUT' }).then(function () { paint(); }); paint(); }
-            var wrap = document.createElement('div'); wrap.className = 'modal fade'; wrap.tabIndex = -1;
-            wrap.innerHTML = '<div class="modal-dialog modal-dialog-centered"><div class="modal-content vs-modal"><div class="modal-header border-0 pb-0"><h2 class="modal-title h5 fw-bold">' + VS.esc(n.title) + '</h2><button class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div><div class="modal-body">' + html + '</div>' +
-                '<div class="modal-footer border-0 pt-0"><button class="btn btn-light" data-toggle>Mark as unread</button>' + (t ? '<a class="btn btn-velocity" href="' + t.href + '">' + t.label + '</a>' : '') + '</div></div></div>';
-            document.body.appendChild(wrap);
-            var m = new bootstrap.Modal(wrap); m.show();
-            wrap.addEventListener('hidden.bs.modal', function () { wrap.remove(); });
-            var tg = wrap.querySelector('[data-toggle]');
-            tg.onclick = function () {
-                var toUnread = n.is_read;
-                VS.api('/notifications/' + n.id + (toUnread ? '/unread' : '/read'), { method: 'PUT' }).then(function (r) { if (r.ok) { n.is_read = !toUnread; tg.textContent = n.is_read ? 'Mark as unread' : 'Mark as read'; paint(); } });
-            };
-        }
+        function open(n) { VS.openNote(n, paint); }
         function load() {
             host.innerHTML = VS.skeleton(4);
             VS.api('/notifications', { query: { per_page: 200 } }).then(function (r) {

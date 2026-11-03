@@ -43,7 +43,7 @@ class PromoRulesTest extends ApiFlowTestCase
         return Promotion::create(array_merge([
             'promo_name' => 'Promo', 'promo_type' => 'discount', 'status' => 'active', 'discount_applies_to' => 'rate',
             'discount_type' => 'percentage', 'discount_value' => 10,
-            'start_date' => today()->subDay()->toDateString(), 'end_date' => today()->addMonth()->toDateString(),
+            'start_date' => \App\Support\CheckInWindow::date()->copy()->subDay()->toDateString(), 'end_date' => \App\Support\CheckInWindow::date()->copy()->addMonth()->toDateString(),
         ], $attrs));
     }
 
@@ -58,7 +58,7 @@ class PromoRulesTest extends ApiFlowTestCase
     private function booking(array $lines, int $nights = 2, ?int $promotionId = null): Booking
     {
         $booking = Booking::create(['room_type_id' => $lines[0][0]->id, 'rooms_requested' => array_sum(array_column($lines, 1)), 'guest_first_name' => 'Mia', 'guest_last_name' => 'Cruz',
-            'check_in' => today()->addDays(3), 'check_out' => today()->addDays(3 + $nights), 'adults' => 2, 'children' => 0, 'number_of_guests' => 2,
+            'check_in' => \App\Support\CheckInWindow::date()->copy()->addDays(3), 'check_out' => \App\Support\CheckInWindow::date()->copy()->addDays(3 + $nights), 'adults' => 2, 'children' => 0, 'number_of_guests' => 2,
             'booking_status' => Booking::STATUS_ACTIVE, 'payment_method' => 'cash', 'promotion_id' => $promotionId]);
         foreach ($lines as [$type, $qty, $rate]) {
             BookingRoomLine::create(['booking_id' => $booking->id, 'room_type_id' => $type->id, 'room_type_name' => $type->name, 'quantity' => $qty,
@@ -231,8 +231,8 @@ class PromoRulesTest extends ApiFlowTestCase
         $this->promo(['promo_name' => 'Live Deluxe', 'room_type_id' => $deluxe->id]);
         $this->promo(['promo_name' => 'Live All']);
         $this->promo(['promo_name' => 'Switched off', 'room_type_id' => $deluxe->id, 'status' => 'inactive']);
-        $this->promo(['promo_name' => 'Ended', 'room_type_id' => $deluxe->id, 'start_date' => today()->subDays(9)->toDateString(), 'end_date' => today()->subDay()->toDateString()]);
-        $this->promo(['promo_name' => 'Not yet', 'room_type_id' => $deluxe->id, 'start_date' => today()->addDay()->toDateString(), 'end_date' => today()->addDays(5)->toDateString()]);
+        $this->promo(['promo_name' => 'Ended', 'room_type_id' => $deluxe->id, 'start_date' => \App\Support\CheckInWindow::date()->copy()->subDays(9)->toDateString(), 'end_date' => \App\Support\CheckInWindow::date()->copy()->subDay()->toDateString()]);
+        $this->promo(['promo_name' => 'Not yet', 'room_type_id' => $deluxe->id, 'start_date' => \App\Support\CheckInWindow::date()->copy()->addDay()->toDateString(), 'end_date' => \App\Support\CheckInWindow::date()->copy()->addDays(5)->toDateString()]);
         $this->promo(['promo_name' => 'On a retired type', 'room_type_id' => $off->id]);
         $archived = $this->promo(['promo_name' => 'Archived', 'room_type_id' => $deluxe->id]);
         $archived->archiveRecord();
@@ -265,8 +265,8 @@ class PromoRulesTest extends ApiFlowTestCase
         $later = $this->promo(['promo_name' => 'Later', 'room_type_id' => $deluxe->id]);
 
         // ...then the first promo ends before check-in
-        $running->update(['end_date' => today()->subDay()->toDateString()]);
-        $later->update(['end_date' => today()->subDay()->toDateString()]);
+        $running->update(['end_date' => \App\Support\CheckInWindow::date()->copy()->subDay()->toDateString()]);
+        $later->update(['end_date' => \App\Support\CheckInWindow::date()->copy()->subDay()->toDateString()]);
 
         $offers = app(StayOffersService::class);
         $listed = $offers->promotionsFor([$deluxe->id], \Carbon\Carbon::parse($booking->check_in), $booking->fresh())->pluck('promo_name')->all();
@@ -287,7 +287,7 @@ class PromoRulesTest extends ApiFlowTestCase
         $promo = $this->promo(['promo_name' => 'Running', 'room_type_id' => $deluxe->id]);
         [$user] = $this->makeGuestUser('Snap');
         $reservation = Reservation::create(['guest_id' => $user->guest->id, 'guest_first_name' => 'A', 'guest_last_name' => 'B', 'room_type_id' => $deluxe->id,
-            'rooms_requested' => 1, 'check_in' => today()->addDays(5)->toDateString(), 'check_out' => today()->addDays(7)->toDateString(), 'adults' => 1, 'number_of_guests' => 1,
+            'rooms_requested' => 1, 'check_in' => \App\Support\CheckInWindow::date()->copy()->addDays(5)->toDateString(), 'check_out' => \App\Support\CheckInWindow::date()->copy()->addDays(7)->toDateString(), 'adults' => 1, 'number_of_guests' => 1,
             'status' => Reservation::STATUS_AWAITING_CASH]);
         ReservationRoomLine::create(['reservation_id' => $reservation->id, 'room_type_id' => $deluxe->id, 'room_type_name' => 'Deluxe', 'quantity' => 1, 'price_per_night' => 3500, 'number_of_nights' => 2, 'subtotal' => 7000]);
 

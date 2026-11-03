@@ -173,3 +173,80 @@ a.vs-rcpt:hover { border-color: var(--vs-red); color: var(--vs-ink); }
 #vsPct > [class*="col-"] { position: relative; }
 .vs-page .btn-check { left: 0; top: 0; width: 1px; height: 1px; }
 .btn-check:checked + .btn-outline-velocity { background: var(--vs-red); color: #fff; }
+
+/* ---- the guest shell: the staff roles' sidebar, header, page area and footer ---- */
+body.vs-page-body { background: var(--vs-bg); color: var(--vs-ink); }
+.vs-footer { color: var(--vs-muted); font-size: .85rem; padding: 1.5rem 0; }
+.vs-shell-main.vs-page { background: transparent; min-height: 0; color: inherit; }
+.vs-shell-main .container { max-width: none; padding-inline: 0; }
+.vs-shell-main .vs-head { padding: 0; margin-bottom: 1.5rem; }
+.vs-shell-main .vs-head h1 { font-size: 1.75rem; font-weight: 600; color: var(--text-dark); margin-bottom: .25rem; }
+.vs-shell-main .vs-head p { color: var(--text-light); margin: 0; }
+.vs-shell-main .vs-card { background: var(--surface-color); border-color: var(--border-color); border-radius: var(--radius-card); box-shadow: var(--shadow-sm); }
+.vs-shell-main .btn-velocity { background: var(--primary-color); border-color: var(--primary-color); border-radius: var(--radius-btn); }
+.vs-shell-main .btn-velocity:hover { background: var(--accent-color); border-color: var(--accent-color); box-shadow: 0 4px 8px rgba(214, 65, 75, .3); }
+.vs-shell-main .btn-outline-velocity { border-radius: var(--radius-btn); }
+.vs-shell-main .container[style*="max-width"] { margin-left: 0; }
+
+/* bell dropdown */
+.vs-bell-menu { width: min(380px, calc(100vw - 1.5rem)); border-radius: var(--radius-card); border: 1px solid var(--border-color); box-shadow: var(--shadow-md); overflow: hidden; background: var(--surface-color); }
+.vs-bell-head { display: flex; justify-content: space-between; align-items: center; padding: .7rem 1rem; border-bottom: 1px solid var(--border-color); }
+.vs-bell-head .btn-link { color: var(--primary-color); font-weight: 600; text-decoration: none; }
+.vs-bell-list { max-height: min(60vh, 380px); overflow-y: auto; }
+.vs-bell-item { display: flex; gap: .6rem; width: 100%; text-align: left; border: 0; border-bottom: 1px solid var(--border-color); background: transparent; padding: .7rem 1rem; color: var(--text-dark); }
+.vs-bell-item:hover, .vs-bell-item:focus-visible { background: var(--bg-color); }
+.vs-bell-dot { flex: 0 0 .55rem; height: .55rem; margin-top: .4rem; border-radius: 50%; background: transparent; }
+.vs-bell-item.unread .vs-bell-dot { background: var(--primary-color); }
+.vs-bell-text { display: flex; flex-direction: column; min-width: 0; }
+.vs-bell-msg { color: var(--text-light); font-size: .85rem; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.vs-bell-time { color: var(--vs-muted); font-size: .75rem; margin-top: .15rem; }
+.vs-bell-empty { padding: 1.5rem 1rem; text-align: center; color: var(--vs-muted); }
+.vs-bell-foot { display: block; text-align: center; padding: .7rem 1rem; font-weight: 600; color: var(--primary-color); text-decoration: none; }
+.vs-bell-foot:hover { background: var(--bg-color); }
+
+/* sign-up: one card, step line with a progress bar, floating labels, actions always in view */
+.vs-reg .vs-reg-logo { margin-bottom: 1.25rem; }
+.vs-reg .vs-stepline { font-weight: 600; color: var(--vs-ink); margin-bottom: .4rem; }
+.vs-prog { height: 8px; border-radius: 99px; background: var(--vs-line); }
+.vs-prog .progress-bar { background: var(--vs-red); transition: width .25s ease; }
+.vs-reduced .vs-prog .progress-bar { transition: none; }
+.vs-reg .form-group { margin-bottom: 1rem; }
+.vs-reg .vs-float { position: relative; }
+.vs-reg .vs-float > label { position: absolute; z-index: 2; left: .75rem; top: .98rem; margin: 0; padding: 0 .2rem; font-size: 1rem; font-weight: 400; color: var(--vs-muted); line-height: 1.2; pointer-events: none; transform-origin: left top; transition: transform .15s ease, color .15s ease; }
+.vs-reg .vs-float > .form-control, .vs-reg .vs-float > .form-select { height: 3.5rem; padding: 1.5rem .85rem .4rem; }
+.vs-reg .vs-float.is-up > label { transform: translateY(-.62rem) scale(.78); color: var(--vs-red-dark); }
+.vs-reg .vs-float > .form-control.is-invalid ~ label, .vs-reg .vs-float > .is-invalid ~ label { color: #b02a37; }
+.vs-reduced .vs-reg .vs-float > label { transition: none; }
+.vs-reg .vs-float > .invalid-feedback, .vs-reg .vs-float > .field-caption { position: static; }
+.vs-reg .vs-reg-actions { display: flex; justify-content: space-between; gap: .75rem; position: sticky; bottom: 0; z-index: 5; margin: 1rem -.25rem 0; padding: .75rem .25rem .25rem; background: var(--secondary-color); border-top: 1px solid var(--vs-line); }
+.vs-reg .vs-reg-actions .btn { min-width: 7.5rem; }
+.vs-reg .vs-reg-actions .btn-velocity { margin-left: auto; }
+@media (max-width: 400px) { .auth-card.vs-reg { padding: 1.25rem; } .vs-reg .vs-reg-actions .btn { min-width: 0; flex: 1; } }
+.vs-shell-main .container[style*="max-width"] { max-width: 1140px !important; }
+
+/* room selection: quantity stepper on a card and the sticky bar */
+.vs-stepper { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; margin: .2rem 0 .7rem; }
+.vs-qty-label { font-size: .85rem; font-weight: 600; color: var(--vs-muted); }
+.vs-qty { display: inline-flex; align-items: center; gap: .5rem; }
+.vs-qty output { min-width: 1.8rem; text-align: center; font-size: 1.05rem; }
+.vs-qty .btn { width: 2.1rem; height: 2.1rem; padding: 0; line-height: 1; font-size: 1.1rem; }
+.vs-qty-msg { flex-basis: 100%; color: var(--vs-amber); }
+.vs-qty-msg:empty { display: none; }
+.vs-daterow .invalid-feedback { font-size: .8rem; }
+.vs-selbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 1040; background: var(--surface-color, #fff); border-top: 1px solid var(--border-color, var(--vs-line)); box-shadow: 0 -6px 18px rgba(20, 20, 30, .12); }
+.vs-selbar[hidden] { display: none; }
+.vs-selbar-in { max-width: 1140px; margin: 0 auto; padding: .7rem 1rem; display: flex; flex-wrap: wrap; gap: .6rem 1rem; justify-content: space-between; align-items: center; }
+.vs-selbar-text { color: var(--vs-ink); }
+.vs-selbar-actions { display: flex; gap: .5rem; margin-left: auto; }
+body.vs-has-selbar { padding-bottom: 5.5rem; }
+body.vs-shell-body.vs-has-selbar { padding-bottom: 0; }
+body.vs-shell-body.vs-has-selbar .content-scroll-wrap { padding-bottom: 5.5rem; }
+@media (min-width: 768px) {
+    body.vs-shell-body .vs-selbar { left: var(--sidebar-width, 260px); }
+    body.vs-shell-body.sidebar-collapsed .vs-selbar { left: var(--sidebar-collapsed-width, 76px); }
+}
+@media (max-width: 575px) { .vs-selbar-actions { width: 100%; } .vs-selbar-actions .btn { flex: 1; } }
+html { scroll-padding-bottom: 6.5rem; }
+.navbar-nav .dropdown-menu.vs-bell-menu { position: absolute; }
+#vsBellItem { position: relative; }
+@media (max-width: 575px) { #vsBellItem { position: static; } .navbar-nav .dropdown-menu.vs-bell-menu { right: .75rem; left: .75rem; width: auto; top: 100%; } }

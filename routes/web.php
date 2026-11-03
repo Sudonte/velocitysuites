@@ -466,6 +466,7 @@ Route::middleware(['auth', 'account.status', 'log.activity', 'no.cache'])->group
         Route::put('/profile/password', [GuestController::class, 'changePassword'])->name('profile.changePassword');
 
         // Guest web pages (the same /api/* endpoints as the app behind every one)
+        Route::get('/rooms', [\App\Http\Controllers\Guest\PortalController::class, 'rooms'])->name('rooms');
         Route::get('/book/new', [\App\Http\Controllers\Guest\PortalController::class, 'bookingWizard'])->name('book.new');
         Route::get('/reserve/new', [\App\Http\Controllers\Guest\PortalController::class, 'reservationWizard'])->name('reserve.new');
         Route::get('/pay/{kind}/{id}', [\App\Http\Controllers\Guest\PortalController::class, 'pay'])->whereIn('kind', ['booking', 'reservation'])->whereNumber('id')->name('pay');

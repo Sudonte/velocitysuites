@@ -4,7 +4,7 @@
             <button class="btn btn-link text-dark d-md-none p-0 me-3 flex-shrink-0" type="button" data-bs-toggle="offcanvas" data-bs-target="#mobileSidebar" aria-controls="mobileSidebar" aria-label="Open menu">
                 <i class="fas fa-bars fs-4"></i>
             </button>
-            <span class="app-header-title fw-bold mb-0 text-truncate" style="min-width: 0;">@yield('title', config('app.name'))</span>
+            <span class="app-header-title fw-bold mb-0 text-truncate" style="min-width: 0;">{{ \Illuminate\Support\Str::before($__env->yieldContent('title') ?: config('app.name'), ' - Velocity') }}</span>
         @else
             {{-- No sidebar exists on unauthenticated pages using this layout, so the
                  header carries the brand itself instead of just a page title. --}}
@@ -35,6 +35,21 @@
                     $navUnreadCount = \App\Models\Notification::unreadCountFor(auth()->id());
                     $navNotifUrl = auth()->user()->role === 'manager' ? route('manager.notifications.index') : route('notifications.index');
                 @endphp
+                @if(auth()->user()->role === 'guest')
+                {{-- Guests: the bell opens the latest notifications (public/js/portal/shell.js fills it from /api/notifications). --}}
+                <li class="nav-item dropdown" id="vsBellItem">
+                    <a class="nav-link position-relative navbar-icon-link" href="{{ route('guest.notifications.index') }}" role="button" id="vsBell"
+                       data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false" title="Notifications" aria-label="Notifications ({{ $navUnreadCount }} unread)">
+                        <i class="fas fa-bell fs-5"></i>
+                        <span class="navbar-notif-badge {{ $navUnreadCount > 0 ? '' : 'd-none' }}" data-notif-unread-count>{{ $navUnreadCount > 9 ? '9+' : $navUnreadCount }}</span>
+                    </a>
+                    <div class="dropdown-menu dropdown-menu-end vs-bell-menu p-0" aria-labelledby="vsBell">
+                        <div class="vs-bell-head"><strong>Notifications</strong><button type="button" class="btn btn-link btn-sm p-0" id="vsBellReadAll">Mark all as read</button></div>
+                        <div class="vs-bell-list" id="vsBellList" aria-live="polite"><div class="vs-bell-empty">Loading</div></div>
+                        <a class="vs-bell-foot" href="{{ route('guest.notifications.index') }}">View all notifications</a>
+                    </div>
+                </li>
+                @else
                 <li class="nav-item" data-live-sync="nav-bell">
                     <a class="nav-link position-relative navbar-icon-link" href="{{ $navNotifUrl }}"
                        title="Notifications" aria-label="Notifications ({{ $navUnreadCount }} unread)">
@@ -44,6 +59,7 @@
                         @endif
                     </a>
                 </li>
+                @endif
                 {{-- Account dropdown - guests use their dedicated guest.profile.show
                      (matches the richer guest-editing flow GuestController offers, e.g.
                      an editable email field), every other role shares the generic
@@ -72,7 +88,7 @@
                         <ul class="list-unstyled mb-0 py-2">
                             <li>
                                 <a class="dropdown-item d-flex align-items-center gap-2" href="{{ $navProfileUrl }}">
-                                    <i class="fas fa-user fa-fw"></i> My Profile
+                                    <i class="fas fa-user fa-fw"></i> {{ auth()->user()->role === 'guest' ? 'Profile Management' : 'My Profile' }}
                                 </a>
                             </li>
                             @if(auth()->user()->role === 'receptionist')
@@ -113,17 +129,17 @@
                         <div class="modal-content logout-confirm-modal">
                             <div class="modal-header border-0">
                                 <h5 class="modal-title" id="logoutConfirmModalLabel">
-                                    <i class="fas fa-sign-out-alt text-brand"></i> Confirm Logout
+                                    <i class="fas fa-sign-out-alt text-brand"></i> Log out of Velocity Suites?
                                 </h5>
                                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                             </div>
                             <div class="modal-body">
-                                Are you sure you want to log out?
+                                You can log back in anytime.
                             </div>
                             <div class="modal-footer border-0">
                                 <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
                                 <button type="button" class="btn btn-primary" id="navLogoutConfirmBtn">
-                                    <i class="fas fa-sign-out-alt"></i> Logout
+                                    <i class="fas fa-sign-out-alt"></i> Log out
                                 </button>
                             </div>
                         </div>
