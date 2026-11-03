@@ -1,136 +1,59 @@
-@extends(auth()->check() ? 'layouts.app' : 'layouts.public')
+@extends('layouts.portal')
 
-@section('title', 'Our Rooms - Velocity Suites')
+@section('title', 'Rooms - Velocity Suites')
 
 @section('content')
-    @auth
-        <div class="container-fluid py-4">
-            <x-page-header icon="fas fa-door-open" title="Book a Room" subtitle="Find the perfect room type for your stay" />
-    @else
-        <!-- Page Banner -->
-        <section class="py-5 bg-light">
-            <div class="container text-center">
-                <span class="section-badge mb-3"><i class="fas fa-bed"></i> Our Rooms</span>
-                <h1 class="mt-3">Room Types <span class="text-brand">for Every Guest</span></h1>
-                <p class="text-muted mx-auto mb-0" style="max-width: 560px;">Find the perfect room type for your stay.</p>
+<div class="container pb-5">
+    <div class="vs-head">
+        <h1>Available rooms</h1>
+        <p>The same rooms, rates and availability as the Velocity Suites app.</p>
+    </div>
+
+    <form id="vsRoomFilters" class="vs-card" novalidate>
+        <div class="row g-3 align-items-end">
+            <div class="col-6 col-lg-2">
+                <label class="form-label small fw-semibold" for="fIn">Check-in</label>
+                <input type="date" class="form-control" id="fIn" name="check_in" value="{{ request('check_in') }}">
             </div>
-        </section>
-
-        <div class="container py-5">
-    @endauth
-        <div class="row">
-            <!-- Filters Sidebar -->
-            <div class="col-lg-3 mb-4">
-                <div class="card border-0 shadow-sm">
-                    <div class="card-header">
-                        <h5 class="mb-0"><i class="fas fa-filter me-2"></i>Filter Rooms</h5>
-                    </div>
-                    <div class="card-body">
-                        <form action="{{ route('public.rooms.index') }}" method="GET">
-                            <div class="mb-3">
-                                <label class="form-label">Check-in</label>
-                                <input type="date" name="check_in" class="form-control" min="{{ \App\Support\CheckInWindow::earliest() }}"
-                                       value="{{ $checkIn->toDateString() }}">
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label">Check-out</label>
-                                <input type="date" name="check_out" class="form-control" min="{{ \App\Support\CheckInWindow::earliestCheckOut(\App\Support\CheckInWindow::earliest()) }}"
-                                       value="{{ $checkOut->toDateString() }}">
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label">Room Type</label>
-                                <select name="room_type" class="form-select">
-                                    <option value="">All Types</option>
-                                    @foreach($allRoomTypes as $type)
-                                        <option value="{{ $type }}" {{ request('room_type') == $type ? 'selected' : '' }}>
-                                            {{ $type }}
-                                        </option>
-                                    @endforeach
-                                </select>
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label">Min Price (₱)</label>
-                                <input type="number" name="min_price" class="form-control" value="{{ request('min_price') }}" placeholder="0">
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label">Max Price (₱)</label>
-                                <input type="number" name="max_price" class="form-control" value="{{ request('max_price') }}" placeholder="10000">
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label">Guests</label>
-                                <select name="capacity" class="form-select">
-                                    <option value="">Any</option>
-                                    <option value="1" {{ request('capacity') == 1 ? 'selected' : '' }}>1+ Guest</option>
-                                    <option value="2" {{ request('capacity') == 2 ? 'selected' : '' }}>2+ Guests</option>
-                                    <option value="3" {{ request('capacity') == 3 ? 'selected' : '' }}>3+ Guests</option>
-                                    <option value="4" {{ request('capacity') == 4 ? 'selected' : '' }}>4+ Guests</option>
-                                </select>
-                            </div>
-                            <button type="submit" class="btn btn-velocity w-100">Apply Filters</button>
-                            <a href="{{ route('public.rooms.index') }}" class="btn btn-outline-secondary w-100 mt-2">Clear</a>
-                        </form>
-                    </div>
-                </div>
+            <div class="col-6 col-lg-2">
+                <label class="form-label small fw-semibold" for="fOut">Check-out</label>
+                <input type="date" class="form-control" id="fOut" name="check_out" value="{{ request('check_out') }}">
             </div>
-
-            <!-- Room Type Listings -->
-            <div class="col-lg-9">
-                <p class="text-muted mb-3">
-                    <i class="fas fa-calendar-alt me-1"></i>
-                    Showing availability for <strong>{{ $checkIn->format('M d, Y') }}</strong> to <strong>{{ $checkOut->format('M d, Y') }}</strong>
-                </p>
-                @if($roomTypes->isEmpty())
-                    <div class="alert alert-info">
-                        No room types available matching your criteria. Please try different filters.
-                    </div>
-                @else
-                    <div class="row g-4">
-                        @foreach($roomTypes as $roomType)
-                            <div class="col-md-6 col-lg-4">
-                                <div class="room-card position-relative">
-                                    @if($roomType->is_fully_booked)
-                                        <span class="badge bg-danger position-absolute m-2" style="z-index: 2;">Fully Booked</span>
-                                    @endif
-                                    <img src="{{ $roomType->image_url }}"
-                                         alt="{{ $roomType->name }}" class="img-fluid" style="height: 200px; width: 100%; object-fit: cover; {{ $roomType->is_fully_booked ? 'opacity: 0.6;' : '' }}">
-                                    <div class="p-4">
-                                        <h5 class="fw-bold">{{ $roomType->name }}</h5>
-                                        <p class="mb-2 text-muted">
-                                            <i class="fas fa-user me-1 text-brand"></i> {{ $roomType->capacity_label }}
-                                        </p>
-                                        <p class="small text-muted">
-                                            {{ Str::limit($roomType->description, 100) }}
-                                        </p>
-                                        @if($roomType->amenities)
-                                            <p class="small mb-2">
-                                                <i class="fas fa-concierge-bell text-brand me-1"></i>
-                                                @foreach(array_slice($roomType->amenities, 0, 3) as $amenity)
-                                                    {{ $amenity['name'] }}{{ !$loop->last ? ',' : '' }}
-                                                @endforeach
-                                                @if(count($roomType->amenities) > 3)
-                                                    <span class="text-muted">+{{ count($roomType->amenities) - 3 }} more</span>
-                                                @endif
-                                            </p>
-                                        @else
-                                            <p class="small text-muted mb-2">No Available Amenities.</p>
-                                        @endif
-                                        <p class="room-price mb-3">₱{{ number_format($roomType->rate, 2) }} <small class="text-muted">/night</small></p>
-                                        <a href="{{ route('public.rooms.show', array_merge(['roomType' => $roomType], request()->only('check_in', 'check_out'))) }}"
-                                           class="btn btn-outline-danger w-100">View Details</a>
-                                    </div>
-                                </div>
-                            </div>
-                        @endforeach
-                    </div>
-
-                    <!-- Pagination -->
-                    <div class="mt-4">
-                        {{ $roomTypes->links() }}
-                    </div>
-                @endif
+            <div class="col-6 col-lg-2">
+                <label class="form-label small fw-semibold" for="fCap">Guests</label>
+                <input type="number" min="1" max="20" class="form-control" id="fCap" name="capacity" value="{{ request('capacity') }}" placeholder="Any">
+            </div>
+            <div class="col-6 col-lg-2">
+                <label class="form-label small fw-semibold" for="fType">Room type</label>
+                <select class="form-select" id="fType" name="room_type"><option value="">All room types</option></select>
+            </div>
+            <div class="col-6 col-lg-1">
+                <label class="form-label small fw-semibold" for="fMin">Min price</label>
+                <input type="number" min="0" class="form-control" id="fMin" name="min_price" placeholder="₱">
+            </div>
+            <div class="col-6 col-lg-1">
+                <label class="form-label small fw-semibold" for="fMax">Max price</label>
+                <input type="number" min="0" class="form-control" id="fMax" name="max_price" placeholder="₱">
+            </div>
+            <div class="col-12 col-lg-2">
+                <label class="form-label small fw-semibold" for="fSort">Sort by</label>
+                <select class="form-select" id="fSort" name="sort">
+                    <option value="name">Name</option><option value="price_asc">Price: low to high</option><option value="price_desc">Price: high to low</option>
+                </select>
             </div>
         </div>
-    </div>
-@include('partials.stay-date-rules')
+        <div class="d-flex flex-wrap align-items-center gap-3 mt-3">
+            <div class="form-check mb-0"><input class="form-check-input" type="checkbox" id="fAvail" name="only_available"><label class="form-check-label" for="fAvail">Only rooms that are available</label></div>
+            <button class="btn btn-velocity ms-auto" type="submit">Search rooms</button>
+            <button class="btn btn-light" type="button" data-clear>Clear</button>
+        </div>
+    </form>
+
+    <div class="row g-4" id="vsRoomGrid" aria-live="polite"></div>
+</div>
 @endsection
 
+@push('scripts')
+<script src="{{ asset('js/portal/rooms.js') }}?v={{ filemtime(public_path('js/portal/rooms.js')) }}"></script>
+<script>VSRooms.page(document.querySelector('main'));</script>
+@endpush

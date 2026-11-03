@@ -805,35 +805,11 @@
     <section id="rooms" class="py-5">
         <div class="container">
             <div class="text-center mb-4">
-                <span class="section-badge mb-3"><i class="fas fa-bolt"></i> Live Rates</span>
-                <h2 class="mt-3">Featured <span class="text-brand">Rooms</span></h2>
-                <p class="text-muted">Handpicked suites ready for your next getaway</p>
+                <span class="section-badge mb-3"><i class="fas fa-bolt"></i> Live rates</span>
+                <h2 class="mt-3">Featured <span class="text-brand">rooms</span></h2>
+                <p class="text-muted">The same rooms and availability you see in the Velocity Suites app</p>
             </div>
-            <div class="row g-4">
-                @forelse($featuredRoomTypes ?? [] as $roomType)
-                <div class="col-sm-6 col-lg-4">
-                    <div class="room-card">
-                        <img src="{{ $roomType->image_url }}"
-                             alt="{{ $roomType->name }}" class="img-fluid" style="height: 200px; width: 100%; object-fit: cover;">
-                        <div class="p-4">
-                            <h5 class="fw-bold">{{ $roomType->name }}</h5>
-                            <p class="mb-2 text-muted">
-                                <i class="fas fa-user me-1 text-brand"></i> {{ $roomType->capacity_label }}
-                            </p>
-                            @if($roomType->description)
-                                <p class="small text-muted mb-2">{{ Str::limit($roomType->description, 80) }}</p>
-                            @endif
-                            <p class="room-price">₱{{ number_format($roomType->rate, 2) }} <small class="text-muted">/night</small></p>
-                            <a href="{{ route('public.rooms.show', $roomType) }}" class="btn btn-outline-danger w-100">View Details</a>
-                        </div>
-                    </div>
-                </div>
-                @empty
-                <div class="col-12 text-center">
-                    <p class="text-muted">No room types available at the moment. Please check back later.</p>
-                </div>
-                @endforelse
-            </div>
+            <div class="row g-4" id="vsFeaturedRooms" aria-live="polite"></div>
             <div class="text-center mt-5">
                 <a href="{{ route('public.rooms.index') }}" class="btn btn-velocity">View All Rooms</a>
             </div>
@@ -1164,6 +1140,10 @@
 
 @if($appAvailable)
 @push('scripts')
+<link rel="stylesheet" href="{{ asset('css/portal.css') }}?v={{ filemtime(public_path('css/portal.css')) }}">
+<script src="{{ asset('js/portal/core.js') }}?v={{ filemtime(public_path('js/portal/core.js')) }}"></script>
+<script src="{{ asset('js/portal/rooms.js') }}?v={{ filemtime(public_path('js/portal/rooms.js')) }}"></script>
+<script>VSRooms.featured(document.getElementById('vsFeaturedRooms'));</script>
     <script src="{{ asset('js/vendor/qrcode-generator-1.4.4.js') }}" defer></script>
     <script src="{{ asset('js/app-download-qr.js') }}" defer></script>
 @endpush

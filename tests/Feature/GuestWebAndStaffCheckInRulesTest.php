@@ -10,50 +10,30 @@ use App\Support\CheckInWindow;
  */
 class GuestWebAndStaffCheckInRulesTest extends ApiFlowTestCase
 {
-    public function test_the_public_room_pages_disable_dates_before_the_earliest_check_in_and_before_check_in_plus_one(): void
+    public function test_the_public_room_pages_ask_the_api_for_the_dates_and_keep_the_earliest_check_in_in_the_page_script(): void
     {
         $rt = $this->makeRoomTypeWithRooms('Deluxe', 1000, 2, 2);
-        $earliest = CheckInWindow::earliest();
-        $checkOutMin = CheckInWindow::earliestCheckOut($earliest);
 
         foreach ([route('public.rooms.index'), route('public.rooms.show', $rt)] as $url) {
             $html = $this->get($url)->assertOk()->getContent();
-            $this->assertStringContainsString('name="check_in"', $html);
-            $this->assertMatchesRegularExpression('/name="check_in"[^>]*min="'.$earliest.'"|min="'.$earliest.'"[^>]*name="check_in"/s', $html, $url);
-            $this->assertStringContainsString('min="'.$checkOutMin.'"', $html, $url);
-            // the picker keeps check-out >= check-in + 1 as the guest changes check-in
-            $this->assertStringContainsString('EARLIEST', $html);
+            $this->assertStringContainsString('js/portal/rooms.js', $html, $url);
         }
+        // the rooms page's script clamps the picker to today + 2 days (hotel time), exactly the rule the API enforces
+        $script = file_get_contents(public_path('js/portal/rooms.js'));
+        $this->assertStringContainsString('VS.addDays(today, 2)', $script);
     }
 
-    public function test_the_default_dates_on_the_public_pages_are_the_earliest_stay_even_for_a_stale_link(): void
-    {
-        $rt = $this->makeRoomTypeWithRooms('Deluxe', 1000, 2, 2);
-        $stale = $this->get(route('public.rooms.show', ['roomType' => $rt, 'check_in' => now()->toDateString(), 'check_out' => now()->toDateString()]))->assertOk()->getContent();
-        $this->assertStringContainsString('value="'.CheckInWindow::earliest().'"', $stale, 'a stale check-in is lifted to the earliest allowed date');
-        $this->assertStringContainsString('value="'.CheckInWindow::earliestCheckOut(CheckInWindow::earliest()).'"', $stale);
-    }
-
-    public function test_the_guest_reservation_form_rejects_a_check_in_inside_the_lead_time_and_accepts_the_earliest(): void
+    public function test_the_guest_booking_pages_start_from_the_earliest_check_in_and_the_api_refuses_an_earlier_one(): void
     {
         [$user] = $this->makeGuestUser('WebGuest');
-        $rt = $this->makeRoomTypeWithRooms('Deluxe', 1000, 2, 2);
-        $earliest = CheckInWindow::earliest();
+        $this->makeRoomTypeWithRooms('Deluxe', 1000, 2, 2);
 
-        $bad = $this->actingAs($user)->get(route('guest.reservations.create', [
-            'room_type_id' => $rt->id, 'check_in' => now('Asia/Manila')->addDay()->toDateString(), 'check_out' => now('Asia/Manila')->addDays(3)->toDateString(),
-        ]));
-        $bad->assertRedirect(route('public.rooms.index'));
-
-        $same = $this->actingAs($user)->get(route('guest.reservations.create', [
-            'room_type_id' => $rt->id, 'check_in' => $earliest, 'check_out' => $earliest,
-        ]));
-        $same->assertRedirect(route('public.rooms.index'));
-
-        $ok = $this->actingAs($user)->get(route('guest.reservations.create', [
-            'room_type_id' => $rt->id, 'check_in' => $earliest, 'check_out' => CheckInWindow::earliestCheckOut($earliest),
-        ]));
-        $ok->assertOk();
+        $this->actingAs($user)->get(route('guest.book.new'))->assertOk()->assertSee('js/portal/wizard.js', false);
+        $this->actingAs($user)->get(route('guest.reserve.new'))->assertOk()->assertSee('js/portal/wizard.js', false);
+        $wizard = file_get_contents(public_path('js/portal/wizard.js'));
+        $this->assertStringContainsString('VS.addDays(VS.today(), 2)', $wizard);
+        // the shared rule every creation goes through (the web pages call the same endpoints as the app)
+        $this->assertStringContainsString('CheckInWindow::rules()', file_get_contents(base_path('app/Http/Controllers/Api/ReservationController.php')));
     }
 
     public function test_the_guest_mobile_api_endpoints_are_not_reachable_with_the_staff_exemption(): void

@@ -78,12 +78,16 @@ Route::middleware(['guest', 'throttle:20,1'])->group(function () {
     Route::get('/login', [LoginController::class, 'showLoginForm'])->name('login');
     Route::post('/login', [LoginController::class, 'login'])->name('login.post');
 
+    // Guest web sign-in goes through the app's own API; this trades the token it issued for a web session
+    Route::post('/auth/portal-session', [\App\Http\Controllers\Guest\PortalSessionController::class, 'store'])->name('portal.session');
+
     // Registration
     Route::get('/register', [RegisterController::class, 'showRegistrationForm'])->name('register');
     Route::post('/register', [RegisterController::class, 'register'])->name('register.post');
 
     // Password Reset
     Route::get('/forgot-password', [ForgotPasswordController::class, 'showLinkRequestForm'])->name('password.request');
+    Route::get('/forgot-password/staff', [ForgotPasswordController::class, 'showStaffForm'])->name('password.request.staff');
     Route::post('/forgot-password', [ForgotPasswordController::class, 'sendResetLink'])->name('password.email');
     Route::get('/reset-password/verify-otp', [ForgotPasswordController::class, 'showOtpForm'])->name('password.otp.form');
     Route::post('/reset-password/verify-otp', [ForgotPasswordController::class, 'verifyOtp'])->name('password.otp.verify');
@@ -416,22 +420,22 @@ Route::middleware(['auth', 'account.status', 'log.activity', 'no.cache'])->group
     // Guest Routes
     Route::middleware('role:guest')->prefix('guest')->name('guest.')->group(function () {
         // Dashboard
-        Route::get('/dashboard', [\App\Http\Controllers\Guest\GuestDashboardController::class, 'index'])->name('dashboard');
+        Route::get('/dashboard', [\App\Http\Controllers\Guest\PortalController::class, 'dashboard'])->name('dashboard');
 
         // Unified Booking Flow - uses public rooms but with booking capability
         // Guests search/browse rooms via public routes, then book from room details
 
         // Reservations Management
-        Route::get('/reservations', [GuestController::class, 'bookings'])->name('reservations.index');
+        Route::get('/reservations', [\App\Http\Controllers\Guest\PortalController::class, 'stays'])->name('reservations.index');
         // Export routes registered before the {reservation} wildcard for clarity, though the
         // extra path segment already keeps them from ever matching it.
         Route::get('/reservations/export/csv', [GuestController::class, 'exportReservationsCsv'])->name('reservations.export.csv');
         Route::get('/reservations/export/pdf', [GuestController::class, 'exportReservationsPdf'])->name('reservations.export.pdf');
-        Route::get('/reservations/create', [\App\Http\Controllers\Guest\ReservationController::class, 'create'])->name('reservations.create');
+        Route::get('/reservations/create', [\App\Http\Controllers\Guest\PortalController::class, 'reservationWizard'])->name('reservations.create');
         Route::post('/reservations', [\App\Http\Controllers\Guest\ReservationController::class, 'store'])->name('reservations.store');
-        Route::get('/reservations/{reservation}', [\App\Http\Controllers\Guest\ReservationController::class, 'show'])->name('reservations.show');
+        Route::get('/reservations/{id}', fn (int $id) => app(\App\Http\Controllers\Guest\PortalController::class)->stay('reservation', $id))->whereNumber('id')->name('reservations.show');
         // Bookings on the account with no reservation behind them (app pay-first, or added by the front desk).
-        Route::get('/bookings/{booking}', [\App\Http\Controllers\Guest\ReservationController::class, 'showBooking'])->name('bookings.show');
+        Route::get('/bookings/{id}', fn (int $id) => app(\App\Http\Controllers\Guest\PortalController::class)->stay('booking', $id))->whereNumber('id')->name('bookings.show');
         Route::put('/reservations/{reservation}', [\App\Http\Controllers\Guest\ReservationController::class, 'update'])->name('reservations.update');
         Route::put('/reservations/{reservation}/cancel', [\App\Http\Controllers\Guest\ReservationController::class, 'cancel'])->name('reservations.cancel');
         Route::put('/reservations/{reservation}/switch-to-gcash', [\App\Http\Controllers\Guest\ReservationController::class, 'switchToGcash'])->name('reservations.switch-to-gcash');
@@ -445,7 +449,7 @@ Route::middleware(['auth', 'account.status', 'log.activity', 'no.cache'])->group
         Route::get('/billing/{billing}/receipt', [\App\Http\Controllers\BillingController::class, 'receipt'])->name('billing.receipt');
 
         // Payments - view payment history and pending bills
-        Route::get('/payments', [GuestController::class, 'payments'])->name('payments.index');
+        Route::get('/payments', fn () => redirect()->route('guest.history'))->name('payments.index');
         Route::get('/payments/export/csv', [GuestController::class, 'exportPaymentsCsv'])->name('payments.export.csv');
         Route::get('/payments/export/pdf', [GuestController::class, 'exportPaymentsPdf'])->name('payments.export.pdf');
         // Guest self-service on their own in-flight GCash payment attempt -
@@ -454,12 +458,21 @@ Route::middleware(['auth', 'account.status', 'log.activity', 'no.cache'])->group
         Route::put('/payments/{payment}/void', [\App\Http\Controllers\Guest\PaymentController::class, 'void'])->name('payments.void');
 
         // Profile Management
-        Route::get('/profile', [GuestController::class, 'profile'])->name('profile.show');
+        Route::get('/profile', [\App\Http\Controllers\Guest\PortalController::class, 'profile'])->name('profile.show');
         Route::put('/profile', [GuestController::class, 'updateProfile'])->name('profile.update');
         Route::post('/profile/picture', [GuestController::class, 'updateProfilePicture'])->name('profile.picture.update');
         Route::delete('/profile/picture', [GuestController::class, 'removeProfilePicture'])->name('profile.picture.remove');
         Route::post('/profile/password/otp', [GuestController::class, 'requestPasswordOtp'])->name('profile.password.otp');
         Route::put('/profile/password', [GuestController::class, 'changePassword'])->name('profile.changePassword');
+
+        // Guest web pages (the same /api/* endpoints as the app behind every one)
+        Route::get('/book/new', [\App\Http\Controllers\Guest\PortalController::class, 'bookingWizard'])->name('book.new');
+        Route::get('/reserve/new', [\App\Http\Controllers\Guest\PortalController::class, 'reservationWizard'])->name('reserve.new');
+        Route::get('/pay/{kind}/{id}', [\App\Http\Controllers\Guest\PortalController::class, 'pay'])->whereIn('kind', ['booking', 'reservation'])->whereNumber('id')->name('pay');
+        Route::get('/history', [\App\Http\Controllers\Guest\PortalController::class, 'history'])->name('history');
+        Route::get('/notifications', [\App\Http\Controllers\Guest\PortalController::class, 'notifications'])->name('notifications.index');
+        Route::get('/receipts/{number}', [\App\Http\Controllers\Guest\PortalController::class, 'receipt'])->where('number', '[A-Za-z0-9-]+')->name('receipts.show');
+        Route::get('/receipts/{number}/pdf', [\App\Http\Controllers\Guest\PortalController::class, 'receiptPdf'])->where('number', '[A-Za-z0-9-]+')->name('receipts.pdf');
 
         // Account deletion (30-day soft-delete/restore) - mirrors
         // Api\ProfileController::deleteAccount()/restoreAccount(). The

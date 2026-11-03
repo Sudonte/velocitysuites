@@ -190,6 +190,7 @@ class LoginController extends Controller
         if ($user = $request->user()) {
             Activity::logFor($user, 'Logged out', 'Signed out of the website');
         }
+        \App\Support\PortalToken::revoke();
         Auth::logout();
         $request->session()->invalidate();
         $request->session()->regenerateToken();
