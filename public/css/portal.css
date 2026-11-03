@@ -177,7 +177,8 @@ a.vs-rcpt:hover { border-color: var(--vs-red); color: var(--vs-ink); }
 /* ---- the guest shell: the staff roles' sidebar, header, page area and footer ---- */
 body.vs-page-body { background: var(--vs-bg); color: var(--vs-ink); }
 .vs-footer { color: var(--vs-muted); font-size: .85rem; padding: 1.5rem 0; }
-.vs-shell-main.vs-page { background: transparent; min-height: 0; color: inherit; }
+.vs-shell-main.vs-page { background: transparent; color: inherit; flex: 1 0 auto; min-height: auto; }
+.vs-shell-body .app-footer { flex-shrink: 0; }
 .vs-shell-main .container { max-width: none; padding-inline: 0; }
 .vs-shell-main .vs-head { padding: 0; margin-bottom: 1.5rem; }
 .vs-shell-main .vs-head h1 { font-size: 1.75rem; font-weight: 600; color: var(--text-dark); margin-bottom: .25rem; }
@@ -250,3 +251,41 @@ html { scroll-padding-bottom: 6.5rem; }
 .navbar-nav .dropdown-menu.vs-bell-menu { position: absolute; }
 #vsBellItem { position: relative; }
 @media (max-width: 575px) { #vsBellItem { position: static; } .navbar-nav .dropdown-menu.vs-bell-menu { right: .75rem; left: .75rem; width: auto; top: 100%; } }
+
+/* Booking & Reservation tabs (the app's Bookings / Reservations switch) */
+.vs-tabs { display: inline-flex; gap: .25rem; padding: .25rem; margin-bottom: 1rem; background: var(--bg-color, var(--vs-bg)); border: 1px solid var(--border-color, var(--vs-line)); border-radius: 12px; max-width: 100%; }
+.vs-tab { border: 0; background: transparent; padding: .5rem 1.1rem; border-radius: 9px; font-weight: 600; color: var(--text-dark, var(--vs-ink)); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.vs-tab.active { background: var(--primary-color, var(--vs-red)); color: #fff; }
+.vs-tab:not(.active):hover { background: rgba(214, 65, 75, .1); }
+/* the six totals on the dashboard */
+.vs-sumgrid { display: grid; grid-template-columns: 1fr 1fr; gap: .6rem; }
+.vs-sumhead { font-size: .8rem; font-weight: 700; color: var(--vs-muted); text-transform: none; padding: 0 .25rem; }
+.vs-sumtile { display: flex; flex-direction: column; align-items: center; text-align: center; gap: .1rem; padding: .7rem .5rem; border: 1px solid var(--border-color, var(--vs-line)); border-radius: 12px; text-decoration: none; color: var(--vs-ink); background: var(--surface-color, #fff); transition: border-color .15s ease, transform .15s ease; }
+.vs-sumtile:hover, .vs-sumtile:focus-visible { border-color: var(--primary-color, var(--vs-red)); transform: translateY(-1px); color: var(--vs-ink); }
+.vs-sumtile .n { font-size: 1.7rem; font-weight: 800; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.vs-sumtile .l { font-size: .82rem; color: var(--vs-muted); }
+.vs-sumtile.zero { opacity: .6; }
+
+/* Profile Management sections */
+.vs-sec-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; margin-bottom: .75rem; }
+.vs-sec-head h2 { margin: 0; }
+.vs-sec-msg:empty { display: none; }
+.vs-lock { padding: .6rem .9rem; margin-bottom: 1rem; border-radius: 10px; background: var(--bg-color, var(--vs-bg)); border: 1px solid var(--border-color, var(--vs-line)); }
+.vs-lock.is-locked { background: var(--vs-amber-soft); color: var(--vs-amber); border-color: transparent; }
+.vs-subform { margin-top: .75rem; padding: 1rem; border: 1px dashed var(--border-color, var(--vs-line)); border-radius: 12px; }
+.vs-pwstages { display: flex; gap: .4rem; list-style: none; padding: 0; margin: 0 0 1rem; font-size: .8rem; font-weight: 600; }
+.vs-pwstages li { flex: 1; padding: .3rem .5rem; border-radius: 8px; background: var(--bg-color, var(--vs-bg)); color: var(--vs-muted); text-align: center; }
+.vs-pwstages li.now { background: var(--primary-color, var(--vs-red)); color: #fff; }
+.vs-pwstages li.done { background: var(--vs-green-soft); color: var(--vs-green); }
+.vs-strength { display: flex; gap: .3rem; margin: .4rem 0 .25rem; }
+.vs-strength i { flex: 1; height: 6px; border-radius: 4px; background: var(--border-color, var(--vs-line)); }
+.vs-strength i.s1 { background: #d32f2f; } .vs-strength i.s2 { background: #ef8f00; } .vs-strength i.s3 { background: #7cb342; } .vs-strength i.s4 { background: #2e7d32; }
+
+/* Calendar screen */
+.vs-cal-head, .vs-cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; text-align: center; }
+.vs-cal-head { font-size: .78rem; font-weight: 700; color: var(--vs-muted); padding: .3rem 0; }
+button.vs-cal-day { border: 0; background: transparent; color: inherit; cursor: pointer; padding: .6rem 0; }
+button.vs-cal-day:hover { background: var(--vs-red-soft); }
+button.vs-cal-day.picked { background: var(--primary-color, var(--vs-red)); color: #fff; }
+button.vs-cal-day.picked i { background: #fff; }
+.vs-sec-head h2 { font-size: 1.05rem; font-weight: 700; color: var(--primary-color, var(--vs-red)); }

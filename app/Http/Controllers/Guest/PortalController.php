@@ -20,6 +20,11 @@ class PortalController extends Controller
         return view('portal.dashboard');
     }
 
+    public function calendar(): View
+    {
+        return view('portal.calendar');
+    }
+
     public function rooms(): View
     {
         return view('portal.rooms');

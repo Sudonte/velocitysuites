@@ -1,16 +1,22 @@
 @extends('layouts.portal')
-@section('title', 'Transaction history - Velocity Suites')
+@section('title', 'Transaction History - Velocity Suites')
 @section('content')
-<div class="container pb-5" style="max-width:860px">
-    <div class="vs-head"><h1>Transaction history</h1><p id="vsHistCount" aria-live="polite">&nbsp;</p></div>
+<div class="container pb-5" style="max-width:900px">
+    <div class="vs-head"><h1>Transaction History</h1><p>Everything you booked or reserved, with its payments.</p></div>
     <form id="vsHistFilters" class="vs-card" novalidate>
-        <div class="row g-2 align-items-end"><div class="col-12 col-md-4"><label class="form-label small fw-semibold" for="hq">Search</label><input class="form-control" id="hq" name="q" type="search" placeholder="Number, room type or status"></div>
-        <div class="col-6 col-md-2"><label class="form-label small fw-semibold" for="ht">Type</label><select class="form-select" id="ht" name="type"><option value="">All</option><option value="booking">Bookings</option><option value="reservation">Reservations</option></select></div>
-        <div class="col-6 col-md-2"><label class="form-label small fw-semibold" for="hs">Status</label><select class="form-select" id="hs" name="status"><option value="">All</option><option value="pending">Pending</option><option value="confirmed">Confirmed</option><option value="checkedin">Checked in</option><option value="completed">Completed</option><option value="cancelled">Cancelled</option><option value="rejected">Rejected</option><option value="noshow">No-show</option></select></div>
-        <div class="col-6 col-md-2"><label class="form-label small fw-semibold" for="hf">From</label><input class="form-control" type="date" id="hf" name="from"></div>
-        <div class="col-6 col-md-2"><label class="form-label small fw-semibold" for="hto">To</label><input class="form-control" type="date" id="hto" name="to"></div></div>
-        <div class="text-end mt-2"><button type="button" class="btn btn-light btn-sm" data-clear>Clear filters</button></div>
+        <div class="row g-2 align-items-end">
+            <div class="col-12 col-md-8"><label class="form-label small fw-semibold" for="hq">Search</label><input class="form-control" id="hq" name="q" type="search" placeholder="Transaction number, room type or date"></div>
+            <div class="col-12 col-md-4 text-md-end"><button type="button" class="btn btn-light btn-sm" id="vsHistToggle" aria-controls="vsHistPanel">Hide filters</button> <button type="button" class="btn btn-light btn-sm" data-clear>Clear filters</button></div>
+        </div>
+        <div id="vsHistPanel" class="row g-2 mt-1">
+            <div class="col-6 col-lg-3"><label class="form-label small fw-semibold" for="ht">Transaction</label><select class="form-select" id="ht" name="type"></select></div>
+            <div class="col-6 col-lg-3"><label class="form-label small fw-semibold" for="hb">Booking status</label><select class="form-select" id="hb" name="bstat"></select></div>
+            <div class="col-12 col-lg-3"><label class="form-label small fw-semibold" for="hr">Room type</label><select class="form-select" id="hr" name="room"><option value="">All room types</option></select></div>
+            <div class="col-6 col-lg-3 d-flex gap-2"><div class="flex-fill"><label class="form-label small fw-semibold" for="hf">Check-in date</label><input class="form-control" type="date" id="hf" name="from"></div></div>
+            <div class="col-6 col-lg-3"><label class="form-label small fw-semibold" for="hto">Check-out date</label><input class="form-control" type="date" id="hto" name="to"></div>
+        </div>
     </form>
+    <div class="d-flex justify-content-end text-muted small mb-2" id="vsHistCount" aria-live="polite">&nbsp;</div>
     <div id="vsHist" aria-live="polite"></div>
 </div>
 @endsection

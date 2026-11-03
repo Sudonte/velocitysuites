@@ -43,8 +43,8 @@
 
     D.page = function (root, firstName) {
         var host = root.querySelector('#vsDash');
-        host.innerHTML = '<section class="vs-card"><div class="text-muted">' + greeting() + '</div><h1 class="h3 fw-bold mb-1">' + VS.esc(firstName) + '</h1><div class="text-muted small" id="vsClock"></div><p class="mb-0 mt-1">Here’s a quick look at your stays and payments.</p></section>' +
-            card('Quick actions', '<div class="row g-2">' + [['/rooms', 'fa-bed', 'Browse rooms'], ['/guest/book/new', 'fa-calendar-check', 'Booking'], ['/guest/reserve/new', 'fa-bookmark', 'Reservation'], ['/guest/reservations', 'fa-suitcase', 'My stays'], ['/guest/history', 'fa-clock-rotate-left', 'Transaction history'], ['/guest/profile', 'fa-circle-user', 'Profile']].map(function (q) {
+        host.innerHTML = '<section class="vs-card"><div class="text-muted">' + greeting() + '</div><h1 class="h3 fw-bold mb-1">' + VS.esc(firstName) + '</h1><a class="text-muted small text-decoration-none d-inline-block" id="vsClock" href="/guest/calendar" title="Open the calendar"></a><p class="mb-0 mt-1">Here’s a quick look at your stays and payments.</p></section>' +
+            card('Quick actions', '<div class="row g-2">' + [['/rooms', 'fa-bed', 'Browse rooms'], ['/guest/book/new', 'fa-calendar-check', 'Booking'], ['/guest/reserve/new', 'fa-bookmark', 'Reservation'], ['/guest/reservations', 'fa-suitcase', 'Booking & Reservation'], ['/guest/history', 'fa-clock-rotate-left', 'Transaction history'], ['/guest/profile', 'fa-circle-user', 'Profile']].map(function (q) {
                 return '<div class="col-6 col-md-4"><a class="btn btn-outline-velocity w-100 py-2" href="' + q[0] + '"><i class="fas ' + q[1] + ' me-2"></i>' + q[2] + '</a></div>'; }).join('') + '</div>') +
             '<div id="vsDashBody">' + VS.skeleton(4) + '</div>';
         function tick() { var c = root.querySelector('#vsClock'); if (c) c.textContent = clock(); }
@@ -62,7 +62,15 @@
                 var past = items.filter(function (x) { return /completed|noshow/.test(keyOf(x)); });
                 var cancelled = items.filter(function (x) { return /cancelled|rejected/.test(keyOf(x)); });
                 var html = '';
-                html += card('Booking & reservation summary', '<div class="row text-center g-2"><div class="col-4"><div class="h3 mb-0 vs-num">' + active.length + '</div><div class="small text-muted">Active</div></div><div class="col-4"><div class="h3 mb-0 vs-num">' + past.length + '</div><div class="small text-muted">Past</div></div><div class="col-4"><div class="h3 mb-0 vs-num">' + cancelled.length + '</div><div class="small text-muted">Cancelled</div></div></div>');
+                var cnt = S.counts(S.classify(items));
+                function tile(tab, cat, label) {
+                    var n = cnt[tab][cat];
+                    return '<a class="vs-sumtile' + (n ? '' : ' zero') + '" href="/guest/reservations?tab=' + (tab === 'booking' ? 'bookings' : 'reservations') + '&status=' + cat + '" aria-label="' + VS.esc(label) + ': ' + n + '"><span class="n">' + n + '</span><span class="l">' + VS.esc(label) + '</span></a>';
+                }
+                html += card('Booking & reservation summary', '<p class="text-muted small mb-2">Your stays at a glance. Tap a total to open that list.</p><div class="vs-sumgrid">' +
+                    tile('booking', 'active', 'Active bookings') + tile('reservation', 'active', 'Active reservations') +
+                    tile('booking', 'completed', 'Past bookings') + tile('reservation', 'completed', 'Past reservations') +
+                    tile('booking', 'cancelled', 'Cancelled bookings') + tile('reservation', 'cancelled', 'Cancelled reservations') + '</div>');
 
                 // next stay: the one in house, else the soonest upcoming
                 var upcoming = active.filter(function (x) { var s = (x.it.stays && x.it.stays[0]) || {}; return keyOf(x) === 'checkedin' || (s.check_out || '') >= today; })
@@ -93,9 +101,8 @@
                 html += card('Payment status', '<div class="vs-row"><span>Paid (verified)</span><span>' + VS.money(paid) + '</span></div><div class="vs-row"><span>Waiting for verification</span><span>' + VS.money(wait) + '</span></div><div class="vs-row vs-strong"><span>Balance due</span><span>' + VS.money(due) + '</span></div>');
 
                 var pr = rs[2].ok ? (rs[2].data.user || {}) : {}, g = rs[2].ok ? (rs[2].data.guest || {}) : {};
-                var fields = [pr.first_name, pr.last_name, pr.email, g.mobile_number || pr.mobile_number, g.gender || pr.gender, g.date_of_birth || pr.date_of_birth, g.address || pr.address, g.profile_picture || pr.profile_picture];
-                var pct = Math.round(fields.filter(Boolean).length / fields.length * 100);
-                html += card('Account summary', '<div class="d-flex align-items-center gap-3"><div class="vs-donut" style="--p:' + pct + '" role="img" aria-label="Profile ' + pct + '% complete"><span>' + pct + '%</span></div><div><div class="fw-bold">' + VS.esc([pr.first_name, pr.last_name].filter(Boolean).join(' ')) + '</div><div class="small text-muted">' + VS.esc(pr.email || '') + '</div><div class="small text-muted">' + VS.esc(g.mobile_number || pr.mobile_number || '') + '</div><a class="small" href="/guest/profile">' + (pct < 100 ? 'Complete your profile' : 'View profile') + '</a></div></div>');
+                var comp = S.completeness(pr, g), pct = comp.pct;
+                html += card('Account summary', '<a class="d-flex align-items-center gap-3 text-decoration-none" style="color:inherit" href="/guest/profile"><div class="vs-donut" style="--p:' + pct + '" role="img" aria-label="Profile ' + pct + '% complete"><span>' + pct + '%</span></div><div><div class="fw-bold">' + VS.esc([pr.first_name, pr.last_name].filter(Boolean).join(' ')) + '</div><div class="small text-muted">' + VS.esc(pr.email || '') + '</div><div class="small text-muted">' + VS.esc(g.mobile_number || pr.mobile_number || '') + '</div><div class="small ' + (comp.line ? 'text-danger' : 'text-success') + '">' + VS.esc(comp.line || 'Profile complete') + '</div></div></a>');
                 html += card('Need help', '<p class="mb-2">The front desk is here 24/7.</p><div><i class="fas fa-phone me-2 text-danger"></i>0955 139 2737</div><div><i class="fas fa-envelope me-2 text-danger"></i>velocitysuites@gmail.com</div><div><i class="fas fa-location-dot me-2 text-danger"></i>Allah Valley Drive, Surallah, South Cotabato</div>');
                 body.innerHTML = html; VS.reveal(body);
                 calendar(body, items);
@@ -123,6 +130,53 @@
             }
             body.querySelectorAll('#calMode [data-m]').forEach(function (b) { b.onclick = function () { mode = b.dataset.m; body.querySelectorAll('#calMode [data-m]').forEach(function (x) { x.className = 'btn btn-sm ' + (x === b ? 'btn-velocity' : 'btn-outline-velocity'); }); paint(); }; });
             paint();
+        }
+        load();
+    };
+
+    // ---- the Calendar screen (the app opens it from the date and time on the dashboard) ----
+    D.calendarPage = function (root) {
+        var host = root.querySelector('#vsCal'), filter = 'All', picked = null, month = VS.today().slice(0, 7), events = [];
+        var MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+        function build(items) {
+            var today = VS.today(), floor = VS.addDays(today, -1);
+            events = [];
+            S.classify(items).forEach(function (r) {
+                if (r.historical || r.cat !== 'active') return;
+                var x = r.x, key = S.status(x.it, x.kind).key, label = (r.tab === 'booking' ? 'Booking' : 'Reservation') + ': ' + (S.firstRoomTypes(x.it) || S.idLabel(x.it, x.kind));
+                var href = '/guest/' + (x.kind === 'reservation' ? 'reservations' : 'bookings') + '/' + x.it.id;
+                (x.it.stays && x.it.stays.length ? x.it.stays : [{ check_in: String(x.it.check_in).slice(0, 10), check_out: String(x.it.check_out).slice(0, 10) }]).forEach(function (st) {
+                    if (key !== 'checkedin' && st.check_in >= floor) events.push({ date: st.check_in, kind: 'in', tab: r.tab, label: label, href: href });
+                    if (key === 'checkedin' && st.check_out >= floor) events.push({ date: st.check_out, kind: 'out', tab: r.tab, label: label, href: href });
+                });
+            });
+            events.sort(function (a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : 0; });
+        }
+        function byFilter(e) { return filter === 'All' || (filter === 'Bookings' ? e.tab === 'booking' : e.tab === 'reservation'); }
+        function paint() {
+            var y = +month.slice(0, 4), mo = +month.slice(5, 7), first = new Date(Date.UTC(y, mo - 1, 1)), days = new Date(Date.UTC(y, mo, 0)).getUTCDate(), lead = first.getUTCDay(), today = VS.today();
+            var dots = {}; events.filter(byFilter).forEach(function (e) { dots[e.date] = 1; });
+            var cells = ''; for (var i = 0; i < lead; i++) cells += '<div></div>';
+            for (var d = 1; d <= days; d++) { var iso = month + '-' + String(d).padStart(2, '0'); cells += '<button type="button" class="vs-cal-day' + (iso === today ? ' today' : '') + (iso === picked ? ' picked' : '') + '" data-d="' + iso + '" aria-label="' + VS.esc(VS.date(iso)) + (dots[iso] ? ', has events' : '') + '" aria-pressed="' + (iso === picked) + '">' + d + (dots[iso] ? '<i></i>' : '') + '</button>'; }
+            var list = events.filter(function (e) { return byFilter(e) && (!picked || e.date === picked); });
+            host.innerHTML = '<section class="vs-card"><div class="d-flex flex-wrap gap-2 mb-3" role="group" aria-label="Show">' + [['All', 'All'], ['Bookings', 'Upcoming booking'], ['Reservations', 'Upcoming reservation']].map(function (f) { return '<button type="button" class="btn btn-sm ' + (filter === f[0] ? 'btn-velocity' : 'btn-outline-velocity') + '" data-f="' + f[0] + '" aria-pressed="' + (filter === f[0]) + '">' + f[1] + '</button>'; }).join('') + '</div>' +
+                '<div class="d-flex justify-content-between align-items-center mb-1"><button class="btn btn-sm btn-light" data-prev aria-label="Previous month">\u2039</button><strong>' + MONTHS[mo - 1] + ' ' + y + '</strong><button class="btn btn-sm btn-light" data-nextm aria-label="Next month">\u203a</button></div>' +
+                '<div class="vs-cal-head"><span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span></div><div class="vs-cal-grid" role="group" aria-label="' + MONTHS[mo - 1] + ' ' + y + '">' + cells + '</div></section>' +
+                '<section class="vs-card"><div class="d-flex justify-content-between align-items-center mb-2"><h2 class="mb-0">' + (picked ? 'Showing events for ' + VS.esc(VS.date(picked)) : 'Upcoming check-ins and check-outs') + '</h2>' + (picked ? '<button class="btn btn-light btn-sm" data-clear>Clear</button>' : '') + '</div>' +
+                (list.length ? list.map(function (e) { return '<a class="vs-rcpt d-flex justify-content-between align-items-center gap-2 text-decoration-none" href="' + e.href + '"><div><div class="fw-semibold">' + VS.esc(e.label) + '</div><div class="small text-muted">' + (e.kind === 'in' ? 'Check-in' : 'Check-out') + ' \u00b7 ' + VS.esc(VS.date(e.date)) + '</div></div><span class="vs-chip ' + (e.kind === 'in' ? '' : 'ok') + '">' + (e.kind === 'in' ? '2:00 PM' : '12:00 PM') + '</span></a>'; }).join('')
+                    : VS.empty('fa-calendar', 'No transactions found', 'No transactions match the filters you chose. Try a different type or date.')) + '</section>';
+            host.querySelectorAll('[data-f]').forEach(function (b) { b.onclick = function () { filter = b.dataset.f; paint(); }; });
+            host.querySelectorAll('[data-d]').forEach(function (b) { b.onclick = function () { picked = picked === b.dataset.d ? null : b.dataset.d; paint(); }; });
+            var c = host.querySelector('[data-clear]'); if (c) c.onclick = function () { picked = null; paint(); };
+            host.querySelector('[data-prev]').onclick = function () { month = new Date(Date.UTC(y, mo - 2, 1)).toISOString().slice(0, 7); paint(); };
+            host.querySelector('[data-nextm]').onclick = function () { month = new Date(Date.UTC(y, mo, 1)).toISOString().slice(0, 7); paint(); };
+        }
+        function load() {
+            host.innerHTML = VS.skeleton(5);
+            S.loadAll().then(function (r) {
+                if (r.error) { host.innerHTML = VS.errorState(r.error, 'vsCalRetry'); document.getElementById('vsCalRetry').onclick = load; return; }
+                build(r.items); paint();
+            });
         }
         load();
     };

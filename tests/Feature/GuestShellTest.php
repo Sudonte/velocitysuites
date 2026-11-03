@@ -17,6 +17,7 @@ class GuestShellTest extends ApiFlowTestCase
     {
         parent::setUp();
         foreach ([
+            'announcements' => function (Blueprint $t) { $t->id(); $t->string('title'); $t->text('content'); $t->json('images')->nullable(); $t->string('status')->default('draft'); $t->date('published_at')->nullable(); $t->json('target_audience')->nullable(); $t->timestamp('notified_at')->nullable(); $t->timestamps(); },
             'api_tokens' => function (Blueprint $t) { $t->id(); $t->unsignedBigInteger('user_id'); $t->string('token')->unique(); $t->string('device_name')->nullable(); $t->timestamp('last_used_at')->nullable(); $t->timestamp('expires_at')->nullable(); $t->timestamps(); },
         ] as $name => $def) {
             if (! Schema::hasTable($name)) {
@@ -102,7 +103,8 @@ class GuestShellTest extends ApiFlowTestCase
                 $at = $pos;
             }
             $this->assertStringContainsString('Log out of Velocity Suites?', $html);
-            $this->assertStringContainsString('<span class="link-text">Log out</span>', $html);
+            $this->assertStringNotContainsString('<span class="link-text">Log out</span>', $html, 'Log out lives in the header menu only');
+            $this->assertStringContainsString('id="navLogoutLink"', $html);
             $this->assertStringNotContainsString('Sign out', $html, $url);
             $this->assertStringNotContainsString('> Logout<', $html, $url);
             // the bell opens a dropdown with Mark all as read and View all notifications
@@ -166,5 +168,17 @@ class GuestShellTest extends ApiFlowTestCase
         $rooms = $this->getJson('/api/rooms?check_in='.now()->addDays(3)->toDateString().'&check_out='.now()->addDays(4)->toDateString())->assertOk();
         $this->assertSame(3, $rooms->json('room_types.data.0.available_count') ?? $rooms->json('room_types.0.available_count'));
         $this->postJson('/api/login', ['email' => $user->email, 'password' => 'nope', 'device_name' => 'Pixel'])->assertStatus(401)->assertJsonPath('code', 'INVALID_CREDENTIALS');
+    }
+
+    public function test_featured_rooms_load_with_or_without_the_apk_download(): void
+    {
+        $this->makeRoomTypeWithRooms('Deluxe', 3500, 2, 3);
+        foreach (['downloads/this-file-does-not-exist.apk', 'favicon.ico'] as $file) {
+            config(['services.mobile_app.file' => $file]);
+            $html = $this->get(route('home'))->assertOk()->getContent();
+            $this->assertStringContainsString('VSRooms.featured', $html, $file);
+            $this->assertStringContainsString('js/portal/rooms.js', $html, $file);
+            $this->assertStringContainsString('id="vsFeaturedDates"', $html, $file);
+        }
     }
 }

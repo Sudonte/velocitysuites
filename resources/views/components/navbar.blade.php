@@ -4,7 +4,7 @@
             <button class="btn btn-link text-dark d-md-none p-0 me-3 flex-shrink-0" type="button" data-bs-toggle="offcanvas" data-bs-target="#mobileSidebar" aria-controls="mobileSidebar" aria-label="Open menu">
                 <i class="fas fa-bars fs-4"></i>
             </button>
-            <span class="app-header-title fw-bold mb-0 text-truncate" style="min-width: 0;">{{ \Illuminate\Support\Str::before($__env->yieldContent('title') ?: config('app.name'), ' - Velocity') }}</span>
+            <span class="app-header-title fw-bold mb-0 text-truncate" style="min-width: 0;">{{ html_entity_decode(\Illuminate\Support\Str::before($__env->yieldContent('title') ?: config('app.name'), ' - Velocity')) }}</span>
         @else
             {{-- No sidebar exists on unauthenticated pages using this layout, so the
                  header carries the brand itself instead of just a page title. --}}
@@ -77,7 +77,7 @@
                         <x-user-avatar :user="auth()->user()" :size="36" />
                         <span class="d-none d-sm-flex flex-column lh-sm">
                             <span class="text-dark">{{ auth()->user()->full_name }}</span>
-                            <span class="navbar-role-text text-uppercase">{{ auth()->user()->role_label }}</span>
+                            @if(auth()->user()->role === 'guest')<span class="navbar-role-text">Guest</span>@else<span class="navbar-role-text text-uppercase">{{ auth()->user()->role_label }}</span>@endif
                         </span>
                     </a>
                     <div class="dropdown-menu dropdown-menu-end navbar-account-menu p-0" id="navAccountMenu" data-bs-auto-close="outside">

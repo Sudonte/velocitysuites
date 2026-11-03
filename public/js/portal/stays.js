@@ -71,47 +71,132 @@
     }
     S.loadAll = loadAll;
 
+    // ------------------------------------------------------------------ the app's Bookings / Reservations split
+    // The same rules as the app (ApiMapper.displayStatus + TransactionCategorizer): a reservation that has become a booking is a
+    // Booking, and also stays behind as a finished (frozen) Reservation; Active also holds stays that are still to come.
+
+    function appStatus(x) {
+        var it = x.it, b = x.kind === 'reservation' ? it.booking : it, bs = b ? b.booking_status : null, rs = x.kind === 'reservation' ? it.status : null;
+        if (bs) return { ACTIVE_BOOKING: 'Confirmed', CHECKED_IN: 'Checked-In', COMPLETED_BOOKING: 'Checked-Out', CANCELLED_BOOKING: 'Cancelled' }[bs] || bs;
+        if (!rs) return 'Pending';
+        return { REJECTED_RESERVATION: 'Rejected', CANCELLED_RESERVATION: 'Cancelled', CONVERTED_TO_BOOKING: 'Confirmed' }[rs] || 'Pending';
+    }
+    /** The app's ProfileCompleteness: name, email, mobile, gender, birth date and photo; and the "Add your ..." line. */
+    S.completeness = function (u, g) {
+        u = u || {}; g = g || {};
+        var has = function (v) { return v != null && String(v).trim() !== ''; };
+        var list = [['your name', has(u.first_name) && has(u.last_name)], ['your email', has(u.email)], ['your phone number', has(g.mobile_number || u.mobile_number)],
+            ['your gender', has(g.gender || u.gender)], ['your birth date', has(g.date_of_birth || u.date_of_birth)], ['a profile photo', has(g.profile_picture || u.profile_picture)]];
+        var missing = list.filter(function (f) { return !f[1]; }).map(function (f) { return f[0]; });
+        var line = null;
+        if (missing.length === 1) line = missing[0]; else if (missing.length === 2) line = missing[0] + ' and ' + missing[1]; else if (missing.length > 2) line = missing[0] + ', ' + missing[1] + ' and ' + (missing.length - 2) + ' more';
+        return { pct: Math.floor((list.length - missing.length) * 100 / list.length), line: line ? 'Add ' + line + ' to complete your profile' : null };
+    };
+    S.appKind = function (x) { return (x.kind === 'booking' || x.it.booking) ? 'booking' : 'reservation'; };
+    S.appCategory = function (x) {
+        var st = appStatus(x);
+        if (st === 'Cancelled' || st === 'Rejected') return 'cancelled';
+        if (st === 'Checked-Out') return 'completed';
+        var verified = x.kind === 'reservation' ? (x.it.booking ? x.it.booking.verified_at : x.it.verified_at) : x.it.verified_at;
+        if (S.appKind(x) === 'reservation' && verified) return 'completed';
+        return 'active';
+    };
+    /** Every row of the two tabs: { tab: 'booking' | 'reservation', cat, x, historical } */
+    S.classify = function (items) {
+        var rows = [];
+        items.forEach(function (x) {
+            rows.push({ tab: S.appKind(x), cat: S.appCategory(x), x: x, historical: false });
+            if (x.kind === 'reservation' && x.it.booking && !x.it.snapshot_hidden_at) rows.push({ tab: 'reservation', cat: 'completed', x: x, historical: true });
+        });
+        return rows;
+    };
+    S.counts = function (rows) {
+        var c = { booking: { active: 0, completed: 0, cancelled: 0, all: 0 }, reservation: { active: 0, completed: 0, cancelled: 0, all: 0 } };
+        rows.forEach(function (r) { c[r.tab][r.cat]++; c[r.tab].all++; });
+        return c;
+    };
+    var TAB_TEXT = {
+        booking: { all: 'All bookings', active: 'Confirmed booking list', completed: 'Completed booking list', cancelled: 'Cancelled or rejected booking list', title: 'Bookings',
+            none: { all: 'You have no bookings yet.', active: 'No confirmed bookings.', completed: 'No completed bookings.', cancelled: 'No cancelled or rejected bookings.' }, empty: 'No bookings found', match: 'No bookings match your filters' },
+        reservation: { all: 'All reservations', active: 'Pending/confirmed reservation list', completed: 'Completed reservation list', cancelled: 'Cancelled or rejected reservation list', title: 'Reservations',
+            none: { all: 'No reservations found. Your reservations will be displayed here.', active: 'No pending or confirmed reservations.', completed: 'No completed reservations.', cancelled: 'No cancelled or rejected reservations.' }, empty: 'No reservations found', match: 'No reservations match your filters' }
+    };
+
     S.list = function (root) {
-        var host = root.querySelector('#vsStayCards'), form = root.querySelector('#vsStayFilters'), all = [];
+        var host = root.querySelector('#vsStayCards'), form = root.querySelector('#vsStayFilters'), all = [], rows = [];
+        var qs = new URLSearchParams(window.location.search);
+        var tab = qs.get('tab') === 'reservations' ? 'reservation' : 'booking';
+        var state = { booking: { status: '', q: '', sort: 'newest', room: '' }, reservation: { status: '', q: '', sort: 'newest', room: '' } };
+        var pre = qs.get('status'); if (/^(active|completed|cancelled)$/.test(pre || '')) state[tab].status = pre;
+        var tabs = root.querySelectorAll('#vsStayTabs [data-tab]');
+
+        function readForm() { var f = form.elements; state[tab] = { status: f.status.value, q: f.q.value, sort: f.sort.value, room: f.room.value }; }
+        function writeForm() {
+            var f = form.elements, st = state[tab];
+            f.status.innerHTML = '<option value="">' + TAB_TEXT[tab].all + '</option><option value="active">Active</option><option value="completed">Completed</option><option value="cancelled">Cancelled / rejected</option>';
+            f.status.value = st.status; f.q.value = st.q; f.sort.value = st.sort;
+            var types = {}; rows.filter(function (r) { return r.tab === tab; }).forEach(function (r) { (r.x.it.stays || []).forEach(function (s) { (s.rooms || []).forEach(function (rm) { types[rm.room_type] = 1; }); }); });
+            f.room.innerHTML = '<option value="">All room types</option>' + Object.keys(types).sort().map(function (t) { return '<option>' + VS.esc(t) + '</option>'; }).join('');
+            f.room.value = st.room;
+        }
+        function syncUrl() {
+            var p = new URLSearchParams(); p.set('tab', tab === 'reservation' ? 'reservations' : 'bookings'); if (state[tab].status) p.set('status', state[tab].status);
+            history.replaceState(null, '', window.location.pathname + '?' + p.toString());
+        }
+        function paintTabs() {
+            var c = S.counts(rows);
+            tabs.forEach(function (t) {
+                var k = t.dataset.tab, on = k === tab;
+                t.textContent = TAB_TEXT[k].title + ' (' + c[k].all + ')';
+                t.classList.toggle('active', on); t.setAttribute('aria-selected', on ? 'true' : 'false'); t.tabIndex = on ? 0 : -1;
+            });
+        }
+        function card(r) {
+            var x = r.x, it = x.it, s = r.historical ? { label: 'Completed', cls: 'gray', key: 'completed', note: 'This reservation became a booking.' } : S.status(it, x.kind), m = S.money(it);
+            var id = r.historical || x.kind === 'reservation' ? 'Reservation #' + it.id : 'Booking #' + it.id;
+            if (!r.historical && x.kind === 'reservation' && it.booking && r.tab === 'booking') id = 'Booking #' + (it.booking.id || it.id);
+            var href = '/guest/' + (r.historical || (x.kind === 'reservation' && r.tab === 'reservation') ? 'reservations' : (x.kind === 'reservation' ? 'reservations' : 'bookings')) + '/' + it.id;
+            return '<a class="vs-card vs-stay-card d-block text-decoration-none vs-reveal" href="' + href + '">' +
+                '<div class="d-flex justify-content-between align-items-start gap-2"><div><div class="fw-bold">' + VS.esc(id) + '</div><div class="text-muted small">' + VS.esc(dates(it)) + '</div><div class="small">' + VS.esc(S.firstRoomTypes(it)) + '</div></div>' +
+                '<span class="vs-chip ' + s.cls + '">' + s.label + '</span></div>' +
+                (s.note ? '<div class="small text-muted mt-1">' + VS.esc(s.note) + '</div>' : '') +
+                '<div class="row text-center g-2 mt-2"><div class="col-4"><div class="small text-muted">Total</div><div class="vs-num fw-bold">' + VS.money(m.total) + '</div></div><div class="col-4"><div class="small text-muted">Paid</div><div class="vs-num fw-bold">' + VS.money(m.paid) + '</div></div><div class="col-4"><div class="small text-muted">Balance</div><div class="vs-num fw-bold">' + VS.money(m.remaining) + '</div></div></div></a>';
+        }
         function paint() {
-            var q = form.elements.q.value.trim().toLowerCase(), st = form.elements.status.value, sort = form.elements.sort.value, rt = form.elements.room.value;
-            var list = all.filter(function (x) {
-                var s = S.status(x.it, x.kind);
-                if (st && s.key !== st) return false;
-                if (rt && S.firstRoomTypes(x.it).indexOf(rt) < 0) return false;
-                if (q) { var hay = (idLabel(x.it, x.kind) + ' ' + S.firstRoomTypes(x.it) + ' ' + s.label + ' ' + dates(x.it) + ' ' + (x.it.guest_first_name || '') + ' ' + (x.it.guest_last_name || '')).toLowerCase(); if (hay.indexOf(q) < 0) return false; }
+            paintTabs(); syncUrl();
+            var st = state[tab], q = st.q.trim().toLowerCase(), T = TAB_TEXT[tab];
+            var list = rows.filter(function (r) {
+                if (r.tab !== tab) return false;
+                if (st.status && r.cat !== st.status) return false;
+                if (st.room && S.firstRoomTypes(r.x.it).indexOf(st.room) < 0) return false;
+                if (q) { var it = r.x.it, hay = ((r.historical || r.x.kind === 'reservation' ? 'reservation #' : 'booking #') + it.id + ' ' + S.firstRoomTypes(it) + ' ' + S.status(it, r.x.kind).label + ' ' + dates(it) + ' ' + (it.guest_first_name || '') + ' ' + (it.guest_last_name || '')).toLowerCase(); if (hay.indexOf(q) < 0) return false; }
                 return true;
             });
-            list.sort(function (a, b) {
-                if (sort === 'oldest') return new Date(a.it.created_at) - new Date(b.it.created_at);
-                if (sort === 'checkin') return nextCheckIn(a.it) < nextCheckIn(b.it) ? -1 : 1;
-                if (sort === 'total_desc') return S.money(b.it).total - S.money(a.it).total;
-                if (sort === 'total_asc') return S.money(a.it).total - S.money(b.it).total;
-                return new Date(b.it.created_at) - new Date(a.it.created_at);
-            });
-            host.innerHTML = list.length ? list.map(function (x) {
-                var s = S.status(x.it, x.kind), m = S.money(x.it);
-                return '<a class="vs-card vs-stay-card d-block text-decoration-none vs-reveal" href="/guest/' + (x.kind === 'reservation' ? 'reservations' : 'bookings') + '/' + x.it.id + '">' +
-                    '<div class="d-flex justify-content-between align-items-start gap-2"><div><div class="fw-bold">' + VS.esc(idLabel(x.it, x.kind)) + '</div><div class="text-muted small">' + VS.esc(dates(x.it)) + '</div><div class="small">' + VS.esc(S.firstRoomTypes(x.it)) + '</div></div>' +
-                    '<span class="vs-chip ' + s.cls + '">' + s.label + '</span></div>' +
-                    (s.note ? '<div class="small text-muted mt-1">' + VS.esc(s.note) + '</div>' : '') +
-                    '<div class="row text-center g-2 mt-2"><div class="col-4"><div class="small text-muted">Total</div><div class="vs-num fw-bold">' + VS.money(m.total) + '</div></div><div class="col-4"><div class="small text-muted">Paid</div><div class="vs-num fw-bold">' + VS.money(m.paid) + '</div></div><div class="col-4"><div class="small text-muted">Balance</div><div class="vs-num fw-bold ' + (m.remaining > 0.009 ? '' : 'text-success') + '">' + VS.money(m.remaining) + '</div></div></div></a>';
-            }).join('') : VS.empty('fa-suitcase', all.length ? 'Nothing matches' : 'No bookings or reservations yet', all.length ? 'Try other filters.' : 'Your bookings and reservations appear here.', all.length ? '' : '<a class="btn btn-velocity" href="/rooms">Browse rooms</a>');
+            list.sort(function (a, b) { var d = new Date(b.x.it.created_at) - new Date(a.x.it.created_at); return st.sort === 'oldest' ? -d : d; });
+            var filtered = st.status || q || st.room;
+            root.querySelector('#vsStayCount').textContent = VS.plural(list.length, 'result');
+            root.querySelector('#vsStayListTitle').textContent = st.status ? T[st.status] : T.title;
+            host.innerHTML = list.length ? list.map(card).join('')
+                : VS.empty('fa-suitcase', filtered ? T.match : T.empty, filtered ? (st.status && !q && !st.room ? T.none[st.status] : 'Try another transaction number, room type, or date.') : T.none.all, filtered ? '<button class="btn btn-light btn-sm" data-clear2>Clear filters</button>' : '<a class="btn btn-velocity" href="/rooms">Browse rooms</a>');
+            var c2 = host.querySelector('[data-clear2]'); if (c2) c2.onclick = clear;
             VS.reveal(host);
         }
+        function clear() { state[tab] = { status: '', q: '', sort: 'newest', room: '' }; writeForm(); paint(); }
         function load() {
             host.innerHTML = VS.skeleton(4);
             loadAll().then(function (r) {
                 if (r.error) { host.innerHTML = VS.errorState(r.error, 'vsStaysRetry'); document.getElementById('vsStaysRetry').onclick = load; return; }
-                if (r.partial) VS.toast('Part of your list could not be loaded. Pull to refresh in a moment.', 'warning');
-                all = r.items;
-                var types = {}; all.forEach(function (x) { (x.it.stays || []).forEach(function (s) { (s.rooms || []).forEach(function (rm) { types[rm.room_type] = 1; }); }); });
-                var sel = form.elements.room; sel.innerHTML = '<option value="">All room types</option>' + Object.keys(types).sort().map(function (t) { return '<option>' + VS.esc(t) + '</option>'; }).join('');
-                paint();
+                if (r.partial) VS.toast('Part of your list could not be loaded. Try again in a moment.', 'warning');
+                all = r.items; rows = S.classify(all);
+                writeForm(); paint();
             });
         }
-        form.addEventListener('input', VS.debounce(paint, 120)); form.addEventListener('change', paint); form.addEventListener('submit', function (e) { e.preventDefault(); });
-        form.querySelector('[data-clear]').onclick = function () { form.reset(); paint(); };
+        tabs.forEach(function (t) {
+            t.addEventListener('click', function () { readForm(); tab = t.dataset.tab; writeForm(); paint(); });
+            t.addEventListener('keydown', function (e) { if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') { var o = [].filter.call(tabs, function (x) { return x !== t; })[0]; o.click(); o.focus(); } });
+        });
+        form.addEventListener('input', VS.debounce(function () { readForm(); paint(); }, 120)); form.addEventListener('change', function () { readForm(); paint(); }); form.addEventListener('submit', function (e) { e.preventDefault(); });
+        form.querySelector('[data-clear]').onclick = clear;
         load();
     };
 

@@ -1139,15 +1139,18 @@
     <x-amenity-detail-modal />
 @endsection
 
-@if($appAvailable)
-@push('scripts')
+{{-- Featured rooms (with the date picker and the room selection) load whether or not the app download is available. --}}
+@push('styles')
 <link rel="stylesheet" href="{{ asset('css/portal.css') }}?v={{ filemtime(public_path('css/portal.css')) }}">
+@endpush
+@push('scripts')
 <script src="{{ asset('js/portal/core.js') }}?v={{ filemtime(public_path('js/portal/core.js')) }}"></script>
 <script src="{{ asset('js/portal/rooms.js') }}?v={{ filemtime(public_path('js/portal/rooms.js')) }}"></script>
 <script>VSRooms.featured(document.getElementById('vsFeaturedRooms'), { signed: {{ auth()->check() && auth()->user()->role === 'guest' ? 'true' : 'false' }} });</script>
+@endpush
+@if($appAvailable)
+@push('scripts')
     <script src="{{ asset('js/vendor/qrcode-generator-1.4.4.js') }}" defer></script>
     <script src="{{ asset('js/app-download-qr.js') }}" defer></script>
 @endpush
 @endif
-
-

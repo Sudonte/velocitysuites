@@ -379,7 +379,7 @@
             </span>
             <div class="sidebar-brand-text">
                 <div class="fw-bold sidebar-brand-name">{{ config('app.name') }}</div>
-                <div class="sidebar-role-badge text-uppercase fw-semibold">{{ auth()->user()->role_label }}</div>
+                @if(auth()->user()->role === 'guest')<div class="sidebar-role-badge fw-semibold">Guest</div>@else<div class="sidebar-role-badge text-uppercase fw-semibold">{{ auth()->user()->role_label }}</div>@endif
             </div>
         </div>
 
@@ -486,7 +486,7 @@
             </ul>
         @elseif(auth()->user()->role === 'guest')
             <ul class="nav flex-column">
-                <li><a href="{{ route('guest.dashboard') }}" class="nav-link {{ request()->routeIs('guest.dashboard') ? 'active' : '' }}" title="Dashboard" @if(request()->routeIs('guest.dashboard')) aria-current="page" @endif>
+                <li><a href="{{ route('guest.dashboard') }}" class="nav-link {{ request()->routeIs('guest.dashboard', 'guest.calendar') ? 'active' : '' }}" title="Dashboard" @if(request()->routeIs('guest.dashboard')) aria-current="page" @endif>
                     <i class="fas fa-home"></i> <span class="link-text">Dashboard</span>
                 </a></li>
                 <li><a href="{{ route('guest.rooms') }}" class="nav-link {{ request()->routeIs('guest.rooms') ? 'active' : '' }}" title="Room Browsing" @if(request()->routeIs('guest.rooms')) aria-current="page" @endif>
@@ -500,9 +500,6 @@
                 </a></li>
                 <li><a href="{{ route('guest.profile.show') }}" class="nav-link {{ request()->routeIs('guest.profile.*') ? 'active' : '' }}" title="Profile Management" @if(request()->routeIs('guest.profile.*')) aria-current="page" @endif>
                     <i class="fas fa-user-gear"></i> <span class="link-text">Profile Management</span>
-                </a></li>
-                <li><a href="#" class="nav-link" title="Log out" data-bs-toggle="modal" data-bs-target="#logoutConfirmModal">
-                    <i class="fas fa-sign-out-alt"></i> <span class="link-text">Log out</span>
                 </a></li>
             </ul>
         @endif
