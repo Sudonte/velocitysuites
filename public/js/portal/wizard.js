@@ -575,7 +575,8 @@
             main.innerHTML = VS.skeleton(5);
             return VS.api('/guest/reservations/' + editId).then(function (r) {
                 var back = '<a class="btn btn-light" href="/guest/reservations">Back to Booking &amp; Reservation</a>';
-                if (!r.ok) { main.innerHTML = VS.errorState(r.status === 404 || r.status === 403 ? 'We could not find that reservation.' : r.message) + '<div class="text-center">' + back + '</div>'; return Promise.reject('stop'); }
+                if (!r.ok && (r.status === 404 || r.status === 403)) { main.innerHTML = VS.notFound('That reservation is not on your account.'); return Promise.reject('stop'); }
+                if (!r.ok) { main.innerHTML = VS.errorState(r.message) + '<div class="text-center">' + back + '</div>'; return Promise.reject('stop'); }
                 var it = r.data, awaiting = /AWAITING|TO_BE_CONVERTED/.test(it.status || '');
                 if (it.booking || !awaiting) { main.innerHTML = '<div class="vs-empty"><i class="fas fa-circle-info"></i><h3 class="h6 fw-bold">This reservation can no longer be edited</h3><p class="text-muted">Only a pending reservation can be edited.</p>' + back + '</div>'; return Promise.reject('stop'); }
                 if (it.edited_at) { main.innerHTML = '<div class="vs-empty"><i class="fas fa-circle-info"></i><h3 class="h6 fw-bold">Already edited</h3><p class="text-muted">This reservation has already been modified and cannot be edited again.</p>' + back + '</div>'; return Promise.reject('stop'); }

@@ -465,7 +465,8 @@
             var path = '/guest/' + (kind === 'reservation' ? 'reservations' : 'bookings') + '/' + id;
             Promise.all([VS.api(path), VS.api(path + '/additional-amenities', { quiet401: true })]).then(function (rs) {
                 var r = rs[0];
-                if (!r.ok) { host.innerHTML = VS.errorState(r.status === 404 || r.status === 403 ? 'We could not find that transaction.' : r.message, 'vsDetRetry'); var rb = document.getElementById('vsDetRetry'); if (rb) rb.onclick = load; return; }
+                if (!r.ok && (r.status === 404 || r.status === 403)) { host.innerHTML = VS.notFound('That booking or reservation is not on your account.'); return; }
+                if (!r.ok) { host.innerHTML = VS.errorState(r.message, 'vsDetRetry'); var rb = document.getElementById('vsDetRetry'); if (rb) rb.onclick = load; return; }
                 var it = r.data, requests = rs[1].ok ? (rs[1].data.requests || rs[1].data.data || rs[1].data || []) : [];
                 if (!Array.isArray(requests)) requests = [];
                 render(it, requests);

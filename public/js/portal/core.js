@@ -255,6 +255,13 @@
         return '<div class="vs-empty"><i class="fas ' + icon + '"></i><h3 class="h6 fw-bold mb-1">' + VS.esc(title) + '</h3><p class="text-muted mb-2">' + VS.esc(text || '') + '</p>' + (actionHtml || '') + '</div>';
     };
 
+    /** The friendly "not found" block (a missing or someone else's transaction, receipt or reservation): where to go next, no Retry. */
+    VS.notFound = function (what) {
+        return '<div class="vs-empty"><i class="fas fa-circle-question" aria-hidden="true"></i><h2 class="h5 fw-bold">We couldn’t find that page</h2>' +
+            '<p class="text-muted">' + VS.esc(what || 'It may have been removed, or the link is not right.') + '</p>' +
+            '<div class="d-flex flex-wrap justify-content-center gap-2"><a class="btn btn-velocity" href="/guest/dashboard">Dashboard</a><a class="btn btn-outline-velocity" href="/guest/reservations">Booking &amp; Reservation</a></div></div>';
+    };
+
     VS.errorState = function (message, retryId) {
         return '<div class="vs-empty"><i class="fas fa-circle-exclamation"></i><h3 class="h6 fw-bold mb-1">Something went wrong</h3><p class="text-muted mb-2">' + VS.esc(message) + '</p>' +
             (retryId ? '<button class="btn btn-velocity btn-sm" id="' + retryId + '">Try again</button>' : '') + '</div>';

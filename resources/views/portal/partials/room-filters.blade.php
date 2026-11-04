@@ -3,15 +3,15 @@
     <div class="row g-3 align-items-start">
         <div class="col-6 col-lg-2">
             <label class="form-label small fw-semibold" for="fIn">Check-in</label>
-            <input type="date" class="form-control" id="fIn" name="check_in" value="{{ request('check_in') }}">
+            <input type="date" class="form-control" id="fIn" name="check_in" value="{{ is_scalar(request('check_in')) ? request('check_in') : '' }}">
         </div>
         <div class="col-6 col-lg-2">
             <label class="form-label small fw-semibold" for="fOut">Check-out</label>
-            <input type="date" class="form-control" id="fOut" name="check_out" value="{{ request('check_out') }}">
+            <input type="date" class="form-control" id="fOut" name="check_out" value="{{ is_scalar(request('check_out')) ? request('check_out') : '' }}">
         </div>
         <div class="col-6 col-lg-2">
             <label class="form-label small fw-semibold" for="fCap">Guests</label>
-            <input type="number" min="1" max="20" class="form-control" id="fCap" name="capacity" value="{{ request('capacity') }}" placeholder="Any">
+            <input type="number" min="1" max="20" class="form-control" id="fCap" name="capacity" value="{{ is_scalar(request('capacity')) ? request('capacity') : '' }}" placeholder="Any">
         </div>
         <div class="col-6 col-lg-2">
             <label class="form-label small fw-semibold" for="fType">Room type</label>

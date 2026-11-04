@@ -72,7 +72,7 @@ class ReservationController extends Controller
         // Default stays 15 for any other caller, but the Android app explicitly
         // requests a high per_page so the dashboard/Transaction History always
         // see this guest's complete history instead of only the latest 15.
-        $perPage = min($request->integer('per_page', 15), 200);
+        $perPage = max(1, min($request->integer('per_page', 15), 200));
 
         $reservations = $query->latest('created_at')->paginate($perPage);
 

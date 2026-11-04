@@ -59,7 +59,7 @@ class BookingController extends Controller
             $query->where('booking_status', $request->status);
         }
 
-        $perPage = min($request->integer('per_page', 15), 200);
+        $perPage = max(1, min($request->integer('per_page', 15), 200));
 
         // Newest-created-first (not soonest-check-in-first) so a guest sees a transaction they just created at the top regardless of its stay dates.
         $paginated = $query->latest('created_at')->paginate($perPage);

@@ -29,15 +29,15 @@ class RoomController extends Controller
 
         $query = RoomType::where('status', 'active');
 
-        if ($request->filled('min_price')) {
+        if (is_scalar($request->query('min_price')) && $request->filled('min_price')) {
             $query->where('rate', '>=', $request->min_price);
         }
 
-        if ($request->filled('max_price')) {
+        if (is_scalar($request->query('max_price')) && $request->filled('max_price')) {
             $query->where('rate', '<=', $request->max_price);
         }
 
-        if ($request->filled('capacity')) {
+        if (is_scalar($request->query('capacity')) && $request->filled('capacity')) {
             $query->where('capacity', '>=', $request->capacity);
         }
 

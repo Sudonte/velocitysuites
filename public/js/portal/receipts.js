@@ -76,6 +76,7 @@
         function load() {
             host.innerHTML = VS.skeleton(6);
             VS.api('/guest/receipts/' + encodeURIComponent(number)).then(function (r) {
+                if (r.status === 404) { host.innerHTML = VS.notFound('That receipt is not on your account.'); return; }
                 if (!r.ok || !r.data || !r.data.receipt) {
                     host.innerHTML = '<div class="vs-empty"><i class="fas fa-receipt"></i><h2 class="h5 fw-bold">We couldn’t open this receipt</h2><p class="text-muted mb-1">' + VS.esc(r.status === 404 ? 'This receipt is not available.' : (r.message || 'Please try again.')) + '</p>' +
                         '<p class="small text-muted">Tap Try again. If it keeps happening, show this receipt number to the front desk: ' + VS.esc(number) + '</p><button class="btn btn-velocity" id="vsRcRetry">Try again</button></div>';
