@@ -215,6 +215,7 @@
                 .catch(function () { VS.toast('Your theme is changed here, but could not be saved to your account.', 'warning'); });
         }
 
+        var photoBusy = false; // a second tap while the photo is being saved or removed does nothing
         function wirePhoto(u, g, hasPic, pic) {
             var menu = host.querySelector('#pMenu'), cam = host.querySelector('#pFileCam'), file = host.querySelector('#pFile');
             host.querySelector('#pCam').onclick = function () { menu.classList.toggle('d-none'); };
@@ -230,15 +231,15 @@
             menu.querySelectorAll('[data-a]').forEach(function (b) { b.onclick = function () {
                 menu.classList.add('d-none'); var a = b.dataset.a;
                 if (a === 'camera') cam.click(); else if (a === 'gallery') file.click();
-                else if (a === 'remove') VS.confirm({ title: 'Remove your profile photo?', message: 'Your initials will show instead.', confirmText: 'Remove', danger: true }).then(function (yes) { if (yes) VS.api('/guest/profile/picture', { method: 'DELETE' }).then(function (r) { if (r.ok) { VS.toast('Photo removed.', 'success'); load(); } else VS.toast(r.message, 'danger'); }); });
+                else if (a === 'remove') VS.confirm({ title: 'Remove your profile photo?', message: 'Your initials will show instead.', confirmText: 'Remove', danger: true }).then(function (yes) { if (yes && !photoBusy) { photoBusy = true; VS.api('/guest/profile/picture', { method: 'DELETE' }).then(function (r) { photoBusy = false; if (r.ok) { VS.toast('Photo removed.', 'success'); load(); } else VS.toast(r.message, 'danger'); }); } });
             }; });
             function chosen(e) {
                 var f = e.target.files[0]; e.target.value = ''; if (!f) return;
                 VS.compressImage(f).then(function (c) {
                     var url = URL.createObjectURL(c);
                     VS.confirm({ title: 'Use this photo?', html: '<div class="text-center"><img src="' + url + '" alt="New profile photo preview" class="rounded-circle" style="width:160px;height:160px;object-fit:cover"></div>', confirmText: 'Save', cancelText: 'Cancel' }).then(function (yes) {
-                        if (!yes) return; var fd = new FormData(); fd.append('profile_picture', c, c.name);
-                        VS.api('/guest/profile/picture', { method: 'POST', body: fd }).then(function (r) { if (r.ok) { VS.toast('Profile photo updated.', 'success'); load(); } else VS.toast(r.message, 'danger'); });
+                        if (!yes || photoBusy) return; photoBusy = true; var fd = new FormData(); fd.append('profile_picture', c, c.name);
+                        VS.api('/guest/profile/picture', { method: 'POST', body: fd }).then(function (r) { photoBusy = false; if (r.ok) { VS.toast('Profile photo updated.', 'success'); load(); } else VS.toast(r.message, 'danger'); });
                     });
                 });
             }
