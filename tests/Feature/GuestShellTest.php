@@ -243,10 +243,12 @@ class GuestShellTest extends ApiFlowTestCase
         $this->assertStringContainsString('js/portal/nextstay.js', $html);
 
         $dash = file_get_contents(public_path('js/portal/dashboard.js'));
-        foreach (["https://mail.google.com/mail/?view=cm&fs=1&to=", "'Support request \u2013 Guest ID '", "velocitysuites@gmail.com", 'Use another email app', "target=\"_blank\" rel=\"noopener noreferrer\"",
+        foreach (["https://mail.google.com/mail/?view=cm&fs=1&to=", "'Support request \u2013 Guest ID '", "velocitysuites@gmail.com", 'vsCopyMail', 'Copied', 'layoutLower', "target=\"_blank\" rel=\"noopener noreferrer\"",
             'Member since', 'Email verified', 'Last profile update', 'Next update allowed', 'Edit profile', 'Change password', 'Next booking: '] as $needle) {
             $this->assertStringContainsString($needle, $dash, $needle);
         }
+        $this->assertStringNotContainsString('Use another email app', $dash);
+        $this->assertStringNotContainsString('mailto:', $dash, 'Contact support is Gmail only; the address is shown as text with a Copy button');
         $ns = file_get_contents(public_path('js/portal/nextstay.js'));
         foreach (['Yesterday', 'Tomorrow', "'Last week'", "'This week'", "'Next week'", 'Show cancelled', 'Your next stay · in ', 'nearestStayDay', 'forWindow', 'This month', 'Nothing booked for this day. Pick another day above.'] as $needle) {
             $this->assertStringContainsString($needle, $ns, $needle);

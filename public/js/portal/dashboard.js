@@ -70,17 +70,45 @@
     function card(title, html, extra, desc) { return '<section class="vs-card vs-reveal" ' + (extra || '') + '><h2' + (desc ? ' class="mb-0"' : '') + '>' + title + '</h2>' + (desc ? '<p class="text-muted small mb-2">' + desc + '</p>' : '') + html + '</section>'; }
 
     var SUPPORT_EMAIL = 'velocitysuites@gmail.com';
-    /** Gmail's compose window (new tab) and the mailto: fallback, with the same prefilled subject and body. */
+    /** Gmail's compose window (opened in a new tab) with the hotel address, subject and the guest's details prefilled. */
     D.supportLinks = function (o) {
         var subject = 'Support request \u2013 Guest ID ' + (o.guestId != null && o.guestId !== '' ? o.guestId : 'unknown');
         var body = 'Hello Velocity Suites,\n\nName: ' + (o.name || '') + '\nGuest ID: ' + (o.guestId != null ? o.guestId : '') + (o.nextBooking ? '\nNext booking: ' + o.nextBooking : '') + '\n\nHow can we help you? Please describe your question below:\n';
         var q = function (v) { return encodeURIComponent(v); };
         return {
             gmail: 'https://mail.google.com/mail/?view=cm&fs=1&to=' + q(SUPPORT_EMAIL) + '&su=' + q(subject) + '&body=' + q(body),
-            mailto: 'mailto:' + SUPPORT_EMAIL + '?subject=' + q(subject) + '&body=' + q(body),
             subject: subject, body: body, to: SUPPORT_EMAIL
         };
     };
+
+    /** Copies text and says "Copied" for a moment; falls back to a hidden field where the clipboard API is not available. */
+    function copyText(text, btn, note) {
+        function done(ok) {
+            if (!note) return;
+            note.textContent = ok ? 'Copied' : 'Press Ctrl+C to copy';
+            clearTimeout(note._t); note._t = setTimeout(function () { note.textContent = ''; }, 2000);
+        }
+        if (navigator.clipboard && navigator.clipboard.writeText) { navigator.clipboard.writeText(text).then(function () { done(true); }, function () { fallback(); }); return; }
+        fallback();
+        function fallback() {
+            var t = document.createElement('textarea'); t.value = text; t.setAttribute('readonly', ''); t.style.position = 'fixed'; t.style.opacity = '0'; document.body.appendChild(t); t.select();
+            var ok = false; try { ok = document.execCommand('copy'); } catch (e) { ok = false; } t.remove(); done(ok);
+        }
+    }
+
+    /**
+     * The cards at the bottom sit in two even columns: Payment status and Notifications on the left, Account summary with Need help?
+     * directly below it on the right. The last card of each column stretches, so neither column ends with an empty gap.
+     */
+    function layoutLower(body) {
+        var by = {}; body.querySelectorAll('.vs-dash-grid > section.vs-card').forEach(function (sec) { var h = sec.querySelector('h2'); if (h) by[h.textContent.replace(/\s+\d+$/, '').trim().toLowerCase()] = sec; });
+        var left = [by['payment status'], by['notifications']].filter(Boolean), right = [by['account summary'], by['need help?']].filter(Boolean);
+        if (!left.length || !right.length) return;
+        var wrap = document.createElement('div'); wrap.className = 'vs-dash-cols';
+        [left, right].forEach(function (cards) { var col = document.createElement('div'); col.className = 'vs-dash-col'; cards.forEach(function (c) { c.classList.remove('vs-span2'); col.appendChild(c); }); wrap.appendChild(col); });
+        body.querySelector('.vs-dash-grid').appendChild(wrap);
+        if (by['recent bookings']) by['recent bookings'].classList.add('vs-span2');
+    }
 
     D.page = function (root, firstName, fullName) {
         var host = root.querySelector('#vsDash');
@@ -163,11 +191,14 @@
                     '<div class="vs-row"><span>Last profile update</span><span>' + VS.esc(upd) + '</span></div><div class="vs-row"><span>Next update allowed</span><span>' + VS.esc(nextUpd) + '</span></div>' +
                     '<div class="d-flex flex-wrap gap-2 mt-3"><a class="btn btn-outline-velocity btn-sm" href="/guest/profile">Edit profile</a><a class="btn btn-outline-velocity btn-sm" href="/guest/profile?change=password">Change password</a></div>', '', 'Your profile and contact details');
                 var sup = D.supportLinks({ name: fullNm, guestId: g.id, nextBooking: nextBk });
-                html += card('Need help?', '<p class="mb-2">Our team is here for you 24/7.</p><div><i class="fas fa-phone me-2 text-danger"></i>0955 139 2737</div><div><i class="fas fa-envelope me-2 text-danger"></i>velocitysuites@gmail.com</div><div><i class="fas fa-location-dot me-2 text-danger"></i>Allah Valley Drive, Surallah, South Cotabato</div>' +
-                    '<div class="d-flex flex-wrap align-items-center gap-2 mt-3"><a class="btn btn-velocity btn-sm" href="' + VS.esc(sup.gmail) + '" target="_blank" rel="noopener noreferrer"><i class="fas fa-envelope me-1"></i>Contact support</a><a class="small" href="' + VS.esc(sup.mailto) + '">Use another email app</a></div>');
+                html += card('Need help?', '<p class="mb-2">Our team is here for you 24/7.</p><div><i class="fas fa-phone me-2 text-danger"></i>0955 139 2737</div><div><i class="fas fa-location-dot me-2 text-danger"></i>Allah Valley Drive, Surallah, South Cotabato</div>' +
+                    '<div class="mt-3"><a class="btn btn-velocity btn-sm" href="' + VS.esc(sup.gmail) + '" target="_blank" rel="noopener noreferrer"><i class="fas fa-envelope me-1"></i>Contact support</a></div>' +
+                    '<div class="vs-mail mt-2"><span class="vs-mail-addr text-break" id="vsSupportMail">' + VS.esc(sup.to) + '</span><button type="button" class="btn btn-sm btn-outline-velocity" id="vsCopyMail" aria-describedby="vsSupportMail">Copy</button><span class="small text-success" id="vsCopied" role="status" aria-live="polite"></span></div>');
                 body.innerHTML = '<div class="vs-dash-grid">' + html + '</div>';
-                body.querySelectorAll('section.vs-card').forEach(function (sec) { var h = sec.querySelector('h2'); if (h && /^(booking & reservation summary|your next stay|stay calendar|payment status)$/i.test(h.textContent.trim())) sec.classList.add('vs-span2'); });
+                body.querySelectorAll('section.vs-card').forEach(function (sec) { var h = sec.querySelector('h2'); if (h && /^(booking & reservation summary|your next stay|stay calendar)$/i.test(h.textContent.trim())) sec.classList.add('vs-span2'); });
+                layoutLower(body);
                 VS.reveal(body);
+                var cp = body.querySelector('#vsCopyMail'); if (cp) cp.onclick = function () { copyText(D.supportLinks({}).to, cp, body.querySelector('#vsCopied')); };
                 var tg = body.querySelector('#vsSummaryToggle'); if (tg) tg.onclick = function () { var now = tg.getAttribute('aria-expanded') !== 'true'; tg.setAttribute('aria-expanded', now); body.querySelector('#vsSummaryBody').hidden = !now; try { localStorage.setItem('vs_summary_open', now ? '1' : '0'); } catch (e) { /* storage off */ } };
                 if (window.VSNextStay) { VSNextStay.nextStay(body.querySelector('#vsNextStay'), items, VS.today()); VSNextStay.calendar(body.querySelector('#vsStayCal'), items, VS.today()); }
             });

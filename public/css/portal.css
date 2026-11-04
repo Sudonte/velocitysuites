@@ -462,3 +462,15 @@ button.vs-mi:hover, button.vs-mi:focus-visible { background: var(--vs-red-soft);
 [data-bs-theme="dark"] .vs-dot { background: #ff8f97; }
 .vs-calday { aspect-ratio: auto; height: 2.75rem; min-height: 0; }
 #vsStayCal .vs-cal { max-width: 560px; margin-left: auto; margin-right: auto; }
+
+/* dashboard, lower area: two even columns (Payment status + Notifications | Account summary + Need help?); no gaps, one gap size */
+.vs-dash-cols { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem; align-items: stretch; }
+.vs-dash-col { display: flex; flex-direction: column; gap: 1rem; min-width: 0; }
+.vs-dash-col > .vs-card { margin-bottom: 0; height: auto; }
+.vs-dash-col > .vs-card:last-child { flex: 1 1 auto; }
+@media (min-width: 992px) { .vs-dash-cols { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.vs-mail { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; }
+.vs-mail-addr { font-variant-numeric: tabular-nums; }
+.vs-dash-grid > .vs-card > h2, .vs-dash-col > .vs-card > h2 { font-size: 1.05rem; margin: 0 0 .25rem; min-height: 1.6rem; display: flex; align-items: center; }
+.vs-shell-body .user-avatar-initials { color: #a62b34; }
+[data-bs-theme="dark"] .vs-shell-body .user-avatar-initials { color: #fff; }
