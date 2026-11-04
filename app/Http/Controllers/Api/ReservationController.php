@@ -173,6 +173,7 @@ class ReservationController extends Controller
             'rooms' => 'nullable|array|min:1',
             'rooms.*.room_type_id' => 'required_with:rooms|exists:room_types,id',
             'rooms.*.quantity' => 'required_with:rooms|integer|min:1|max:50',
+            'rooms.*.option_key' => 'nullable|string|max:40',
             'room_type_id' => 'required_without:rooms|exists:room_types,id',
             'check_in' => \App\Support\CheckInWindow::rules(),
             'check_out' => 'required|date|after:check_in',
@@ -202,6 +203,7 @@ class ReservationController extends Controller
             'amenities.*.quantity' => 'required_with:amenities|integer|min:1',
             'amenities.*.room_type_id' => 'nullable|integer',
             'amenities.*.room_slot' => 'nullable|integer|min:1|max:50',
+            'amenities.*.option_key' => 'nullable|string|max:40',
             // Optional: a fresh Reservation may now submit real GCash payment
             // at creation time itself, instead of only ever being created
             // unpaid and paid later via a separate Pay Now action. All four
@@ -234,7 +236,7 @@ class ReservationController extends Controller
         ];
         if ($hasStays) {
             // One transaction, several stays: each stay has its own dates, rooms and amenities (StaysInput). The flat fields are for a one-stay request.
-            foreach (['rooms', 'rooms.*.room_type_id', 'rooms.*.quantity', 'room_type_id', 'check_in', 'check_out', 'rooms_requested', 'amenities', 'amenities.*.amenity_id', 'amenities.*.quantity'] as $flat) {
+            foreach (['rooms', 'rooms.*.room_type_id', 'rooms.*.quantity', 'rooms.*.option_key', 'amenities.*.option_key', 'room_type_id', 'check_in', 'check_out', 'rooms_requested', 'amenities', 'amenities.*.amenity_id', 'amenities.*.quantity'] as $flat) {
                 unset($rules[$flat]);
             }
             $rules += \App\Support\StaysInput::rules();
@@ -534,6 +536,7 @@ class ReservationController extends Controller
             'rooms' => 'nullable|array|min:1',
             'rooms.*.room_type_id' => 'required_with:rooms|exists:room_types,id',
             'rooms.*.quantity' => 'required_with:rooms|integer|min:1|max:50',
+            'rooms.*.option_key' => 'nullable|string|max:40',
             // Legacy single-room-type shape - still accepted for backward
             // compatibility with an older app build.
             'room_type_id' => 'nullable|exists:room_types,id',
@@ -559,10 +562,11 @@ class ReservationController extends Controller
             'amenities.*.quantity' => 'required_with:amenities|integer|min:1',
             'amenities.*.room_type_id' => 'nullable|integer',
             'amenities.*.room_slot' => 'nullable|integer|min:1|max:50',
+            'amenities.*.option_key' => 'nullable|string|max:40',
         ];
         if ($hasStays) {
             // The whole transaction's stays, replacing the current ones (each with its own dates, rooms and amenities).
-            foreach (['check_in', 'check_out', 'rooms', 'rooms.*.room_type_id', 'rooms.*.quantity', 'room_type_id', 'rooms_requested', 'amenities', 'amenities.*.amenity_id', 'amenities.*.quantity'] as $flat) {
+            foreach (['check_in', 'check_out', 'rooms', 'rooms.*.room_type_id', 'rooms.*.quantity', 'rooms.*.option_key', 'amenities.*.option_key', 'room_type_id', 'rooms_requested', 'amenities', 'amenities.*.amenity_id', 'amenities.*.quantity'] as $flat) {
                 unset($rules[$flat]);
             }
             $rules += \App\Support\StaysInput::rules();
@@ -667,6 +671,7 @@ class ReservationController extends Controller
             $resolvedAmenities = $this->amenityService->validateSelection($rawAmenities)->values()->map(fn (array $entry, int $k) => $entry + [
                 'room_type_id' => isset($rawAmenities[$k]['room_type_id']) ? (int) $rawAmenities[$k]['room_type_id'] : null,
                 'room_slot' => isset($rawAmenities[$k]['room_slot']) ? (int) $rawAmenities[$k]['room_slot'] : null,
+                'option_key' => $rawAmenities[$k]['option_key'] ?? null,
             ]);
         }
 

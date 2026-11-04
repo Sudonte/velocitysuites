@@ -427,3 +427,9 @@ button.vs-mi:hover, button.vs-mi:focus-visible { background: var(--vs-red-soft);
 .vs-next { color: var(--vs-muted); }
 .min-w-0 { min-width: 0; }
 @media (min-width: 992px) { #vsStayCards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; } #vsStayCards > .vs-stay-card { margin-bottom: 0; } #vsStayCards > :not(.vs-stay-card) { grid-column: 1 / -1; } }
+
+/* the receipt paper is a PAPER: white with black text in dark mode too (what the preview shows is what prints and what the PDF holds) */
+[data-bs-theme="dark"] .vs-paper, [data-bs-theme="dark"] .vs-paper .rcpt-doc, [data-bs-theme="dark"] .vs-paper .rcpt-doc table, [data-bs-theme="dark"] .vs-paper .rcpt-doc thead, [data-bs-theme="dark"] .vs-paper .rcpt-doc tbody,
+[data-bs-theme="dark"] .vs-paper .rcpt-doc tr, [data-bs-theme="dark"] .vs-paper .rcpt-doc td, [data-bs-theme="dark"] .vs-paper .rcpt-doc th, [data-bs-theme="dark"] .vs-paper .rcpt-doc div { background-color: #fff; --bs-table-bg: #fff; --bs-table-color: #000; }
+/* receipt page buttons in dark mode */
+[data-bs-theme="dark"] .vs-shell-main a.text-decoration-none:not(.btn):not(.vs-mi):not(.vs-clockcard):not(.vs-stretch) { color: #ff8f97; }

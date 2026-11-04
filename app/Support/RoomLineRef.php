@@ -23,7 +23,7 @@ final class RoomLineRef
      *
      * @return array{room_line_id: ?int, room_slot: ?int}
      */
-    public static function resolve(Booking|Reservation $transaction, ?int $stayId, ?int $roomTypeId, ?int $slot): array
+    public static function resolve(Booking|Reservation $transaction, ?int $stayId, ?int $roomTypeId, ?int $slot, ?string $optionKey = null): array
     {
         $none = ['room_line_id' => null, 'room_slot' => null];
         if (! $roomTypeId) {
@@ -33,6 +33,12 @@ final class RoomLineRef
         $query->where($transaction instanceof Booking ? 'booking_id' : 'reservation_id', $transaction->id)->where('room_type_id', $roomTypeId);
         if ($stayId) {
             $query->where('stay_id', $stayId);
+        }
+        // a named option picks that option's line of the type (std = the standard line); no option named = the first line, as before
+        if ($optionKey !== null && $optionKey !== '') {
+            $optionKey === 'std'
+                ? $query->where(fn ($w) => $w->whereNull('option_key')->orWhere('option_key', 'std'))
+                : $query->where('option_key', $optionKey);
         }
         $line = $query->orderBy('id')->first();
         if (! $line) {
@@ -54,8 +60,8 @@ final class RoomLineRef
         $table = $isReservation ? 'reservation_room_lines' : 'booking_room_lines';
         $key = $table . ':' . $lineId;
         if (! array_key_exists($key, self::$lines)) {
-            $line = DB::table($table)->where('id', $lineId)->first(['room_type_id', 'room_type_name', 'quantity']);
-            self::$lines[$key] = $line ? ['type' => (string) $line->room_type_name, 'quantity' => (int) $line->quantity, 'type_id' => (int) $line->room_type_id] : null;
+            $line = DB::table($table)->where('id', $lineId)->first(['room_type_id', 'room_type_name', 'quantity', 'option_key']);
+            self::$lines[$key] = $line ? ['type' => (string) $line->room_type_name, 'quantity' => (int) $line->quantity, 'type_id' => (int) $line->room_type_id, 'option_key' => $line->option_key ?: 'std'] : null;
         }
         $line = self::$lines[$key];
         if ($line === null) {
@@ -78,11 +84,25 @@ final class RoomLineRef
         return self::$lines[($isReservation ? 'reservation_room_lines' : 'booking_room_lines') . ':' . $lineId]['type_id'] ?? null;
     }
 
+    /** The option of the row's line ("std", or e.g. "r4200c4"), null when the row has no room recorded. */
+    public static function optionKey(object $row): ?string
+    {
+        self::label($row);
+        $lineId = $row->room_line_id ?? null;
+        if (! $lineId) {
+            return null;
+        }
+        $isReservation = ! empty($row->reservation_id) || ($row instanceof \App\Models\ReservationAmenity);
+
+        return self::$lines[($isReservation ? 'reservation_room_lines' : 'booking_room_lines') . ':' . $lineId]['option_key'] ?? null;
+    }
+
     /** The fields a payload carries for a row. */
     public static function payload(object $row): array
     {
         return [
             'room_type_id' => self::roomTypeId($row),
+            'option_key' => self::optionKey($row),
             'room_line_id' => $row->room_line_id ?? null,
             'room_slot' => $row->room_slot ?? null,
             'room_label' => self::label($row),

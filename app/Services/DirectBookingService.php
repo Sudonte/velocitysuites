@@ -243,7 +243,7 @@ class DirectBookingService
                 foreach ($stay['amenities'] as $entry) {
                     /** @var Amenity $amenity */
                     $amenity = $entry['amenity'];
-                    $roomRef = \App\Support\RoomLineRef::resolve($booking, $savedStays[$i]->id, $entry['room_type_id'] ?? null, $entry['room_slot'] ?? null);
+                    $roomRef = \App\Support\RoomLineRef::resolve($booking, $savedStays[$i]->id, $entry['room_type_id'] ?? null, $entry['room_slot'] ?? null, $entry['option_key'] ?? null);
                     AmenityRequest::create($roomRef + [
                         'guest_id' => $guest->id,
                         'reservation_id' => null,

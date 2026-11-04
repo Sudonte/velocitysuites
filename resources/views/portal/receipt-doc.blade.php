@@ -42,7 +42,7 @@
     .rcpt-doc .stay-h { font-weight: bold; page-break-after: avoid; break-after: avoid; }
     .rcpt-doc .head td { vertical-align: middle; padding: 0; }
     .rcpt-doc .head img { width: 48px; height: 42px; }
-    .rcpt-doc .brand { font-size: 1.9em; font-weight: bold; margin: 0; line-height: 1.1; }
+    .rcpt-doc .brand { font-size: 1.9em; font-weight: bold; margin: 0; line-height: 1.1; color: #000; }
     .rcpt-doc .title { font-size: 1.25em; font-weight: bold; text-align: right; }
     .rcpt-doc .rule { border: 0; border-top: 2px solid #000; margin: 6px 0 8px; }
     .rcpt-doc .box { border: 1px solid #000; padding: 6px 9px; margin-top: 12px; page-break-inside: avoid; break-inside: avoid; }

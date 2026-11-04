@@ -384,11 +384,14 @@ class RoomAvailabilityService
                 return 'One of the selected room types no longer exists.';
             }
             $quantity = max(1, (int) ($line['quantity'] ?? 1));
-            $quantitiesByRoomTypeId[$roomTypeId] = ($quantitiesByRoomTypeId[$roomTypeId] ?? 0) + $quantity;
+            $optionKey = RoomOptions::isStandard($line['option_key'] ?? null) ? RoomOptions::STANDARD : (string) $line['option_key'];
+            $slot = $roomTypeId . '|' . $optionKey;
+            $quantitiesByRoomTypeId[$slot] = ($quantitiesByRoomTypeId[$slot] ?? 0) + $quantity;
         }
 
         $roomLines = [];
-        foreach ($quantitiesByRoomTypeId as $roomTypeId => $quantity) {
+        foreach ($quantitiesByRoomTypeId as $slot => $quantity) {
+            [$roomTypeId, $optionKey] = explode('|', (string) $slot, 2);
             $roomType = RoomType::find($roomTypeId);
             if (!$roomType) {
                 return 'One of the selected room types no longer exists.';
@@ -396,15 +399,21 @@ class RoomAvailabilityService
             if ($roomType->status !== 'active') {
                 return "{$roomType->name} is not currently available.";
             }
+            // the room type as that option sees it (its own price and capacity); an option with no rooms any more is refused
+            $optionType = RoomOptions::typeFor($roomType, $optionKey);
+            if (! $optionType) {
+                return "That {$roomType->name} room option is no longer offered. Please choose again.";
+            }
+            $name = RoomOptions::lineName($optionType);
 
-            $available = $this->availableCount($roomType, $checkIn, $checkOut, null, RoomOptions::STANDARD);
+            $available = $this->availableCount($roomType, $checkIn, $checkOut, null, $optionKey);
             if ($available < $quantity) {
                 return $quantity > 1
-                    ? "Not enough {$roomType->name} rooms available for these dates (needs {$quantity}, only {$available} free)."
-                    : "{$roomType->name} is fully booked for the requested dates.";
+                    ? "Not enough {$name} rooms available for these dates (needs {$quantity}, only {$available} free)."
+                    : "{$name} is fully booked for the requested dates.";
             }
 
-            $roomLines[] = ['room_type' => $roomType, 'quantity' => $quantity];
+            $roomLines[] = ['room_type' => $optionType, 'quantity' => $quantity];
         }
 
         return null;

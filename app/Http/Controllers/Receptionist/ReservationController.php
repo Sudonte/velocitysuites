@@ -111,13 +111,16 @@ class ReservationController extends Controller
             'room_type_id' => 'required|exists:room_types,id',
             'check_in' => 'required|date',
             'check_out' => 'required|date|after:check_in',
+            'option_key' => 'nullable|string|max:40',
         ]);
 
         $roomType = RoomType::findOrFail($validated['room_type_id']);
         $available = $this->availability->availableCount(
             $roomType,
             Carbon::parse($validated['check_in']),
-            Carbon::parse($validated['check_out'])
+            Carbon::parse($validated['check_out']),
+            null,
+            $validated['option_key'] ?? null
         );
 
         return response()->json(['available' => $available]);
@@ -145,6 +148,7 @@ class ReservationController extends Controller
             'rooms' => 'nullable|array|min:1',
             'rooms.*.room_type_id' => 'required_with:rooms|exists:room_types,id',
             'rooms.*.quantity' => 'required_with:rooms|integer|min:1|max:50',
+            'rooms.*.option_key' => 'nullable|string|max:40',
             'room_type_id' => 'required_without:rooms|exists:room_types,id',
             'check_in' => \App\Support\CheckInWindow::rules(),
             'check_out' => 'required|date|after:check_in',
@@ -212,12 +216,15 @@ class ReservationController extends Controller
             foreach ($roomLines as $line) {
                 $reservation->roomLines()->create([
                     'room_type_id' => $line['room_type']->id,
-                    'room_type_name' => $line['room_type']->name,
+                    'room_type_name' => \App\Support\RoomOptions::lineName($line['room_type']),
                     'quantity' => $line['quantity'],
                     'price_per_night' => $line['room_type']->rate,
                     'number_of_nights' => $nights,
                     'subtotal' => round((float) $line['room_type']->rate * $nights * $line['quantity'], 2),
-                ]);
+                ] + (\App\Support\RoomOptions::isStandard(\App\Support\RoomOptions::keyOf($line['room_type'])) ? [] : [
+                    'option_key' => \App\Support\RoomOptions::keyOf($line['room_type']),
+                    'capacity' => (int) $line['room_type']->capacity,
+                ]));
             }
 
             return $reservation;
@@ -230,7 +237,7 @@ class ReservationController extends Controller
             return redirect()->route('receptionist.reservations.index', ['tab' => 'active'])->withErrors($e->errors())->with('error', collect($e->errors())->flatten()->first());
         }
 
-        $roomTypeSummary = collect($roomLines)->map(fn ($l) => "{$l['room_type']->name} x{$l['quantity']}")->implode(', ');
+        $roomTypeSummary = collect($roomLines)->map(fn ($l) => \App\Support\RoomOptions::lineName($l['room_type']) . " x{$l['quantity']}")->implode(', ');
         Activity::log(
             'Created reservation',
             "Reservation #{$reservation->id} for {$roomTypeSummary} ({$reservation->guest_display_name}) - created directly by staff",

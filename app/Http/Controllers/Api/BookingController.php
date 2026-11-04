@@ -215,6 +215,7 @@ class BookingController extends Controller
             'rooms' => 'nullable|array|min:1',
             'rooms.*.room_type_id' => 'required_with:rooms|exists:room_types,id',
             'rooms.*.quantity' => 'required_with:rooms|integer|min:1|max:50',
+            'rooms.*.option_key' => 'nullable|string|max:40',
             // Legacy single-room-type shape - required only when 'rooms' isn't sent.
             'room_type_id' => 'required_without:rooms|exists:room_types,id',
             'check_in' => \App\Support\CheckInWindow::rules(),
@@ -240,6 +241,7 @@ class BookingController extends Controller
             'amenities.*.quantity' => 'required_with:amenities|integer|min:1',
             'amenities.*.room_type_id' => 'nullable|integer',
             'amenities.*.room_slot' => 'nullable|integer|min:1|max:50',
+            'amenities.*.option_key' => 'nullable|string|max:40',
             'payment_method' => 'required|in:cash,gcash',
             'reference_number' => [
                 'required_if:payment_method,gcash',
@@ -270,7 +272,7 @@ class BookingController extends Controller
         ];
         if ($hasStays) {
             // One transaction, several stays: each stay has its own dates, rooms and amenities (StaysInput). The flat fields are for a one-stay request.
-            foreach (['rooms', 'rooms.*.room_type_id', 'rooms.*.quantity', 'room_type_id', 'check_in', 'check_out', 'rooms_requested', 'amenities', 'amenities.*.amenity_id', 'amenities.*.quantity'] as $flat) {
+            foreach (['rooms', 'rooms.*.room_type_id', 'rooms.*.quantity', 'rooms.*.option_key', 'amenities.*.option_key', 'room_type_id', 'check_in', 'check_out', 'rooms_requested', 'amenities', 'amenities.*.amenity_id', 'amenities.*.quantity'] as $flat) {
                 unset($rules[$flat]);
             }
             $rules += \App\Support\StaysInput::rules();

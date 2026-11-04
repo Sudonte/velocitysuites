@@ -37,6 +37,8 @@ final class StaysInput
             // optional: which booked room of the stay the amenity is for (room type + which room of that type, 1-based)
             'stays.*.amenities.*.room_type_id' => 'nullable|integer',
             'stays.*.amenities.*.room_slot' => 'nullable|integer|min:1|max:50',
+            // optional: which OPTION of that room type ("Other Deluxe rooms"); missing = the first line of the type, as before
+            'stays.*.amenities.*.option_key' => 'nullable|string|max:40',
         ];
     }
 
@@ -106,8 +108,10 @@ final class StaysInput
                 $raw = $stay['raw_amenities'][$k] ?? [];
                 $typeId = isset($raw['room_type_id']) ? (int) $raw['room_type_id'] : null;
                 $slot = isset($raw['room_slot']) ? (int) $raw['room_slot'] : null;
+                $optionKey = isset($raw['option_key']) && $raw['option_key'] !== '' ? (string) $raw['option_key'] : null;
                 if ($typeId) {
-                    $line = collect($stay['lines'])->first(fn ($l) => $l['room_type']->id === $typeId);
+                    $line = collect($stay['lines'])->first(fn ($l) => $l['room_type']->id === $typeId
+                        && ($optionKey === null || RoomOptions::keyOf($l['room_type']) === (RoomOptions::isStandard($optionKey) ? RoomOptions::STANDARD : $optionKey)));
                     if (! $line || ($slot && $slot > $line['quantity'])) {
                         throw \Illuminate\Validation\ValidationException::withMessages([
                             'amenities' => self::rangeLabel($stay) . ': an amenity was chosen for a room that is not part of those dates.',
@@ -115,7 +119,7 @@ final class StaysInput
                     }
                 }
 
-                return $entry + ['room_type_id' => $typeId, 'room_slot' => $slot];
+                return $entry + ['room_type_id' => $typeId, 'room_slot' => $slot, 'option_key' => $optionKey];
             });
         }
 

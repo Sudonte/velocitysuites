@@ -213,4 +213,13 @@ class GuestShellTest extends ApiFlowTestCase
             $this->assertStringContainsString($needle, $js, $needle);
         }
     }
+
+    public function test_the_receipt_paper_stays_white_with_black_text_in_dark_mode(): void
+    {
+        $css = file_get_contents(public_path('css/portal.css'));
+        $this->assertStringContainsString('[data-bs-theme="dark"] .vs-paper .rcpt-doc td', $css);
+        $this->assertMatchesRegularExpression('/\.vs-paper \{ background: #fff; color: #000;/', $css);
+        $doc = file_get_contents(resource_path('views/portal/receipt-doc.blade.php'));
+        $this->assertStringContainsString('.rcpt-doc .brand { font-size: 1.9em; font-weight: bold; margin: 0; line-height: 1.1; color: #000; }', $doc);
+    }
 }

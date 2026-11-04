@@ -87,7 +87,7 @@ class ReservationAmenityService
             $amenity = $entry['amenity'];
             $quantity = $entry['quantity'];
 
-            $roomRef = \App\Support\RoomLineRef::resolve($reservation, $stayId, $entry['room_type_id'] ?? null, $entry['room_slot'] ?? null);
+            $roomRef = \App\Support\RoomLineRef::resolve($reservation, $stayId, $entry['room_type_id'] ?? null, $entry['room_slot'] ?? null, $entry['option_key'] ?? null);
             $reservation->bookingAmenities()->create($roomRef + [
                 'stay_id' => $stayId,
                 'amenity_id' => $amenity->id,

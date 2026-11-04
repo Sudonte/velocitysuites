@@ -211,4 +211,148 @@ class RoomOptionsFlowTest extends ApiFlowTestCase
         // the ID discount is a percentage of the bill's room charge, which is already the option's price (8,400): 20% = 1,680
         $this->assertEquals(1680.0, round($bill['room_charge'] * 0.20, 2));
     }
+
+    // ---------------------------------------------------------------- the front desk's New booking / New reservation forms
+
+    private function desk(): \App\Models\User
+    {
+        return \App\Models\User::create(['first_name' => 'Rita', 'last_name' => 'Desk', 'email' => 'desk-opt@example.test', 'password' => bcrypt('x'),
+            'role' => 'receptionist', 'status' => 'active', 'email_verified_at' => now()]);
+    }
+
+    private function deskPayload(array $rooms, int $adults): array
+    {
+        $in = \App\Support\CheckInWindow::earliest();
+
+        return ['guest_first_name' => 'Typed', 'guest_last_name' => 'Name', 'rooms' => $rooms, 'adults' => $adults, 'children' => 0,
+            'check_in' => $in, 'check_out' => \Carbon\Carbon::parse($in)->addDays(2)->toDateString()];
+    }
+
+    public function test_the_desk_forms_list_the_other_options_with_their_price_and_capacity(): void
+    {
+        $desk = $this->desk();
+        foreach (['receptionist.bookings.create', 'receptionist.reservations.create'] as $route) {
+            $html = $this->actingAs($desk)->get(route($route))->assertOk()->getContent();
+            $this->assertStringContainsString('value="' . $this->deluxe->id . ':r4200c4"', $html, $route);
+            $this->assertStringContainsString('Deluxe (other room) - ₱4,200.00/night (up to 4 guests per room)', $html, $route);
+            $this->assertStringContainsString('Deluxe - ₱3,500.00/night', $html, $route);
+            $this->assertStringContainsString('data-line-avail', $html);
+        }
+    }
+
+    public function test_a_desk_booking_on_an_other_option_is_priced_stored_and_cannot_overbook(): void
+    {
+        $desk = $this->desk();
+        $this->actingAs($desk)->post(route('receptionist.bookings.store'), $this->deskPayload([['room_type_id' => $this->deluxe->id, 'option_key' => 'r4200c4', 'quantity' => 2]], 4))->assertRedirect();
+        $booking = Booking::latest('id')->first();
+        $line = $booking->roomLines()->first();
+        $this->assertSame('r4200c4', $line->option_key);
+        $this->assertSame(4, (int) $line->capacity);
+        $this->assertEquals(4200.0, (float) $line->price_per_night);
+        $this->assertEquals(2 * 4200 * 2, (float) $line->subtotal, '2 rooms x 4,200 x 2 nights');
+        $this->assertSame('Deluxe (up to 4 guests)', $line->room_type_name);
+        $this->assertEquals(16800.0, (float) $booking->fresh()->total_amount_due);
+
+        // both "other" rooms are taken now; the standard rooms are untouched
+        $count = Booking::count();
+        $this->actingAs($desk)->post(route('receptionist.bookings.store'), $this->deskPayload([['room_type_id' => $this->deluxe->id, 'option_key' => 'r4200c4', 'quantity' => 1]], 2))->assertRedirect();
+        $this->assertSame($count, Booking::count(), 'a third "other" room is refused');
+        $this->actingAs($desk)->post(route('receptionist.bookings.store'), $this->deskPayload([['room_type_id' => $this->deluxe->id, 'quantity' => 3]], 2))->assertRedirect();
+        $this->assertSame($count + 1, Booking::count(), 'the three standard rooms are still free');
+    }
+
+    public function test_a_desk_reservation_uses_the_options_capacity_and_price_and_check_in_offers_only_matching_rooms(): void
+    {
+        $desk = $this->desk();
+        // 3 guests: too many for a standard room (2), fine for the other option (4)
+        $this->actingAs($desk)->post(route('receptionist.reservations.store'), $this->deskPayload([['room_type_id' => $this->deluxe->id, 'quantity' => 1]], 3))->assertRedirect();
+        $this->assertSame(0, \App\Models\Reservation::count());
+        $this->actingAs($desk)->post(route('receptionist.reservations.store'), $this->deskPayload([['room_type_id' => $this->deluxe->id, 'option_key' => 'r4200c4', 'quantity' => 1]], 3))->assertRedirect();
+        $res = \App\Models\Reservation::first();
+        $this->assertNotNull($res);
+        $this->assertSame('r4200c4', $res->roomLines()->first()->option_key);
+        $this->assertSame('r4200c4', $res->room_lines[0]['option_key']);
+        $this->assertEquals(8400.0, (float) $res->roomLines()->sum('subtotal'));
+    }
+
+    public function test_the_live_availability_answers_per_option(): void
+    {
+        $desk = $this->desk();
+        $in = \App\Support\CheckInWindow::earliest();
+        $q = ['room_type_id' => $this->deluxe->id, 'check_in' => $in, 'check_out' => \Carbon\Carbon::parse($in)->addDay()->toDateString()];
+        $this->actingAs($desk)->getJson(route('receptionist.reservations.check-availability', $q + ['option_key' => 'std']))->assertOk()->assertJson(['available' => 3]);
+        $this->actingAs($desk)->getJson(route('receptionist.reservations.check-availability', $q + ['option_key' => 'r4200c4']))->assertOk()->assertJson(['available' => 2]);
+        $this->actingAs($desk)->getJson(route('receptionist.reservations.check-availability', $q))->assertOk()->assertJson(['available' => 5]);
+    }
+
+    public function test_an_amenity_stays_on_the_room_of_its_option_when_a_type_has_a_standard_and_an_other_line(): void
+    {
+        $towel = \App\Models\Amenity::create(['amenity_name' => 'Towel', 'description' => 'd', 'category' => 'Room', 'quantity' => 50, 'charge' => 100, 'status' => 'active']);
+        static $n = 100; $n++;
+        [$user] = $this->makeGuestUser('Amen' . $n);
+        $this->actingAs($user);
+        $in = now('Asia/Manila')->addDays(5)->toDateString();
+        $out = now('Asia/Manila')->addDays(6)->toDateString();
+        $request = Request::create('/api/guest/bookings', 'POST', [
+            'stays' => [[
+                'check_in' => $in, 'check_out' => $out,
+                'rooms' => [['room_type_id' => $this->deluxe->id, 'quantity' => 1], ['room_type_id' => $this->deluxe->id, 'option_key' => 'r4200c4', 'quantity' => 2]],
+                'amenities' => [
+                    ['amenity_id' => $towel->id, 'quantity' => 1, 'room_type_id' => $this->deluxe->id, 'option_key' => 'std', 'room_slot' => 1],
+                    ['amenity_id' => $towel->id, 'quantity' => 2, 'room_type_id' => $this->deluxe->id, 'option_key' => 'r4200c4', 'room_slot' => 2],
+                ],
+            ]],
+            'adults' => 4, 'children' => 0, 'guest_first_name' => 'Ana', 'guest_last_name' => 'Cruz',
+            'payment_method' => 'gcash', 'reference_number' => 'AM-' . Str::random(8), 'gcash_number' => '9171234567',
+            'amount_paid' => 5000, 'idempotency_key' => (string) Str::uuid(),
+        ]);
+        $request->files->set('receipt', \Illuminate\Http\UploadedFile::fake()->image('receipt.jpg', 20, 20));
+        $request->setUserResolver(fn () => $user);
+        $response = app(BookingController::class)->store($request);
+        $this->assertSame(201, $response->getStatusCode(), $response->getContent());
+
+        $booking = Booking::first();
+        $stdLine = $booking->roomLines()->whereNull('option_key')->first();
+        $otherLine = $booking->roomLines()->where('option_key', 'r4200c4')->first();
+        $rows = \App\Models\AmenityRequest::where('booking_id', $booking->id)->orderBy('id')->get();
+        $this->assertCount(2, $rows);
+        $this->assertSame($stdLine->id, (int) $rows[0]->room_line_id);
+        $this->assertSame(1, (int) $rows[0]->room_slot);
+        $this->assertSame($otherLine->id, (int) $rows[1]->room_line_id, 'the second amenity belongs to the OTHER option line');
+        $this->assertSame(2, (int) $rows[1]->room_slot);
+
+        // what the app reads back says which option each amenity is on
+        $payload = collect($booking->fresh()->staysPayload())->flatMap(fn ($st) => $st['amenities'] ?? [])->values();
+        $this->assertSame(['std', 'r4200c4'], $payload->pluck('option_key')->all());
+    }
+
+    public function test_the_older_flat_request_shape_keeps_the_option_too(): void
+    {
+        static $n = 200; $n++;
+        [$user] = $this->makeGuestUser('Flat' . $n);
+        $this->actingAs($user);
+        $base = [
+            'rooms' => [['room_type_id' => $this->deluxe->id, 'option_key' => 'r4200c4', 'quantity' => 1]],
+            'check_in' => now('Asia/Manila')->addDays(5)->toDateString(), 'check_out' => now('Asia/Manila')->addDays(7)->toDateString(),
+            'adults' => 3, 'children' => 0, 'guest_first_name' => 'Ana', 'guest_last_name' => 'Cruz', 'idempotency_key' => (string) Str::uuid(),
+        ];
+        // reservation (cash): the stored line is the other option, at its price (2 nights x 4,200)
+        $request = Request::create('/api/guest/reservations', 'POST', $base + ['payment_method' => 'cash']);
+        $request->setUserResolver(fn () => $user);
+        $response = app(\App\Http\Controllers\Api\ReservationController::class)->store($request);
+        $this->assertSame(201, $response->getStatusCode(), $response->getContent());
+        $line = \App\Models\Reservation::first()->roomLines()->first();
+        $this->assertSame('r4200c4', $line->option_key);
+        $this->assertEquals(8400.0, (float) $line->subtotal);
+
+        // booking (gcash): the same
+        $request = Request::create('/api/guest/bookings', 'POST', array_merge($base, ['idempotency_key' => (string) Str::uuid(), 'payment_method' => 'gcash',
+            'reference_number' => 'FL-' . Str::random(8), 'gcash_number' => '9171234567', 'amount_paid' => 2520]));
+        $request->files->set('receipt', \Illuminate\Http\UploadedFile::fake()->image('receipt.jpg', 20, 20));
+        $request->setUserResolver(fn () => $user);
+        $response = app(BookingController::class)->store($request);
+        $this->assertSame(201, $response->getStatusCode(), $response->getContent());
+        $this->assertSame('r4200c4', Booking::first()->roomLines()->first()->option_key);
+        $this->assertEquals(8400.0, (float) Booking::first()->roomLines()->first()->subtotal);
+    }
 }

@@ -252,17 +252,18 @@
                 host.innerHTML = S.stays.map(function (s, i) {
                     var slots = []; stayRooms(s).forEach(function (r) { for (var k = 1; k <= r.qty; k++) slots.push({ type: r.id, slot: k }); });
                     return '<div class="vs-card"><h3 class="h6 fw-bold">' + VS.esc(VS.date(s.check_in)) + ' → ' + VS.esc(VS.date(s.check_out)) + '</h3>' + slots.map(function (sl) {
-                        var tn = types[sl.type] ? types[sl.type].name : 'Room';
+                        var tn = types[sl.type] ? unitName(types[sl.type]) : 'Room';
                         return '<details class="mb-2"><summary class="fw-semibold">' + VS.esc(tn) + ' (room ' + sl.slot + ')<span class="text-muted small ms-2" data-sum="' + i + '-' + sl.type + '-' + sl.slot + '"></span></summary><div class="mt-2">' + list.map(function (a) {
                             return '<div class="d-flex align-items-center gap-2 py-1" data-am="' + i + '|' + sl.type + '|' + sl.slot + '|' + a.id + '"><div class="flex-grow-1">' + VS.esc(a.amenity_name) + ' <span class="text-muted small">' + VS.money(a.charge) + '</span></div>' +
                                 '<button class="btn btn-sm btn-outline-velocity" data-d aria-label="Fewer ' + VS.esc(a.amenity_name) + '">−</button><span class="vs-num fw-bold" data-q style="min-width:1.5rem;text-align:center">0</span><button class="btn btn-sm btn-velocity" data-u aria-label="More ' + VS.esc(a.amenity_name) + '">+</button></div>';
                         }).join('') + '</div></details>';
                     }).join('') + '</div>';
                 }).join('');
-                function qtyOf(i, t, sl, id) { var f = (S.amenities[i] || []).find(function (x) { return x.room_type_id == t && x.room_slot == sl && x.amenity_id == id; }); return f ? f.quantity : 0; }
+                function unitOf(x) { return x.unit || String(x.room_type_id); }
+                function qtyOf(i, t, sl, id) { var f = (S.amenities[i] || []).find(function (x) { return unitOf(x) == t && x.room_slot == sl && x.amenity_id == id; }); return f ? f.quantity : 0; }
                 function setQty(i, t, sl, id, q) {
-                    var arr = S.amenities[i] = S.amenities[i] || []; var idx = arr.findIndex(function (x) { return x.room_type_id == t && x.room_slot == sl && x.amenity_id == id; });
-                    if (q <= 0) { if (idx >= 0) arr.splice(idx, 1); } else if (idx >= 0) arr[idx].quantity = q; else arr.push({ amenity_id: +id, quantity: q, room_type_id: +t, room_slot: +sl });
+                    var arr = S.amenities[i] = S.amenities[i] || []; var idx = arr.findIndex(function (x) { return unitOf(x) == t && x.room_slot == sl && x.amenity_id == id; });
+                    if (q <= 0) { if (idx >= 0) arr.splice(idx, 1); } else if (idx >= 0) arr[idx].quantity = q; else { var pp = String(t).split(':'); arr.push({ amenity_id: +id, quantity: q, unit: String(t), room_type_id: +pp[0], option_key: pp[1] || null, room_slot: +sl }); }
                     save();
                 }
                 function totalFor(id) { var n = 0; Object.keys(S.amenities).forEach(function (i) { (S.amenities[i] || []).forEach(function (x) { if (x.amenity_id == id) n += x.quantity; }); }); return n; }
@@ -415,7 +416,7 @@
                 var r = roomsTotal(types), a = amenitiesTotal();
                 var staysHtml = S.stays.map(function (s, i) {
                     var lines = stayRooms(s).map(function (rm) { var t = types[rm.id] || { name: 'Room', rate: 0 }; return '<div class="vs-row"><span>' + VS.esc(unitName(t)) + ' × ' + rm.qty + ' <span class="small">(' + VS.money(t.rate) + ' × ' + VS.plural(nights(s), 'night') + ')</span></span><span>' + VS.money(Number(t.rate) * nights(s) * rm.qty) + '</span></div>'; }).join('');
-                    var am = (S.amenities[i] || []).map(function (x) { var am = amenBy[x.amenity_id] || { amenity_name: 'Amenity', charge: 0 }; var t = types[x.room_type_id]; return '<div class="vs-row vs-sub"><span>' + VS.esc(am.amenity_name) + ' × ' + x.quantity + (t ? ' <span class="small">(' + VS.esc(t.name) + ' room ' + x.room_slot + ')</span>' : '') + '</span><span>' + VS.money(am.charge * x.quantity) + '</span></div>'; }).join('');
+                    var am = (S.amenities[i] || []).map(function (x) { var am = amenBy[x.amenity_id] || { amenity_name: 'Amenity', charge: 0 }; var t = types[unitOf(x)]; return '<div class="vs-row vs-sub"><span>' + VS.esc(am.amenity_name) + ' × ' + x.quantity + (t ? ' <span class="small">(' + VS.esc(unitName(t)) + ' room ' + x.room_slot + ')</span>' : '') + '</span><span>' + VS.money(am.charge * x.quantity) + '</span></div>'; }).join('');
                     return '<div class="vs-card"><h3 class="h6 fw-bold">' + VS.esc(VS.date(s.check_in)) + ' → ' + VS.esc(VS.date(s.check_out)) + ' · ' + VS.plural(nights(s), 'night') + '</h3>' + lines + am + '</div>';
                 }).join('');
                 var ed = expectedDiscount(types, r + a), promos = promoNotes(types);
@@ -448,7 +449,7 @@
                 stayRooms(s).forEach(function (r, k) { fd.append('stays[' + i + '][rooms][' + k + '][room_type_id]', r.typeId); if (r.option) fd.append('stays[' + i + '][rooms][' + k + '][option_key]', r.option); fd.append('stays[' + i + '][rooms][' + k + '][quantity]', r.qty); });
                 (S.amenities[i] || []).forEach(function (a, k) {
                     fd.append('stays[' + i + '][amenities][' + k + '][amenity_id]', a.amenity_id); fd.append('stays[' + i + '][amenities][' + k + '][quantity]', a.quantity);
-                    fd.append('stays[' + i + '][amenities][' + k + '][room_type_id]', a.room_type_id); fd.append('stays[' + i + '][amenities][' + k + '][room_slot]', a.room_slot);
+                    fd.append('stays[' + i + '][amenities][' + k + '][room_type_id]', a.room_type_id); if (a.option_key) fd.append('stays[' + i + '][amenities][' + k + '][option_key]', a.option_key); fd.append('stays[' + i + '][amenities][' + k + '][room_slot]', a.room_slot);
                 });
             });
             fd.append('adults', S.adults); fd.append('children', S.minors.length);
@@ -465,7 +466,7 @@
         function editBody() {
             var b = { stays: S.stays.map(function (s, i) { return { check_in: s.check_in, check_out: s.check_out,
                     rooms: stayRooms(s).map(function (r) { return r.option ? { room_type_id: r.typeId, option_key: r.option, quantity: r.qty } : { room_type_id: r.typeId, quantity: r.qty }; }),
-                    amenities: (S.amenities[i] || []).map(function (a) { return { amenity_id: a.amenity_id, quantity: a.quantity, room_type_id: a.room_type_id, room_slot: a.room_slot }; }) }; }),
+                    amenities: (S.amenities[i] || []).map(function (a) { var o = { amenity_id: a.amenity_id, quantity: a.quantity, room_type_id: a.room_type_id, room_slot: a.room_slot }; if (a.option_key) o.option_key = a.option_key; return o; }) }; }),
                 adults: S.adults, children: S.minors.length, guest_first_name: S.rep.first, guest_last_name: S.rep.last,
                 additional_guests: S.minors.map(function (age, i) { return { name: 'Child ' + (i + 1), age: age, relationship: 'Child' }; }) };
             if (S.rep.middle) b.guest_middle_name = S.rep.middle;
@@ -580,7 +581,7 @@
                 if (it.edited_at) { main.innerHTML = '<div class="vs-empty"><i class="fas fa-circle-info"></i><h3 class="h6 fw-bold">Already edited</h3><p class="text-muted">This reservation has already been modified and cannot be edited again.</p>' + back + '</div>'; return Promise.reject('stop'); }
                 editInfo = it;
                 S.stays = (it.stays || []).map(function (s) { var rooms = {}; (s.rooms || []).forEach(function (rm) { var k = rm.option_key && rm.option_key !== 'std' ? rm.room_type_id + ':' + rm.option_key : String(rm.room_type_id); rooms[k] = (rooms[k] || 0) + rm.quantity; }); return { check_in: s.check_in, check_out: s.check_out, rooms: rooms }; });
-                S.amenities = {}; (it.stays || []).forEach(function (s, i) { S.amenities[i] = (s.amenities || []).filter(function (a) { return a.amenity_id; }).map(function (a) { return { amenity_id: +a.amenity_id, quantity: a.quantity, room_type_id: a.room_type_id != null ? +a.room_type_id : null, room_slot: a.room_slot != null ? +a.room_slot : null }; }); });
+                S.amenities = {}; (it.stays || []).forEach(function (s, i) { S.amenities[i] = (s.amenities || []).filter(function (a) { return a.amenity_id; }).map(function (a) { var ok = a.option_key && a.option_key !== 'std' ? a.option_key : null; return { amenity_id: +a.amenity_id, quantity: a.quantity, unit: a.room_type_id != null ? (ok ? a.room_type_id + ':' + ok : String(a.room_type_id)) : null, room_type_id: a.room_type_id != null ? +a.room_type_id : null, option_key: ok, room_slot: a.room_slot != null ? +a.room_slot : null }; }); });
                 S.adults = Math.max(1, +it.adults || 1);
                 S.minors = (it.additional_guest_details || it.additional_guests || []).map(function (g) { return g.age != null ? +g.age : null; });
                 S.rep = { who: 'other', first: it.guest_first_name || '', middle: it.guest_middle_name || '', last: it.guest_last_name || '' };
