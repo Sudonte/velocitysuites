@@ -82,13 +82,23 @@ class PortalController extends Controller
         return view('portal.receipt', ['number' => $number]);
     }
 
-    /** The receipt as a PDF: the very payload GET /api/guest/receipts/{number} returns, printed. */
+    /** The receipt, as it will print: the very document the PDF is made from (owner only; 404 for anyone else). */
+    public function receiptPreview(Request $request, string $number, ReceiptService $receipts)
+    {
+        $guest = $request->user()->guest;
+        $payload = $guest ? $receipts->findReceiptPayload($number, $guest) : null;
+        abort_if($payload === null, 404);
+
+        return view('portal.receipt-preview', ['number' => $number, 'receipt' => $payload]);
+    }
+
+    /** The receipt as a PDF: the same document as the preview and print, one receipt per file. */
     public function receiptPdf(Request $request, string $number, ReceiptService $receipts)
     {
         $guest = $request->user()->guest;
         $payload = $guest ? $receipts->findReceiptPayload($number, $guest) : null;
         abort_if($payload === null, 404);
 
-        return Pdf::loadView('portal.receipt-pdf', ['receipt' => $payload])->setPaper('a4', 'portrait')->download('Receipt_' . $number . '.pdf');
+        return \App\Support\ReceiptPdf::make($payload)->download(\App\Support\ReceiptPdf::fileName($payload, $number));
     }
 }

@@ -475,6 +475,7 @@ Route::middleware(['auth', 'account.status', 'log.activity', 'no.cache'])->group
         Route::get('/history', [\App\Http\Controllers\Guest\PortalController::class, 'history'])->name('history');
         Route::get('/notifications', [\App\Http\Controllers\Guest\PortalController::class, 'notifications'])->name('notifications.index');
         Route::get('/receipts/{number}', [\App\Http\Controllers\Guest\PortalController::class, 'receipt'])->where('number', '[A-Za-z0-9-]+')->name('receipts.show');
+        Route::get('/receipts/{number}/preview', [\App\Http\Controllers\Guest\PortalController::class, 'receiptPreview'])->where('number', '[A-Za-z0-9-]+')->name('receipts.preview');
         Route::get('/receipts/{number}/pdf', [\App\Http\Controllers\Guest\PortalController::class, 'receiptPdf'])->where('number', '[A-Za-z0-9-]+')->name('receipts.pdf');
 
         // Account deletion (30-day soft-delete/restore) - mirrors

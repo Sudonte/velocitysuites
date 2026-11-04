@@ -256,7 +256,13 @@ class GuestPortalParityTest extends ApiFlowTestCase
         $web = $this->actingAs($user)->get(route('guest.receipts.pdf', $number));
         $web->assertOk();
         $this->assertSame('application/pdf', $web->headers->get('Content-Type'));
+        $this->assertStringContainsString('VelocitySuites-Receipt1-'.$number.'.pdf', $web->headers->get('Content-Disposition'));
         $this->actingAs($other)->get(route('guest.receipts.pdf', $number))->assertNotFound();
+
+        // the preview is the same document: owner only, with Print and Download PDF, and the receipt's own numbers
+        $preview = $this->actingAs($user)->get(route('guest.receipts.preview', $number))->assertOk();
+        $preview->assertSee('Download PDF')->assertSee('Print')->assertSee($number)->assertSee('rcpt-doc', false);
+        $this->actingAs($other)->get(route('guest.receipts.preview', $number))->assertNotFound();
     }
 
     /** Flattens nested arrays into the multipart field names the wizard's FormData uses (stays[0][rooms][0][quantity]). */

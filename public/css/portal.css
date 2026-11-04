@@ -308,3 +308,17 @@ button.vs-cal-day.picked i { background: #fff; }
 #pg .form-check-label { margin: 0; }
 #vsHotelNo { flex-wrap: wrap; text-align: center; }
 #vsHotelNo > span:first-child { flex-basis: 100%; }
+
+/* receipt preview + print: only the document, on white, inside the printable area; the shell, menus and buttons are hidden */
+.vs-paper { background: #fff; color: #000; border: 1px solid var(--border-color, var(--vs-line)); border-radius: 6px; padding: 14mm; box-shadow: var(--shadow-sm); }
+.vs-paper .rcpt-doc { max-width: 100%; }
+@media (max-width: 575px) { .vs-paper { padding: 1rem; } }
+@media print {
+    html, body { background: #fff !important; height: auto !important; }
+    .app-shell, .content-column, .content-scroll-wrap { display: block !important; height: auto !important; max-height: none !important; overflow: visible !important; }
+    nav.sidebar, .app-header, .app-footer, #mobileSidebar, .offcanvas, .vs-noprint, .vs-selbar, .vs-toasts, .modal, .modal-backdrop { display: none !important; }
+    .main-content, .vs-shell-main, .vs-shell-main .container, .vs-shell-main .container-fluid { padding: 0 !important; margin: 0 !important; max-width: none !important; width: 100% !important; }
+    .vs-paper { border: 0 !important; box-shadow: none !important; padding: 0 !important; border-radius: 0 !important; }
+    .vs-rcpt-preview { max-width: none !important; padding: 0 !important; }
+    * { color: #000 !important; -webkit-print-color-adjust: economy; }
+}
