@@ -22,10 +22,18 @@
         return n ? '<span class="vs-room-promo"><i class="fas fa-tag me-1"></i>' + VS.plural(n, 'promo') + '</span>' : '';
     }
 
+    /** The standard option has no free room. */
+    function stdFull(rt) { return rt.is_fully_booked || (rt.available_count || 0) <= 0; }
+    /** Some "other" option of the type has a free room for the dates. */
+    R.otherFree = function (rt) { return (rt.other_options || []).some(function (o) { return !o.is_fully_booked && (o.available_count || 0) > 0; }); };
+    /** "Fully booked" only when EVERY option is full; when just the standard rooms are, the other options are what is available. */
     function availChip(rt) {
-        return rt.is_fully_booked || (rt.available_count || 0) <= 0
-            ? '<span class="vs-chip bad vs-room-avail">Fully booked</span>'
-            : '<span class="vs-chip ok vs-room-avail">' + VS.plural(rt.available_count, 'room') + ' available</span>';
+        if (stdFull(rt)) {
+            return R.otherFree(rt)
+                ? '<span class="vs-chip ok vs-room-avail">Other ' + VS.esc(rt.name) + ' rooms available</span>'
+                : '<span class="vs-chip bad vs-room-avail">Fully booked</span>';
+        }
+        return '<span class="vs-chip ok vs-room-avail">' + VS.plural(rt.available_count, 'room') + ' available</span>';
     }
 
     // ---- the selection: dates + how many rooms of each type, kept for 30 minutes (also through sign-in) ----
@@ -72,7 +80,8 @@
     /** "Other Deluxe rooms >": the rooms of this type with their own price or capacity, each with its own stepper, hidden until opened. */
     R.otherBlock = function (rt, sel) {
         var units = R.unitsOf(rt).slice(1);
-        var open = sel && units.some(function (u) { return sel.qty(R.unitKey(u)) > 0; });
+        // open by default when the standard rooms are full and another option is free (that is all there is to pick), or when one is already picked
+        var open = (stdFull(rt) && R.otherFree(rt)) || (sel && units.some(function (u) { return sel.qty(R.unitKey(u)) > 0; }));
         var rows = units.map(function (u) {
             var K = R.unitKey(u), max = sel ? sel.max(u) : 0, free = u.is_fully_booked || (u.available_count || 0) <= 0 ? 0 : u.available_count;
             return '<div class="vs-other-row" data-other-row="' + VS.esc(K) + '"><div><div class="fw-semibold">Up to ' + u.capacity + ' guests</div>' +
@@ -292,9 +301,11 @@
             var amen = (rt.amenities || []).length ? '<ul class="list-unstyled row row-cols-1 row-cols-sm-2 g-2 mb-0">' + rt.amenities.map(function (a) {
                 return '<li class="col"><i class="fas fa-check text-success me-2"></i>' + VS.esc(a.name) + '</li>';
             }).join('') + '</ul>' : '<p class="text-muted mb-0">No amenities listed.</p>';
-            var full = rt.is_fully_booked || rt.available_count <= 0;
+            var full = stdFull(rt), others = full && R.otherFree(rt);
             var book = '/guest/book/new?room=' + rt.id + (qs.get('check_in') ? '&check_in=' + qs.get('check_in') + '&check_out=' + (qs.get('check_out') || '') : '');
-            var cta = full
+            var cta = others
+                ? '<p class="small text-muted mb-2">The standard ' + VS.esc(rt.name) + ' rooms are fully booked for these dates, but other ' + VS.esc(rt.name) + ' rooms are available.</p><a class="btn btn-velocity w-100" href="/guest/rooms' + (qs.get('check_in') ? '?check_in=' + qs.get('check_in') + '&check_out=' + (qs.get('check_out') || '') : '') + '">See the other ' + VS.esc(rt.name) + ' rooms</a>'
+                : full
                 ? '<button class="btn btn-secondary w-100" disabled>Fully booked for these dates</button>'
                 : '<a class="btn btn-velocity w-100 mb-2" href="' + book + '">Book this room</a><a class="btn btn-outline-velocity w-100" href="' + book.replace('/book/new', '/reserve/new') + '">Reserve this room</a>';
             el.innerHTML =
@@ -341,7 +352,7 @@
         function paint(list) {
             var type = form.elements.room_type.value;
             if (type) list = list.filter(function (r) { return r.name === type; });
-            if (form.elements.only_available.checked) list = list.filter(function (r) { return !r.is_fully_booked && r.available_count > 0; });
+            if (form.elements.only_available.checked) list = list.filter(function (r) { return (!r.is_fully_booked && r.available_count > 0) || R.otherFree(r); });
             list = list.slice().sort(function (a, b) {
                 return state.sort === 'price_asc' ? a.rate - b.rate : state.sort === 'price_desc' ? b.rate - a.rate : state.sort === 'name' ? a.name.localeCompare(b.name) : 0;
             });

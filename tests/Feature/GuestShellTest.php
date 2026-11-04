@@ -222,4 +222,15 @@ class GuestShellTest extends ApiFlowTestCase
         $doc = file_get_contents(resource_path('views/portal/receipt-doc.blade.php'));
         $this->assertStringContainsString('.rcpt-doc .brand { font-size: 1.9em; font-weight: bold; margin: 0; line-height: 1.1; color: #000; }', $doc);
     }
+
+    public function test_a_room_type_whose_standard_rooms_are_full_but_another_option_is_free_is_not_called_fully_booked(): void
+    {
+        $js = file_get_contents(public_path('js/portal/rooms.js'));
+        foreach (["' rooms available</span>'", 'R.otherFree = function', "'<span class=\"vs-chip ok vs-room-avail\">Other ' + VS.esc(rt.name) + ' rooms available</span>'",
+            '(stdFull(rt) && R.otherFree(rt))', "|| R.otherFree(r); });", 'See the other '] as $needle) {
+            $this->assertStringContainsString($needle, $js, $needle);
+        }
+        // "Fully booked" stays for the case where every option is full
+        $this->assertStringContainsString('<span class="vs-chip bad vs-room-avail">Fully booked</span>', $js);
+    }
 }
