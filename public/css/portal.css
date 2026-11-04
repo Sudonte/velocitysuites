@@ -368,3 +368,16 @@ button.vs-cal-day.picked i { background: #fff; }
 .vs-other-row { display: flex; justify-content: space-between; align-items: center; gap: .75rem; padding: .55rem .7rem; border: 1px solid var(--vs-line, #e5e7eb); border-radius: 10px; }
 .vs-other-row .vs-stepper { margin: 0; }
 .vs-other-unit { border-style: dashed; }
+
+/* dashboard: the greeting and today's date/time are two cards side by side; the rest sit in an even, aligned grid */
+.vs-dash-top { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem; margin-bottom: 1rem; }
+.vs-dash-top > .vs-card { margin-bottom: 0; }
+.vs-clockcard { display: block; color: inherit; }
+.vs-clockcard:hover { color: inherit; border-color: var(--vs-red, #c0392b); }
+.vs-clock { font-size: 1.75rem; font-weight: 700; letter-spacing: .02em; }
+.vs-dash-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem; align-items: stretch; }
+.vs-dash-grid > .vs-card { margin-bottom: 0; height: 100%; }
+.vs-dash-grid > .vs-card > h2 { font-size: 1.05rem; margin: 0 0 .25rem; min-height: 1.6rem; display: flex; align-items: center; }
+.vs-countdown { display: inline-flex; align-items: center; gap: .5rem; font-weight: 600; padding: .35rem .7rem; border-radius: 999px; background: var(--vs-soft, rgba(192, 57, 43, .08)); }
+@media (min-width: 768px) { .vs-dash-top { grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); } }
+@media (min-width: 992px) { .vs-dash-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .vs-dash-grid > .vs-span2 { grid-column: 1 / -1; } }
