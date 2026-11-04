@@ -166,7 +166,7 @@ class GuestParityV3Test extends TestCase
             $this->assertStringContainsString($needle, $html, $needle);
         }
         $js = file_get_contents(public_path('js/portal/account.js'));
-        foreach (['Personal information', 'Contact information', "card('Address'", 'Change password', 'Save changes', "'Save these changes?'",
+        foreach (['Personal information', 'Contact information', "mi('address'", 'Change password', 'Save changes', 'Review changes', 'Discard your changes?',
             'First name is required', 'Last name is required', 'Date of birth is required', 'You must be at least 18 years old to create an account.', 'Passwords do not match',
             'Use at least 8 characters with a letter and a number', 'Strength: Weak', 'Strength: Strong', '1 Verify', '2 New password', '3 Done', 'Password updated', 'Profile updated successfully.',
             '/guest/profile/email/request', '/guest/password/change', '/verify-reset-otp', 'Remove your profile photo?'] as $needle) {
@@ -333,13 +333,14 @@ class GuestParityV3Test extends TestCase
         $this->assertSame($new, $user->email);
     }
 
-    public function test_the_edit_profile_page_is_one_button_and_one_save_bar(): void
+    public function test_the_edit_profile_is_one_step_by_step_modal_saved_together_once(): void
     {
         $js = file_get_contents(public_path('js/portal/account.js'));
-        foreach (['id="pEdit"', 'Edit profile', 'id="pSave"', 'id="pCancel"', "/guest/profile/all", "'Save these changes?'", 'You can edit your profile again after 30 days.', 'Nothing was saved.', 'Confirm your password', 'Profile updated successfully.', 'You can edit your profile again on '] as $needle) {
+        foreach (['Edit profile', "var STEPS = ['Personal', 'Contact', 'Address', 'Review changes']", 'data-edit', 'data-next', 'data-cancel', '/guest/profile/all', 'Discard your changes?', 'you can edit your profile again after 30 days.', 'Nothing was saved.', 'Confirm your password', 'Profile updated successfully.', 'You can edit your profile again on '] as $needle) {
             $this->assertStringContainsString($needle, $js, $needle);
         }
-        $this->assertStringNotContainsString('data-edit', $js, 'no per-section Edit buttons any more');
+        $this->assertStringNotContainsString('id="pSave"', $js, 'the old single save bar is gone');
+        $this->assertSame(1, substr_count($js, "'/guest/profile/all'"), 'all three sections go in one request');
     }
 
     // ================================================================ stabilization pass

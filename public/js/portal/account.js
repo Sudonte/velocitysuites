@@ -171,20 +171,48 @@
             var lockText = locked
                 ? 'Profile information was last updated on ' + VS.date(String(pu.last_updated_at || '').slice(0, 10)) + '. You can edit your profile again on ' + VS.date(String(pu.next_update_at || '').slice(0, 10)) + ' (' + VS.plural(pu.days_remaining || 0, 'day') + ' left).'
                 : 'Personal, contact and address information are saved together and can be updated once every 30 days.';
+            var dark = document.documentElement.getAttribute('data-bs-theme') === 'dark';
+            function mi(k, icon, label, desc) { return '<button type="button" class="vs-mi" data-k="' + k + '"><span class="vs-mi-ic"><i class="fas ' + icon + '"></i></span><span class="vs-mi-t"><span class="vs-mi-l">' + label + '</span><span class="vs-mi-d">' + desc + '</span></span><i class="fas fa-chevron-right vs-mi-c" aria-hidden="true"></i></button>'; }
             host.innerHTML =
-                '<section class="vs-card p-0 overflow-hidden"><div class="vs-cover" style="background-image:linear-gradient(rgba(166,43,52,.35),rgba(166,43,52,.35)),url(/images/hero-building-640.jpg)"></div>' +
-                '<div class="px-3 pb-3"><div class="vs-avatar-wrap">' + (pic ? '<button class="vs-avatar" id="pView" aria-label="View profile photo"><img src="' + VS.esc(pic) + '" alt="Your profile photo"></button>' : '<div class="vs-avatar vs-avatar-init" aria-hidden="true">' + VS.esc(initials(u)) + '</div>') +
+                '<section class="vs-card p-0 overflow-hidden vs-prof-head"><div class="vs-cover" style="background-image:linear-gradient(rgba(166,43,52,.35),rgba(166,43,52,.35)),url(/images/hero-building-640.jpg)"></div>' +
+                '<div class="px-3 pb-3 text-center"><div class="vs-avatar-wrap">' + (pic ? '<button class="vs-avatar" id="pView" aria-label="View profile photo"><img src="' + VS.esc(pic) + '" alt="Your profile photo"></button>' : '<div class="vs-avatar vs-avatar-init" aria-hidden="true">' + VS.esc(initials(u)) + '</div>') +
                 '<button class="vs-cam" id="pCam" aria-label="Change profile photo" aria-haspopup="menu"><i class="fas fa-camera"></i></button></div>' +
                 '<h1 class="h4 fw-bold mt-2 mb-0">' + VS.esc(name) + '</h1><div class="text-muted">' + VS.esc(u.email) + '</div>' + (g.id ? '<div class="small text-muted">Guest ID: ' + VS.esc(g.id) + '</div>' : '') +
-                '<div class="small mt-1 ' + (comp.line ? 'text-danger' : 'text-success') + '">' + VS.esc(comp.line || 'Profile complete') + ' · ' + comp.pct + '%</div>' +
-                '<div id="pMenu" class="d-none vs-menu"><button data-a="camera"><i class="fas fa-camera me-2"></i>Take a photo</button><button data-a="gallery"><i class="fas fa-image me-2"></i>Choose from gallery</button>' + (pic ? '<button data-a="remove" class="text-danger"><i class="fas fa-trash me-2"></i>Remove photo</button>' : '') + '<button data-a="cancel">Cancel</button></div>' +
+                '<div class="small mt-1 ' + (comp.line ? 'text-danger' : 'text-success') + '">' + VS.esc(comp.line || 'Profile complete') + ' \u00b7 ' + comp.pct + '%</div>' +
+                '<div id="pMenu" class="d-none vs-menu text-start"><button data-a="camera"><i class="fas fa-camera me-2"></i>Take a photo</button><button data-a="gallery"><i class="fas fa-image me-2"></i>Choose from gallery</button>' + (pic ? '<button data-a="remove" class="text-danger"><i class="fas fa-trash me-2"></i>Remove photo</button>' : '') + '<button data-a="cancel">Cancel</button></div>' +
                 '<input type="file" id="pFileCam" accept="image/*" capture="user" class="d-none"><input type="file" id="pFile" accept="image/*" class="d-none"></div></section>' +
-                '<div class="vs-editbar" id="pBar"></div>' +
-                '<div id="pAlert" aria-live="polite"></div><div id="pSections"></div><div id="pSaveBar"></div>' +
-                '<section class="vs-card" id="pwCard"><div class="vs-sec-head"><div><h2>Change password</h2><p class="text-muted small mb-0">Keep your account secure with a strong password</p></div><button class="btn btn-outline-velocity btn-sm" id="pwOpen">Change password</button></div><div id="pPw"></div></section>';
+                '<div id="pAlert" aria-live="polite"></div>' +
+                '<section class="vs-card p-0 vs-menulist" aria-label="Profile menu">' +
+                mi('personal', 'fa-user', 'Personal information', 'Name, gender and date of birth') +
+                mi('contact', 'fa-envelope', 'Contact information', 'Email and mobile number') +
+                mi('address', 'fa-location-dot', 'Address', 'Where you live') +
+                '<div class="vs-mi vs-mi-theme"><span class="vs-mi-ic"><i class="fas fa-circle-half-stroke"></i></span><span class="vs-mi-t"><span class="vs-mi-l" id="pThemeL">Theme</span><span class="vs-mi-d" id="pThemeD">' + (dark ? 'Dark' : 'Light') + '</span></span>' +
+                '<div class="form-check form-switch m-0"><input class="form-check-input" type="checkbox" role="switch" id="pTheme" aria-labelledby="pThemeL pThemeD"' + (dark ? ' checked' : '') + '></div></div>' +
+                mi('password', 'fa-key', 'Change password', 'Keep your account secure') +
+                mi('logout', 'fa-right-from-bracket', 'Log out', 'Sign out of Velocity Suites') +
+                '</section><div class="vs-editbar" id="pBar"></div>';
             wirePhoto(u, g, !!pic, pic);
-            sections(u, g, pu, lockText);
-            wirePassword(u);
+            var ed = sections(u, g, pu, lockText), openPw = wirePassword(u);
+            host.querySelectorAll('.vs-mi[data-k]').forEach(function (b) {
+                b.onclick = function () {
+                    var k = b.dataset.k;
+                    if (k === 'password') openPw();
+                    else if (k === 'logout') VS.confirm({ title: 'Log out of Velocity Suites?', message: 'You will need to sign in again to see your stays.', confirmText: 'Log out', cancelText: 'Stay signed in', danger: true }).then(function (yes) { if (yes) { var f = document.getElementById('navLogoutForm'); if (f) f.submit(); else window.location.href = '/login'; } });
+                    else ed.openView(k);
+                };
+            });
+            host.querySelector('#pTheme').onchange = function (e) { setTheme(e.target.checked ? 'dark' : 'light'); };
+        }
+
+        /** Light / Dark for the whole guest web: applied now, kept on the account (users.theme) so the next page is painted with it, and in this browser. */
+        function setTheme(t) {
+            document.documentElement.setAttribute('data-bs-theme', t);
+            try { localStorage.setItem('vs_theme', t); } catch (e) { /* storage off */ }
+            var d = host.querySelector('#pThemeD'); if (d) d.textContent = t === 'dark' ? 'Dark' : 'Light';
+            var token = document.querySelector('meta[name="csrf-token"]');
+            fetch('/profile/theme', { method: 'PUT', credentials: 'same-origin', headers: { 'X-CSRF-TOKEN': token ? token.content : '', 'Accept': 'application/json', 'Content-Type': 'application/json' }, body: JSON.stringify({ theme: t }) })
+                .then(function (r) { if (!r.ok) VS.toast('Your theme is changed here, but could not be saved to your account.', 'warning'); })
+                .catch(function () { VS.toast('Your theme is changed here, but could not be saved to your account.', 'warning'); });
         }
 
         function wirePhoto(u, g, hasPic, pic) {
@@ -254,15 +282,16 @@
 
         function sections(u, g, pu, lockText) {
             var locked = pu.can_update === false;
-            var bar = host.querySelector('#pBar'), saveBar = host.querySelector('#pSaveBar'), box = host.querySelector('#pSections');
-            var editing = false, cascade = null;
+            var bar = host.querySelector('#pBar'), box = null, cascade = null, dirty = false;
             var origAddress = { country: g.country || '', region: g.region || '', province: g.province || '', city: g.city || '', barangay: g.barangay || '', street: g.street || '', zip_code: g.zip_code || '' };
+            var STEPS = ['Personal', 'Contact', 'Address', 'Review changes'];
 
-            function viewHtml() {
-                return card('Personal information', 'Your basic information', row('First name', u.first_name) + row('Middle name', u.middle_name) + row('Last name', u.last_name) + row('Gender', genderText(g.gender || u.gender)) + row('Date of birth', dobText(g, u))) +
-                    card('Contact information', 'Your email and mobile number', row('Email address', u.email) + row('Mobile number', g.mobile_number || u.mobile_number)) +
-                    card('Address', 'Where you live', row('Country', g.country) + (g.country === 'Philippines' ? row('Region', g.region) + row('Province', g.province) + row('City / municipality', g.city) + row('Barangay', g.barangay) + row('Street / house no.', g.street) + row('ZIP code', g.zip_code) : '') + (!g.country ? row('Address', g.address) : ''));
+            function viewBody(k) {
+                if (k === 'personal') return row('First name', u.first_name) + row('Middle name', u.middle_name) + row('Last name', u.last_name) + row('Gender', genderText(g.gender || u.gender)) + row('Date of birth', dobText(g, u));
+                if (k === 'contact') return row('Email address', u.email) + row('Mobile number', g.mobile_number || u.mobile_number);
+                return row('Country', g.country) + (g.country === 'Philippines' ? row('Region', g.region) + row('Province', g.province) + row('City / municipality', g.city) + row('Barangay', g.barangay) + row('Street / house no.', g.street) + row('ZIP code', g.zip_code) : '') + (!g.country ? row('Address', g.address) : '');
             }
+            var TITLES = { personal: 'Personal information', contact: 'Contact information', address: 'Address' };
             function card(title, sub, body) { return '<section class="vs-card vs-sec"><div class="vs-sec-head"><div><h2>' + title + '</h2><p class="text-muted small mb-0">' + sub + '</p></div></div><div class="vs-sec-body">' + body + '</div></section>'; }
             function formHtml() {
                 var gd = g.gender || u.gender || '', dob = String(g.date_of_birth || u.date_of_birth || '').slice(0, 10);
@@ -277,39 +306,6 @@
                     '<div class="col-md-6"><label class="form-label small fw-semibold" for="pp">Mobile number</label><input class="form-control" id="pp" type="tel" inputmode="tel" autocomplete="tel" value="' + VS.esc(g.mobile_number || u.mobile_number || '') + '"><div class="small text-muted mt-1">' + (g.country === 'Philippines' || !g.country ? '09XXXXXXXXX or +639XXXXXXXXX' : 'Include the country code, such as +65.') + '</div></div></div>') +
                     card('Address', 'Where you live', '<div id="pAddrHost"></div>');
             }
-            function setBar() {
-                if (editing) {
-                    bar.className = 'vs-editbar'; bar.innerHTML = '<div class="small text-muted"><i class="fas fa-pen me-2"></i>You are editing your profile. Personal, contact and address information are saved together.</div>';
-                    saveBar.className = 'vs-savebar';
-                    saveBar.innerHTML = '<div class="vs-savebar-in"><span class="small text-muted d-none d-md-inline">You can edit your profile again after 30 days.</span><div class="d-flex gap-2 ms-md-auto"><button type="button" class="btn btn-light" id="pCancel">Cancel</button><button type="button" class="btn btn-velocity" id="pSave" data-busy-text="Saving">Save changes</button></div></div>';
-                    saveBar.querySelector('#pCancel').onclick = stopEdit; saveBar.querySelector('#pSave').onclick = save;
-                } else {
-                    saveBar.className = ''; saveBar.innerHTML = '';
-                    bar.className = 'vs-editbar' + (locked ? ' is-locked' : '');
-                    var lastU = pu.last_updated_at ? VS.date(String(pu.last_updated_at).slice(0, 10)) : 'Not yet', nextU = locked ? VS.date(String(pu.next_update_at || '').slice(0, 10)) : 'Now';
-                    bar.innerHTML = '<div class="d-flex flex-wrap align-items-start gap-3 justify-content-between"><div class="flex-grow-1"><div class="fw-bold">Profile update status</div><div class="small text-muted mb-1">Personal information and contact &amp; address updates share one 30-day wait</div>' +
-                        '<div class="small ' + (locked ? 'fw-semibold' : '') + '" id="pLockText"><i class="fas ' + (locked ? 'fa-lock' : 'fa-circle-check') + ' me-2"></i>' + VS.esc(locked ? lockText : 'You can update your profile information now.') + '</div>' +
-                        '<div class="vs-row mt-1"><span>Last updated</span><span>' + VS.esc(lastU) + '</span></div><div class="vs-row"><span>Next update available</span><span>' + VS.esc(nextU) + '</span></div>' +
-                        (locked ? '' : '<div class="small text-muted mt-1">For account security and consistency, profile information can be updated once every 30 days.</div>') + '</div>' +
-                        '<button type="button" class="btn btn-velocity" id="pEdit"' + (locked ? ' disabled aria-describedby="pLockText"' : '') + '><i class="fas fa-pen me-1"></i>Edit profile</button></div>';
-                    var eb = bar.querySelector('#pEdit'); if (!locked) eb.onclick = startEdit;
-                }
-            }
-            function startEdit() {
-                editing = true; box.innerHTML = formHtml(); setBar();
-                var tpl = document.getElementById('vsAddrTpl'), hostEl = box.querySelector('#pAddrHost');
-                hostEl.appendChild(tpl.content.cloneNode(true));
-                var root = hostEl.querySelector('[data-address-cascade]');
-                cascade = root.__addressCascade = new window.AddressCascade(root, { initial: { country: g.country || 'Philippines', region: g.region, province: g.province, city: g.city, barangay: g.barangay, street: g.street, zip_code: g.zip_code, timezone: g.timezone }, required: true });
-                var z = root.querySelector('#addrZip'); if (z && g.zip_code) z.value = g.zip_code;
-                var st = root.querySelector('#addrStreet'); if (st && g.street) st.value = g.street;
-                var d = box.querySelector('#pd'); d.addEventListener('input', function () { box.querySelector('#pAge').textContent = d.value ? 'Age: ' + ageOf(d.value) : 'You must be 18 or older.'; });
-                box.addEventListener('input', clearOne);
-                box.querySelector('#pf').focus();
-            }
-            function clearOne(e) { var t = e.target; if (t.classList && t.classList.contains('is-invalid')) { t.classList.remove('is-invalid'); var fb = t.parentElement.querySelector('.vs-fb'); if (fb) fb.remove(); } }
-            function stopEdit() { editing = false; cascade = null; box.innerHTML = viewHtml(); setBar(); host.querySelector('#pAlert') && (host.querySelector('#pAlert').innerHTML = ''); }
-
             function addressValues() {
                 var root = box.querySelector('[data-address-cascade]');
                 var v = function (n) { var e = root.querySelector('[name="' + n + '"]:not(:disabled)'); return e ? e.value.trim() : ''; };
@@ -322,23 +318,6 @@
                     addr = parts.filter(Boolean).join(', ');
                 }
                 return { fields: { country: country, region: v('region'), province: v('province'), city: v('city'), barangay: v('barangay'), street: v('street'), zip_code: v('zip_code'), timezone: v('timezone') }, address: addr };
-            }
-
-            /** Checks every field of the three sections; each message sits under its own field. */
-            function validateAll() {
-                box.querySelectorAll('[data-address-error]').forEach(function (e) { e.textContent = ''; });
-                var ok = true, q = function (id) { return box.querySelector(id); };
-                var first = q('#pf'), last = q('#pl'), d = q('#pd'), email = q('#pe'), mob = q('#pp');
-                if (!first.value.trim()) { VS.fieldError(first, 'First name is required'); ok = false; }
-                if (!last.value.trim()) { VS.fieldError(last, 'Last name is required'); ok = false; }
-                if (!box.querySelector('input[name=pgen]:checked')) { VS.fieldError(q('#pg'), 'Choose your gender.'); ok = false; }
-                if (!d.value) { VS.fieldError(d, 'Date of birth is required'); ok = false; } else if (ageOf(d.value) < 18) { VS.fieldError(d, 'You must be at least 18 years old to create an account.'); ok = false; }
-                if (!email.value.trim()) { VS.fieldError(email, 'Email is required'); ok = false; } else if (!EMAIL_RE.test(email.value.trim())) { VS.fieldError(email, 'Enter a valid email address'); ok = false; }
-                var country = (cascade && cascade.countryEl && cascade.countryEl.value) || g.country || 'Philippines', msg = mobileOk(country, mob.value);
-                if (msg) { VS.fieldError(mob, msg); ok = false; }
-                if (!cascade.validate()) ok = false;
-                if (!ok) { var bad = box.querySelector('.is-invalid, .invalid-feedback.d-block:not(:empty)'); if (bad && bad.scrollIntoView) bad.scrollIntoView({ block: 'center', behavior: VS.reducedMotion ? 'auto' : 'smooth' }); }
-                return ok;
             }
 
             /** What changed, as { label, from, to } rows - and the payload that carries only those fields. */
@@ -377,35 +356,128 @@
                 var payload = Object.assign({}, body); if (code) payload.email_otp = code;
                 return VS.api('/guest/profile/all', { method: 'PUT', body: payload });
             }
-            var FIELD = { first_name: '#pf', last_name: '#pl', gender: '#pg', date_of_birth: '#pd', mobile_number: '#pp', middle_name: '#pm' };
-            function showErrors(r) {
-                var errs = r.errors || {}, shown = false;
-                Object.keys(errs).forEach(function (key) { var el = FIELD[key] && box.querySelector(FIELD[key]); if (el) { VS.fieldError(el, [].concat(errs[key])[0]); shown = true; } });
-                if (!shown) VS.alertBox(host.querySelector('#pAlert'), r.message || 'Couldn\u2019t update your profile. Please check your details and try again.');
-                var bad = box.querySelector('.is-invalid'); if (bad) bad.scrollIntoView({ block: 'center' }); else window.scrollTo({ top: 0, behavior: 'smooth' });
+            var FIELD = { first_name: ['#pf', 0], last_name: ['#pl', 0], gender: ['#pg', 0], date_of_birth: ['#pd', 0], middle_name: ['#pm', 0], mobile_number: ['#pp', 1], email: ['#pe', 1] };
+
+            /** A modal shell; resolves nothing, the caller wires its buttons. */
+            function shell(title, body, footer, opts) {
+                var wrap = document.createElement('div'); wrap.className = 'modal fade'; wrap.tabIndex = -1; wrap.setAttribute('aria-labelledby', 'vsPmT');
+                wrap.innerHTML = '<div class="modal-dialog modal-dialog-centered modal-dialog-scrollable' + ((opts && opts.lg) ? ' modal-lg' : '') + '"><div class="modal-content vs-modal"><div class="modal-header border-0 pb-0"><h2 class="modal-title h5 fw-bold" id="vsPmT">' + VS.esc(title) + '</h2></div><div class="modal-body">' + body + '</div><div class="modal-footer border-0 pt-0">' + footer + '</div></div></div>';
+                document.body.appendChild(wrap);
+                var modal = new bootstrap.Modal(wrap, { backdrop: 'static', keyboard: false });
+                wrap.addEventListener('hidden.bs.modal', function () { wrap.remove(); });
+                modal.show();
+                return { wrap: wrap, modal: modal };
             }
 
-            function save() {
-                var saveBtn = saveBar.querySelector('#pSave'); VS.clearErrors(box); VS.alertBox(host.querySelector('#pAlert'), '');
-                if (!validateAll()) return;
-                var d = diff();
-                if (!d.rows.length) { VS.toast('No changes to save.', 'info'); return; }
-                var list = '<ul class="vs-changes">' + d.rows.map(function (r) { return '<li><span class="vs-ch-l">' + VS.esc(r.label) + '</span><span class="vs-ch-v"><s>' + VS.esc(r.from || 'Not set') + '</s> <i class="fas fa-arrow-right small"></i> <strong>' + VS.esc(r.to || 'Not set') + '</strong></span></li>'; }).join('') + '</ul>';
-                VS.confirm({ title: 'Save these changes?', html: list + '<p class="small text-muted mb-0">You can edit your profile again after 30 days.' + (d.email ? ' Changing your email also needs your password and an emailed code.' : '') + '</p>', confirmText: 'Save changes' }).then(function (yes) {
-                    if (!yes) return;
+            // ---- read-only view of one section, with Edit
+            function openView(k) {
+                var lockNote = locked ? '<div class="small text-muted mt-3"><i class="fas fa-lock me-2"></i>' + VS.esc(lockText) + '</div>' : '';
+                var m = shell(TITLES[k], '<div class="vs-sec-body">' + viewBody(k) + '</div>' + lockNote,
+                    '<button type="button" class="btn btn-light" data-x>Close</button><button type="button" class="btn btn-velocity" data-edit' + (locked ? ' disabled' : '') + '><i class="fas fa-pen me-1"></i>Edit</button>');
+                m.wrap.querySelector('[data-x]').onclick = function () { m.modal.hide(); };
+                m.wrap.querySelector('[data-edit]').onclick = function () { m.modal.hide(); setTimeout(function () { openEdit(k === 'personal' ? 0 : k === 'contact' ? 1 : 2); }, 250); };
+            }
+
+            // ---- one step-by-step "Edit profile": Personal, Contact, Address, Review changes; saved together once
+            function openEdit(start) {
+                var step = Math.min(start || 0, 2), saving = false; dirty = false;
+                var m = shell('Edit profile',
+                    '<ol class="vs-pwstages vs-editsteps" id="pStages" aria-label="Steps"></ol><div id="pmAlert" aria-live="polite"></div><div id="pEditBox" class="vs-editmodal">' + '</div>',
+                    '<button type="button" class="btn btn-light me-auto" data-cancel>Cancel</button><button type="button" class="btn btn-light" data-back>Back</button><button type="button" class="btn btn-velocity" data-next data-busy-text="Saving">Next</button>', { lg: true });
+                var wrap = m.wrap;
+                box = wrap.querySelector('#pEditBox');
+                var parts = document.createElement('div'); parts.innerHTML = formHtml();
+                var secs = [].slice.call(parts.querySelectorAll(':scope > section.vs-sec'));
+                secs.forEach(function (sec, i) { sec.setAttribute('data-step', i); sec.classList.add('d-none'); var hd = sec.querySelector('.vs-sec-head'); if (hd) hd.remove(); box.appendChild(sec); });
+                var review = document.createElement('div'); review.setAttribute('data-step', 3); review.className = 'd-none'; box.appendChild(review);
+                var hostEl = box.querySelector('#pAddrHost'); hostEl.appendChild(document.getElementById('vsAddrTpl').content.cloneNode(true));
+                var rootEl = hostEl.querySelector('[data-address-cascade]');
+                cascade = rootEl.__addressCascade = new window.AddressCascade(rootEl, { initial: { country: g.country || 'Philippines', region: g.region, province: g.province, city: g.city, barangay: g.barangay, street: g.street, zip_code: g.zip_code, timezone: g.timezone }, required: true });
+                var z = rootEl.querySelector('#addrZip'); if (z && g.zip_code) z.value = g.zip_code;
+                var st = rootEl.querySelector('#addrStreet'); if (st && g.street) st.value = g.street;
+                var dd = box.querySelector('#pd'); dd.addEventListener('input', function () { box.querySelector('#pAge').textContent = dd.value ? 'Age: ' + ageOf(dd.value) : 'You must be 18 or older.'; });
+                box.addEventListener('input', function (e) { dirty = true; clearOne(e); }); box.addEventListener('change', function () { dirty = true; });
+
+                function q(id) { return box.querySelector(id); }
+                function validateStep(i) {
+                    var ok = true;
+                    if (i === 0) {
+                        var first = q('#pf'), last = q('#pl'), d = q('#pd');
+                        if (!first.value.trim()) { VS.fieldError(first, 'First name is required'); ok = false; }
+                        if (!last.value.trim()) { VS.fieldError(last, 'Last name is required'); ok = false; }
+                        if (!box.querySelector('input[name=pgen]:checked')) { VS.fieldError(q('#pg'), 'Choose your gender.'); ok = false; }
+                        if (!d.value) { VS.fieldError(d, 'Date of birth is required'); ok = false; } else if (ageOf(d.value) < 18) { VS.fieldError(d, 'You must be at least 18 years old to create an account.'); ok = false; }
+                    } else if (i === 1) {
+                        var email = q('#pe'), mob = q('#pp');
+                        if (!email.value.trim()) { VS.fieldError(email, 'Email is required'); ok = false; } else if (!EMAIL_RE.test(email.value.trim())) { VS.fieldError(email, 'Enter a valid email address'); ok = false; }
+                        var country = (cascade && cascade.countryEl && cascade.countryEl.value) || g.country || 'Philippines', msg = mobileOk(country, mob.value);
+                        if (msg) { VS.fieldError(mob, msg); ok = false; }
+                    } else if (i === 2) {
+                        box.querySelectorAll('[data-address-error]').forEach(function (e) { e.textContent = ''; });
+                        if (!cascade.validate()) ok = false;
+                    }
+                    if (!ok) { var bad = box.querySelector('[data-step="' + i + '"] .is-invalid, [data-step="' + i + '"] .invalid-feedback.d-block:not(:empty)'); if (bad && bad.scrollIntoView) bad.scrollIntoView({ block: 'center', behavior: VS.reducedMotion ? 'auto' : 'smooth' }); }
+                    return ok;
+                }
+                function reviewHtml() {
+                    var d = diff();
+                    if (!d.rows.length) return { html: '<div class="vs-empty"><i class="fas fa-circle-info"></i><h3 class="h6 fw-bold">No changes to save</h3><p class="text-muted mb-0">Nothing was changed. Go back to edit, or cancel.</p></div>', d: d };
+                    return { d: d, html: '<p class="text-muted small">Check your changes (old \u2192 new). They are saved together, and you can edit your profile again after 30 days.' + (d.email ? ' Changing your email also needs your password and an emailed code.' : '') + '</p><ul class="vs-changes">' + d.rows.map(function (r) { return '<li><span class="vs-ch-l">' + VS.esc(r.label) + '</span><span class="vs-ch-v"><s>' + VS.esc(r.from || 'Not set') + '</s> <i class="fas fa-arrow-right small"></i> <strong>' + VS.esc(r.to || 'Not set') + '</strong></span></li>'; }).join('') + '</ul>' };
+                }
+                var current = null;
+                function paintStep() {
+                    VS.alertBox(wrap.querySelector('#pmAlert'), '');
+                    wrap.querySelector('#pStages').innerHTML = STEPS.map(function (t, i) { return '<li class="' + (i < step ? 'done' : i === step ? 'now' : '') + '"' + (i === step ? ' aria-current="step"' : '') + '>' + (i + 1) + ' ' + t + '</li>'; }).join('');
+                    box.querySelectorAll('[data-step]').forEach(function (e) { e.classList.toggle('d-none', +e.getAttribute('data-step') !== step); });
+                    var back = wrap.querySelector('[data-back]'), next = wrap.querySelector('[data-next]');
+                    back.classList.toggle('d-none', step === 0);
+                    if (step === 3) { current = reviewHtml(); review.innerHTML = current.html; next.textContent = 'Save changes'; next.disabled = !current.d.rows.length; }
+                    else { next.textContent = 'Next'; next.disabled = false; }
+                    var f = box.querySelector('[data-step="' + step + '"] input:not([type=hidden]):not(:disabled), [data-step="' + step + '"] select'); if (f) f.focus({ preventScroll: true });
+                }
+                function goStep(i) { step = i; paintStep(); }
+                function leave() {
+                    if (!dirty) { m.modal.hide(); return; }
+                    VS.confirm({ title: 'Discard your changes?', message: 'What you changed is not saved.', confirmText: 'Discard', cancelText: 'Keep editing', danger: true }).then(function (yes) { if (yes) m.modal.hide(); });
+                }
+                wrap.querySelector('[data-cancel]').onclick = leave;
+                wrap.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !document.querySelector('.modal.show ~ .modal.show')) { e.preventDefault(); leave(); } });
+                wrap.querySelector('[data-back]').onclick = function () { if (!saving && step > 0) goStep(step - 1); };
+                wrap.querySelector('[data-next]').onclick = function (ev) {
+                    if (saving) return;
+                    VS.clearErrors(box);
+                    if (step < 3) { if (validateStep(step)) goStep(step + 1); return; }
+                    var d = current.d; if (!d.rows.length) return;
+                    saving = true;
                     (d.email ? askEmailCode(d.email) : Promise.resolve('')).then(function (code) {
-                        if (code === null) { VS.toast('Nothing was saved.', 'info'); return; }
-                        VS.busy(saveBtn, function () { return send(d.body, code || null); }).then(function (r) {
+                        if (code === null) { saving = false; VS.toast('Nothing was saved.', 'info'); return; }
+                        VS.busy(ev.currentTarget, function () { return send(d.body, code || null); }).then(function (r) {
+                            saving = false;
                             if (!r) return;
-                            if (r.ok) { VS.toast('Profile updated successfully.', 'success'); load(); return; }
+                            if (r.ok) { dirty = false; m.modal.hide(); VS.toast('Profile updated successfully.', 'success'); load(); return; }
                             if (r.errors && r.errors.email_otp) { VS.toast(r.message, 'danger'); return; }   // a wrong code saved nothing; Save changes asks for a new one
-                            showErrors(r);
+                            var errs = r.errors || {}, shown = false, first = null;
+                            Object.keys(errs).forEach(function (key) { var f = FIELD[key], el = f && box.querySelector(f[0]); if (el) { if (first === null) first = f[1]; goStep(f[1]); VS.fieldError(el, [].concat(errs[key])[0]); shown = true; } });
+                            if (!shown) VS.alertBox(wrap.querySelector('#pmAlert'), r.message || 'Couldn\u2019t update your profile. Please check your details and try again.');
                         });
                     });
-                });
+                };
+                paintStep();
             }
 
-            box.innerHTML = viewHtml(); setBar();
+            function clearOne(e) { var t = e.target; if (t.classList && t.classList.contains('is-invalid')) { t.classList.remove('is-invalid'); var fb = t.parentElement.querySelector('.vs-fb'); if (fb) fb.remove(); } }
+
+            /** The 30-day status block under the menu. */
+            function setBar() {
+                bar.className = 'vs-editbar' + (locked ? ' is-locked' : '');
+                var lastU = pu.last_updated_at ? VS.date(String(pu.last_updated_at).slice(0, 10)) : 'Not yet', nextU = locked ? VS.date(String(pu.next_update_at || '').slice(0, 10)) : 'Now';
+                bar.innerHTML = '<div class="fw-bold">Profile update status</div><div class="small text-muted mb-1">Personal information and contact &amp; address updates share one 30-day wait</div>' +
+                    '<div class="small ' + (locked ? 'fw-semibold' : '') + '" id="pLockText"><i class="fas ' + (locked ? 'fa-lock' : 'fa-circle-check') + ' me-2"></i>' + VS.esc(locked ? lockText : 'You can update your profile information now.') + '</div>' +
+                    '<div class="vs-row mt-1"><span>Last updated</span><span>' + VS.esc(lastU) + '</span></div><div class="vs-row"><span>Next update available</span><span>' + VS.esc(nextU) + '</span></div>' +
+                    (locked ? '' : '<div class="small text-muted mt-1">For account security and consistency, profile information can be updated once every 30 days.</div>');
+            }
+            setBar();
+            return { openView: openView, openEdit: openEdit };
         }
 
         function strength(v) {
@@ -417,12 +489,11 @@
             return Math.max(1, Math.min(4, score));
         }
         function wirePassword(u) {
-            var box = host.querySelector('#pPw'), open = host.querySelector('#pwOpen');
+            var box = null, pwModal = null;
             function stages(n) { return '<ol class="vs-pwstages" aria-label="Steps">' + ['1 Verify', '2 New password', '3 Done'].map(function (t, i) { return '<li class="' + (i + 1 < n ? 'done' : i + 1 === n ? 'now' : '') + '"' + (i + 1 === n ? ' aria-current="step"' : '') + '>' + t + '</li>'; }).join('') + '</ol>'; }
             function cool(btn, sec) { var left = sec; btn.disabled = true; btn.textContent = 'Resend code (' + left + 's)'; var t = setInterval(function () { left--; btn.textContent = left > 0 ? 'Resend code (' + left + 's)' : 'Resend code'; if (left <= 0) { clearInterval(t); btn.disabled = false; } }, 1000); }
-            function close() { box.innerHTML = ''; open.classList.remove('d-none'); }
+            function close() { if (pwModal) pwModal.hide(); }
             function step1() {
-                open.classList.add('d-none');
                 box.innerHTML = '<div class="vs-subform">' + stages(1) + '<div id="ppAlert"></div><h3 class="h6 fw-bold">Confirm it is you</h3><p class="small text-muted mb-1">To change your password we will email a 6-digit code to ' + VS.esc(u.email) + '.</p><p class="small text-muted">Enter the code on the next step, then choose your new password. The code only works for a short time, and you can ask for a new one.</p><div class="d-flex gap-2"><button class="btn btn-velocity btn-sm" id="ppSend" data-busy-text="Sending">Send code</button><button class="btn btn-light btn-sm" id="ppCancel">Cancel</button></div></div>';
                 box.querySelector('#ppCancel').onclick = close;
                 box.querySelector('#ppSend').onclick = function (e) {
@@ -470,7 +541,16 @@
                     });
                 };
             }
-            open.onclick = step1;
+            /** Opens the change-password flow in its own modal: verify code, new password, done (then log in again). */
+            return function openPw() {
+                var wrap = document.createElement('div'); wrap.className = 'modal fade'; wrap.tabIndex = -1; wrap.setAttribute('aria-label', 'Change password');
+                wrap.innerHTML = '<div class="modal-dialog modal-dialog-centered modal-dialog-scrollable"><div class="modal-content vs-modal"><div class="modal-header border-0 pb-0"><h2 class="modal-title h5 fw-bold">Change password</h2></div><div class="modal-body"><div id="pPw"></div></div></div></div>';
+                document.body.appendChild(wrap);
+                pwModal = new bootstrap.Modal(wrap, { backdrop: 'static', keyboard: false });
+                wrap.addEventListener('hidden.bs.modal', function () { wrap.remove(); pwModal = null; });
+                box = wrap.querySelector('#pPw');
+                pwModal.show(); step1();
+            };
         }
         load();
     };

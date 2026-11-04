@@ -181,4 +181,24 @@ class GuestShellTest extends ApiFlowTestCase
             $this->assertStringContainsString('id="vsFeaturedDates"', $html, $file);
         }
     }
+
+    public function test_the_profile_page_is_a_menu_and_the_theme_is_kept_on_the_account_and_painted_before_the_page(): void
+    {
+        [$user] = $this->makeGuestUser('Theme');
+        $this->actingAs($user)->putJson(route('profile.theme'), ['theme' => 'dark'])->assertSuccessful();
+        $this->assertSame('dark', $user->fresh()->theme);
+        // the very first tag of the page already carries the theme: no flash of the light page
+        $html = $this->actingAs($user->fresh())->get('/guest/profile')->assertOk()->getContent();
+        $this->assertMatchesRegularExpression('/<html lang="en" data-bs-theme="dark"/', $html);
+        $this->assertStringContainsString('vsProfile', $html);
+        // the profile script builds the menu in this order: Personal, Contact, Address, Theme, Change password, Log out
+        $js = file_get_contents(public_path('js/portal/account.js'));
+        $order = array_map(fn ($needle) => strpos($js, $needle), ["mi('personal'", "mi('contact'", "mi('address'", 'id="pTheme"', "mi('password'", "mi('logout'"]);
+        $this->assertNotContains(false, $order);
+        $sorted = $order; sort($sorted);
+        $this->assertSame($sorted, $order, 'menu order');
+        foreach (['Edit profile', 'Review changes', 'Discard your changes?', 'Log out of Velocity Suites?'] as $text) {
+            $this->assertStringContainsString($text, $js, $text);
+        }
+    }
 }

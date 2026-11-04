@@ -1,6 +1,6 @@
 /* Velocity Suites guest web - design system shared with the app (red brand, sentence case, tabular figures). */
 :root {
-    --vs-red: #D6414B;
+    --vs-red: #C7333E;
     --vs-red-dark: #A62B34;
     --vs-red-soft: #FDECEC;
     --vs-ink: #1b1b1f;
@@ -156,8 +156,8 @@ a.vs-rcpt:hover { border-color: var(--vs-red); color: var(--vs-ink); }
 .vs-note { border: 1px solid var(--vs-line); cursor: pointer; transition: border-color .15s ease; }
 .vs-note:hover { border-color: var(--vs-red); }
 .vs-note.unread { border-left: 4px solid var(--vs-red); }
-.vs-cover { height: 150px; background-size: cover; background-position: center; }
-.vs-avatar-wrap { position: relative; width: 112px; margin-top: -56px; }
+.vs-cover { height: 190px; background-size: cover; background-position: center; }
+.vs-avatar-wrap { position: relative; width: 112px; margin: -56px auto 0; }
 .vs-avatar { width: 112px; height: 112px; border-radius: 50%; border: 4px solid var(--vs-surface); overflow: hidden; padding: 0; background: var(--vs-red); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 2rem; font-weight: 800; cursor: pointer; }
 .vs-avatar img { width: 100%; height: 100%; object-fit: cover; }
 .vs-avatar-init { cursor: default; }
@@ -381,3 +381,37 @@ button.vs-cal-day.picked i { background: #fff; }
 .vs-countdown { display: inline-flex; align-items: center; gap: .5rem; font-weight: 600; padding: .35rem .7rem; border-radius: 999px; background: var(--vs-soft, rgba(192, 57, 43, .08)); }
 @media (min-width: 768px) { .vs-dash-top { grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); } }
 @media (min-width: 992px) { .vs-dash-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .vs-dash-grid > .vs-span2 { grid-column: 1 / -1; } }
+
+/* profile: the cover is taller; the round photo sits centered on its bottom edge (half over it) with name, email and Guest ID centered below */
+.vs-prof-head .vs-avatar-wrap { z-index: 2; }
+.vs-prof-head .vs-menu { left: 50%; transform: translateX(-50%); }
+/* profile menu: icon, label, short description, chevron */
+.vs-menulist { overflow: hidden; }
+.vs-mi { display: flex; align-items: center; gap: .9rem; width: 100%; padding: .85rem 1.1rem; border: 0; border-bottom: 1px solid var(--vs-line); background: transparent; color: var(--vs-ink); text-align: left; }
+.vs-mi:last-child { border-bottom: 0; }
+button.vs-mi:hover, button.vs-mi:focus-visible { background: var(--vs-red-soft); }
+.vs-mi-ic { flex: 0 0 2.4rem; width: 2.4rem; height: 2.4rem; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; background: var(--vs-red-soft); color: var(--vs-red); }
+.vs-mi-t { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.vs-mi-l { font-weight: 600; }
+.vs-mi-d { font-size: .85rem; color: var(--vs-muted); }
+.vs-mi-c { color: var(--vs-muted); }
+.vs-editsteps { margin-bottom: 1rem; }
+.vs-editmodal .vs-sec { border: 0; box-shadow: none; padding: 0; margin: 0; background: transparent; }
+
+/* ---- dark mode contrast (text 4.5:1): the brand red is lightened for TEXT, and the filled red is a little deeper under white text ---- */
+[data-bs-theme="dark"] .vs-card > h2, [data-bs-theme="dark"] .vs-card-title, [data-bs-theme="dark"] .vs-sec-head h2, [data-bs-theme="dark"] .vs-room-price,
+[data-bs-theme="dark"] .btn-outline-velocity, [data-bs-theme="dark"] .text-danger, [data-bs-theme="dark"] .vs-shell-main a:not(.btn):not(.vs-mi):not(.vs-clockcard),
+[data-bs-theme="dark"] .vs-shell-main .vs-qa .btn span, [data-bs-theme="dark"] .vs-other-toggle .fa-chevron-right { color: #ff8f97 !important; }
+[data-bs-theme="dark"] .btn-outline-velocity { border-color: #ff8f97; }
+[data-bs-theme="dark"] .btn-outline-velocity:hover { background: #3d1f1f; color: #ffb3b8 !important; }
+[data-bs-theme="dark"] .btn-outline-danger { color: #ff8f97; border-color: #ff8f97; }
+[data-bs-theme="dark"] .btn-outline-danger:hover { background: #3d1f1f; color: #ffb3b8; }
+[data-bs-theme="dark"] .btn-velocity, [data-bs-theme="dark"] .vs-tab.active, [data-bs-theme="dark"] .navbar-notif-badge, [data-bs-theme="dark"] .user-avatar-initials,
+[data-bs-theme="dark"] .vs-room-promo, [data-bs-theme="dark"] .vs-avatar-init, [data-bs-theme="dark"] .vs-pwstages li.now { background: #b3262f; border-color: #b3262f; color: #fff; }
+[data-bs-theme="dark"] .btn-velocity:hover { background: #c9303a; border-color: #c9303a; }
+[data-bs-theme="dark"] .vs-chip:not(.ok):not(.wait):not(.bad):not(.gray) { background: #3d1f1f; color: #ffb3b8; }
+[data-bs-theme="dark"] .vs-chip.ok { background: #1d3322; color: #a5d6a7; }
+[data-bs-theme="dark"] .vs-chip.wait { background: #3a2f17; color: #f2c36b; }
+[data-bs-theme="dark"] .vs-countdown { background: #3d1f1f; color: #ffb3b8; }
+[data-bs-theme="dark"] .vs-collapse-head h2 { color: #ff8f97; }
+:root { --primary-color: #C7333E; }
