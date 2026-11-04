@@ -175,18 +175,52 @@
                 t.textContent = TAB_TEXT[k].title + ' (' + c[k].all + ')';
                 t.classList.toggle('active', on); t.setAttribute('aria-selected', on ? 'true' : 'false'); t.tabIndex = on ? 0 : -1;
             });
+            // Bookings shows only "New booking", Reservations only "New reservation"
+            var nb = root.querySelector('#vsNewBtn');
+            if (nb) { nb.textContent = tab === 'reservation' ? 'New reservation' : 'New booking'; nb.href = tab === 'reservation' ? nb.dataset.reserve : nb.dataset.book; }
+            var sm = root.querySelector('#vsStaySummary'), cc = c[tab];
+            if (sm) sm.textContent = cc.active + ' active \u00b7 ' + cc.completed + ' completed \u00b7 ' + cc.cancelled + ' cancelled';
+        }
+        /** What happens next, in one line (the app's wording). */
+        function nextStep(r, st, m) {
+            if (r.historical) return '';
+            var x = r.x, pa = S.payAction(x);
+            if (/cancelled|rejected/.test(st.key)) return '';
+            if (/completed|noshow/.test(st.key)) return st.key === 'noshow' ? '' : 'Stay completed';
+            if (m.waiting > 0.009) return 'Waiting for front desk verification';
+            if (pa.a === 'PAY_NOW') return 'Pay now to secure your reservation';
+            if (st.key === 'checkedin') return m.remaining > 0.009 ? 'Balance is paid at check-out' : 'Fully paid';
+            if (st.key === 'confirmed') return m.remaining > 0.009 ? 'Pay at check-in' : 'Ready for your stay';
+            if (pa.a === 'FRONT_DESK' && x.kind === 'reservation') return pa.text;
+            return 'Waiting for front desk verification';
+        }
+        function guestsText(it) {
+            var a = Number(it.adults || 0), c = Number(it.children || 0), n = a + c || Number(it.number_of_guests || 0);
+            return n ? VS.plural(n, 'guest') + (c ? ' (' + VS.plural(a, 'adult') + ', ' + c + (c === 1 ? ' minor' : ' minors') + ')' : '') : '';
         }
         function card(r) {
             var x = r.x, it = x.it, s = r.historical ? { label: 'Completed', cls: 'gray', key: 'completed', note: 'This reservation became a booking.' } : S.status(it, x.kind), m = S.money(it);
             var id = r.historical || x.kind === 'reservation' ? 'Reservation #' + it.id : 'Booking #' + it.id;
             if (!r.historical && x.kind === 'reservation' && it.booking && r.tab === 'booking') id = 'Booking #' + (it.booking.id || it.id);
             var href = '/guest/' + (r.historical || (x.kind === 'reservation' && r.tab === 'reservation') ? 'reservations' : (x.kind === 'reservation' ? 'reservations' : 'bookings')) + '/' + it.id;
-            return '<a class="vs-card vs-stay-card d-block text-decoration-none vs-reveal" href="' + href + '">' +
-                '<div class="d-flex justify-content-between align-items-start gap-2"><div><div class="fw-bold">' + VS.esc(id) + '</div><div class="text-muted small">' + VS.esc(dates(it)) + '</div><div class="small">' + VS.esc(S.firstRoomTypes(it)) + '</div></div>' +
+            var acts = ['<a class="btn btn-light btn-sm vs-act" href="' + href + '">View details</a>'];
+            if (!r.historical) {
+                var pa = S.payAction(x);
+                if (pa.a === 'PAY_NOW') acts.unshift('<a class="btn btn-velocity btn-sm vs-act" href="' + pa.href + '">Pay now</a>');
+                if (S.canEdit(x)) acts.push('<a class="btn btn-outline-velocity btn-sm vs-act" href="/guest/reserve/' + it.id + '/edit">Edit</a>');
+                if (S.cancelRule(x).can) acts.push('<button type="button" class="btn btn-outline-danger btn-sm vs-act" data-cancel="' + it.id + '" data-kind="' + x.kind + '">Cancel ' + x.kind + '</button>');
+                if (/cancelled|rejected|completed|noshow/.test(s.key)) acts.push('<button type="button" class="btn btn-outline-danger btn-sm vs-act" data-delete="' + it.id + '" data-kind="' + x.kind + '">Delete</button>');
+            }
+            var rooms = S.firstRoomTypes(it), guests = guestsText(it), next = nextStep(r, s, m);
+            return '<article class="vs-card vs-stay-card vs-reveal">' +
+                '<div class="d-flex justify-content-between align-items-start gap-2"><div class="min-w-0"><a class="fw-bold text-decoration-none vs-stretch" style="color:inherit" href="' + href + '">' + VS.esc(id) + '</a><div class="text-muted small">' + VS.esc(dates(it)) + '</div></div>' +
                 '<span class="vs-chip ' + s.cls + '">' + s.label + '</span></div>' +
+                '<div class="vs-facts mt-2">' + (rooms ? '<div><i class="fas fa-bed" aria-hidden="true"></i><span>' + VS.esc(rooms) + '</span></div>' : '') + (guests ? '<div><i class="fas fa-user-group" aria-hidden="true"></i><span>' + VS.esc(guests) + '</span></div>' : '') + '</div>' +
                 (s.note ? '<div class="small text-muted mt-1">' + VS.esc(s.note) + '</div>' : '') +
-                (function () { if (r.historical) return ''; var ed = S.canEdit(x) ? '<span class="btn btn-outline-velocity btn-sm ms-2" role="link" tabindex="0" data-edit-link="/guest/reserve/' + it.id + '/edit">Edit</span>' : ''; var pa = S.payAction(x); return pa.a === 'PAY_NOW' ? '<div class="mt-2"><span class="btn btn-velocity btn-sm" data-pay="' + pa.href + '">Pay now</span>' + ed + '</div>' : pa.a === 'NONE' ? (ed ? '<div class="mt-2">' + ed + '</div>' : '') : '<div class="small text-muted mt-2"><i class="fas fa-circle-info me-1"></i>' + VS.esc(pa.text) + ed + '</div>'; })() +
-                '<div class="row text-center g-2 mt-2"><div class="col-4"><div class="small text-muted">Total</div><div class="vs-num fw-bold">' + VS.money(m.total) + '</div></div><div class="col-4"><div class="small text-muted">Paid</div><div class="vs-num fw-bold">' + VS.money(m.paid) + '</div></div><div class="col-4"><div class="small text-muted">Balance</div><div class="vs-num fw-bold">' + VS.money(m.remaining) + '</div></div></div></a>';
+                '<div class="row text-center g-2 mt-2"><div class="col-4"><div class="small text-muted">Total</div><div class="vs-num fw-bold">' + VS.money(m.total) + '</div></div><div class="col-4"><div class="small text-muted">Paid</div><div class="vs-num fw-bold">' + VS.money(m.paid) + '</div></div><div class="col-4"><div class="small text-muted">Balance</div><div class="vs-num fw-bold">' + VS.money(m.remaining) + '</div></div></div>' +
+                (m.waiting > 0.009 ? '<div class="vs-row small mt-1"><span>Waiting for verification</span><span class="vs-num fw-semibold">' + VS.money(m.waiting) + '</span></div>' : '') +
+                (next ? '<div class="small mt-2 vs-next"><i class="fas fa-circle-info me-1" aria-hidden="true"></i>' + VS.esc(next) + '</div>' : '') +
+                '<div class="d-flex flex-wrap gap-2 mt-2 vs-acts">' + acts.join('') + '</div></article>';
         }
         function paint() {
             paintTabs(); syncUrl();
@@ -205,9 +239,27 @@
             host.innerHTML = list.length ? list.map(card).join('')
                 : VS.empty('fa-suitcase', filtered ? T.match : T.empty, filtered ? (st.status && !q && !st.room ? T.none[st.status] : 'Try another transaction number, room type, or date.') : T.none.all, filtered ? '<button class="btn btn-light btn-sm" data-clear2>Clear filters</button>' : '<a class="btn btn-velocity" href="/rooms">Browse rooms</a>');
             var c2 = host.querySelector('[data-clear2]'); if (c2) c2.onclick = clear;
-            host.querySelectorAll('[data-edit-link]').forEach(function (a) { var go = function (e) { e.stopPropagation(); e.preventDefault(); window.location.href = a.getAttribute('data-edit-link'); }; a.addEventListener('click', go); a.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') go(e); }); });
-            host.querySelectorAll('[data-pay]').forEach(function (b) { b.addEventListener('click', function (e) { e.preventDefault(); e.stopPropagation(); window.location.href = b.getAttribute('data-pay'); }); });
+            host.querySelectorAll('[data-cancel]').forEach(function (b) { b.onclick = function () { act(b, 'cancel'); }; });
+            host.querySelectorAll('[data-delete]').forEach(function (b) { b.onclick = function () { act(b, 'delete'); }; });
             VS.reveal(host);
+        }
+        /** Cancel / Delete straight from the list, with the same confirmations as the details page; a second tap while it runs does nothing. */
+        function act(btn, what) {
+            var id = btn.getAttribute('data-' + what), kind = btn.dataset.kind, row = rows.filter(function (r) { return String(r.x.it.id) === String(id) && r.x.kind === kind; })[0];
+            if (!row) return;
+            var it = row.x.it, base = '/guest/' + (kind === 'reservation' ? 'reservations' : 'bookings') + '/' + it.id, label = idLabel(it, kind);
+            if (what === 'cancel') {
+                var paid = S.money(it).paid > 0.009;
+                VS.confirm({ title: 'Cancel ' + label + '?', message: paid ? 'The ' + VS.money(S.money(it).paid) + ' you paid is non-refundable.' : 'You can book again at any time.', confirmText: 'Cancel ' + kind, cancelText: 'Keep ' + kind, danger: true }).then(function (yes) {
+                    if (!yes) return;
+                    VS.busy(btn, function () { return VS.api(base + '/cancel', { method: 'PUT' }); }).then(function (r) { if (!r) return; if (r.ok) { VS.toast('Cancelled.', 'success'); load(); } else VS.toast(r.message, 'danger'); });
+                });
+            } else {
+                VS.confirm({ title: 'Delete this ' + kind + '?', message: 'It is removed from your list. It stays in your Transaction History.', confirmText: 'Delete', danger: true }).then(function (yes) {
+                    if (!yes) return;
+                    VS.busy(btn, function () { return VS.api(base, { method: 'DELETE' }); }).then(function (r) { if (!r) return; if (r.ok) { VS.toast('Deleted.', 'success'); load(); } else VS.toast(r.message, 'danger'); });
+                });
+            }
         }
         function clear() { state[tab] = { status: '', q: '', sort: 'newest', room: '' }; writeForm(); paint(); }
         function load() {

@@ -124,7 +124,7 @@ class GuestPaymentEntryPointsTest extends ApiFlowTestCase
         $wiz = file_get_contents(public_path('js/portal/wizard.js'));
         $page = file_get_contents(resource_path('views/portal/pay.blade.php'));
 
-        foreach (["S.payAction = function", "a: 'PAY_NOW'", "a: 'UNDER_REVIEW'", "a: 'FRONT_DESK'", "text: 'Pay at the hotel'", "text: 'Payment under review'", "data-pay="] as $n) {
+        foreach (["S.payAction = function", "a: 'PAY_NOW'", "a: 'UNDER_REVIEW'", "a: 'FRONT_DESK'", "text: 'Pay at the hotel'", "text: 'Payment under review'", "Pay now</a>'"] as $n) {
             $this->assertStringContainsString($n, $stays, $n);
         }
         $this->assertSame(1, substr_count($stays, 'S.payAction = function'), 'one rule, not a copy per page');

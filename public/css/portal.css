@@ -415,3 +415,15 @@ button.vs-mi:hover, button.vs-mi:focus-visible { background: var(--vs-red-soft);
 [data-bs-theme="dark"] .vs-countdown { background: #3d1f1f; color: #ffb3b8; }
 [data-bs-theme="dark"] .vs-collapse-head h2 { color: #ff8f97; }
 :root { --primary-color: #C7333E; }
+
+/* Booking & Reservation cards: one layout for every card; the title link covers the card, the buttons sit above it */
+.vs-tabsum { font-weight: 600; color: var(--vs-muted); margin: .25rem 0 .75rem; }
+.vs-stay-card { position: relative; }
+.vs-stay-card .vs-stretch::after { content: ""; position: absolute; inset: 0; z-index: 1; border-radius: var(--vs-radius); }
+.vs-stay-card .vs-acts, .vs-stay-card .vs-acts .btn { position: relative; z-index: 2; }
+.vs-stay-card:hover { border-color: var(--vs-red); }
+.vs-facts { display: flex; flex-wrap: wrap; gap: .25rem 1.25rem; font-size: .9rem; }
+.vs-facts i { width: 1.1rem; color: var(--vs-muted); margin-right: .35rem; }
+.vs-next { color: var(--vs-muted); }
+.min-w-0 { min-width: 0; }
+@media (min-width: 992px) { #vsStayCards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; } #vsStayCards > .vs-stay-card { margin-bottom: 0; } #vsStayCards > :not(.vs-stay-card) { grid-column: 1 / -1; } }

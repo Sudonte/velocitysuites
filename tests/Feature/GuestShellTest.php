@@ -201,4 +201,16 @@ class GuestShellTest extends ApiFlowTestCase
             $this->assertStringContainsString($text, $js, $text);
         }
     }
+
+    public function test_the_booking_and_reservation_page_has_one_new_button_a_tab_summary_and_full_cards(): void
+    {
+        [$user] = $this->makeGuestUser('Stays4');
+        $html = $this->actingAs($user)->get('/guest/reservations')->assertOk()->getContent();
+        $this->assertSame(1, substr_count($html, 'id="vsNewBtn"'), 'one new button that follows the tab');
+        $this->assertStringContainsString('id="vsStaySummary"', $html);
+        $js = file_get_contents(public_path('js/portal/stays.js'));
+        foreach (["' active \u00b7 '", "' completed \u00b7 '", "' cancelled'", 'Waiting for verification', 'Waiting for front desk verification', 'Pay at check-in', 'View details', 'data-cancel', 'data-delete', 'Pay now', 'guestsText'] as $needle) {
+            $this->assertStringContainsString($needle, $js, $needle);
+        }
+    }
 }
