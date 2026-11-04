@@ -135,6 +135,7 @@
     VS.sessionExpired = function () {
         if (VS._expiring) return;
         VS._expiring = true;
+        window.__vsLeavingOk = true; // no "leave this page?" prompt on the way to the sign-in page
         window.location.href = '/login?expired=1';
     };
 

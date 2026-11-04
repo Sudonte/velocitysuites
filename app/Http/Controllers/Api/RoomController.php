@@ -138,13 +138,11 @@ class RoomController extends Controller
      */
     private function resolveDates(Request $request): array
     {
-        $checkIn = $request->filled('check_in')
-            ? Carbon::parse($request->check_in)->startOfDay()
-            : \App\Support\CheckInWindow::date()->addDay();
-
-        $checkOut = $request->filled('check_out')
-            ? Carbon::parse($request->check_out)->startOfDay()
-            : $checkIn->copy()->addDay();
+        // a value that is not a real date is read as "no date" (it used to end in a 500)
+        $in = \App\Support\SafeDate::parse($request->query('check_in'));
+        $out = \App\Support\SafeDate::parse($request->query('check_out'));
+        $checkIn = $in ? $in->startOfDay() : \App\Support\CheckInWindow::date()->addDay();
+        $checkOut = $out ? $out->startOfDay() : $checkIn->copy()->addDay();
 
         return [$checkIn, $checkOut];
     }
