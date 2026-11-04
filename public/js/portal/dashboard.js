@@ -69,9 +69,22 @@
     }
     function card(title, html, extra, desc) { return '<section class="vs-card vs-reveal" ' + (extra || '') + '><h2' + (desc ? ' class="mb-0"' : '') + '>' + title + '</h2>' + (desc ? '<p class="text-muted small mb-2">' + desc + '</p>' : '') + html + '</section>'; }
 
-    D.page = function (root, firstName) {
+    var SUPPORT_EMAIL = 'velocitysuites@gmail.com';
+    /** Gmail's compose window (new tab) and the mailto: fallback, with the same prefilled subject and body. */
+    D.supportLinks = function (o) {
+        var subject = 'Support request \u2013 Guest ID ' + (o.guestId != null && o.guestId !== '' ? o.guestId : 'unknown');
+        var body = 'Hello Velocity Suites,\n\nName: ' + (o.name || '') + '\nGuest ID: ' + (o.guestId != null ? o.guestId : '') + (o.nextBooking ? '\nNext booking: ' + o.nextBooking : '') + '\n\nHow can we help you? Please describe your question below:\n';
+        var q = function (v) { return encodeURIComponent(v); };
+        return {
+            gmail: 'https://mail.google.com/mail/?view=cm&fs=1&to=' + q(SUPPORT_EMAIL) + '&su=' + q(subject) + '&body=' + q(body),
+            mailto: 'mailto:' + SUPPORT_EMAIL + '?subject=' + q(subject) + '&body=' + q(body),
+            subject: subject, body: body, to: SUPPORT_EMAIL
+        };
+    };
+
+    D.page = function (root, firstName, fullName) {
         var host = root.querySelector('#vsDash');
-        host.innerHTML = '<div class="vs-dash-top"><section class="vs-card vs-greet"><div class="text-muted">' + greeting() + '</div><h1 class="h3 fw-bold mb-1">' + VS.esc(firstName) + '</h1><p class="mb-0 mt-1">Here’s a quick look at your stays and payments.</p></section>' +
+        host.innerHTML = '<div class="vs-dash-top"><section class="vs-card vs-greet"><div class="text-muted">' + greeting() + '</div><h1 class="h3 fw-bold mb-1 vs-fullname">' + VS.esc(fullName || firstName) + '</h1><p class="mb-0 mt-1">Here’s a quick look at your stays and payments.</p></section>' +
             '<a class="vs-card vs-clockcard text-decoration-none" href="/guest/calendar" title="Open the calendar" aria-label="Today and the time. Open the calendar"><div class="text-muted small">Today</div><div class="fw-bold" id="vsDate"></div><div class="vs-clock vs-num" id="vsClock" aria-hidden="true"></div></a></div>' +
             card('Quick actions', '<div class="vs-qa">' + [['/guest/rooms', 'fa-bed', 'Browse rooms'], ['/guest/reservations?tab=bookings', 'fa-calendar-check', 'My bookings'], ['/guest/reservations?tab=reservations', 'fa-bookmark', 'My reservations'], ['/guest/history', 'fa-clock-rotate-left', 'Transaction history'], ['/guest/book/new', 'fa-plus', 'New booking'], ['/guest/reserve/new', 'fa-plus', 'New reservation']].map(function (q) {
                 return '<a class="btn btn-outline-velocity" href="' + q[0] + '"><i class="fas ' + q[1] + '"></i><span>' + q[2] + '</span></a>'; }).join('') + '</div>', '', 'Shortcuts to common tasks') +
@@ -113,16 +126,10 @@
                 var upcoming = active.filter(function (x) { var s = (x.it.stays && x.it.stays[0]) || {}; return keyOf(x) === 'checkedin' || (s.check_out || '') >= today; })
                     .sort(function (a, b) { var A = keyOf(a) === 'checkedin' ? '0' : ((a.it.stays[0] || {}).check_in || '9'), B = keyOf(b) === 'checkedin' ? '0' : ((b.it.stays[0] || {}).check_in || '9'); return A < B ? -1 : 1; });
                 var next = upcoming[0];
-                if (next) {
-                    var st = S.status(next.it, next.kind), m = S.money(next.it);
-                    var label = { checkedin: 'Staying with us', confirmed: 'Confirmed', pending: m.waiting > 0.009 ? 'Payment under review' : (next.it.payment_method === 'gcash' && m.paid <= 0.009 ? 'Waiting for payment' : 'Awaiting verification') }[st.key] || st.label;
-                    html += card('Your next stay', '<div class="d-flex justify-content-between align-items-start gap-2"><div><div class="fw-bold">' + VS.esc(S.idLabel(next.it, next.kind)) + '</div><div>' + VS.esc(S.dates(next.it)) + '</div><div class="text-muted small">' + VS.esc(hint(next, today)) + '</div><div class="small">' + VS.esc(S.firstRoomTypes(next.it)) + '</div></div><span class="vs-chip ' + st.cls + '">' + VS.esc(label) + '</span></div>' +
-                        '<div class="vs-countdown mt-2"><i class="fas fa-hourglass-half" aria-hidden="true"></i> ' + VS.esc(hint(next, today)) + '</div>' +
-                        '<div class="vs-row mt-2"><span>Balance due</span><span>' + VS.money(m.remaining) + '</span></div>' + nextPay(next) + '<a class="btn btn-velocity btn-sm mt-2" href="' + linkOf(next) + '">View details ›</a>');
-                } else html += card('Your next stay', VS.empty('fa-calendar', 'No stay planned yet', 'Book a room and your next stay will show up here.', '<a class="btn btn-velocity" href="/guest/rooms">Book a room</a>'));
+                html += card('Your next stay', '<div id="vsNextStay"></div>');
 
                 // stay calendar
-                html += card('Stay calendar', '<p class="text-muted small">Check-ins and check-outs of your stays</p><div class="btn-group mb-2" role="group" aria-label="Period" id="calMode"><button class="btn btn-sm btn-velocity" data-m="daily">Daily</button><button class="btn btn-sm btn-outline-velocity" data-m="weekly">Weekly</button><button class="btn btn-sm btn-outline-velocity" data-m="monthly">Monthly</button></div><div id="calGrid"></div><div id="calList" class="mt-2"></div>');
+                html += card('Stay calendar', '<p class="text-muted small">Check-ins and check-outs of your stays</p><div id="vsStayCal"></div>');
 
                 var others = items.filter(function (x) { return !next || x !== next; });
                 html += card('Other recent & upcoming stays', others.slice(0, 5).length ? others.slice(0, 5).map(stayRow).join('') : '<p class="text-muted mb-0">No recent or upcoming stays</p>');
@@ -140,13 +147,29 @@
 
                 var pr = rs[2].ok ? (rs[2].data.user || {}) : {}, g = rs[2].ok ? (rs[2].data.guest || {}) : {};
                 var comp = S.completeness(pr, g), pct = comp.pct;
-                html += card('Account summary', '<a class="d-flex align-items-center gap-3 text-decoration-none" style="color:inherit" href="/guest/profile"><div class="vs-donut" style="--p:' + pct + '" role="img" aria-label="Profile ' + pct + '% complete"><span>' + pct + '%</span></div><div><div class="fw-bold">' + VS.esc([pr.first_name, pr.last_name].filter(Boolean).join(' ')) + '</div><div class="small text-muted">' + VS.esc(pr.email || '') + '</div><div class="small text-muted">' + VS.esc(g.mobile_number || pr.mobile_number || '') + '</div><div class="small ' + (comp.line ? 'text-danger' : 'text-success') + '">' + VS.esc(comp.line || 'Profile complete') + '</div></div></a><div class="vs-row mt-2"><span>Account type</span><span>Guest</span></div><div class="vs-row"><span>Account status</span><span>Active</span></div>', '', 'Your profile and contact details');
-                html += card('Need help?', '<p class="mb-2">Our team is here for you 24/7.</p><div><i class="fas fa-phone me-2 text-danger"></i>0955 139 2737</div><div><i class="fas fa-envelope me-2 text-danger"></i>velocitysuites@gmail.com</div><div><i class="fas fa-location-dot me-2 text-danger"></i>Allah Valley Drive, Surallah, South Cotabato</div><a class="btn btn-outline-velocity btn-sm mt-3" href="mailto:velocitysuites@gmail.com?subject=Velocity%20Suites%20support">Contact support</a>');
+                var pu = rs[2].ok ? (rs[2].data.profile_update || {}) : {};
+                var fullNm = [pr.first_name, pr.middle_name, pr.last_name].filter(Boolean).join(' ');
+                var nextBk = (typeof upcoming !== 'undefined' && upcoming[0]) ? S.idLabel(upcoming[0].it, upcoming[0].kind) : '';
+                var since = pr.created_at ? new Date(pr.created_at).toLocaleDateString('en-US', { month: 'long', year: 'numeric', timeZone: 'Asia/Manila' }) : '';
+                var verified = !!pr.email_verified_at;
+                var missing = comp.line ? '<div class="small text-danger mt-1">' + VS.esc(comp.line) + '</div>' : '<div class="small text-success mt-1"><i class="fas fa-circle-check me-1"></i>Profile complete</div>';
+                var upd = pu.last_updated_at ? VS.date(String(pu.last_updated_at).slice(0, 10)) : 'Not yet';
+                var nextUpd = pu.can_update === false ? VS.date(String(pu.next_update_at || '').slice(0, 10)) : 'Now';
+                html += card('Account summary', '<div class="d-flex align-items-center gap-3 mb-2"><a class="vs-donut" style="--p:' + pct + '" href="/guest/profile" role="img" aria-label="Profile ' + pct + '% complete"><span>' + pct + '%</span></a><div class="min-w-0"><div class="fw-bold vs-fullname">' + VS.esc(fullNm) + '</div><div class="small text-muted text-break">' + VS.esc(pr.email || '') + '</div><div class="small text-muted">' + VS.esc(g.mobile_number || pr.mobile_number || '') + '</div>' + missing + '</div></div>' +
+                    '<div class="vs-row"><span>Guest ID</span><span class="vs-num">' + VS.esc(g.id != null ? g.id : '') + '</span></div>' +
+                    (since ? '<div class="vs-row"><span>Member since</span><span>' + VS.esc(since) + '</span></div>' : '') +
+                    '<div class="vs-row"><span>Account type</span><span>Guest</span></div><div class="vs-row"><span>Account status</span><span>' + VS.esc((pr.status || 'active').replace(/^./, function (c) { return c.toUpperCase(); })) + '</span></div>' +
+                    '<div class="vs-row"><span>Email verified</span><span>' + (verified ? '<span class="vs-chip ok">Verified</span>' : '<span class="vs-chip wait">Not verified</span>') + '</span></div>' +
+                    '<div class="vs-row"><span>Last profile update</span><span>' + VS.esc(upd) + '</span></div><div class="vs-row"><span>Next update allowed</span><span>' + VS.esc(nextUpd) + '</span></div>' +
+                    '<div class="d-flex flex-wrap gap-2 mt-3"><a class="btn btn-outline-velocity btn-sm" href="/guest/profile">Edit profile</a><a class="btn btn-outline-velocity btn-sm" href="/guest/profile?change=password">Change password</a></div>', '', 'Your profile and contact details');
+                var sup = D.supportLinks({ name: fullNm, guestId: g.id, nextBooking: nextBk });
+                html += card('Need help?', '<p class="mb-2">Our team is here for you 24/7.</p><div><i class="fas fa-phone me-2 text-danger"></i>0955 139 2737</div><div><i class="fas fa-envelope me-2 text-danger"></i>velocitysuites@gmail.com</div><div><i class="fas fa-location-dot me-2 text-danger"></i>Allah Valley Drive, Surallah, South Cotabato</div>' +
+                    '<div class="d-flex flex-wrap align-items-center gap-2 mt-3"><a class="btn btn-velocity btn-sm" href="' + VS.esc(sup.gmail) + '" target="_blank" rel="noopener noreferrer"><i class="fas fa-envelope me-1"></i>Contact support</a><a class="small" href="' + VS.esc(sup.mailto) + '">Use another email app</a></div>');
                 body.innerHTML = '<div class="vs-dash-grid">' + html + '</div>';
-                body.querySelectorAll('section.vs-card').forEach(function (sec) { var h = sec.querySelector('h2'); if (h && /summary|calendar|next stay|payment status/i.test(h.textContent)) sec.classList.add('vs-span2'); });
+                body.querySelectorAll('section.vs-card').forEach(function (sec) { var h = sec.querySelector('h2'); if (h && /^(booking & reservation summary|your next stay|stay calendar|payment status)$/i.test(h.textContent.trim())) sec.classList.add('vs-span2'); });
                 VS.reveal(body);
                 var tg = body.querySelector('#vsSummaryToggle'); if (tg) tg.onclick = function () { var now = tg.getAttribute('aria-expanded') !== 'true'; tg.setAttribute('aria-expanded', now); body.querySelector('#vsSummaryBody').hidden = !now; try { localStorage.setItem('vs_summary_open', now ? '1' : '0'); } catch (e) { /* storage off */ } };
-                calendar(body, items);
+                if (window.VSNextStay) { VSNextStay.nextStay(body.querySelector('#vsNextStay'), items, VS.today()); VSNextStay.calendar(body.querySelector('#vsStayCal'), items, VS.today()); }
             });
         }
 
@@ -177,46 +200,14 @@
 
     // ---- the Calendar screen (the app opens it from the date and time on the dashboard) ----
     D.calendarPage = function (root) {
-        var host = root.querySelector('#vsCal'), filter = 'All', picked = null, month = VS.today().slice(0, 7), events = [];
-        var MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-        function build(items) {
-            var today = VS.today(), floor = VS.addDays(today, -1);
-            events = [];
-            S.classify(items).forEach(function (r) {
-                if (r.historical || r.cat !== 'active') return;
-                var x = r.x, key = S.status(x.it, x.kind).key, label = (r.tab === 'booking' ? 'Booking' : 'Reservation') + ': ' + (S.firstRoomTypes(x.it) || S.idLabel(x.it, x.kind));
-                var href = '/guest/' + (x.kind === 'reservation' ? 'reservations' : 'bookings') + '/' + x.it.id;
-                (x.it.stays && x.it.stays.length ? x.it.stays : [{ check_in: String(x.it.check_in).slice(0, 10), check_out: String(x.it.check_out).slice(0, 10) }]).forEach(function (st) {
-                    if (key !== 'checkedin' && st.check_in >= floor) events.push({ date: st.check_in, kind: 'in', tab: r.tab, label: label, href: href });
-                    if (key === 'checkedin' && st.check_out >= floor) events.push({ date: st.check_out, kind: 'out', tab: r.tab, label: label, href: href });
-                });
-            });
-            events.sort(function (a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : 0; });
-        }
-        function byFilter(e) { return filter === 'All' || (filter === 'Bookings' ? e.tab === 'booking' : e.tab === 'reservation'); }
-        function paint() {
-            var y = +month.slice(0, 4), mo = +month.slice(5, 7), first = new Date(Date.UTC(y, mo - 1, 1)), days = new Date(Date.UTC(y, mo, 0)).getUTCDate(), lead = first.getUTCDay(), today = VS.today();
-            var dots = {}; events.filter(byFilter).forEach(function (e) { dots[e.date] = 1; });
-            var cells = ''; for (var i = 0; i < lead; i++) cells += '<div></div>';
-            for (var d = 1; d <= days; d++) { var iso = month + '-' + String(d).padStart(2, '0'); cells += '<button type="button" class="vs-cal-day' + (iso === today ? ' today' : '') + (iso === picked ? ' picked' : '') + '" data-d="' + iso + '" aria-label="' + VS.esc(VS.date(iso)) + (dots[iso] ? ', has events' : '') + '" aria-pressed="' + (iso === picked) + '">' + d + (dots[iso] ? '<i></i>' : '') + '</button>'; }
-            var list = events.filter(function (e) { return byFilter(e) && (!picked || e.date === picked); });
-            host.innerHTML = '<section class="vs-card"><div class="d-flex flex-wrap gap-2 mb-3" role="group" aria-label="Show">' + [['All', 'All'], ['Bookings', 'Upcoming booking'], ['Reservations', 'Upcoming reservation']].map(function (f) { return '<button type="button" class="btn btn-sm ' + (filter === f[0] ? 'btn-velocity' : 'btn-outline-velocity') + '" data-f="' + f[0] + '" aria-pressed="' + (filter === f[0]) + '">' + f[1] + '</button>'; }).join('') + '</div>' +
-                '<div class="d-flex justify-content-between align-items-center mb-1"><button class="btn btn-sm btn-light" data-prev aria-label="Previous month">\u2039</button><strong>' + MONTHS[mo - 1] + ' ' + y + '</strong><button class="btn btn-sm btn-light" data-nextm aria-label="Next month">\u203a</button></div>' +
-                '<div class="vs-cal-head"><span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span></div><div class="vs-cal-grid" role="group" aria-label="' + MONTHS[mo - 1] + ' ' + y + '">' + cells + '</div></section>' +
-                '<section class="vs-card"><div class="d-flex justify-content-between align-items-center mb-2"><h2 class="mb-0">' + (picked ? 'Showing events for ' + VS.esc(VS.date(picked)) : 'Upcoming check-ins and check-outs') + '</h2>' + (picked ? '<button class="btn btn-light btn-sm" data-clear>Clear</button>' : '') + '</div>' +
-                (list.length ? list.map(function (e) { return '<a class="vs-rcpt d-flex justify-content-between align-items-center gap-2 text-decoration-none" href="' + e.href + '"><div><div class="fw-semibold">' + VS.esc(e.label) + '</div><div class="small text-muted">' + (e.kind === 'in' ? 'Check-in' : 'Check-out') + ' \u00b7 ' + VS.esc(VS.date(e.date)) + '</div></div><span class="vs-chip ' + (e.kind === 'in' ? '' : 'ok') + '">' + (e.kind === 'in' ? '2:00 PM' : '12:00 PM') + '</span></a>'; }).join('')
-                    : VS.empty('fa-calendar', 'No transactions found', 'No transactions match the filters you chose. Try a different type or date.')) + '</section>';
-            host.querySelectorAll('[data-f]').forEach(function (b) { b.onclick = function () { filter = b.dataset.f; paint(); }; });
-            host.querySelectorAll('[data-d]').forEach(function (b) { b.onclick = function () { picked = picked === b.dataset.d ? null : b.dataset.d; paint(); }; });
-            var c = host.querySelector('[data-clear]'); if (c) c.onclick = function () { picked = null; paint(); };
-            host.querySelector('[data-prev]').onclick = function () { month = new Date(Date.UTC(y, mo - 2, 1)).toISOString().slice(0, 7); paint(); };
-            host.querySelector('[data-nextm]').onclick = function () { month = new Date(Date.UTC(y, mo, 1)).toISOString().slice(0, 7); paint(); };
-        }
+        var host = root.querySelector('#vsCal');
         function load() {
-            host.innerHTML = VS.skeleton(5);
+            host.innerHTML = VS.skeleton(4);
             S.loadAll().then(function (r) {
                 if (r.error) { host.innerHTML = VS.errorState(r.error, 'vsCalRetry'); document.getElementById('vsCalRetry').onclick = load; return; }
-                build(r.items); paint();
+                if (r.partial) VS.toast('Part of your list could not be loaded. Try again in a moment.', 'warning');
+                host.innerHTML = '<section class="vs-card"><div id="vsStayCal"></div></section>';
+                VSNextStay.calendar(host.querySelector('#vsStayCal'), r.items, VS.today());
             });
         }
         load();

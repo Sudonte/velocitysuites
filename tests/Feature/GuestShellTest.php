@@ -233,4 +233,23 @@ class GuestShellTest extends ApiFlowTestCase
         // "Fully booked" stays for the case where every option is full
         $this->assertStringContainsString('<span class="vs-chip bad vs-room-avail">Fully booked</span>', $js);
     }
+
+    public function test_the_dashboard_greets_by_the_full_name_and_support_opens_gmail_with_the_guests_details(): void
+    {
+        [$user] = $this->makeGuestUser('FullName');
+        $user->forceFill(['first_name' => 'John Pauls', 'middle_name' => 'Abe', 'last_name' => 'Ombid'])->save();
+        $html = $this->actingAs($user->fresh())->get('/guest/dashboard')->assertOk()->getContent();
+        $this->assertStringContainsString('"John Pauls Abe Ombid"', $html, 'the full name as saved goes to the greeting');
+        $this->assertStringContainsString('js/portal/nextstay.js', $html);
+
+        $dash = file_get_contents(public_path('js/portal/dashboard.js'));
+        foreach (["https://mail.google.com/mail/?view=cm&fs=1&to=", "'Support request \u2013 Guest ID '", "velocitysuites@gmail.com", 'Use another email app', "target=\"_blank\" rel=\"noopener noreferrer\"",
+            'Member since', 'Email verified', 'Last profile update', 'Next update allowed', 'Edit profile', 'Change password', 'Next booking: '] as $needle) {
+            $this->assertStringContainsString($needle, $dash, $needle);
+        }
+        $ns = file_get_contents(public_path('js/portal/nextstay.js'));
+        foreach (['Yesterday', 'Tomorrow', "'Last week'", "'This week'", "'Next week'", 'Show cancelled', 'Your next stay · in ', 'nearestStayDay', 'forWindow', 'This month', 'Nothing booked for this day. Pick another day above.'] as $needle) {
+            $this->assertStringContainsString($needle, $ns, $needle);
+        }
+    }
 }

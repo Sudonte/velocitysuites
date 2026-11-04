@@ -201,6 +201,7 @@
                     else ed.openView(k);
                 };
             });
+            if (/(^|[?&])change=password(&|$)/.test(window.location.search)) { history.replaceState(null, '', window.location.pathname); setTimeout(openPw, 300); }
             host.querySelector('#pTheme').onchange = function (e) { setTheme(e.target.checked ? 'dark' : 'light'); };
         }
 
