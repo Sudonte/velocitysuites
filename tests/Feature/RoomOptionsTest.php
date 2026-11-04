@@ -42,6 +42,6 @@ class RoomOptionsTest extends ApiFlowTestCase
         $this->assertCount(0, RoomOptions::others($standard));
         $this->assertCount(1, RoomOptions::forType($standard));
         $this->assertSame('r4200c4', RoomOptions::keyFor(4200.0, 4));
-        $this->assertSame('r1500.5c2', RoomOptions::keyFor(1500.5, 2));
+        $this->assertSame('r1500p5c2', RoomOptions::keyFor(1500.5, 2));
     }
 }

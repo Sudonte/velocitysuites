@@ -51,12 +51,16 @@ class StayRecorder
                 $lineAttrs = [
                     'stay_id' => $row->id,
                     'room_type_id' => $roomType->id,
-                    'room_type_name' => $roomType->name,
+                    'room_type_name' => \App\Support\RoomOptions::lineName($roomType),
                     'quantity' => $line['quantity'],
                     'price_per_night' => $roomType->rate,
                     'number_of_nights' => $nights,
                     'subtotal' => round((float) $roomType->rate * $nights * $line['quantity'], 2),
                 ];
+                $key = \App\Support\RoomOptions::keyOf($roomType);
+                if (! \App\Support\RoomOptions::isStandard($key)) {
+                    $lineAttrs += ['option_key' => $key, 'capacity' => (int) $roomType->capacity];
+                }
                 $transaction instanceof Booking
                     ? BookingRoomLine::create($lineAttrs + ['booking_id' => $transaction->id])
                     : ReservationRoomLine::create($lineAttrs + ['reservation_id' => $transaction->id]);
@@ -104,6 +108,8 @@ class StayRecorder
                 'price_per_night' => $line->price_per_night,
                 'number_of_nights' => $line->number_of_nights,
                 'subtotal' => $line->subtotal,
+                'option_key' => $line->option_key,
+                'capacity' => $line->capacity,
             ]);
         }
         $booking->unsetRelation('stays');

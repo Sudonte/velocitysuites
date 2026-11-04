@@ -218,9 +218,13 @@ class CheckInController extends Controller
         if ($pickedRooms->contains(fn ($room) => ! $room->roomType || $room->roomType->status !== 'active')) {
             return back()->withInput()->with('error', 'One of the selected rooms is not a room type that can be booked.');
         }
-        $roomLines = $pickedRooms->groupBy('room_type_id')
-            ->map(fn ($rooms) => ['room_type' => $rooms->first()->roomType, 'quantity' => $rooms->count(), 'room_ids' => $rooms->pluck('id')->all()])
-            ->values()->all();
+        // one line per room type AND option (a room with its own price or capacity is its own option and is billed at its own price)
+        $roomLines = $pickedRooms->groupBy(fn ($room) => $room->room_type_id . '|' . \App\Support\RoomOptions::keyForRoom($room))
+            ->map(fn ($rooms) => [
+                'room_type' => \App\Support\RoomOptions::typeFor($rooms->first()->roomType, \App\Support\RoomOptions::keyForRoom($rooms->first())) ?? $rooms->first()->roomType,
+                'quantity' => $rooms->count(),
+                'room_ids' => $rooms->pluck('id')->all(),
+            ])->values()->all();
 
         // the rooms picked, each with its own capacity
         $capacityError = \App\Support\GuestCapacity::error(\App\Support\GuestCapacity::linesForRooms($pickedRooms), (int) $validated['adults'] + $children);
@@ -238,7 +242,7 @@ class CheckInController extends Controller
             ) {
                 $this->availability->lockRoomTypesForAvailabilityCheck(collect($roomLines)->map(fn ($l) => $l['room_type']->id));
                 foreach ($roomLines as $line) {
-                    $left = $this->availability->availableCount($line['room_type'], $checkIn, $checkOut);
+                    $left = $this->availability->availableCount($line['room_type'], $checkIn, $checkOut, null, \App\Support\RoomOptions::keyOf($line['room_type']));
                     if ($left < $line['quantity']) {
                         throw ValidationException::withMessages(['room_ids' => "Only {$left} {$line['room_type']->name} room(s) can still be booked for these dates."]);
                     }
@@ -268,12 +272,15 @@ class CheckInController extends Controller
                 foreach ($roomLines as $line) {
                     $booking->roomLines()->create([
                         'room_type_id' => $line['room_type']->id,
-                        'room_type_name' => $line['room_type']->name,
+                        'room_type_name' => \App\Support\RoomOptions::lineName($line['room_type']),
                         'quantity' => $line['quantity'],
                         'price_per_night' => $line['room_type']->rate,
                         'number_of_nights' => $nights,
                         'subtotal' => round((float) $line['room_type']->rate * $nights * $line['quantity'], 2),
-                    ]);
+                    ] + (\App\Support\RoomOptions::isStandard(\App\Support\RoomOptions::keyOf($line['room_type'])) ? [] : [
+                        'option_key' => \App\Support\RoomOptions::keyOf($line['room_type']),
+                        'capacity' => (int) $line['room_type']->capacity,
+                    ]));
                 }
 
                 // Approved straight away - the receptionist added them with the guest at the desk; billed now.
@@ -305,7 +312,7 @@ class CheckInController extends Controller
 
                 $rooms = $this->availability->assignRoomsForLines(
                     $booking,
-                    collect($roomLines)->mapWithKeys(fn ($l) => [(string) $l['room_type']->id => $l['room_ids']])->all()
+                    collect($roomLines)->mapWithKeys(fn ($l) => [\App\Services\RoomAvailabilityService::optionLineKey($l['room_type']->id, \App\Support\RoomOptions::keyOf($l['room_type'])) => $l['room_ids']])->all()
                 );
                 foreach ($rooms as $room) {
                     $room->update(['status' => 'occupied']);
@@ -398,7 +405,7 @@ class CheckInController extends Controller
         $assignableRoomsByLine = $this->availability->assignableRoomsByLine($booking, $checkInStay);
         $stayLines = $this->availability->linesOfStay($booking, $checkInStay);
         $roomLines = $stayLines->isNotEmpty()
-            ? $stayLines->map(fn ($l) => ['room_type_id' => (string) $l->room_type_id, 'room_type' => $l->room_type_name, 'quantity' => (int) $l->quantity])->values()->all()
+            ? $stayLines->map(fn ($l) => ['room_type_id' => \App\Services\RoomAvailabilityService::lineKey($l), 'room_type' => $this->lineLabel($l), 'quantity' => (int) $l->quantity])->values()->all()
             : [[
                 'room_type_id' => (string) $booking->room_type_id,
                 'room_type' => $booking->roomType->name ?? 'N/A',
@@ -418,7 +425,7 @@ class CheckInController extends Controller
                 return [
                     'stay' => $st,
                     'roomLines' => $lines->isNotEmpty()
-                        ? $lines->map(fn ($l) => ['room_type_id' => (string) $l->room_type_id, 'room_type' => $l->room_type_name, 'quantity' => (int) $l->quantity])->values()->all()
+                        ? $lines->map(fn ($l) => ['room_type_id' => \App\Services\RoomAvailabilityService::lineKey($l), 'room_type' => $this->lineLabel($l), 'quantity' => (int) $l->quantity])->values()->all()
                         : [['room_type_id' => (string) $booking->room_type_id, 'room_type' => $booking->roomType->name ?? 'N/A', 'quantity' => $booking->rooms_requested]],
                     'assignable' => $this->availability->assignableRoomsByLine($booking, $st),
                 ];
@@ -442,6 +449,12 @@ class CheckInController extends Controller
             'booking', 'assignableRoomsByLine', 'roomLines', 'assignedRoomIds', 'assignedRoomIdsByType', 'accountGuest',
             'checkInStay', 'bookingStays', 'firstCheckIn', 'panelCapacity', 'checkInStays', 'stayPanels'
         ), $this->settlement($booking)));
+    }
+
+    /** What the panel calls a booked line (an other option's name already says its capacity). */
+    private function lineLabel(object $l): string
+    {
+        return (string) $l->room_type_name;
     }
 
     /** The room types x quantities of ONE stay (what its guests must fit in) - the whole booking's for a one-stay booking. */

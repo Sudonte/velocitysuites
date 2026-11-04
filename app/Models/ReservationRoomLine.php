@@ -28,6 +28,8 @@ class ReservationRoomLine extends Model
         'price_per_night',
         'number_of_nights',
         'subtotal',
+        'option_key',
+        'capacity',
     ];
 
     protected $casts = [

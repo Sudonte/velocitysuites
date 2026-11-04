@@ -6,6 +6,7 @@ use App\Models\Booking;
 use App\Models\Room;
 use App\Models\RoomType;
 use App\Models\Stay;
+use App\Support\RoomOptions;
 use App\Support\TestAccountScope;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
@@ -52,8 +53,11 @@ class RoomAvailabilityService
     }
 
     /** Rooms bookable at all: inventory minus the ones under maintenance (unusable whatever the dates). */
-    public function sellableCapacity(RoomType $roomType): int
+    public function sellableCapacity(RoomType $roomType, ?string $optionKey = null): int
     {
+        if ($optionKey !== null) {
+            return RoomOptions::rooms($roomType, $optionKey, false)->count();
+        }
         $maintenance = Room::notArchived()->where('room_type_id', $roomType->id)->where('status', 'maintenance')->count();
 
         return max(0, $this->totalInventory($roomType) - $maintenance);
@@ -63,11 +67,51 @@ class RoomAvailabilityService
      * How many rooms of this type are free for the given date range: sellable inventory minus the most rooms any single NIGHT of the
      * range already has taken by confirmed or checked-in bookings (their stays, each with its own dates).
      */
-    public function availableCount(RoomType $roomType, Carbon $checkIn, Carbon $checkOut, ?int $excludingBookingId = null): int
+    public function availableCount(RoomType $roomType, Carbon $checkIn, Carbon $checkOut, ?int $excludingBookingId = null, ?string $optionKey = null): int
     {
-        $occupied = $this->occupancyByNight([$roomType->id], $checkIn, $checkOut, $excludingBookingId)[$roomType->id] ?? [];
+        $occupied = $this->occupancyByNight([$roomType->id], $checkIn, $checkOut, $excludingBookingId, null, false, false, $optionKey)[$roomType->id] ?? [];
 
-        return max(0, $this->sellableCapacity($roomType) - ($occupied ? max($occupied) : 0));
+        return max(0, $this->sellableCapacity($roomType, $optionKey) - ($occupied ? max($occupied) : 0));
+    }
+
+    /**
+     * The options of every given room type with their own availability for the dates: [room_type_id => [option key => [key, rate,
+     * capacity, is_standard, total (rooms in inventory), available]]]. An option only counts the rooms that are that option (same price
+     * and capacity) and the booked lines that name it, so one option can never be sold past its own rooms. The standard option is
+     * always present; others only while they have rooms.
+     *
+     * @param  iterable<RoomType>  $roomTypes
+     * @return array<int,array<string,array<string,mixed>>>
+     */
+    public function optionAvailability(iterable $roomTypes, Carbon $checkIn, Carbon $checkOut): array
+    {
+        $types = collect($roomTypes)->filter(fn ($t) => $t->id)->keyBy('id');
+        if ($types->isEmpty()) {
+            return [];
+        }
+        $rooms = Room::notArchived()->whereIn('room_type_id', $types->keys())->get()->groupBy('room_type_id');
+        $out = [];
+        $byKey = []; // option key => [type ids] (std is read once for all types)
+        foreach ($types as $id => $type) {
+            foreach (RoomOptions::forType($type, $rooms->get($id, collect())) as $g) {
+                $maintenance = collect($g['room_ids'])->filter(fn ($rid) => ($rooms->get($id)?->firstWhere('id', $rid)?->status) === 'maintenance')->count();
+                $out[$id][$g['key']] = ['key' => $g['key'], 'rate' => $g['rate'], 'capacity' => $g['capacity'], 'is_standard' => $g['is_standard'],
+                    'total' => $g['count'], 'sellable' => max(0, $g['count'] - $maintenance), 'available' => 0];
+                $byKey[$g['key']][] = $id;
+            }
+        }
+        foreach ($byKey as $key => $ids) {
+            $occupied = $this->occupancyByNight($ids, $checkIn, $checkOut, null, null, false, false, $key);
+            foreach ($ids as $id) {
+                $peak = ! empty($occupied[$id]) ? max($occupied[$id]) : 0;
+                $out[$id][$key]['available'] = max(0, $out[$id][$key]['sellable'] - $peak);
+            }
+        }
+        foreach ($out as $id => $options) {
+            $out[$id] = array_filter($options, fn ($o) => $o['is_standard'] || $o['total'] > 0);
+        }
+
+        return $out;
     }
 
     /**
@@ -115,7 +159,7 @@ class RoomAvailabilityService
      * @param  array<int,string>|null  $statuses
      * @return array<int,array<string,int>>
      */
-    public function occupancyByNight(array $roomTypeIds, Carbon $from, Carbon $to, ?int $excludingBookingId = null, ?array $statuses = null, bool $keepCheckedOutStays = false, bool $excludeTestAccounts = false): array
+    public function occupancyByNight(array $roomTypeIds, Carbon $from, Carbon $to, ?int $excludingBookingId = null, ?array $statuses = null, bool $keepCheckedOutStays = false, bool $excludeTestAccounts = false, ?string $optionKey = null): array
     {
         $statuses ??= [Booking::STATUS_ACTIVE, Booking::STATUS_CHECKED_IN];
         $fromDay = Carbon::parse($from->format('Y-m-d'));
@@ -132,6 +176,9 @@ class RoomAvailabilityService
             ->whereNull('b.deleted_at')
             ->whereIn('b.booking_status', $statuses)
             ->whereIn('l.room_type_id', $roomTypeIds)
+            ->when($optionKey !== null, fn ($q) => RoomOptions::isStandard($optionKey)
+                ? $q->where(fn ($w) => $w->whereNull('l.option_key')->orWhere('l.option_key', RoomOptions::STANDARD))
+                : $q->where('l.option_key', $optionKey))
             ->when($excludingBookingId, fn ($q) => $q->where('b.id', '!=', $excludingBookingId))
             ->when($excludeTestAccounts, fn ($q) => $q->whereNotIn('b.id', TestAccountScope::testBookingIdsQuery()))
             ->selectRaw('l.room_type_id AS type_id, l.quantity AS qty, b.booking_status AS status, '
@@ -146,6 +193,7 @@ class RoomAvailabilityService
             ->whereIn('b.booking_status', $statuses)
             ->whereIn('b.room_type_id', $roomTypeIds)
             ->whereNotExists(fn ($q) => $q->select(DB::raw(1))->from('booking_room_lines as l')->whereColumn('l.booking_id', 'b.id'))
+            ->when($optionKey !== null && ! RoomOptions::isStandard($optionKey), fn ($q) => $q->whereRaw('1 = 0'))
             ->when($excludingBookingId, fn ($q) => $q->where('b.id', '!=', $excludingBookingId))
             ->when($excludeTestAccounts, fn ($q) => $q->whereNotIn('b.id', TestAccountScope::testBookingIdsQuery()))
             ->selectRaw('b.room_type_id AS type_id, b.rooms_requested AS qty, b.booking_status AS status, '
@@ -253,6 +301,55 @@ class RoomAvailabilityService
             }
         }
 
+        return $this->optionShortfall($stays, $excludingBookingId);
+    }
+
+    /**
+     * The same night-by-night check, per OPTION: the rooms of one option (same price and capacity) asked for across the stays, on top of
+     * what other transactions already hold of that option, must fit that option's own rooms. This is what stops "Other Deluxe" from being
+     * sold past its rooms even when the room type as a whole still has free ones.
+     */
+    private function optionShortfall(array $stays, ?int $excludingBookingId): ?array
+    {
+        $byOption = [];
+        foreach ($stays as $i => $stay) {
+            foreach ($stay['lines'] as $line) {
+                $type = $line['room_type'];
+                $key = RoomOptions::keyOf($type);
+                $slot = $type->id . '|' . $key;
+                $byOption[$slot]['type'] = $type;
+                $byOption[$slot]['key'] = $key;
+                $byOption[$slot]['stays'][$i] = ($byOption[$slot]['stays'][$i] ?? 0) + (int) $line['quantity'];
+            }
+        }
+        foreach ($byOption as $entry) {
+            /** @var RoomType $type */
+            $type = $entry['type'];
+            $realType = RoomType::find($type->id) ?? $type;
+            $capacity = $this->sellableCapacity($realType, $entry['key']);
+            $firstIn = collect(array_keys($entry['stays']))->map(fn ($i) => $stays[$i]['check_in'])->min();
+            $lastOut = collect(array_keys($entry['stays']))->map(fn ($i) => $stays[$i]['check_out'])->max();
+            $others = $this->occupancyByNight([$type->id], $firstIn, $lastOut, $excludingBookingId, null, false, false, $entry['key'])[$type->id] ?? [];
+            $own = [];
+            foreach ($entry['stays'] as $i => $qty) {
+                $in = Carbon::parse($stays[$i]['check_in']->format('Y-m-d'));
+                $out = Carbon::parse($stays[$i]['check_out']->format('Y-m-d'));
+                for ($d = $in->copy(); $d->lt($out); $d->addDay()) {
+                    $night = $d->toDateString();
+                    $own[$night] = ($own[$night] ?? 0) + $qty;
+                    if (($others[$night] ?? 0) + $own[$night] > $capacity) {
+                        $free = max(0, $capacity - ($others[$night] ?? 0));
+                        $name = $type->name . (RoomOptions::isStandard($entry['key']) ? '' : ' (up to ' . (int) $type->capacity . ' guests)');
+                        $message = $free > 0
+                            ? "Not enough {$name} rooms for {$d->format('M j')} (needs {$own[$night]}, only {$free} free)."
+                            : "{$name} is fully booked for {$d->format('M j')}.";
+
+                        return ['stay' => $i + 1, 'field' => count($stays) === 1 ? 'rooms_requested' : 'stays', 'message' => $message, 'type_name' => $type->name, 'needed' => $own[$night], 'free' => $free];
+                    }
+                }
+            }
+        }
+
         return null;
     }
 
@@ -300,7 +397,7 @@ class RoomAvailabilityService
                 return "{$roomType->name} is not currently available.";
             }
 
-            $available = $this->availableCount($roomType, $checkIn, $checkOut);
+            $available = $this->availableCount($roomType, $checkIn, $checkOut, null, RoomOptions::STANDARD);
             if ($available < $quantity) {
                 return $quantity > 1
                     ? "Not enough {$roomType->name} rooms available for these dates (needs {$quantity}, only {$available} free)."
@@ -328,7 +425,7 @@ class RoomAvailabilityService
      * assignment, run once per distinct room type. $stay is the stay being checked in (its own dates decide the window); without it the
      * booking's overall span is used.
      */
-    public function assignableRoomsOfType(int $roomTypeId, Booking $booking, ?Stay $stay = null): Collection
+    public function assignableRoomsOfType(int $roomTypeId, Booking $booking, ?Stay $stay = null, ?string $optionKey = null): Collection
     {
         // Rooms are only ever assigned at check-in, i.e. NOW - even for a guest arriving ahead of their booked
         // date - so the stay is taken to start today (or on its booked date if that already passed).
@@ -337,7 +434,7 @@ class RoomAvailabilityService
         $out = $stay?->check_out ?? $booking->check_out;
         $from = $in->lt($hotelToday) ? $in : $hotelToday;
 
-        return $this->freeRoomsOfType($roomTypeId, $from, $out, $booking->id, $stay && ! $stay->isVirtual() ? $stay->id : null);
+        return $this->onlyOption($this->freeRoomsOfType($roomTypeId, $from, $out, $booking->id, $stay && ! $stay->isVirtual() ? $stay->id : null), $roomTypeId, $optionKey);
     }
 
     /**
@@ -349,6 +446,32 @@ class RoomAvailabilityService
      * Maintenance and archived rooms are never offered. $excludingBookingId leaves that booking's own rooms out of the exclusion;
      * with $excludingStayId only that stay's own rooms - its OTHER stays still hold theirs.
      */
+    /** Keeps only the rooms of the booked option (price and capacity); no option given = the whole list, as before. */
+    private function onlyOption(Collection $rooms, int $roomTypeId, ?string $optionKey): Collection
+    {
+        if ($optionKey === null) {
+            return $rooms;
+        }
+        $type = RoomType::find($roomTypeId);
+        if (! $type) {
+            return $rooms;
+        }
+        $ids = RoomOptions::rooms($type, $optionKey)->pluck('id')->all();
+
+        return $rooms->filter(fn ($r) => in_array($r->id, $ids, true))->values();
+    }
+
+    /** The key a line goes by in the check-in forms: the room type id, plus the option for a non-standard one. */
+    public static function lineKey(object $line): string
+    {
+        return self::optionLineKey((int) $line->room_type_id, $line->option_key ?? null);
+    }
+
+    public static function optionLineKey(int $roomTypeId, ?string $optionKey): string
+    {
+        return RoomOptions::isStandard($optionKey) ? (string) $roomTypeId : $roomTypeId . ':' . $optionKey;
+    }
+
     public function freeRoomsOfType(int $roomTypeId, Carbon $from, Carbon $checkOut, ?int $excludingBookingId = null, ?int $excludingStayId = null): Collection
     {
         $taken = DB::table('booking_rooms as br')
@@ -395,8 +518,16 @@ class RoomAvailabilityService
         }
 
         return $lines->mapWithKeys(
-            fn ($line) => [(string) $line->room_type_id => $this->assignableRoomsOfType($line->room_type_id, $booking, $stay)]
+            fn ($line) => [self::lineKey($line) => $this->assignableRoomsOfType($line->room_type_id, $booking, $stay, RoomOptions::isStandard($line->option_key ?? null) && ! $this->hasOtherOptions($line->room_type_id) ? null : ($line->option_key ?: RoomOptions::STANDARD))]
         );
+    }
+
+    /** Whether a room type has rooms with their own price or capacity (so that standard bookings must be matched to standard rooms). */
+    private function hasOtherOptions(int $roomTypeId): bool
+    {
+        $type = RoomType::find($roomTypeId);
+
+        return $type !== null && RoomOptions::others($type)->isNotEmpty();
     }
 
     /** The room lines that belong to one stay (a one-stay booking: all of them; a row with no stay yet belongs to the first stay). */
@@ -441,23 +572,26 @@ class RoomAvailabilityService
         $lines = $this->linesOfStay($booking, $stay);
         $requiredByType = $lines->isEmpty()
             ? collect([(string) $booking->room_type_id => $booking->rooms_requested])
-            : $lines->mapWithKeys(fn ($line) => [(string) $line->room_type_id => $line->quantity]);
+            : $lines->mapWithKeys(fn ($line) => [self::lineKey($line) => $line->quantity]);
+        $optionOf = $lines->mapWithKeys(fn ($line) => [self::lineKey($line) => $line]);
 
         $allRooms = collect();
 
         foreach ($requiredByType as $roomTypeId => $requiredQuantity) {
             $picked = collect($roomIdsByType[$roomTypeId] ?? []);
             if ($picked->count() !== (int) $requiredQuantity) {
-                $roomType = RoomType::find((int) $roomTypeId);
+                $roomType = RoomType::find((int) explode(':', (string) $roomTypeId)[0]);
                 abort(422, "This booking needs exactly {$requiredQuantity} " . ($roomType->name ?? 'room')
                     . ' room(s) assigned - selected ' . $picked->count() . '.');
             }
 
-            $assignable = $this->assignableRoomsOfType((int) $roomTypeId, $booking, $stay)->keyBy('id');
+            $line = $optionOf->get((string) $roomTypeId);
+            $typeId = (int) explode(':', (string) $roomTypeId)[0];
+            $assignable = $this->assignableRoomsOfType($typeId, $booking, $stay, $line && ! (RoomOptions::isStandard($line->option_key ?? null) && ! $this->hasOtherOptions($typeId)) ? ($line->option_key ?: RoomOptions::STANDARD) : null)->keyBy('id');
             $rooms = $picked->map(fn ($id) => $assignable->get((int) $id));
 
             if ($rooms->contains(null)) {
-                $roomType = RoomType::find((int) $roomTypeId);
+                $roomType = RoomType::find($typeId);
                 abort(422, 'One or more selected rooms are no longer available: they are not a free '
                     . ($roomType->name ?? 'matching') . ' room for these dates. Please try again.');
             }

@@ -30,6 +30,7 @@ final class StaysInput
             'stays.*.rooms' => 'required|array|min:1',
             'stays.*.rooms.*.room_type_id' => 'required|exists:room_types,id',
             'stays.*.rooms.*.quantity' => 'required|integer|min:1|max:50',
+            'stays.*.rooms.*.option_key' => 'nullable|string|max:40',
             'stays.*.amenities' => 'nullable|array',
             'stays.*.amenities.*.amenity_id' => 'required_with:stays.*.amenities|integer',
             'stays.*.amenities.*.quantity' => 'required_with:stays.*.amenities|integer|min:1',
@@ -45,6 +46,17 @@ final class StaysInput
             'stays.*.check_in.after_or_equal' => CheckInWindow::messages()['check_in.after_or_equal'],
             'stays.*.check_out.after' => CheckInWindow::messages()['check_out.after'],
         ];
+    }
+
+    /** The room type as the requested option sees it (rate and capacity of that option); an option that no longer exists is refused. */
+    private static function optionType(RoomType $type, ?string $optionKey): RoomType
+    {
+        $copy = RoomOptions::typeFor($type, $optionKey);
+        if (! $copy) {
+            throw ValidationException::withMessages(['rooms' => "That {$type->name} room option is no longer offered. Please choose again."]);
+        }
+
+        return $copy;
     }
 
     /** @return array<int,array{check_in: Carbon, check_out: Carbon, lines: array, amenities: Collection}> */
@@ -63,7 +75,7 @@ final class StaysInput
             'check_in' => Carbon::parse($stay['check_in']),
             'check_out' => Carbon::parse($stay['check_out']),
             'lines' => array_map(fn (array $line) => [
-                'room_type' => RoomType::findOrFail($line['room_type_id']),
+                'room_type' => self::optionType(RoomType::findOrFail($line['room_type_id']), $line['option_key'] ?? null),
                 'quantity' => (int) $line['quantity'],
             ], array_values($stay['rooms'])),
             'raw_amenities' => array_values($stay['amenities'] ?? []),
@@ -185,10 +197,14 @@ final class StaysInput
             return [
                 'check_in' => $stay->check_in,
                 'check_out' => $stay->check_out,
-                'lines' => $mine->map(fn ($l) => [
-                    'room_type' => $types->get($l->room_type_id) ?? RoomType::find($l->room_type_id),
-                    'quantity' => (int) $l->quantity,
-                ])->filter(fn ($l) => $l['room_type'] !== null)->values()->all(),
+                'lines' => $mine->map(function ($l) use ($types) {
+                    $type = $types->get($l->room_type_id) ?? RoomType::find($l->room_type_id);
+
+                    return [
+                        'room_type' => $type ? RoomOptions::typeForLine($type, $l) : null,
+                        'quantity' => (int) $l->quantity,
+                    ];
+                })->filter(fn ($l) => $l['room_type'] !== null)->values()->all(),
                 'raw_amenities' => [],
                 'amenities' => collect(),
             ];

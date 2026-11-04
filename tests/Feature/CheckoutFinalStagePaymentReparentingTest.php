@@ -97,6 +97,8 @@ class CheckoutFinalStagePaymentReparentingTest extends TestCase
             $table->decimal('price_per_night', 10, 2);
             $table->integer('number_of_nights');
             $table->decimal('subtotal', 10, 2);
+            $table->string('option_key', 40)->nullable();
+            $table->unsignedSmallInteger('capacity')->nullable();
             $table->timestamps();
             $table->unsignedBigInteger('stay_id')->nullable();
         });
@@ -171,6 +173,8 @@ class CheckoutFinalStagePaymentReparentingTest extends TestCase
             $table->decimal('price_per_night', 10, 2);
             $table->integer('number_of_nights');
             $table->decimal('subtotal', 10, 2);
+            $table->string('option_key', 40)->nullable();
+            $table->unsignedSmallInteger('capacity')->nullable();
             $table->timestamps();
             $table->unsignedBigInteger('stay_id')->nullable();
         });

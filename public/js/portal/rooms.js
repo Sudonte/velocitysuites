@@ -45,15 +45,49 @@
     var MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     function shortDate(iso) { var p = String(iso).split('-'); return MONTHS[+p[1] - 1] + ' ' + (+p[2]); }
 
+    // A room type has its STANDARD option (the type itself) and, when some of its rooms have their own price or capacity, "other" options.
+    // Every option is a "unit" with its own key ("12" for the standard one, "12:r4200c4" for another) used by the steppers, the selection and the wizard.
+    R.unitKey = function (u) { return u._key || String(u.id); };
+    R.unitsOf = function (rt) {
+        var out = [rt];
+        (rt.other_options || []).forEach(function (o) {
+            out.push({ id: rt.id, name: rt.name, rate: o.price, capacity: o.capacity, capacity_label: o.capacity_label, available_count: o.available_count, is_fully_booked: o.is_fully_booked,
+                promos: o.promos || [], image_url: rt.image_url, _key: rt.id + ':' + o.option_key, option_key: o.option_key, _type: rt });
+        });
+        return out;
+    };
+    R.flatUnits = function (rooms) { return rooms.reduce(function (a, rt) { return a.concat(R.unitsOf(rt)); }, []); };
+    function unitLabel(u) { return u.name + (u.option_key ? ' (up to ' + u.capacity + ' guests)' : ''); }
+
     function stepperInner(rt, qty, max) {
         if (max <= 0) return '';
-        var atLimit = qty >= max;
-        return '<span class="vs-qty-label" id="qtyl' + rt.id + '">Rooms</span><div class="vs-qty" role="group" aria-labelledby="qtyl' + rt.id + '">' +
-            '<button type="button" class="btn btn-sm btn-outline-velocity" data-dec="' + rt.id + '" aria-label="Fewer ' + VS.esc(rt.name) + ' rooms"' + (qty ? '' : ' disabled') + '>\u2212</button>' +
+        var atLimit = qty >= max, K = R.unitKey(rt);
+        return '<span class="vs-qty-label" id="qtyl' + K + '">Rooms</span><div class="vs-qty" role="group" aria-labelledby="qtyl' + K + '">' +
+            '<button type="button" class="btn btn-sm btn-outline-velocity" data-dec="' + K + '" aria-label="Fewer ' + VS.esc(unitLabel(rt)) + ' rooms"' + (qty ? '' : ' disabled') + '>\u2212</button>' +
             '<output class="vs-num fw-bold" aria-live="polite">' + qty + '</output>' +
-            '<button type="button" class="btn btn-sm btn-outline-velocity" data-inc="' + rt.id + '" aria-label="More ' + VS.esc(rt.name) + ' rooms"' + (atLimit ? ' disabled' : '') + '>+</button></div>' +
+            '<button type="button" class="btn btn-sm btn-outline-velocity" data-inc="' + K + '" aria-label="More ' + VS.esc(unitLabel(rt)) + ' rooms"' + (atLimit ? ' disabled' : '') + '>+</button></div>' +
             '<div class="vs-qty-msg small" role="status">' + (atLimit ? 'Only ' + VS.plural(max, 'room') + ' available for these dates.' : '') + '</div>';
     }
+
+    /** "Other Deluxe rooms >": the rooms of this type with their own price or capacity, each with its own stepper, hidden until opened. */
+    R.otherBlock = function (rt, sel) {
+        var units = R.unitsOf(rt).slice(1);
+        var open = sel && units.some(function (u) { return sel.qty(R.unitKey(u)) > 0; });
+        var rows = units.map(function (u) {
+            var K = R.unitKey(u), max = sel ? sel.max(u) : 0, free = u.is_fully_booked || (u.available_count || 0) <= 0 ? 0 : u.available_count;
+            return '<div class="vs-other-row" data-other-row="' + VS.esc(K) + '"><div><div class="fw-semibold">Up to ' + u.capacity + ' guests</div>' +
+                '<div class="small vs-num">' + VS.money(u.rate) + ' <span class="text-muted">per night</span></div>' +
+                '<div class="small ' + (free ? 'text-success' : 'text-danger') + '">' + (free ? VS.plural(free, 'room') + ' available' : 'Fully booked') + '</div></div>' +
+                (sel ? '<div class="vs-stepper" data-stepper="' + VS.esc(K) + '">' + stepperInner(u, sel.qty(K), max) + '</div>' : '') + '</div>';
+        }).join('');
+        return '<div class="vs-other"><button type="button" class="vs-other-toggle" aria-expanded="' + !!open + '" aria-controls="vsOther' + rt.id + '"><span>Other ' + VS.esc(rt.name) + ' rooms</span><i class="fas fa-chevron-right" aria-hidden="true"></i></button>' +
+            '<div class="vs-other-list" id="vsOther' + rt.id + '"' + (open ? '' : ' hidden') + '>' + rows + '</div></div>';
+    };
+    document.addEventListener('click', function (e) {
+        var t = e.target.closest('.vs-other-toggle'); if (!t) return;
+        var now = t.getAttribute('aria-expanded') !== 'true';
+        t.setAttribute('aria-expanded', now); var l = document.getElementById(t.getAttribute('aria-controls')); if (l) l.hidden = !now;
+    });
 
     /** One room card; `search` is the query string (dates) carried to the details page; `sel` (optional) adds the quantity stepper. */
     R.card = function (rt, search, sel) {
@@ -64,12 +98,13 @@
             : VS.money(rt.rate);
         var href = '/rooms/' + rt.id + (search ? '?' + search : '');
         var step = sel ? '<div class="vs-stepper" data-stepper="' + rt.id + '">' + stepperInner(rt, sel.qty(rt.id), sel.max(rt)) + '</div>' : '';
+        var others = (rt.other_options || []).length ? R.otherBlock(rt, sel) : '';
         return '<div class="col-sm-6 col-lg-4"><article class="vs-room vs-reveal" data-room="' + rt.id + '">' +
             '<a class="vs-room-photo" href="' + href + '" aria-label="' + VS.esc(rt.name) + ' details">' +
             '<img src="' + VS.esc(rt.image_url) + '" alt="' + VS.esc(rt.name) + '" loading="lazy">' + availChip(rt) + promoBadge(rt) + '</a>' +
             '<div class="vs-room-body"><h3>' + VS.esc(rt.name) + '</h3>' +
             '<div class="vs-room-facts">' + VS.esc(facts(rt)) + '</div>' +
-            '<div class="vs-room-price">' + price + ' <small>per night</small></div>' + step +
+            '<div class="vs-room-price">' + price + ' <small>per night</small></div>' + step + others +
             '<a class="btn btn-outline-velocity mt-auto" href="' + href + '">View details</a>' +
             '</div></article></div>';
     };
@@ -92,14 +127,14 @@
         sel.dates = function () { return { check_in: st.check_in, check_out: st.check_out }; };
 
         sel.sync = function (rooms) {
-            list = rooms;
+            list = R.flatUnits(rooms);
             var changed = false;
             Object.keys(st.rooms).forEach(function (id) {
-                var rt = rooms.filter(function (r) { return String(r.id) === String(id); })[0];
+                var rt = list.filter(function (r) { return R.unitKey(r) === String(id); })[0];
                 var max = rt ? sel.max(rt) : 0;
                 if (st.rooms[id] > max) { changed = true; if (max > 0) st.rooms[id] = max; else delete st.rooms[id]; }
             });
-            rooms.forEach(function (r) { if (st.rooms[r.id]) st.types[r.id] = { name: r.name, rate: Number(r.rate) }; });
+            list.forEach(function (r) { var k = R.unitKey(r); if (st.rooms[k]) st.types[k] = { name: unitLabel(r), rate: Number(r.rate) }; });
             persist(); paintBar();
             return changed;
         };
@@ -148,11 +183,11 @@
         sel.bind = function (grid) {
             grid.addEventListener('click', function (e) {
                 var btn = e.target.closest('[data-inc],[data-dec]'); if (!btn) return;
-                var id = btn.dataset.inc || btn.dataset.dec, rt = list.filter(function (r) { return String(r.id) === String(id); })[0]; if (!rt) return;
-                var q = sel.qty(rt.id) + (btn.dataset.inc ? 1 : -1);
+                var id = btn.dataset.inc || btn.dataset.dec, rt = list.filter(function (r) { return R.unitKey(r) === String(id); })[0]; if (!rt) return;
+                var K = R.unitKey(rt), q = sel.qty(K) + (btn.dataset.inc ? 1 : -1);
                 q = Math.max(0, Math.min(sel.max(rt), q));
-                if (q) { st.rooms[rt.id] = q; st.types[rt.id] = { name: rt.name, rate: Number(rt.rate) }; } else delete st.rooms[rt.id];
-                var host = grid.querySelector('[data-stepper="' + rt.id + '"]');
+                if (q) { st.rooms[K] = q; st.types[K] = { name: unitLabel(rt), rate: Number(rt.rate) }; } else delete st.rooms[K];
+                var host = grid.querySelector('[data-stepper="' + K + '"]');
                 host.innerHTML = stepperInner(rt, q, sel.max(rt));
                 var again = host.querySelector(btn.dataset.inc ? '[data-inc]' : '[data-dec]'); if (again && !again.disabled) again.focus();
                 persist(); paintBar();
@@ -162,7 +197,7 @@
         sel.clear = function () {
             st.rooms = {}; st.types = {}; R.clearSelection();
             document.querySelectorAll('[data-stepper]').forEach(function (host) {
-                var rt = list.filter(function (x) { return String(x.id) === String(host.getAttribute('data-stepper')); })[0];
+                var rt = list.filter(function (x) { return R.unitKey(x) === String(host.getAttribute('data-stepper')); })[0];
                 if (rt) host.innerHTML = stepperInner(rt, 0, sel.max(rt));
             });
             paintBar(); VS.toast('Selection cleared.', 'success');

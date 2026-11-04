@@ -193,6 +193,8 @@ trait HasStays
                     'room_type_id' => (string) $line->room_type_id,
                     'room_type' => $line->room_type_name,
                     'quantity' => (int) $line->quantity,
+                    'option_key' => $line->option_key ?: 'std',
+                    'capacity' => $line->capacity ? (int) $line->capacity : null,
                     'price_per_night' => (float) $line->price_per_night,
                     'nights' => (int) $line->number_of_nights,
                     'subtotal' => (float) $line->subtotal,

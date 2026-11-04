@@ -43,9 +43,9 @@ class RoomController extends Controller
 
         $roomTypes = $query->orderBy('name')->paginate(12)->withQueryString();
 
-        $counts = $this->availability->availableCounts($roomTypes->getCollection(), $checkIn, $checkOut);
-        $roomTypes->getCollection()->transform(function (RoomType $roomType) use ($counts) {
-            $roomType->available_count = $counts[$roomType->id] ?? 0;
+        $options = $this->availability->optionAvailability($roomTypes->getCollection(), $checkIn, $checkOut);
+        $roomTypes->getCollection()->transform(function (RoomType $roomType) use ($options) {
+            $this->attachOptions($roomType, $options[$roomType->id] ?? []);
             $roomType->is_fully_booked = $roomType->available_count <= 0;
             $roomType->promos = $this->promosFor($roomType);
 
@@ -67,9 +67,7 @@ class RoomController extends Controller
     {
         [$checkIn, $checkOut] = $this->resolveDates($request);
 
-        $availableCount = $this->availability->availableCount($roomType, $checkIn, $checkOut);
-        $roomType->available_count = $availableCount;
-        $roomType->is_fully_booked = $availableCount <= 0;
+        $this->attachOptions($roomType, $this->availability->optionAvailability([$roomType], $checkIn, $checkOut)[$roomType->id] ?? []);
         $roomType->total_inventory = $this->availability->totalInventory($roomType);
         $roomType->promos = $this->promosFor($roomType);
 
@@ -77,11 +75,10 @@ class RoomController extends Controller
             ->where('id', '!=', $roomType->id)
             ->take(3)
             ->get();
-        $otherCounts = $this->availability->availableCounts($otherTypes, $checkIn, $checkOut);
+        $otherOptions = $this->availability->optionAvailability($otherTypes, $checkIn, $checkOut);
         $otherTypes = $otherTypes
-            ->map(function (RoomType $type) use ($otherCounts) {
-                $type->available_count = $otherCounts[$type->id] ?? 0;
-                $type->is_fully_booked = $type->available_count <= 0;
+            ->map(function (RoomType $type) use ($otherOptions) {
+                $this->attachOptions($type, $otherOptions[$type->id] ?? []);
                 $type->promos = $this->promosFor($type);
 
                 return $type;
@@ -98,16 +95,36 @@ class RoomController extends Controller
     }
 
     /**
+     * available_count / is_fully_booked are the STANDARD option's (the rooms that have the type's own price and capacity); the rooms
+     * with their own price or capacity are listed in `other_options` (additive: an older app simply ignores the field).
+     */
+    private function attachOptions(RoomType $roomType, array $options): void
+    {
+        $std = $options[\App\Support\RoomOptions::STANDARD]['available'] ?? 0;
+        $roomType->available_count = $std;
+        $roomType->is_fully_booked = $std <= 0;
+        $roomType->other_options = collect($options)->reject(fn ($o) => $o['is_standard'])->map(function ($o) use ($roomType) {
+            $row = [
+                'option_key' => $o['key'], 'price' => $o['rate'], 'capacity' => $o['capacity'], 'capacity_label' => 'Up to ' . $o['capacity'] . ' guests',
+                'total_rooms' => $o['total'], 'available_count' => $o['available'], 'is_fully_booked' => $o['available'] <= 0,
+            ];
+            $row['promos'] = $this->promosFor($roomType, (float) $o['rate']);
+
+            return $row;
+        })->values()->all();
+    }
+
+    /**
      * The ACTIVE promos for this room type (switched on, inside their dates, on an active room type - or for every type): the
      * badge on its card and the Promos section of its details. Each says what it does to THIS type's nightly rate.
      *
      * @return array<int,array<string,mixed>>
      */
-    private function promosFor(RoomType $roomType): array
+    private function promosFor(RoomType $roomType, ?float $rate = null): array
     {
         return \App\Models\Promotion::activeFor([$roomType->id])->map(function ($p) use ($roomType) {
             $row = $p->snapshotRow();
-            $row['rate_after'] = $p->rateAfter($roomType->id, (float) $roomType->rate);
+            $row['rate_after'] = $p->rateAfter($roomType->id, $rate ?? (float) $roomType->rate);
             $row['amenities'] = $p->amenities->map(fn ($a) => $a->pivot->quantity . ' x ' . $a->amenity_name)->values()->all();
 
             return $row;

@@ -67,7 +67,7 @@
             });
         }
         function allTypes() { // type info (rate, capacity, name) from any date range
-            var map = {}; Object.keys(cache.rooms).forEach(function (k) { cache.rooms[k].forEach(function (t) { map[t.id] = t; }); }); return map;
+            var map = {}; Object.keys(cache.rooms).forEach(function (k) { cache.rooms[k].forEach(function (t) { window.VSRooms.unitsOf(t).forEach(function (u) { map[window.VSRooms.unitKey(u)] = u; }); }); }); return map;
         }
         function loadAmenities() {
             if (cache.amenities) return Promise.resolve(cache.amenities);
@@ -83,7 +83,9 @@
         }
 
         // ---- money (same arithmetic the server uses: rooms x booked nights, plus paid amenities)
-        function stayRooms(s) { return Object.keys(s.rooms).map(function (id) { return { id: +id, qty: s.rooms[id] }; }).filter(function (x) { return x.qty > 0; }); }
+        // a key is the room type id ('12'), or '12:r4200c4' for one of its other options
+        function unitName(t) { return t.option_key ? t.name + ' (up to ' + t.capacity + ' guests)' : t.name; }
+        function stayRooms(s) { return Object.keys(s.rooms).map(function (id) { var p = String(id).split(':'); return { id: id, typeId: +p[0], option: p[1] || null, qty: s.rooms[id] }; }).filter(function (x) { return x.qty > 0; }); }
         function roomsTotal(types) {
             return S.stays.reduce(function (sum, s) { return sum + stayRooms(s).reduce(function (a, r) { return a + (types[r.id] ? Number(types[r.id].rate) * nights(s) * r.qty : 0); }, 0); }, 0);
         }
@@ -155,7 +157,7 @@
                 var n = nights(s), sub = 0;
                 var lines = stayRooms(s).map(function (r) {
                     var t = types[r.id], rate = t ? Number(t.rate) : 0, line = rate * n * r.qty; sub += line;
-                    return '<div class="vs-dl-room"><div><span class="fw-semibold">' + VS.esc(t ? t.name : 'Room') + '</span> <span class="text-muted">× ' + r.qty + '</span><div class="small text-muted vs-num">' + VS.money(rate) + ' per night · ' + VS.plural(n, 'night') + '</div></div><div class="vs-num fw-semibold text-end">' + VS.money(line) + '</div></div>';
+                    return '<div class="vs-dl-room"><div><span class="fw-semibold">' + VS.esc(t ? unitName(t) : 'Room') + '</span> <span class="text-muted">× ' + r.qty + '</span><div class="small text-muted vs-num">' + VS.money(rate) + ' per night · ' + VS.plural(n, 'night') + '</div></div><div class="vs-num fw-semibold text-end">' + VS.money(line) + '</div></div>';
                 }).join('');
                 var on = editing === i;
                 return '<article class="vs-dl-card' + (on ? ' is-editing' : '') + '" aria-label="' + VS.esc(VS.date(s.check_in) + ' to ' + VS.date(s.check_out)) + '">' +
@@ -201,22 +203,24 @@
             roomsFor(d.check_in, d.check_out).then(function (list) {
                 if (!list) { host.innerHTML = VS.errorState('We could not load the rooms.', 'vsRoomsRetry'); host.querySelector('#vsRoomsRetry').onclick = paintRooms; return; }
                 var others = S.stays.filter(function (s, i) { return i !== d.editing && overlap(s, d); });
-                function usedElsewhere(typeId) { return others.reduce(function (a, s) { return a + (s.rooms[typeId] || 0); }, 0); }
-                var rows = list.map(function (t) {
-                    var free = Math.max(0, (t.available_count || 0) - usedElsewhere(t.id)), qty = d.rooms[t.id] || 0;
+                function usedElsewhere(key) { return others.reduce(function (a, s) { return a + (s.rooms[key] || 0); }, 0); }
+                var units = window.VSRooms.flatUnits(list), keyOf = window.VSRooms.unitKey;
+                var rows = units.map(function (t) {
+                    var K = keyOf(t), free = Math.max(0, (t.is_fully_booked ? 0 : (t.available_count || 0)) - usedElsewhere(K)), qty = d.rooms[K] || 0;
+                    var label = t.name + (t.option_key ? ' (other, up to ' + t.capacity + ' guests)' : '');
                     var promo = (t.promos || []).length ? '<span class="vs-chip ms-1"><i class="fas fa-tag"></i> ' + VS.plural(t.promos.length, 'promo') + '</span>' : '';
-                    return '<div class="vs-card py-2 d-flex gap-3 align-items-center" data-type="' + t.id + '"><img src="' + VS.esc(t.image_url) + '" alt="" style="width:84px;height:64px;object-fit:cover;border-radius:10px">' +
-                        '<div class="flex-grow-1"><div class="fw-bold">' + VS.esc(t.name) + promo + '</div><div class="small text-muted">' + VS.esc(window.VSRooms.facts(t)) + '</div><div class="vs-num fw-semibold">' + VS.money(t.rate) + ' <span class="text-muted small fw-normal">per night</span></div>' +
+                    return '<div class="vs-card py-2 d-flex gap-3 align-items-center' + (t.option_key ? ' vs-other-unit' : '') + '" data-type="' + VS.esc(K) + '"><img src="' + VS.esc(t.image_url) + '" alt="" style="width:84px;height:64px;object-fit:cover;border-radius:10px">' +
+                        '<div class="flex-grow-1"><div class="fw-bold">' + VS.esc(t.option_key ? t.name + ' \u00b7 other room' : t.name) + promo + '</div><div class="small text-muted">' + VS.esc(t.option_key ? 'Up to ' + t.capacity + ' guests' : window.VSRooms.facts(t)) + '</div><div class="vs-num fw-semibold">' + VS.money(t.rate) + ' <span class="text-muted small fw-normal">per night</span></div>' +
                         '<div class="small ' + (free ? 'text-success' : 'text-danger') + '">' + (free ? VS.plural(free, 'room') + ' available' : 'Fully booked') + '</div></div>' +
-                        '<div class="d-flex align-items-center gap-2"><button class="btn btn-sm btn-outline-velocity" data-dec aria-label="Fewer ' + VS.esc(t.name) + ' rooms"' + (qty ? '' : ' disabled') + '>−</button><span class="vs-num fw-bold" style="min-width:1.5rem;text-align:center">' + qty + '</span><button class="btn btn-sm btn-velocity" data-inc aria-label="More ' + VS.esc(t.name) + ' rooms"' + (qty >= free ? ' disabled' : '') + '>+</button></div></div>';
+                        '<div class="d-flex align-items-center gap-2"><button class="btn btn-sm btn-outline-velocity" data-dec aria-label="Fewer ' + VS.esc(label) + ' rooms"' + (qty ? '' : ' disabled') + '>\u2212</button><span class="vs-num fw-bold" style="min-width:1.5rem;text-align:center">' + qty + '</span><button class="btn btn-sm btn-velocity" data-inc aria-label="More ' + VS.esc(label) + ' rooms"' + (qty >= free ? ' disabled' : '') + '>+</button></div></div>';
                 }).join('');
-                var n = nights(d), preview = list.reduce(function (a, t) { return a + (d.rooms[t.id] || 0) * Number(t.rate) * n; }, 0);
-                host.innerHTML = rows + '<div class="d-flex justify-content-between align-items-center flex-wrap gap-2"><div class="vs-num fw-bold">' + VS.plural(n, 'night') + ' · ' + VS.money(preview) + '</div>' +
+                var n = nights(d), preview = units.reduce(function (a, t) { return a + (d.rooms[keyOf(t)] || 0) * Number(t.rate) * n; }, 0);
+                host.innerHTML = rows + '<div class="d-flex justify-content-between align-items-center flex-wrap gap-2"><div class="vs-num fw-bold">' + VS.plural(n, 'night') + ' \u00b7 ' + VS.money(preview) + '</div>' +
                     '<div class="d-flex gap-2">' + (d.editing != null ? '<button class="btn btn-light" id="wCancelEdit">Cancel edit</button>' : '') + '<button class="btn btn-velocity" id="wConfirm">' + (d.editing != null ? 'Save this stay' : 'Confirm this stay') + '</button></div></div>';
                 host.querySelectorAll('[data-type]').forEach(function (row) {
                     var id = row.dataset.type;
-                    var t = list.find(function (x) { return x.id == id; });
-                    var free = Math.max(0, (t.available_count || 0) - usedElsewhere(t.id));
+                    var t = units.find(function (x) { return keyOf(x) === id; });
+                    var free = Math.max(0, (t.is_fully_booked ? 0 : (t.available_count || 0)) - usedElsewhere(id));
                     row.querySelector('[data-inc]').onclick = function () { d.rooms[id] = Math.min(free, (d.rooms[id] || 0) + 1); save(); paintRooms(); };
                     row.querySelector('[data-dec]').onclick = function () { d.rooms[id] = Math.max(0, (d.rooms[id] || 0) - 1); if (!d.rooms[id]) delete d.rooms[id]; save(); paintRooms(); };
                 });
@@ -410,7 +414,7 @@
                 var types = allTypes(), host = main.querySelector('#vsRev'), amenBy = {}; (cache.amenities || []).forEach(function (a) { amenBy[a.id] = a; });
                 var r = roomsTotal(types), a = amenitiesTotal();
                 var staysHtml = S.stays.map(function (s, i) {
-                    var lines = stayRooms(s).map(function (rm) { var t = types[rm.id] || { name: 'Room', rate: 0 }; return '<div class="vs-row"><span>' + VS.esc(t.name) + ' × ' + rm.qty + ' <span class="small">(' + VS.money(t.rate) + ' × ' + VS.plural(nights(s), 'night') + ')</span></span><span>' + VS.money(Number(t.rate) * nights(s) * rm.qty) + '</span></div>'; }).join('');
+                    var lines = stayRooms(s).map(function (rm) { var t = types[rm.id] || { name: 'Room', rate: 0 }; return '<div class="vs-row"><span>' + VS.esc(unitName(t)) + ' × ' + rm.qty + ' <span class="small">(' + VS.money(t.rate) + ' × ' + VS.plural(nights(s), 'night') + ')</span></span><span>' + VS.money(Number(t.rate) * nights(s) * rm.qty) + '</span></div>'; }).join('');
                     var am = (S.amenities[i] || []).map(function (x) { var am = amenBy[x.amenity_id] || { amenity_name: 'Amenity', charge: 0 }; var t = types[x.room_type_id]; return '<div class="vs-row vs-sub"><span>' + VS.esc(am.amenity_name) + ' × ' + x.quantity + (t ? ' <span class="small">(' + VS.esc(t.name) + ' room ' + x.room_slot + ')</span>' : '') + '</span><span>' + VS.money(am.charge * x.quantity) + '</span></div>'; }).join('');
                     return '<div class="vs-card"><h3 class="h6 fw-bold">' + VS.esc(VS.date(s.check_in)) + ' → ' + VS.esc(VS.date(s.check_out)) + ' · ' + VS.plural(nights(s), 'night') + '</h3>' + lines + am + '</div>';
                 }).join('');
@@ -441,7 +445,7 @@
             var fd = new FormData();
             S.stays.forEach(function (s, i) {
                 fd.append('stays[' + i + '][check_in]', s.check_in); fd.append('stays[' + i + '][check_out]', s.check_out);
-                stayRooms(s).forEach(function (r, k) { fd.append('stays[' + i + '][rooms][' + k + '][room_type_id]', r.id); fd.append('stays[' + i + '][rooms][' + k + '][quantity]', r.qty); });
+                stayRooms(s).forEach(function (r, k) { fd.append('stays[' + i + '][rooms][' + k + '][room_type_id]', r.typeId); if (r.option) fd.append('stays[' + i + '][rooms][' + k + '][option_key]', r.option); fd.append('stays[' + i + '][rooms][' + k + '][quantity]', r.qty); });
                 (S.amenities[i] || []).forEach(function (a, k) {
                     fd.append('stays[' + i + '][amenities][' + k + '][amenity_id]', a.amenity_id); fd.append('stays[' + i + '][amenities][' + k + '][quantity]', a.quantity);
                     fd.append('stays[' + i + '][amenities][' + k + '][room_type_id]', a.room_type_id); fd.append('stays[' + i + '][amenities][' + k + '][room_slot]', a.room_slot);
@@ -460,7 +464,7 @@
 
         function editBody() {
             var b = { stays: S.stays.map(function (s, i) { return { check_in: s.check_in, check_out: s.check_out,
-                    rooms: stayRooms(s).map(function (r) { return { room_type_id: r.id, quantity: r.qty }; }),
+                    rooms: stayRooms(s).map(function (r) { return r.option ? { room_type_id: r.typeId, option_key: r.option, quantity: r.qty } : { room_type_id: r.typeId, quantity: r.qty }; }),
                     amenities: (S.amenities[i] || []).map(function (a) { return { amenity_id: a.amenity_id, quantity: a.quantity, room_type_id: a.room_type_id, room_slot: a.room_slot }; }) }; }),
                 adults: S.adults, children: S.minors.length, guest_first_name: S.rep.first, guest_last_name: S.rep.last,
                 additional_guests: S.minors.map(function (age, i) { return { name: 'Child ' + (i + 1), age: age, relationship: 'Child' }; }) };
@@ -542,7 +546,7 @@
                 if (!list) { VS.alertBox('vsStepErr', 'We could not check availability. Please choose your rooms again.', 'warning'); return; }
                 var rooms = {}, lowered = false;
                 Object.keys(sv.rooms).forEach(function (id) {
-                    var t = list.filter(function (x) { return String(x.id) === String(id); })[0];
+                    var t = window.VSRooms.flatUnits(list).filter(function (x) { return window.VSRooms.unitKey(x) === String(id); })[0];
                     var free = t && !t.is_fully_booked ? Math.max(0, t.available_count || 0) : 0, want = sv.rooms[id], got = Math.min(want, free);
                     if (got < want) lowered = true;
                     if (got > 0) rooms[id] = got;
@@ -575,7 +579,7 @@
                 if (it.booking || !awaiting) { main.innerHTML = '<div class="vs-empty"><i class="fas fa-circle-info"></i><h3 class="h6 fw-bold">This reservation can no longer be edited</h3><p class="text-muted">Only a pending reservation can be edited.</p>' + back + '</div>'; return Promise.reject('stop'); }
                 if (it.edited_at) { main.innerHTML = '<div class="vs-empty"><i class="fas fa-circle-info"></i><h3 class="h6 fw-bold">Already edited</h3><p class="text-muted">This reservation has already been modified and cannot be edited again.</p>' + back + '</div>'; return Promise.reject('stop'); }
                 editInfo = it;
-                S.stays = (it.stays || []).map(function (s) { var rooms = {}; (s.rooms || []).forEach(function (rm) { rooms[rm.room_type_id] = (rooms[rm.room_type_id] || 0) + rm.quantity; }); return { check_in: s.check_in, check_out: s.check_out, rooms: rooms }; });
+                S.stays = (it.stays || []).map(function (s) { var rooms = {}; (s.rooms || []).forEach(function (rm) { var k = rm.option_key && rm.option_key !== 'std' ? rm.room_type_id + ':' + rm.option_key : String(rm.room_type_id); rooms[k] = (rooms[k] || 0) + rm.quantity; }); return { check_in: s.check_in, check_out: s.check_out, rooms: rooms }; });
                 S.amenities = {}; (it.stays || []).forEach(function (s, i) { S.amenities[i] = (s.amenities || []).filter(function (a) { return a.amenity_id; }).map(function (a) { return { amenity_id: +a.amenity_id, quantity: a.quantity, room_type_id: a.room_type_id != null ? +a.room_type_id : null, room_slot: a.room_slot != null ? +a.room_slot : null }; }); });
                 S.adults = Math.max(1, +it.adults || 1);
                 S.minors = (it.additional_guest_details || it.additional_guests || []).map(function (g) { return g.age != null ? +g.age : null; });

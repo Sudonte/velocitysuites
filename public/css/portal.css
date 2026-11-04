@@ -357,3 +357,14 @@ button.vs-cal-day.picked i { background: #fff; }
 .vs-selbar-clear { color: var(--vs-muted); text-decoration: none; font-weight: 600; padding: 0 .25rem; }
 .vs-selbar-clear:hover { color: var(--primary-color, var(--vs-red)); text-decoration: underline; }
 .vs-collapse-head h2 { font-size: .95rem; font-weight: 700; color: var(--primary-color, var(--vs-red)); }
+
+/* "Other Deluxe rooms >": the rooms of a type with their own price or capacity */
+.vs-other { border-top: 1px solid var(--vs-line, #e5e7eb); margin: .35rem 0 .7rem; padding-top: .35rem; }
+.vs-other-toggle { display: flex; justify-content: space-between; align-items: center; width: 100%; background: transparent; border: 0; padding: .35rem 0; font-weight: 600; color: var(--vs-text, inherit); text-align: left; }
+.vs-other-toggle .fa-chevron-right { transition: transform .2s ease; color: var(--vs-muted); }
+.vs-other-toggle[aria-expanded="true"] .fa-chevron-right { transform: rotate(90deg); }
+.vs-reduced .vs-other-toggle .fa-chevron-right { transition: none; }
+.vs-other-list { display: grid; gap: .5rem; }
+.vs-other-row { display: flex; justify-content: space-between; align-items: center; gap: .75rem; padding: .55rem .7rem; border: 1px solid var(--vs-line, #e5e7eb); border-radius: 10px; }
+.vs-other-row .vs-stepper { margin: 0; }
+.vs-other-unit { border-style: dashed; }
