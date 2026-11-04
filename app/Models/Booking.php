@@ -554,7 +554,8 @@ class Booking extends Model
         foreach ($stays as $stay) {
             $own = $assigned->filter(fn (Room $room) => (($room->pivot->stay_id ?? $firstId) === $stay->id))->values();
             if ($own->isNotEmpty()) {
-                $total += (float) $own->sum(fn (Room $room) => (float) $room->room_rate) * $stay->nights();
+                $booked = \App\Support\BookedRates::forStay($this, $stay, $own, $firstId);
+                $total += (float) $own->sum(fn (Room $room) => (float) ($booked[$room->id] ?? $room->room_rate)) * $stay->nights();
                 continue;
             }
             $mine = $lines->filter(fn ($line) => ($line->stay_id ?? $firstId) === $stay->id);

@@ -86,6 +86,8 @@ final class StayBill
         $stayDefs = $stayDefs->map(function ($d) use ($booking, $firstStayId) {
             $d['assigned'] = $d['own']->isNotEmpty();
             $d['rooms'] = $d['assigned'] ? $d['own'] : self::bookedRooms($booking, $d['stay']->id, $firstStayId);
+            // assigned rooms are billed at the price that was BOOKED for them, not at the room's or the type's current rate
+            $d['rates'] = $d['assigned'] ? BookedRates::forStay($booking, $d['stay'], $d['own'], $firstStayId) : [];
 
             return $d;
         });
@@ -123,7 +125,7 @@ final class StayBill
                     $leftOn = $checkedOutAt ? self::day(Carbon::parse($checkedOutAt)) : ($endedOn ?? $billedUntil);
 
                     $nights = max(1, self::daysBetween($checkIn, $billedUntil));
-                    $rate = (float) $room->room_rate;
+                    $rate = (float) ($def['rates'][$room->id] ?? $room->room_rate);
                     $subtotal = round($rate * $nights, 2);
                     $scheduledSubtotal = round($rate * $scheduledNights, 2);
 

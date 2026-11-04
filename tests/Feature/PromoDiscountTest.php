@@ -76,14 +76,14 @@ class PromoDiscountTest extends ApiFlowTestCase
         $this->assertSame('Deluxe Days', $bill['promo_name']);
     }
 
-    public function test_a_rate_promo_comes_off_the_actual_rooms_own_rate_not_the_room_types(): void
+    public function test_a_rate_promo_comes_off_the_booked_rate_not_the_assigned_rooms_own_rate(): void
     {
         $standard = $this->makeRoomTypeWithRooms('Standard', 1000);
         $deluxe = $this->makeRoomTypeWithRooms('Deluxe', 2000);
         $promo = $this->promo(['promo_name' => 'Deluxe Days', 'room_type_id' => $deluxe->id, 'discount_type' => 'percentage', 'discount_value' => 10]);
         $booking = $this->mixedBooking($standard->id, $deluxe->id, $promo->id);
 
-        // The guest gets the Deluxe room that charges its own ₱2,600 a night (not the type's ₱2,000), plus a Standard room.
+        // The guest is put in a Deluxe room that carries its own ₱2,600 a night (booked at the type's ₱2,000), plus a Standard room.
         $special = $deluxe->rooms()->first();
         $special->update(['rate_override' => 2600]);
         $stayId = $booking->stayList()->first()?->id;
@@ -92,8 +92,8 @@ class PromoDiscountTest extends ApiFlowTestCase
 
         $bill = StayBill::forBooking($booking->fresh(), StayBill::PROJECTED);
 
-        $this->assertSame(7200.0, (float) $bill['room_charge'], '2,600 x 2 + 1,000 x 2');
-        $this->assertSame(520.0, (float) $bill['promo_discount'], '10% of THAT room rate ₱2,600 x 2 nights - the Standard room is not discounted');
+        $this->assertSame(6000.0, (float) $bill['room_charge'], 'the BOOKED 2,000 x 2 + 1,000 x 2: the own 2,600 of the room never replaces the price that was booked');
+        $this->assertSame(400.0, (float) $bill['promo_discount'], '10% of the booked ₱2,000 x 2 nights - the Standard room is not discounted');
     }
 
     public function test_a_room_type_with_its_own_rate_is_discounted_on_that_rate(): void

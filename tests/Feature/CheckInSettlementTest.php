@@ -84,10 +84,10 @@ class CheckInSettlementTest extends ApiFlowTestCase
         $this->assertNotNull($billing->checkin_settled_at);
     }
 
-    public function test_check_in_charges_and_discounts_the_picked_rooms_own_rate(): void
+    public function test_check_in_charges_and_discounts_the_booked_price_never_a_rooms_own_rate(): void
     {
-        [$rt, $room, $booking] = $this->arriving(); // booked: 2 nights x the type's 1000
-        $room->update(['rate_override' => 1300]);   // the room picked charges its own 1300 a night
+        [$rt, $room, $booking] = $this->arriving(); // booked: 2 nights x the type's 1000 (the standard option)
+        $own = \App\Models\Room::create(['room_number' => 'OWN-1', 'room_name' => 'Own rate', 'room_type_id' => $rt->id, 'room_capacity' => 2, 'rate_override' => 1300, 'status' => 'available']);
         $day = \App\Support\CheckInWindow::date();
         $promo = \App\Models\Promotion::create(['promo_name' => 'Rate 10', 'promo_type' => 'discount', 'status' => 'active', 'room_type_id' => $rt->id,
             'discount_type' => 'percentage', 'discount_value' => 10, 'discount_applies_to' => 'rate',
@@ -95,19 +95,28 @@ class CheckInSettlementTest extends ApiFlowTestCase
         $booking->forceFill(['promotion_id' => $promo->id])->save();
         $desk = $this->desk();
 
-        // The panel shows the room's own rate, and its price check for that room: 2 x 1300 = 2600, less 10% of THAT rate = 2340.
-        $this->actingAs($desk)->get(route('receptionist.check-in.panel', $booking))->assertOk()->assertSee('data-rate="1300"', false);
-        $this->actingAs($desk)->postJson(route('receptionist.check-in.quote', $booking), ['room_ids' => [(string) $rt->id => [$room->id]]])
-            ->assertOk()->assertJsonPath('room_charge', 2600)->assertJsonPath('promo_discount', 260)->assertJsonPath('balance_due', 2340);
+        // The picker offers only the standard room: the room with its own rate is a different option and is never offered for this booking.
+        $panel = $this->actingAs($desk)->get(route('receptionist.check-in.panel', $booking))->assertOk()->getContent();
+        $this->assertStringContainsString('value="' . $room->id . '"', $panel);
+        $this->assertStringNotContainsString('value="' . $own->id . '"', $panel);
+        $this->assertStringNotContainsString('data-rate="1300"', $panel);
 
-        // The room's own price (2,340, not the booked 1,800) is what the bill comes to.
-        $this->actingAs($desk)->postJson(route('receptionist.check-in.store', $booking), $this->checkInPayload($rt, $room, ['payment_method' => 'cash', 'amount_received' => 2340]))->assertOk();
+        // Even if it were picked, the price check is the booked 2 x 1000, less 10% of the BOOKED 1000 rate.
+        foreach ([$room, $own] as $picked) {
+            $this->actingAs($desk)->postJson(route('receptionist.check-in.quote', $booking), ['room_ids' => [(string) $rt->id => [$picked->id]]])
+                ->assertOk()->assertJsonPath('room_charge', 2000)->assertJsonPath('promo_discount', 200)->assertJsonPath('balance_due', 1800);
+        }
+
+        // Checking in with the own-rate room is refused; with the standard room the bill is the booked price.
+        $this->actingAs($desk)->postJson(route('receptionist.check-in.store', $booking), $this->checkInPayload($rt, $own, ['payment_method' => 'cash', 'amount_received' => 1800]))->assertStatus(422);
+        $this->assertSame(Booking::STATUS_ACTIVE, $booking->fresh()->booking_status);
+        $this->actingAs($desk)->postJson(route('receptionist.check-in.store', $booking), $this->checkInPayload($rt, $room, ['payment_method' => 'cash', 'amount_received' => 1800]))->assertOk();
 
         $billing = $booking->fresh()->billing()->first();
-        $this->assertEquals(2600.0, (float) $billing->room_charge);
-        $this->assertEquals(260.0, (float) $billing->promo_discount);
-        $this->assertEquals(2340.0, (float) $billing->checkin_settled_total);
-        $this->assertEqualsWithDelta(2340, $booking->fresh()->paidTotal(), 0.01);
+        $this->assertEquals(2000.0, (float) $billing->room_charge);
+        $this->assertEquals(200.0, (float) $billing->promo_discount);
+        $this->assertEquals(1800.0, (float) $billing->checkin_settled_total);
+        $this->assertEqualsWithDelta(1800, $booking->fresh()->paidTotal(), 0.01);
     }
 
     public function test_check_in_is_refused_with_422_while_the_requested_discount_is_still_pending(): void

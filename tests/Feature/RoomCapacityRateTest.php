@@ -109,16 +109,19 @@ class RoomCapacityRateTest extends ApiFlowTestCase
         ]);
         $desk = User::create(['first_name' => 'Rita', 'last_name' => 'Desk', 'email' => 'desk-cap@example.test',
             'password' => bcrypt('x'), 'role' => 'receptionist', 'status' => 'active', 'email_verified_at' => now()]);
+        // booked as the "other" option with room for 7 (a booking that names no option booked the standard rooms)
+        $booking->roomLines()->create(['room_type_id' => $rt->id, 'room_type_name' => 'Romero (up to 7 guests)', 'quantity' => 1, 'price_per_night' => 200,
+            'number_of_nights' => 1, 'subtotal' => 200, 'option_key' => \App\Support\RoomOptions::keyFor(200.0, 7), 'capacity' => 7]);
         $payload = fn ($room) => [
             'guest_first_name' => 'Ana', 'guest_last_name' => 'Cruz', 'checkin_permanent_address' => '1 Test St',
             'current_address_same_as_permanent' => true, 'checkin_contact_number' => '09171234567', 'adults' => 5, 'children' => 0,
-            'room_ids' => [(string) $rt->id => [$room->id]], 'payment_method' => 'cash', 'amount_received' => 200,
+            'room_ids' => [$rt->id . ':' . \App\Support\RoomOptions::keyFor(200.0, 7) => [$room->id]], 'payment_method' => 'cash', 'amount_received' => 200,
         ];
 
-        // 5 guests don't fit the type's 2-guest room...
-        $this->actingAs($desk)->postJson(route('receptionist.check-in.store', $booking), $payload($small))->assertStatus(422)->assertJsonValidationErrors('adults');
-        // ...but they fit the room that holds 7.
-        $this->actingAs($desk)->postJson(route('receptionist.check-in.store', $booking), $payload($big))->assertOk();
+        // the 2-guest room is not the option that was booked...
+        $this->actingAs($desk)->postJson(route('receptionist.check-in.store', $booking), $payload($small))->assertStatus(422);
+        // ...the room that holds 7 is, and the 5 guests fit it.
+        $r = $this->actingAs($desk)->postJson(route('receptionist.check-in.store', $booking), $payload($big)); $this->assertSame(200, $r->getStatusCode(), $r->getContent());
         $this->assertSame(Booking::STATUS_CHECKED_IN, $booking->fresh()->booking_status);
     }
 }

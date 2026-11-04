@@ -69,6 +69,9 @@ class StayBillCheckoutTest extends ApiFlowTestCase
             ]);
             $booking->rooms()->attach($room->id);
             $rooms[] = $room;
+            // the price BOOKED for this room: an assigned room is billed at the booked price, not at whatever rate the room carries now
+            $booking->roomLines()->create(['room_type_id' => $rt->id, 'room_type_name' => $rt->name, 'quantity' => 1, 'price_per_night' => $rate,
+                'number_of_nights' => 1, 'subtotal' => $rate]);
         }
 
         return [$booking->fresh(), $rooms];

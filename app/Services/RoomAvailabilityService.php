@@ -458,12 +458,17 @@ class RoomAvailabilityService
     /** Keeps only the rooms of the booked option (price and capacity); no option given = the whole list, as before. */
     private function onlyOption(Collection $rooms, int $roomTypeId, ?string $optionKey): Collection
     {
-        if ($optionKey === null) {
-            return $rooms;
-        }
         $type = RoomType::find($roomTypeId);
         if (! $type) {
             return $rooms;
+        }
+        if ($optionKey === null) {
+            // a booking that names no option (a legacy one, or a standard line) booked the STANDARD option: when the type has other options its
+            // own-price / own-capacity rooms are never offered for it
+            if (RoomOptions::others($type)->isEmpty()) {
+                return $rooms;
+            }
+            $optionKey = RoomOptions::STANDARD;
         }
         $ids = RoomOptions::rooms($type, $optionKey)->pluck('id')->all();
 

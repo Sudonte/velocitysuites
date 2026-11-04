@@ -355,4 +355,82 @@ class RoomOptionsFlowTest extends ApiFlowTestCase
         $this->assertSame('r4200c4', Booking::first()->roomLines()->first()->option_key);
         $this->assertEquals(8400.0, (float) Booking::first()->roomLines()->first()->subtotal);
     }
+
+    // ---------------------------------------------------------------- the guest pays the price that was booked
+
+    private function bookedStandard(int $qty = 1)
+    {
+        $this->assertSame(201, $this->book([['room_type_id' => $this->deluxe->id, 'quantity' => $qty]])->getStatusCode());
+
+        return Booking::latest('id')->first();
+    }
+
+    public function test_a_booking_without_room_lines_is_only_offered_standard_rooms_at_check_in(): void
+    {
+        $booking = $this->bookedStandard();
+        $booking->roomLines()->delete(); // a booking from before room lines existed: only its room type and rooms_requested
+        $offered = app(RoomAvailabilityService::class)->assignableRooms($booking->fresh())->pluck('room_number')->all();
+        $this->assertCount(3, $offered);
+        $this->assertNotContains('D-4', $offered);
+        $this->assertNotContains('D-5', $offered);
+        $byLine = app(RoomAvailabilityService::class)->assignableRoomsByLine($booking->fresh())->first()->pluck('room_number')->all();
+        $this->assertSame($offered, $byLine);
+    }
+
+    public function test_the_bill_stays_at_the_booked_price_when_prices_change_before_or_at_check_in(): void
+    {
+        $booking = $this->bookedStandard(2); // 2 standard rooms at 3,500 x 1 night
+        $this->assertEquals(7000.0, (float) $booking->total_amount_due);
+        $svc = app(RoomAvailabilityService::class);
+        $key = RoomAvailabilityService::lineKey($booking->roomLines()->first());
+        // the admin re-prices the type and one of its rooms after the booking was made
+        $this->deluxe->forceFill(['rate' => 4000])->save();
+        Room::where('room_type_id', $this->deluxe->id)->whereNull('rate_override')->first()->forceFill(['rate_override' => 4800])->save();
+        $offered = $svc->assignableRoomsByLine($booking->fresh())->first();
+        $this->assertGreaterThanOrEqual(2, $offered->count());
+        $svc->assignRoomsForLines($booking->fresh(), [$key => $offered->take(2)->pluck('id')->all()]);
+        $fresh = $booking->fresh();
+        $this->assertEquals(7000.0, (float) $fresh->total_amount_due, 'the booked 3,500 per room, not the new 4,000 / 4,800');
+        $bill = \App\Support\StayBill::forBooking($fresh, \App\Support\StayBill::PROJECTED);
+        $this->assertEquals(7000.0, $bill['room_charge']);
+        $this->assertEquals([3500.0, 3500.0], collect($bill['rooms'])->pluck('rate')->all());
+    }
+
+    public function test_an_other_option_line_is_billed_at_its_booked_option_price_after_check_in(): void
+    {
+        $this->assertSame(201, $this->book([['room_type_id' => $this->deluxe->id, 'option_key' => 'r4200c4', 'quantity' => 1]], 4)->getStatusCode());
+        $booking = Booking::latest('id')->first();
+        $svc = app(RoomAvailabilityService::class);
+        $key = RoomAvailabilityService::lineKey($booking->roomLines()->first());
+        $room = $svc->assignableRoomsByLine($booking)->first()->first();
+        $this->assertContains($room->room_number, ['D-4', 'D-5']);
+        $svc->assignRoomsForLines($booking->fresh(), [$key => [$room->id]]);
+        $this->assertEquals(4200.0, (float) $booking->fresh()->total_amount_due);
+        $this->assertEquals(4200.0, \App\Support\StayBill::forBooking($booking->fresh(), \App\Support\StayBill::PROJECTED)['room_charge']);
+    }
+
+    public function test_a_completed_booking_keeps_the_bill_it_was_settled_with(): void
+    {
+        $booking = $this->bookedStandard();
+        $svc = app(RoomAvailabilityService::class);
+        $key = RoomAvailabilityService::lineKey($booking->roomLines()->first());
+        $room = $svc->assignableRoomsByLine($booking)->first()->first();
+        $svc->assignRoomsForLines($booking->fresh(), [$key => [$room->id]]);
+        $room->forceFill(['rate_override' => 3900])->save();
+        $booking->forceFill(['booking_status' => Booking::STATUS_COMPLETED])->save();
+        $this->assertEquals(3900.0, (float) $booking->fresh()->total_amount_due, 'a settled booking is a fact: it still reads the room rate it was billed at');
+    }
+
+    public function test_the_check_in_panel_of_an_other_option_booking_offers_only_that_options_rooms(): void
+    {
+        $this->assertSame(201, $this->book([['room_type_id' => $this->deluxe->id, 'option_key' => 'r4200c4', 'quantity' => 1]], 4)->getStatusCode());
+        $booking = Booking::latest('id')->first();
+        $html = $this->actingAs($this->desk())->get(route('receptionist.check-in.panel', $booking))->assertOk()->getContent();
+        $this->assertStringContainsString('data-room-type-id="' . $this->deluxe->id . ':r4200c4"', $html);
+        $this->assertStringContainsString('Deluxe (up to 4 guests)', $html);
+        $d4 = Room::where('room_number', 'D-4')->value('id');
+        $std = Room::where('room_type_id', $this->deluxe->id)->where('room_number', 'not like', 'D-%')->value('id');
+        $this->assertStringContainsString('<option value="' . $d4 . '"', $html);
+        $this->assertStringNotContainsString('<option value="' . $std . '"', $html, 'a standard room is not offered for the other option');
+    }
 }
