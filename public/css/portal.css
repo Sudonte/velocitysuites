@@ -187,7 +187,6 @@ body.vs-page-body { background: var(--vs-bg); color: var(--vs-ink); }
 .vs-shell-main .btn-velocity { background: var(--primary-color); border-color: var(--primary-color); border-radius: var(--radius-btn); }
 .vs-shell-main .btn-velocity:hover { background: var(--accent-color); border-color: var(--accent-color); box-shadow: 0 4px 8px rgba(214, 65, 75, .3); }
 .vs-shell-main .btn-outline-velocity { border-radius: var(--radius-btn); }
-.vs-shell-main .container[style*="max-width"] { margin-left: 0; }
 
 /* bell dropdown */
 .vs-bell-menu { width: min(380px, calc(100vw - 1.5rem)); border-radius: var(--radius-card); border: 1px solid var(--border-color); box-shadow: var(--shadow-md); overflow: hidden; background: var(--surface-color); }
@@ -223,7 +222,7 @@ body.vs-page-body { background: var(--vs-bg); color: var(--vs-ink); }
 .vs-reg .vs-reg-actions .btn { min-width: 7.5rem; }
 .vs-reg .vs-reg-actions .btn-velocity { margin-left: auto; }
 @media (max-width: 400px) { .auth-card.vs-reg { padding: 1.25rem; } .vs-reg .vs-reg-actions .btn { min-width: 0; flex: 1; } }
-.vs-shell-main .container[style*="max-width"] { max-width: 1140px !important; }
+
 
 /* room selection: quantity stepper on a card and the sticky bar */
 .vs-stepper { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; margin: .2rem 0 .7rem; }
@@ -322,3 +321,39 @@ button.vs-cal-day.picked i { background: #fff; }
     .vs-rcpt-preview { max-width: none !important; padding: 0 !important; }
     * { color: #000 !important; -webkit-print-color-adjust: economy; }
 }
+
+/* Step 1: "Your dates and rooms" - one card per date range */
+.vs-datelist { margin-bottom: 1.25rem; }
+.vs-datelist-empty { display: flex; gap: .9rem; align-items: center; padding: 1rem; border: 1px dashed var(--border-color, var(--vs-line)); border-radius: 12px; background: var(--surface-color, #fff); }
+.vs-datelist-empty i { font-size: 1.6rem; color: var(--primary-color, var(--vs-red)); }
+.vs-dl-card { border: 1px solid var(--border-color, var(--vs-line)); border-radius: 12px; background: var(--surface-color, #fff); padding: .85rem 1rem; margin-bottom: .75rem; }
+.vs-dl-card.is-editing { border-color: var(--primary-color, var(--vs-red)); box-shadow: 0 0 0 3px rgba(214, 65, 75, .18); }
+.vs-dl-head { display: flex; justify-content: space-between; align-items: flex-start; gap: .75rem; flex-wrap: wrap; padding-bottom: .5rem; margin-bottom: .35rem; border-bottom: 1px solid var(--border-color, var(--vs-line)); }
+.vs-dl-room { display: flex; justify-content: space-between; gap: 1rem; padding: .35rem 0; }
+.vs-dl-sub { display: flex; justify-content: space-between; gap: 1rem; padding-top: .45rem; margin-top: .25rem; border-top: 1px dashed var(--border-color, var(--vs-line)); }
+.vs-dl-total { display: flex; justify-content: space-between; gap: 1rem; padding: .7rem 1rem; border-radius: 12px; background: var(--vs-red-soft); font-weight: 800; font-size: 1.05rem; }
+
+/* every guest page sits in one centered content area (about 1200px) with equal side margins */
+.vs-shell-main > .container-fluid { width: 100%; max-width: 1232px; margin-left: auto; margin-right: auto; padding-left: 1rem; padding-right: 1rem; }
+.vs-shell-main .container, .vs-shell-main .container[style*="max-width"] { max-width: none !important; width: 100%; margin-left: 0; margin-right: 0; padding-left: 0; padding-right: 0; }
+.vs-shell-main .vs-head { text-align: left; }
+@media (min-width: 768px) { .vs-shell-main > .container-fluid { padding-left: 1.25rem; padding-right: 1.25rem; } }
+
+/* dashboard quick actions: an even grid, equal tiles (3 x 2 on desktop, 2 x 3 on tablets, 2 x 3 or one column on phones) */
+.vs-qa { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .75rem; }
+.vs-qa .btn { display: flex; align-items: center; justify-content: center; gap: .5rem; min-height: 3.1rem; width: 100%; padding: .55rem .75rem; text-align: center; line-height: 1.2; }
+@media (max-width: 991px) { .vs-qa { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 419px) { .vs-qa { grid-template-columns: minmax(0, 1fr); } }
+
+/* the summary can be collapsed; it opens expanded, full width, with all six totals */
+.vs-collapse-head { display: flex; justify-content: space-between; align-items: center; gap: 1rem; width: 100%; background: transparent; border: 0; padding: 0; text-align: left; }
+.vs-collapse-head h2 { margin: 0; }
+.vs-collapse-head .fa-chevron-down { transition: transform .2s ease; color: var(--vs-muted); }
+.vs-collapse-head[aria-expanded="false"] .fa-chevron-down { transform: rotate(-90deg); }
+.vs-reduced .vs-collapse-head .fa-chevron-down { transition: none; }
+.vs-sumgrid { width: 100%; }
+
+/* the selection bar's clear button */
+.vs-selbar-clear { color: var(--vs-muted); text-decoration: none; font-weight: 600; padding: 0 .25rem; }
+.vs-selbar-clear:hover { color: var(--primary-color, var(--vs-red)); text-decoration: underline; }
+.vs-collapse-head h2 { font-size: .95rem; font-weight: 700; color: var(--primary-color, var(--vs-red)); }

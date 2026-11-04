@@ -49,13 +49,13 @@
                 (r.pa.a === 'PAY_NOW' ? '<a class="btn btn-velocity btn-sm" href="' + r.pa.href + '">Pay now</a>' : '<span class="small text-muted text-end">' + VS.esc(r.pa.text) + '</span>') + '</div>';
         }).join('');
     }
-    function card(title, html, extra) { return '<section class="vs-card vs-reveal" ' + (extra || '') + '><h2>' + title + '</h2>' + html + '</section>'; }
+    function card(title, html, extra, desc) { return '<section class="vs-card vs-reveal" ' + (extra || '') + '><h2' + (desc ? ' class="mb-0"' : '') + '>' + title + '</h2>' + (desc ? '<p class="text-muted small mb-2">' + desc + '</p>' : '') + html + '</section>'; }
 
     D.page = function (root, firstName) {
         var host = root.querySelector('#vsDash');
         host.innerHTML = '<section class="vs-card"><div class="text-muted">' + greeting() + '</div><h1 class="h3 fw-bold mb-1">' + VS.esc(firstName) + '</h1><a class="text-muted small text-decoration-none d-inline-block" id="vsClock" href="/guest/calendar" title="Open the calendar"></a><p class="mb-0 mt-1">Here’s a quick look at your stays and payments.</p></section>' +
-            card('Quick actions', '<div class="row g-2">' + [['/rooms', 'fa-bed', 'Browse rooms'], ['/guest/book/new', 'fa-calendar-check', 'Booking'], ['/guest/reserve/new', 'fa-bookmark', 'Reservation'], ['/guest/reservations', 'fa-suitcase', 'Booking & Reservation'], ['/guest/history', 'fa-clock-rotate-left', 'Transaction history'], ['/guest/profile', 'fa-circle-user', 'Profile']].map(function (q) {
-                return '<div class="col-6 col-md-4"><a class="btn btn-outline-velocity w-100 py-2" href="' + q[0] + '"><i class="fas ' + q[1] + ' me-2"></i>' + q[2] + '</a></div>'; }).join('') + '</div>') +
+            card('Quick actions', '<div class="vs-qa">' + [['/rooms', 'fa-bed', 'Browse rooms'], ['/guest/reservations?tab=bookings', 'fa-calendar-check', 'My bookings'], ['/guest/reservations?tab=reservations', 'fa-bookmark', 'My reservations'], ['/guest/history', 'fa-clock-rotate-left', 'Transaction history'], ['/guest/book/new', 'fa-plus', 'New booking'], ['/guest/reserve/new', 'fa-plus', 'New reservation']].map(function (q) {
+                return '<a class="btn btn-outline-velocity" href="' + q[0] + '"><i class="fas ' + q[1] + '"></i><span>' + q[2] + '</span></a>'; }).join('') + '</div>', '', 'Shortcuts to common tasks') +
             '<div id="vsDashBody">' + VS.skeleton(4) + '</div>';
         function tick() { var c = root.querySelector('#vsClock'); if (c) c.textContent = clock(); }
         tick(); setInterval(tick, 1000);
@@ -77,10 +77,12 @@
                     var n = cnt[tab][cat];
                     return '<a class="vs-sumtile' + (n ? '' : ' zero') + '" href="/guest/reservations?tab=' + (tab === 'booking' ? 'bookings' : 'reservations') + '&status=' + cat + '" aria-label="' + VS.esc(label) + ': ' + n + '"><span class="n">' + n + '</span><span class="l">' + VS.esc(label) + '</span></a>';
                 }
-                html += card('Booking & reservation summary', '<p class="text-muted small mb-2">Your stays at a glance. Tap a total to open that list.</p><div class="vs-sumgrid">' +
+                var open = localStorage.getItem('vs_summary_open') !== '0';
+                html += '<section class="vs-card vs-reveal" id="vsSummaryCard"><button type="button" class="vs-collapse-head" id="vsSummaryToggle" aria-expanded="' + open + '" aria-controls="vsSummaryBody"><h2>Booking &amp; reservation summary</h2><i class="fas fa-chevron-down" aria-hidden="true"></i></button>' +
+                    '<div id="vsSummaryBody"' + (open ? '' : ' hidden') + '><p class="text-muted small my-2">A booking is paid; a reservation holds a room to pay later. Tap a total to open that list.</p><div class="vs-sumgrid">' +
                     tile('booking', 'active', 'Active bookings') + tile('reservation', 'active', 'Active reservations') +
                     tile('booking', 'completed', 'Past bookings') + tile('reservation', 'completed', 'Past reservations') +
-                    tile('booking', 'cancelled', 'Cancelled bookings') + tile('reservation', 'cancelled', 'Cancelled reservations') + '</div>');
+                    tile('booking', 'cancelled', 'Cancelled bookings') + tile('reservation', 'cancelled', 'Cancelled reservations') + '</div></div></section>';
 
                 // next stay: the one in house, else the soonest upcoming
                 var upcoming = active.filter(function (x) { var s = (x.it.stays && x.it.stays[0]) || {}; return keyOf(x) === 'checkedin' || (s.check_out || '') >= today; })
@@ -97,24 +99,25 @@
                 html += card('Stay calendar', '<p class="text-muted small">Check-ins and check-outs of your stays</p><div class="btn-group mb-2" role="group" aria-label="Period" id="calMode"><button class="btn btn-sm btn-velocity" data-m="daily">Daily</button><button class="btn btn-sm btn-outline-velocity" data-m="weekly">Weekly</button><button class="btn btn-sm btn-outline-velocity" data-m="monthly">Monthly</button></div><div id="calGrid"></div><div id="calList" class="mt-2"></div>');
 
                 var others = items.filter(function (x) { return !next || x !== next; });
-                html += card('Other recent & upcoming stays', others.slice(0, 5).length ? others.slice(0, 5).map(stayRow).join('') : '<p class="text-muted mb-0">Nothing else yet.</p>');
+                html += card('Other recent & upcoming stays', others.slice(0, 5).length ? others.slice(0, 5).map(stayRow).join('') : '<p class="text-muted mb-0">No recent or upcoming stays</p>');
                 var pc = items.filter(function (x) { return /pending|confirmed/.test(keyOf(x)); });
-                html += card('Pending & confirmed stays', pc.length ? pc.slice(0, 5).map(stayRow).join('') : '<p class="text-muted mb-0">No pending or confirmed stays.</p>');
+                html += card('Pending & confirmed stays', pc.length ? pc.slice(0, 5).map(stayRow).join('') : '<p class="text-muted mb-0">No pending or confirmed upcoming stays right now.</p>', '', 'Stays waiting for approval or confirmed');
                 var recent = items.filter(function (x) { return x.kind === 'booking' || (x.it.booking); }).slice(0, 5);
-                html += card('Recent bookings', recent.length ? recent.map(stayRow).join('') : '<p class="text-muted mb-0">No bookings yet.</p>');
+                html += card('Recent bookings', recent.length ? recent.map(stayRow).join('') + '<div class="text-end mt-2"><a href="/guest/reservations?tab=bookings">See all</a></div>' : '<p class="text-muted mb-0">No bookings found</p><a class="btn btn-velocity btn-sm mt-2" href="/rooms">Book now</a>', '', 'Your latest bookings');
 
                 var nr = rs[1].ok ? rs[1].data : { data: [], unread_count: 0 };
-                html += card('Notifications', '<div class="small text-muted mb-1">' + (nr.unread_count ? nr.unread_count + ' unread' : 'You are all caught up') + '</div>' + ((nr.data || []).slice(0, 3).map(function (n) { return '<div class="py-1 border-bottom"><div class="' + (n.is_read ? '' : 'fw-bold') + '">' + VS.esc(n.title) + '</div><div class="small text-muted">' + VS.esc(VS.dateTime(n.created_at)) + '</div></div>'; }).join('') || '<p class="text-muted mb-0">No notifications yet.</p>') + '<a class="small d-inline-block mt-2" href="/guest/notifications">See all</a>');
+                html += card('Notifications', '<div class="small text-muted mb-1">' + (nr.unread_count ? nr.unread_count + ' unread' : 'You are all caught up') + '</div>' + ((nr.data || []).slice(0, 3).map(function (n) { return '<div class="py-1 border-bottom"><div class="' + (n.is_read ? '' : 'fw-bold') + '">' + VS.esc(n.title) + '</div><div class="small text-muted">' + VS.esc(VS.dateTime(n.created_at)) + '</div></div>'; }).join('') || '<p class="text-muted mb-0">No notifications</p>') + '<a class="small d-inline-block mt-2" href="/guest/notifications">See all</a>', '', 'Updates on your stays and payments');
 
                 var live = items.filter(function (x) { return !/cancelled|rejected/.test(keyOf(x)); });
                 var paid = live.reduce(function (a, x) { return a + S.money(x.it).paid; }, 0), wait = live.reduce(function (a, x) { return a + S.money(x.it).waiting; }, 0), due = live.filter(function (x) { return !/completed/.test(keyOf(x)); }).reduce(function (a, x) { return a + S.money(x.it).remaining; }, 0);
-                html += card('Payment status', '<div class="vs-row"><span>Paid (verified)</span><span>' + VS.money(paid) + '</span></div><div class="vs-row"><span>Waiting for verification</span><span>' + VS.money(wait) + '</span></div><div class="vs-row vs-strong"><span>Balance due</span><span>' + VS.money(due) + '</span></div>' + payRows(live));
+                html += card('Payment status', '<div class="vs-row"><span>Paid (verified)</span><span>' + VS.money(paid) + '</span></div><div class="vs-row"><span>Waiting for verification</span><span>' + VS.money(wait) + '</span></div><div class="vs-row vs-strong"><span>Balance due</span><span>' + VS.money(due) + '</span></div>' + payRows(live), '', 'Paid and still due');
 
                 var pr = rs[2].ok ? (rs[2].data.user || {}) : {}, g = rs[2].ok ? (rs[2].data.guest || {}) : {};
                 var comp = S.completeness(pr, g), pct = comp.pct;
-                html += card('Account summary', '<a class="d-flex align-items-center gap-3 text-decoration-none" style="color:inherit" href="/guest/profile"><div class="vs-donut" style="--p:' + pct + '" role="img" aria-label="Profile ' + pct + '% complete"><span>' + pct + '%</span></div><div><div class="fw-bold">' + VS.esc([pr.first_name, pr.last_name].filter(Boolean).join(' ')) + '</div><div class="small text-muted">' + VS.esc(pr.email || '') + '</div><div class="small text-muted">' + VS.esc(g.mobile_number || pr.mobile_number || '') + '</div><div class="small ' + (comp.line ? 'text-danger' : 'text-success') + '">' + VS.esc(comp.line || 'Profile complete') + '</div></div></a>');
-                html += card('Need help', '<p class="mb-2">The front desk is here 24/7.</p><div><i class="fas fa-phone me-2 text-danger"></i>0955 139 2737</div><div><i class="fas fa-envelope me-2 text-danger"></i>velocitysuites@gmail.com</div><div><i class="fas fa-location-dot me-2 text-danger"></i>Allah Valley Drive, Surallah, South Cotabato</div>');
+                html += card('Account summary', '<a class="d-flex align-items-center gap-3 text-decoration-none" style="color:inherit" href="/guest/profile"><div class="vs-donut" style="--p:' + pct + '" role="img" aria-label="Profile ' + pct + '% complete"><span>' + pct + '%</span></div><div><div class="fw-bold">' + VS.esc([pr.first_name, pr.last_name].filter(Boolean).join(' ')) + '</div><div class="small text-muted">' + VS.esc(pr.email || '') + '</div><div class="small text-muted">' + VS.esc(g.mobile_number || pr.mobile_number || '') + '</div><div class="small ' + (comp.line ? 'text-danger' : 'text-success') + '">' + VS.esc(comp.line || 'Profile complete') + '</div></div></a><div class="vs-row mt-2"><span>Account type</span><span>Guest</span></div><div class="vs-row"><span>Account status</span><span>Active</span></div>', '', 'Your profile and contact details');
+                html += card('Need help?', '<p class="mb-2">Our team is here for you 24/7.</p><div><i class="fas fa-phone me-2 text-danger"></i>0955 139 2737</div><div><i class="fas fa-envelope me-2 text-danger"></i>velocitysuites@gmail.com</div><div><i class="fas fa-location-dot me-2 text-danger"></i>Allah Valley Drive, Surallah, South Cotabato</div><a class="btn btn-outline-velocity btn-sm mt-3" href="mailto:velocitysuites@gmail.com?subject=Velocity%20Suites%20support">Contact support</a>');
                 body.innerHTML = html; VS.reveal(body);
+                var tg = body.querySelector('#vsSummaryToggle'); if (tg) tg.onclick = function () { var now = tg.getAttribute('aria-expanded') !== 'true'; tg.setAttribute('aria-expanded', now); body.querySelector('#vsSummaryBody').hidden = !now; try { localStorage.setItem('vs_summary_open', now ? '1' : '0'); } catch (e) { /* storage off */ } };
                 calendar(body, items);
             });
         }

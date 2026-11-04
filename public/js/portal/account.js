@@ -175,7 +175,7 @@
                 '<section class="vs-card p-0 overflow-hidden"><div class="vs-cover" style="background-image:linear-gradient(rgba(166,43,52,.35),rgba(166,43,52,.35)),url(/images/hero-building-640.jpg)"></div>' +
                 '<div class="px-3 pb-3"><div class="vs-avatar-wrap">' + (pic ? '<button class="vs-avatar" id="pView" aria-label="View profile photo"><img src="' + VS.esc(pic) + '" alt="Your profile photo"></button>' : '<div class="vs-avatar vs-avatar-init" aria-hidden="true">' + VS.esc(initials(u)) + '</div>') +
                 '<button class="vs-cam" id="pCam" aria-label="Change profile photo" aria-haspopup="menu"><i class="fas fa-camera"></i></button></div>' +
-                '<h1 class="h4 fw-bold mt-2 mb-0">' + VS.esc(name) + '</h1><div class="text-muted">' + VS.esc(u.email) + '</div>' +
+                '<h1 class="h4 fw-bold mt-2 mb-0">' + VS.esc(name) + '</h1><div class="text-muted">' + VS.esc(u.email) + '</div>' + (g.id ? '<div class="small text-muted">Guest ID: ' + VS.esc(g.id) + '</div>' : '') +
                 '<div class="small mt-1 ' + (comp.line ? 'text-danger' : 'text-success') + '">' + VS.esc(comp.line || 'Profile complete') + ' · ' + comp.pct + '%</div>' +
                 '<div id="pMenu" class="d-none vs-menu"><button data-a="camera"><i class="fas fa-camera me-2"></i>Take a photo</button><button data-a="gallery"><i class="fas fa-image me-2"></i>Choose from gallery</button>' + (pic ? '<button data-a="remove" class="text-danger"><i class="fas fa-trash me-2"></i>Remove photo</button>' : '') + '<button data-a="cancel">Cancel</button></div>' +
                 '<input type="file" id="pFileCam" accept="image/*" capture="user" class="d-none"><input type="file" id="pFile" accept="image/*" class="d-none"></div></section>' +
@@ -286,7 +286,11 @@
                 } else {
                     saveBar.className = ''; saveBar.innerHTML = '';
                     bar.className = 'vs-editbar' + (locked ? ' is-locked' : '');
-                    bar.innerHTML = '<div class="d-flex flex-wrap align-items-center gap-2 justify-content-between"><div class="small ' + (locked ? '' : 'text-muted') + '" id="pLockText"><i class="fas ' + (locked ? 'fa-lock' : 'fa-circle-info') + ' me-2"></i>' + VS.esc(lockText) + '</div>' +
+                    var lastU = pu.last_updated_at ? VS.date(String(pu.last_updated_at).slice(0, 10)) : 'Not yet', nextU = locked ? VS.date(String(pu.next_update_at || '').slice(0, 10)) : 'Now';
+                    bar.innerHTML = '<div class="d-flex flex-wrap align-items-start gap-3 justify-content-between"><div class="flex-grow-1"><div class="fw-bold">Profile update status</div><div class="small text-muted mb-1">Personal information and contact &amp; address updates share one 30-day wait</div>' +
+                        '<div class="small ' + (locked ? 'fw-semibold' : '') + '" id="pLockText"><i class="fas ' + (locked ? 'fa-lock' : 'fa-circle-check') + ' me-2"></i>' + VS.esc(locked ? lockText : 'You can update your profile information now.') + '</div>' +
+                        '<div class="vs-row mt-1"><span>Last updated</span><span>' + VS.esc(lastU) + '</span></div><div class="vs-row"><span>Next update available</span><span>' + VS.esc(nextU) + '</span></div>' +
+                        (locked ? '' : '<div class="small text-muted mt-1">For account security and consistency, profile information can be updated once every 30 days.</div>') + '</div>' +
                         '<button type="button" class="btn btn-velocity" id="pEdit"' + (locked ? ' disabled aria-describedby="pLockText"' : '') + '><i class="fas fa-pen me-1"></i>Edit profile</button></div>';
                     var eb = bar.querySelector('#pEdit'); if (!locked) eb.onclick = startEdit;
                 }

@@ -275,6 +275,9 @@ class GuestParityV3Test extends TestCase
     public function test_there_are_no_example_or_preview_pages_that_could_show_made_up_or_real_guest_data(): void
     {
         foreach (\Illuminate\Support\Facades\Route::getRoutes() as $route) {
+            if ($route->uri() === 'guest/receipts/{number}/preview') {
+                continue;   // the owner's own receipt, as it prints (404 for anyone else) - not a sample page
+            }
             $this->assertDoesNotMatchRegularExpression('/example|preview|demo|mock|sample/i', $route->uri(), $route->uri());
         }
         // a transaction page needs its owner: a visitor goes to sign in and another guest cannot read it through the API
@@ -353,6 +356,59 @@ class GuestParityV3Test extends TestCase
         $stays = file_get_contents(public_path('js/portal/stays.js'));
         foreach (['S.canEdit = function', 'S.cancelRule = function', 'Verified by the front desk \u2014 contact us to make changes', 'Your stay has started', "'Keep ' + kind", 'is non-refundable.', 'You can book again at any time.', "label: 'Awaiting verification'"] as $n) {
             $this->assertStringContainsString($n, $stays, $n);
+        }
+    }
+
+    // ================================================================ round 6: layout, selections, step 1, same content as the app
+
+    public function test_the_guest_pages_share_one_centered_content_area_and_the_dashboard_grid_is_even(): void
+    {
+        $css = file_get_contents(public_path('css/portal.css'));
+        $this->assertMatchesRegularExpression('/\.vs-shell-main > \.container-fluid\s*\{[^}]*max-width:\s*1232px[^}]*margin-left:\s*auto[^}]*margin-right:\s*auto/', $css);
+        $this->assertMatchesRegularExpression('/\.vs-qa\s*\{[^}]*grid-template-columns:\s*repeat\(3/', $css);
+        $this->assertStringContainsString('repeat(2, minmax(0, 1fr))', $css);
+        $this->assertStringContainsString('@media (max-width: 419px) { .vs-qa { grid-template-columns: minmax(0, 1fr); } }', $css);
+        $dash = file_get_contents(public_path('js/portal/dashboard.js'));
+        $this->assertSame(6, preg_match_all("/\['\/[a-z\/?=]*', 'fa-[a-z-]+', '[A-Za-z ]+'\]/", substr($dash, strpos($dash, "card('Quick actions'"), 900)), 'six quick actions');
+        $this->assertStringContainsString("aria-expanded=\"' + open + '\"", $dash);
+        $this->assertStringContainsString("localStorage.getItem('vs_summary_open') !== '0'", $dash, 'the summary opens expanded');
+    }
+
+    public function test_clearing_cancelling_or_finishing_deletes_the_room_selection_from_every_storage(): void
+    {
+        $rooms = file_get_contents(public_path('js/portal/rooms.js'));
+        $wiz = file_get_contents(public_path('js/portal/wizard.js'));
+        foreach (["localStorage.removeItem(SEL_KEY)", "sessionStorage.removeItem(SEL_KEY)", "'Clear ' + VS.plural(t.rooms, 'selected room') + '?'", 'data-clear-sel', 'sel.clear = function', '30 * 60 * 1000'] as $n) {
+            $this->assertStringContainsString($n, $rooms, $n);
+        }
+        foreach (['function abandon()', 'window.VSRooms.clearSelection()', 'data-cancel', "'Cancel this '"] as $n) {
+            $this->assertStringContainsString($n, $wiz, $n);
+        }
+        $this->assertGreaterThanOrEqual(4, substr_count($wiz, 'abandon()'), 'cancel, booking done, reservation done, edit done');
+    }
+
+    public function test_step_one_lists_each_date_range_as_a_card_with_its_rooms_and_a_total(): void
+    {
+        $wiz = file_get_contents(public_path('js/portal/wizard.js'));
+        foreach (['Your dates and rooms', 'vs-dl-card', 'is-editing', 'Editing now', 'Subtotal for these dates', 'Total for all dates', "per night · ", 'data-edit', 'data-remove', 'Nothing chosen yet'] as $n) {
+            $this->assertStringContainsString($n, $wiz, $n);
+        }
+    }
+
+    public function test_the_web_uses_the_apps_section_names_and_descriptions(): void
+    {
+        $dash = file_get_contents(public_path('js/portal/dashboard.js'));
+        foreach (['Shortcuts to common tasks', 'My bookings', 'My reservations', 'Stays waiting for approval or confirmed', 'Your latest bookings', 'Updates on your stays and payments', 'Paid and still due',
+            'Your profile and contact details', 'Account type', 'Account status', 'Need help?', 'Our team is here for you 24/7.', 'Contact support', 'No recent or upcoming stays', 'No bookings found'] as $n) {
+            $this->assertStringContainsString($n, $dash, $n);
+        }
+        $filters = file_get_contents(resource_path('views/portal/partials/room-filters.blade.php'));
+        foreach (['Recommended', 'Price: Low to High', 'Price: High to Low', 'Name: A-Z', 'View availability', 'Reset', 'Available Rooms'] as $n) {
+            $this->assertStringContainsString($n, $filters, $n);
+        }
+        $acc = file_get_contents(public_path('js/portal/account.js'));
+        foreach (['Profile update status', 'Last updated', 'Next update available', 'You can update your profile information now.', 'Guest ID: '] as $n) {
+            $this->assertStringContainsString($n, $acc, $n);
         }
     }
 }

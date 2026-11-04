@@ -108,14 +108,23 @@
             var top = root.getBoundingClientRect().top + window.pageYOffset - 70; window.scrollTo({ top: top, behavior: VS.reducedMotion ? 'auto' : 'smooth' });
         }
         function nav(opts) {
-            return '<div class="d-flex justify-content-between mt-4 gap-2">' + (S.step > 0 ? '<button class="btn btn-light" data-back>Back</button>' : '<a class="btn btn-light" href="/rooms">Cancel</a>') +
+            return '<div class="d-flex justify-content-between mt-4 gap-2">' + (S.step > 0 ? '<button class="btn btn-light" data-back>Back</button>' : '<button type="button" class="btn btn-light" data-cancel>Cancel</button>') +
                 '<button class="btn btn-velocity" data-next>' + (opts && opts.label || 'Continue') + '</button></div>';
         }
         function bindNav(onNext) {
             var n = main.querySelector('[data-next]'), b = main.querySelector('[data-back]');
             if (b) b.onclick = function () { go(S.step - 1); };
             if (n) n.onclick = function () { onNext(n); };
+            var cx = main.querySelector('[data-cancel]');
+            if (cx) cx.onclick = function () {
+                VS.confirm({ title: 'Cancel this ' + (editId ? 'edit' : mode) + '?', message: editId ? 'Your changes are not saved.' : 'What you chose so far, including your selected rooms, is cleared.', confirmText: 'Cancel ' + (editId ? 'edit' : mode), cancelText: 'Keep going', danger: true }).then(function (yes) {
+                    if (!yes) return;
+                    abandon(); window.location.href = editId ? '/guest/reservations' : '/guest/rooms';
+                });
+            };
         }
+        // Cancelling, finishing or leaving for good: the wizard's draft and the room selection are deleted from every storage
+        function abandon() { try { sessionStorage.removeItem(DK); } catch (e) { /* ignore */ } if (window.VSRooms) window.VSRooms.clearSelection(); window.__vsLeavingOk = true; }
         function errorBox(msg) { var e = main.querySelector('#vsStepErr'); if (e) VS.alertBox(e, msg); if (msg && e) e.scrollIntoView({ block: 'center', behavior: VS.reducedMotion ? 'auto' : 'smooth' }); }
 
         function render() { [stepStays, stepAmenities, stepRep, stepGuests, stepId].concat(mode === 'reservation' ? [stepPaymentMethod] : []).concat([stepReview])[S.step](); }
@@ -123,7 +132,7 @@
         // ================================================= STEP 1 - dates and rooms
         function stepStays() {
             var d = S.draft;
-            main.innerHTML = '<h2 class="vs-section-title">Dates and rooms</h2><p class="text-muted">Choose your check-in and check-out dates to see available rooms. You can add more than one date range.</p><div id="vsStepErr"></div>' +
+            main.innerHTML = '<h2 class="vs-section-title">Dates and rooms</h2><p class="text-muted">Choose your check-in and check-out dates to see available rooms. You can add more than one date range; each one is listed below.</p><div id="vsStepErr"></div>' +
                 '<div id="vsStayList"></div><section class="vs-card" id="vsEditor"></section>' + nav();
             paintStays(); paintEditor();
             bindNav(function () {
@@ -136,14 +145,26 @@
 
         function paintStays() {
             var host = main.querySelector('#vsStayList'), types = allTypes();
-            if (!S.stays.length) { host.innerHTML = ''; return; }
-            host.innerHTML = '<h3 class="h6 fw-bold">Your stays</h3>' + S.stays.map(function (s, i) {
-                var rooms = stayRooms(s).map(function (r) { return (types[r.id] ? types[r.id].name : 'Room') + ' × ' + r.qty; }).join(', ');
-                return '<div class="vs-card py-2 d-flex align-items-center gap-2 flex-wrap"><div class="flex-grow-1"><strong>' + VS.esc(VS.date(s.check_in)) + ' → ' + VS.esc(VS.date(s.check_out)) + '</strong> · ' + VS.plural(nights(s), 'night') +
-                    '<div class="text-muted small">' + VS.esc(rooms) + '</div></div><button class="btn btn-sm btn-outline-velocity" data-edit="' + i + '">Edit</button><button class="btn btn-sm btn-light" data-remove="' + i + '">Remove</button></div>';
-            }).join('') + '<div class="vs-row vs-strong"><span>Total for all stays</span><span>' + VS.money(roomsTotal(types)) + '</span></div>';
+            var editing = S.draft && S.draft.editing != null ? S.draft.editing : null;
+            var head = '<h3 class="h5 fw-bold mb-2" id="vsYourDates">Your dates and rooms</h3>';
+            if (!S.stays.length) {
+                host.innerHTML = '<section class="vs-datelist" aria-labelledby="vsYourDates">' + head + '<div class="vs-datelist-empty"><i class="fas fa-calendar-plus"></i><div><div class="fw-semibold">Nothing chosen yet</div><div class="small text-muted">Pick your check-in and check-out dates below, choose your rooms, then confirm. Each date range appears here as its own card.</div></div></div></section>';
+                return;
+            }
+            host.innerHTML = '<section class="vs-datelist" aria-labelledby="vsYourDates">' + head + '<p class="small text-muted">' + VS.plural(S.stays.length, 'date range') + ' · check everything here before you continue.</p>' + S.stays.map(function (s, i) {
+                var n = nights(s), sub = 0;
+                var lines = stayRooms(s).map(function (r) {
+                    var t = types[r.id], rate = t ? Number(t.rate) : 0, line = rate * n * r.qty; sub += line;
+                    return '<div class="vs-dl-room"><div><span class="fw-semibold">' + VS.esc(t ? t.name : 'Room') + '</span> <span class="text-muted">× ' + r.qty + '</span><div class="small text-muted vs-num">' + VS.money(rate) + ' per night · ' + VS.plural(n, 'night') + '</div></div><div class="vs-num fw-semibold text-end">' + VS.money(line) + '</div></div>';
+                }).join('');
+                var on = editing === i;
+                return '<article class="vs-dl-card' + (on ? ' is-editing' : '') + '" aria-label="' + VS.esc(VS.date(s.check_in) + ' to ' + VS.date(s.check_out)) + '">' +
+                    '<header class="vs-dl-head"><div><div class="fw-bold">' + VS.esc(VS.date(s.check_in)) + ' → ' + VS.esc(VS.date(s.check_out)) + ' <span class="text-muted fw-normal">· ' + VS.plural(n, 'night') + '</span></div>' + (on ? '<span class="vs-chip">Editing now</span>' : '') + '</div>' +
+                    '<div class="d-flex gap-2"><button type="button" class="btn btn-sm btn-outline-velocity" data-edit="' + i + '"' + (on ? ' disabled' : '') + '>Edit</button><button type="button" class="btn btn-sm btn-light" data-remove="' + i + '">Remove</button></div></header>' +
+                    lines + '<div class="vs-dl-sub"><span>Subtotal for these dates</span><span class="vs-num fw-bold">' + VS.money(sub) + '</span></div></article>';
+            }).join('') + '<div class="vs-dl-total"><span>Total for all dates</span><span class="vs-num">' + VS.money(roomsTotal(types)) + '</span></div></section>';
             host.querySelectorAll('[data-edit]').forEach(function (b) { b.onclick = function () {
-                var s = S.stays[+b.dataset.edit]; S.draft = { check_in: s.check_in, check_out: s.check_out, rooms: JSON.parse(JSON.stringify(s.rooms)), editing: +b.dataset.edit }; save(); paintEditor();
+                var s = S.stays[+b.dataset.edit]; S.draft = { check_in: s.check_in, check_out: s.check_out, rooms: JSON.parse(JSON.stringify(s.rooms)), editing: +b.dataset.edit }; save(); paintStays(); paintEditor();
                 main.querySelector('#vsEditor').scrollIntoView({ behavior: VS.reducedMotion ? 'auto' : 'smooth' });
             }; });
             host.querySelectorAll('[data-remove]').forEach(function (b) { b.onclick = function () {
@@ -157,7 +178,7 @@
 
         function paintEditor() {
             var d = S.draft, host = main.querySelector('#vsEditor');
-            var title = d.editing != null ? 'Edit ' + VS.date(S.stays[d.editing].check_in) + ' → ' + VS.date(S.stays[d.editing].check_out) : (S.stays.length ? 'Add another date' : 'Choose dates and rooms');
+            var title = d.editing != null ? 'Edit ' + VS.date(S.stays[d.editing].check_in) + ' → ' + VS.date(S.stays[d.editing].check_out) : (S.stays.length ? 'Add another date range' : 'Choose dates and rooms');
             host.innerHTML = '<h3 class="h6 fw-bold">' + VS.esc(title) + '</h3><div class="row g-3 mb-2"><div class="col-6"><label class="form-label small fw-semibold" for="wIn">Check-in</label><input type="date" class="form-control" id="wIn" min="' + earliest + '" value="' + VS.esc(d.check_in) + '"></div>' +
                 '<div class="col-6"><label class="form-label small fw-semibold" for="wOut">Check-out</label><input type="date" class="form-control" id="wOut" min="' + VS.addDays(d.check_in || earliest, 1) + '" value="' + VS.esc(d.check_out) + '"></div></div><div id="vsDateErr"></div><div id="vsRoomPick"></div>';
             var ci = host.querySelector('#wIn'), co = host.querySelector('#wOut');
@@ -199,7 +220,7 @@
                     row.querySelector('[data-inc]').onclick = function () { d.rooms[id] = Math.min(free, (d.rooms[id] || 0) + 1); save(); paintRooms(); };
                     row.querySelector('[data-dec]').onclick = function () { d.rooms[id] = Math.max(0, (d.rooms[id] || 0) - 1); if (!d.rooms[id]) delete d.rooms[id]; save(); paintRooms(); };
                 });
-                var ce = host.querySelector('#wCancelEdit'); if (ce) ce.onclick = function () { S.draft = { check_in: '', check_out: '', rooms: {}, editing: null }; save(); paintEditor(); };
+                var ce = host.querySelector('#wCancelEdit'); if (ce) ce.onclick = function () { S.draft = { check_in: '', check_out: '', rooms: {}, editing: null }; save(); paintStays(); paintEditor(); };
                 host.querySelector('#wConfirm').onclick = confirmStay;
             });
         }
@@ -462,7 +483,7 @@
                 }).then(function (r) {
                     if (!r) return;
                     if (!r.ok) { errorBox(r.message); return; }
-                    sessionStorage.removeItem(DK); window.__vsLeavingOk = true;
+                    abandon();
                     main.innerHTML = '<div class="text-center py-4"><div class="vs-success"><i class="fas fa-check"></i></div><h2 class="h4 fw-bold mt-3">Reservation updated</h2><p class="text-muted">Reservation #' + VS.esc(editId) + ' was saved. It cannot be edited again.</p><a class="btn btn-velocity" href="/guest/reservations/' + VS.esc(editId) + '">View reservation</a></div>';
                     bar.parentNode.classList.add('d-none'); sum.parentNode.classList.add('d-none'); root.querySelector('#vsWizSummaryM').classList.add('d-none');
                 });
@@ -480,7 +501,7 @@
                 VS.busy(btn, function () { return VS.api('/guest/reservations', { method: 'POST', body: fd }); }).then(function (r) {
                     if (!r) return;
                     if (!r.ok) { errorBox(r.message); return; }
-                    sessionStorage.removeItem(DK);
+                    abandon();
                     var res = r.data.reservation || r.data;
                     main.innerHTML = '<div class="text-center py-4"><div class="vs-success"><i class="fas fa-check"></i></div><h2 class="h4 fw-bold mt-3">Reservation confirmed</h2><p class="text-muted">Reservation #' + VS.esc(res.id) + ' is with the front desk.' +
                         (S.payment_method === 'gcash' ? ' Complete your GCash payment from your reservation using Pay now.' : ' Pay at the hotel when you arrive.') + '</p><a class="btn btn-velocity" href="/guest/reservations/' + VS.esc(res.id) + '">View reservation</a></div>';
@@ -502,7 +523,7 @@
                 submit: function (f) {
                     var fd = payload(); fd.append('payment_method', 'gcash'); fd.append('amount_paid', f.amount); fd.append('selected_payment_percentage', f.percent);
                     fd.append('gcash_number', f.gcash_number); fd.append('reference_number', f.reference_number); fd.append('receipt', f.receipt, f.receipt.name || 'receipt.jpg');
-                    return VS.api('/guest/bookings', { method: 'POST', body: fd }).then(function (res) { if (res.ok) { sessionStorage.removeItem(DK); window.__vsLeavingOk = true; } return res; });
+                    return VS.api('/guest/bookings', { method: 'POST', body: fd }).then(function (res) { if (res.ok) { abandon(); } return res; });
                 },
                 success: function (data) { var b = data.booking || data; return '<a class="btn btn-velocity" href="/guest/bookings/' + VS.esc(b.id) + '">View booking</a>'; }
             });

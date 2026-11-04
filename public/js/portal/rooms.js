@@ -39,7 +39,8 @@
         } catch (e) { return null; }
     };
     R.saveSelection = function (v) { v.ts = Date.now(); try { localStorage.setItem(SEL_KEY, JSON.stringify(v)); } catch (e) { /* storage off */ } };
-    R.clearSelection = function () { try { localStorage.removeItem(SEL_KEY); } catch (e) { /* ignore */ } };
+    // gone from the local AND the session storage, so it can never come back on another page
+    R.clearSelection = function () { try { localStorage.removeItem(SEL_KEY); } catch (e) { /* ignore */ } try { sessionStorage.removeItem(SEL_KEY); } catch (e) { /* ignore */ } };
 
     var MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     function shortDate(iso) { var p = String(iso).split('-'); return MONTHS[+p[1] - 1] + ' ' + (+p[2]); }
@@ -85,7 +86,7 @@
         cfg.ci.min = earliest; cfg.ci.value = st.check_in; cfg.co.min = VS.addDays(st.check_in, 1); cfg.co.value = st.check_out;
         var list = [], bar = null, sel = {};
 
-        function persist(intent) { var v = { check_in: st.check_in, check_out: st.check_out, rooms: st.rooms, types: st.types }; if (intent) v.intent = intent; R.saveSelection(v); }
+        function persist(intent) { if (!Object.keys(st.rooms).length && !intent) { R.clearSelection(); return; } var v = { check_in: st.check_in, check_out: st.check_out, rooms: st.rooms, types: st.types }; if (intent) v.intent = intent; R.saveSelection(v); }
         sel.qty = function (id) { return st.rooms[id] || 0; };
         sel.max = function (rt) { return rt.is_fully_booked ? 0 : Math.max(0, rt.available_count || 0); };
         sel.dates = function () { return { check_in: st.check_in, check_out: st.check_out }; };
@@ -113,9 +114,13 @@
         function ensureBar() {
             if (bar) return bar;
             bar = document.createElement('div'); bar.className = 'vs-selbar'; bar.setAttribute('role', 'region'); bar.setAttribute('aria-label', 'Your room selection'); bar.hidden = true;
-            bar.innerHTML = '<div class="vs-selbar-in"><div class="vs-selbar-text" aria-live="polite"></div><div class="vs-selbar-actions"><button type="button" class="btn btn-velocity" data-go="book">Book now</button><button type="button" class="btn btn-outline-velocity" data-go="reserve">Reserve</button></div></div>';
+            bar.innerHTML = '<div class="vs-selbar-in"><div class="vs-selbar-text" aria-live="polite"></div><div class="vs-selbar-actions"><button type="button" class="btn btn-link vs-selbar-clear" data-clear-sel>Clear selection</button><button type="button" class="btn btn-velocity" data-go="book">Book now</button><button type="button" class="btn btn-outline-velocity" data-go="reserve">Reserve</button></div></div>';
             document.body.appendChild(bar);
             bar.querySelectorAll('[data-go]').forEach(function (b) { b.addEventListener('click', function () { go(b.dataset.go); }); });
+            bar.querySelector('[data-clear-sel]').addEventListener('click', function () {
+                var t = totals();
+                VS.confirm({ title: 'Clear ' + VS.plural(t.rooms, 'selected room') + '?', message: 'The rooms you picked are removed. Your dates stay.', confirmText: 'Clear selection', cancelText: 'Keep them', danger: true }).then(function (yes) { if (yes) sel.clear(); });
+            });
             return bar;
         }
         function paintBar() {
@@ -154,6 +159,14 @@
             });
         };
 
+        sel.clear = function () {
+            st.rooms = {}; st.types = {}; R.clearSelection();
+            document.querySelectorAll('[data-stepper]').forEach(function (host) {
+                var rt = list.filter(function (x) { return String(x.id) === String(host.getAttribute('data-stepper')); })[0];
+                if (rt) host.innerHTML = stepperInner(rt, 0, sel.max(rt));
+            });
+            paintBar(); VS.toast('Selection cleared.', 'success');
+        };
         sel.setDates = function (ci, co) { st.check_in = ci; st.check_out = co; persist(); paintBar(); };
         sel.paintBar = paintBar;
         return sel;
@@ -280,7 +293,7 @@
         var grid = root.querySelector('#vsRoomGrid');
         var form = root.querySelector('#vsRoomFilters');
         var signed = root.dataset.signed === '1';
-        var state = { sort: 'name' };
+        var state = { sort: 'recommended' };
         var ci = form.querySelector('[name=check_in]'), co = form.querySelector('[name=check_out]');
         var sel = R.selection({ ci: ci, co: co, signed: signed });
         sel.bind(grid);
@@ -295,9 +308,10 @@
             if (type) list = list.filter(function (r) { return r.name === type; });
             if (form.elements.only_available.checked) list = list.filter(function (r) { return !r.is_fully_booked && r.available_count > 0; });
             list = list.slice().sort(function (a, b) {
-                return state.sort === 'price_asc' ? a.rate - b.rate : state.sort === 'price_desc' ? b.rate - a.rate : a.name.localeCompare(b.name);
+                return state.sort === 'price_asc' ? a.rate - b.rate : state.sort === 'price_desc' ? b.rate - a.rate : state.sort === 'name' ? a.name.localeCompare(b.name) : 0;
             });
             var search = new URLSearchParams(sel.dates()).toString();
+            var cnt = root.querySelector('#vsRoomCount'); if (cnt) cnt.textContent = 'Available Rooms (' + list.length + ')';
             grid.innerHTML = list.length ? list.map(function (r) { return R.card(r, search, sel); }).join('')
                 : '<div class="col-12">' + VS.empty('fa-bed', 'No rooms match', 'Try other dates or clear the filters.') + '</div>';
             VS.reveal(grid);
