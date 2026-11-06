@@ -474,3 +474,11 @@ button.vs-mi:hover, button.vs-mi:focus-visible { background: var(--vs-red-soft);
 .vs-dash-grid > .vs-card > h2, .vs-dash-col > .vs-card > h2 { font-size: 1.05rem; margin: 0 0 .25rem; min-height: 1.6rem; display: flex; align-items: center; }
 .vs-shell-body .user-avatar-initials { color: #a62b34; }
 [data-bs-theme="dark"] .vs-shell-body .user-avatar-initials { color: #fff; }
+
+/* room photos: the card / detail photo keeps its aspect ratio (cover crops, never stretches); full screen uses the shared viewer */
+.vs-room-photo img { object-fit: cover; width: 100%; height: 100%; image-orientation: from-image; }
+.vs-room-photo { position: relative; overflow: hidden; background: #e9ecef; }
+.vs-fs-btn { position: absolute; right: .6rem; bottom: .6rem; z-index: 2; }
+.vs-photo-missing::after { content: "Image unavailable"; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #495057; font-weight: 600; }
+[data-bs-theme="dark"] .vs-room-photo { background: #2a2d34; }
+[data-bs-theme="dark"] .vs-photo-missing::after { color: #c6c6c6; }

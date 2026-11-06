@@ -327,9 +327,18 @@
                 '<li>Check-in from 2:00 PM, check-out until 12:00 PM.</li><li>The earliest check-in you can book is two days from today.</li>' +
                 '<li>Cancelling a booking or reservation that was partly paid does not refund what was already paid.</li></ul></section>' +
                 '</div></div>';
-            el.querySelectorAll('.vs-thumb').forEach(function (b) {
-                b.addEventListener('click', function () { document.getElementById('vsMainPhoto').src = b.getAttribute('data-src'); });
+            // a thumbnail picks the photo; the big photo (or its button) opens the full-screen viewer on the original file
+            var cur = 0, main = document.getElementById('vsMainPhoto');
+            el.querySelectorAll('.vs-thumb').forEach(function (b, i) {
+                b.addEventListener('click', function () { cur = i; main.src = b.getAttribute('data-src'); });
             });
+            var holder = main.parentElement;
+            holder.style.cursor = 'zoom-in';
+            var fs = document.createElement('button'); fs.type = 'button'; fs.className = 'btn btn-sm btn-light vs-fs-btn'; fs.setAttribute('aria-label', 'View ' + rt.name + ' photos full screen');
+            fs.innerHTML = '<i class="fas fa-expand me-1" aria-hidden="true"></i>Full screen' + (gallery.length > 1 ? ' (' + gallery.length + ')' : ''); holder.appendChild(fs);
+            function openViewer() { if (window.VSPhotoViewer) VSPhotoViewer.open(gallery, cur, { title: rt.name }); }
+            main.addEventListener('click', openViewer); fs.addEventListener('click', function (e) { e.stopPropagation(); openViewer(); });
+            main.addEventListener('error', function () { main.style.visibility = 'hidden'; holder.classList.add('vs-photo-missing'); });
         });
     };
 

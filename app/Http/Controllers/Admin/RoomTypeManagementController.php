@@ -38,8 +38,12 @@ class RoomTypeManagementController extends Controller
             $query->where('name', 'like', '%' . $request->search . '%');
         }
 
-        if ($request->has('status') && $request->status) {
-            $query->where('status', $request->status);
+        // Active room types by default; Archived (inactive: kept only for their history) and All on request.
+        $filter = in_array($request->get('status'), ['archived', 'inactive', 'all'], true) ? $request->get('status') : 'active';
+        if ($filter === 'archived' || $filter === 'inactive') {
+            $query->where('status', 'inactive');
+        } elseif ($filter === 'active') {
+            $query->where('status', 'active');
         }
 
         $roomTypes = $query->latest()->paginate(\App\Support\PerPage::resolve($request))->withQueryString();

@@ -40,9 +40,10 @@
             </div>
             <div class="col-md-3">
                 <select name="status" class="form-control">
-                    <option value="">All Status</option>
-                    <option value="active" {{ request('status') === 'active' ? 'selected' : '' }}>Active</option>
-                    <option value="inactive" {{ request('status') === 'inactive' ? 'selected' : '' }}>Inactive</option>
+                    @php $sf = in_array(request('status'), ['archived', 'inactive', 'all'], true) ? (request('status') === 'inactive' ? 'archived' : request('status')) : 'active'; @endphp
+                    <option value="active" {{ $sf === 'active' ? 'selected' : '' }}>Active</option>
+                    <option value="archived" {{ $sf === 'archived' ? 'selected' : '' }}>Archived</option>
+                    <option value="all" {{ $sf === 'all' ? 'selected' : '' }}>All</option>
                 </select>
             </div>
             <div class="col-md-3">

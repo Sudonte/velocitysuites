@@ -17,6 +17,7 @@
 
 @push('scripts')
 <script src="{{ asset('js/portal/core.js') }}?v={{ filemtime(public_path('js/portal/core.js')) }}"></script>
+<script src="{{ asset('js/photo-viewer.js') }}?v={{ filemtime(public_path('js/photo-viewer.js')) }}"></script>
 <script src="{{ asset('js/portal/rooms.js') }}?v={{ filemtime(public_path('js/portal/rooms.js')) }}"></script>
 <script>VSRooms.details(document.getElementById('vsRoomDetails'), {{ $roomType->id }});</script>
 @endpush

@@ -69,7 +69,7 @@ class PromotionManagementController extends Controller
         };
 
         $promotions = $query->with(['amenities', 'roomType'])->latest()->paginate(\App\Support\PerPage::resolve($request))->withQueryString();
-        $roomTypes = RoomType::orderBy('name')->get();
+        $roomTypes = RoomType::where('status', 'active')->orderBy('name')->get();
 
         return view('admin.promotions.index', compact('promotions', 'roomTypes', 'filters'));
     }
@@ -79,7 +79,7 @@ class PromotionManagementController extends Controller
      */
     public function create(): View
     {
-        $roomTypes = RoomType::orderBy('name')->get();
+        $roomTypes = RoomType::where('status', 'active')->orderBy('name')->get();
         $amenities = \App\Models\Amenity::where('status', 'active')->orderBy('amenity_name')->get();
 
         return view('admin.promotions.create', compact('roomTypes', 'amenities'));
@@ -227,7 +227,7 @@ class PromotionManagementController extends Controller
      */
     public function edit(Promotion $promotion): View
     {
-        $roomTypes = RoomType::orderBy('name')->get();
+        $roomTypes = RoomType::where('status', 'active')->orWhere('id', $promotion->room_type_id)->orderBy('name')->get();
         $promotion->load('amenities');
         // Active amenities, plus any already on this promotion even if since deactivated.
         $amenities = \App\Models\Amenity::where('status', 'active')
