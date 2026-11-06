@@ -54,9 +54,8 @@ class NoSecretsInLogsTest extends TestCase
         $user = User::create(['first_name' => 'A', 'last_name' => 'B', 'email' => 'a@example.test', 'password' => bcrypt('x')]);
 
         $sentCodes = [];
-        Mail::shouldReceive('raw')->once()->andReturnUsing(function ($body, $callback) use (&$sentCodes) {
-            preg_match('/code is: (\d{6})/', $body, $m);
-            $sentCodes[] = $m[1];
+        Mail::shouldReceive('send')->once()->andReturnUsing(function ($views, $data, $callback) use (&$sentCodes) {
+            $sentCodes[] = $data['code'];
         });
 
         $this->assertTrue(app(PasswordResetService::class)->sendOtp($user));
@@ -74,9 +73,8 @@ class NoSecretsInLogsTest extends TestCase
     {
         $user = User::create(['first_name' => 'A', 'last_name' => 'B', 'email' => 'b@example.test', 'password' => bcrypt('x')]);
         $captured = null;
-        Mail::shouldReceive('raw')->once()->andReturnUsing(function ($body) use (&$captured) {
-            preg_match('/code is: (\d{6})/', $body, $m);
-            $captured = $m[1];
+        Mail::shouldReceive('send')->once()->andReturnUsing(function ($views, $data) use (&$captured) {
+            $captured = $data['code'];
             throw new \RuntimeException('smtp down');
         });
 

@@ -8,6 +8,7 @@
 
 @section('content')
 <div class="auth-card vs-reg" id="vsRegRoot" style="max-width:600px">
+    <a href="{{ url('/') }}" class="vs-back" data-topback data-custom><i class="fas fa-arrow-left" aria-hidden="true"></i> Back</a>
     <div id="vsRegWrap">
         <div class="logo vs-reg-logo">
             <span class="logo-badge" style="width: 84px; height: 72px;"><img src="{{ asset('images/logo.jpg') }}" alt="Velocity Suites"></span>
@@ -77,6 +78,7 @@
 
 @push('scripts')
 <script src="{{ asset('js/address-cascade.js') }}?v={{ filemtime(public_path('js/address-cascade.js')) }}"></script>
+<script src="{{ asset('js/portal/back-link.js') }}?v={{ filemtime(public_path('js/portal/back-link.js')) }}"></script>
 <script src="{{ asset('js/portal/core.js') }}?v={{ filemtime(public_path('js/portal/core.js')) }}"></script>
 <script src="{{ asset('js/portal/auth.js') }}?v={{ filemtime(public_path('js/portal/auth.js')) }}"></script>
 <script>VSAuth.register(document.getElementById('vsRegRoot'));</script>

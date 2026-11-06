@@ -53,14 +53,12 @@ class WebResetController extends Controller
     {
         $validated = $request->validate(['email' => 'required|email', 'otp' => 'required|string|size:6']);
 
-        if ($this->passwordReset->tooManyAttempts($validated['email'])) {
-            return $this->tooMany();
-        }
+        // a code already traded for its verification is spent, like an expired one
         if ($this->passwordReset->alreadyVerified($validated['email'], $validated['otp'])) {
-            return response()->json(['message' => 'Invalid or expired code.'], 422);
+            return $this->expired();
         }
-        if (! $this->passwordReset->verifyOtp($validated['email'], $validated['otp'])) {
-            return $this->passwordReset->tooManyAttempts($validated['email']) ? $this->tooMany() : response()->json(['message' => 'Invalid or expired code.'], 422);
+        if ($refused = $this->refusal($this->passwordReset->checkOtp($validated['email'], $validated['otp']))) {
+            return $refused;
         }
         $this->passwordReset->markVerified($validated['email'], $validated['otp']);
 
@@ -75,11 +73,8 @@ class WebResetController extends Controller
             'password' => ['required', 'confirmed', PasswordPolicy::rule()],
         ]);
 
-        if ($this->passwordReset->tooManyAttempts($validated['email'])) {
-            return $this->tooMany();
-        }
-        if (! $this->passwordReset->verifyOtp($validated['email'], $validated['otp'])) {
-            return response()->json(['message' => 'Invalid or expired code.'], 422);
+        if ($refused = $this->refusal($this->passwordReset->checkOtp($validated['email'], $validated['otp']))) {
+            return $refused;
         }
         $user = User::where('email', $validated['email'])->first();
         if (! $user || ! in_array($user->role, self::ROLES, true)) {
@@ -109,8 +104,28 @@ class WebResetController extends Controller
         return response()->json(['message' => 'Password changed. Welcome back!', 'redirect' => $user->role === 'admin' ? route('admin.dashboard') : route('guest.dashboard')]);
     }
 
+    /** The answer for a code that was not accepted, or null when it was: wrong (with the tries left), too many tries, or expired. */
+    private function refusal(array $check): ?JsonResponse
+    {
+        return match ($check['status']) {
+            'ok' => null,
+            'wrong' => response()->json([
+                'code' => 'WRONG_CODE',
+                'tries_left' => $check['tries_left'],
+                'message' => "That code isn't right. Please try again. ({$check['tries_left']} " . ($check['tries_left'] === 1 ? 'try' : 'tries') . ' left)',
+            ], 422),
+            'too_many' => $this->tooMany(),
+            default => $this->expired(),
+        };
+    }
+
+    private function expired(): JsonResponse
+    {
+        return response()->json(['code' => 'CODE_EXPIRED', 'message' => 'This code has expired. Please request a new code.'], 422);
+    }
+
     private function tooMany(): JsonResponse
     {
-        return response()->json(['message' => 'Too many incorrect codes. Please request a new code.'], 429);
+        return response()->json(['code' => 'TOO_MANY_TRIES', 'message' => 'Too many tries. Please request a new code.'], 429);
     }
 }

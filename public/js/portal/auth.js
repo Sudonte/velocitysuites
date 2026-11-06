@@ -56,7 +56,7 @@
             b.addEventListener('input', function () {
                 b.value = b.value.replace(/\D/g, '').slice(-1);
                 if (b.value && boxes[i + 1]) boxes[i + 1].focus();
-                b.classList.remove('is-invalid');
+                b.classList.remove('is-invalid', 'bad');
                 if (onChange) onChange(value());
             });
             b.addEventListener('keydown', function (e) {
@@ -77,7 +77,9 @@
             value: value,
             focus: function () { boxes[0].focus(); },
             clear: function () { boxes.forEach(function (b) { b.value = ''; }); boxes[0].focus(); },
-            invalid: function () { boxes.forEach(function (b) { b.classList.add('is-invalid'); }); }
+            // a red outline for one second (no "!" icon, nothing stays locked)
+            invalid: function () { boxes.forEach(function (b) { b.classList.add('bad'); }); setTimeout(function () { boxes.forEach(function (b) { b.classList.remove('bad'); }); }, 1000); },
+            disable: function (off) { boxes.forEach(function (b) { b.disabled = !!off; }); }
         };
     }
 
@@ -218,8 +220,12 @@
         var SENT = 'If an account exists for that email, we\u2019ve sent a 6-digit code.';
 
         /** Every step: its title, one line under it and the (empty) alert area; the logo header is on the page itself. */
-        function head(t, s) { return '<h1 class="h4 fw-bold text-center mb-1">' + t + '</h1>' + (s ? '<p class="text-muted text-center mb-3">' + s + '</p>' : '') + '<div id="vsFAlert" aria-live="polite"></div>'; }
-        function dots(n) { var el = $('#vsFStep', root); if (el) el.textContent = 'Step ' + n + ' of 3'; }
+        function head(t, s, noAlert) { return '<h1 class="h4 fw-bold text-center mb-1">' + t + '</h1>' + (s ? '<p class="text-muted text-center mb-3">' + s + '</p>' : '') + (noAlert ? '' : '<div id="vsFAlert" aria-live="polite"></div>'); }
+        function dots(n) { stepNo = n; var el = $('#vsFStep', root); if (el) el.textContent = 'Step ' + n + ' of 3'; }
+        var stepNo = 1;
+        // Back at the top-left of the card: step 1 leaves the page, the later steps go back to the email step (a code is single-use, so it cannot be re-entered)
+        var topBack = $('[data-topback]', root);
+        if (topBack) topBack.addEventListener('click', function (e) { e.preventDefault(); if (stepNo === 1) window.VSGoBack(); else stepEmail(); });
 
         function stepEmail() {
             dots(1);
@@ -244,28 +250,40 @@
             });
         }
 
-        function stepCode(note) {
+        function stepCode(note, isError) {
             dots(2);
-            host.innerHTML = head('Enter the code', 'We sent a 6-digit code to ' + VS.esc(maskEmail(state.email))) +
-                '<div class="alert alert-info vs-alert" role="status">' + VS.esc(note || SENT) + ' It expires in 15 minutes.</div>' +
-                '<div id="vsOtpHost" class="mb-3"></div><button class="btn btn-velocity w-100 mb-2" id="fGo" data-busy-text="Checking">Continue</button><button class="btn btn-outline-secondary w-100" id="fResend">Resend code</button>' +
+            var masked = maskEmail(state.email);
+            host.innerHTML = head('Enter the code', 'We sent a 6-digit code to ' + VS.esc(masked), true) +
+                '<div id="vsOtpHost" class="mb-2"></div><div id="vsFMsg" class="vs-fmsg" role="status" aria-live="polite"></div>' +
+                '<button class="btn btn-velocity w-100 mb-2 mt-3" id="fGo" data-busy-text="Checking">Continue</button><button class="btn btn-outline-secondary w-100" id="fResend">Resend code</button>' +
                 '<p class="text-center mt-3 mb-0"><a href="#" id="fChange">Change email</a></p>';
-            var otp = otpBoxes($('#vsOtpHost', host), function (v) { VS.clearErrors(host); var al = $('#vsFAlert', host); if (al && v.length < 6) al.innerHTML = ''; if (v.length === 6) go.click(); });
+            var msgEl = $('#vsFMsg', host), locked = false;
+            // ONE message under the boxes at a time: the "sent" note right after a code goes out, otherwise the error of the last try
+            function say(kind, text) { msgEl.className = 'vs-fmsg ' + kind; msgEl.textContent = text; }
+            if (isError) say('err', note); else say('info', (note || SENT) + ' It expires in 15 minutes.');
+            var otp = otpBoxes($('#vsOtpHost', host), function (v) { if (v.length === 6 && !locked) go.click(); });
             otp.focus();
             var go = $('#fGo', host), resend = $('#fResend', host);
             cooldown(resend, 30, 'Resend code');
+            function lock(off) { locked = off; otp.disable(off); go.disabled = off; }
             $('#fChange', host).onclick = function (e) { e.preventDefault(); stepEmail(); };
             resend.onclick = function () {
                 webPost('/auth/reset/send', { email: state.email }).then(function (r) {
-                    VS.toast(r.ok ? 'We sent a new code if the account exists.' : r.message, r.ok ? 'success' : 'warning'); cooldown(resend, 30, 'Resend code');
+                    if (r.ok) { lock(false); otp.clear(); say('info', 'We sent a new code to ' + masked + '.'); cooldown(resend, 30, 'Resend code'); }
+                    else { say('err', r.message); cooldown(resend, Math.max(5, Number(r.data && r.data.retry_after) || 30), 'Resend code'); }
                 });
             };
             go.onclick = function () {
+                if (locked) return;
                 var v = otp.value();
-                if (v.length !== 6) { VS.alertBox('vsFAlert', 'Enter the 6-digit code.'); return; }
+                if (v.length !== 6) { say('err', 'Enter the 6-digit code.'); otp.focus(); return; }
                 VS.busy(go, function () { return webPost('/auth/reset/verify', { email: state.email, otp: v }); }).then(function (r) {
                     if (!r) return;
-                    if (r.ok) { state.otp = v; stepPassword(); } else { otp.invalid(); VS.alertBox('vsFAlert', r.message || 'That code is wrong or has expired. Check it or ask for a new one.'); }
+                    if (r.ok) { state.otp = v; stepPassword(); return; }
+                    var code = r.data && r.data.code;
+                    say('err', r.message);
+                    otp.invalid(); otp.clear();                      // empty, editable, cursor in the first box
+                    if (code === 'TOO_MANY_TRIES') lock(true);       // only "Resend code" is left
                 });
             };
         }
@@ -313,7 +331,7 @@
                         // each person lands on THEIR dashboard (a guest first on the rooms they had picked, if any)
                         window.location.href = (/\/guest\/dashboard/.test(r.data.redirect) && selectionTarget()) || r.data.redirect; return;
                     }
-                    if (r.status === 422 && /code/i.test(r.message)) { stepCode(); VS.alertBox('vsFAlert', r.message); return; }
+                    if (r.data && /^(WRONG_CODE|CODE_EXPIRED|TOO_MANY_TRIES)$/.test(r.data.code || '')) { stepCode(r.message, true); return; }
                     VS.alertBox('vsFAlert', r.message || 'We could not change the password.');
                 });
             });
@@ -460,6 +478,9 @@
             b.addEventListener('click', function () { if (validate(cur)) { if (cur + 1 === steps.length - 1) review(); show(cur + 1); } });
         });
         root.querySelectorAll('[data-back]').forEach(function (b) { b.addEventListener('click', function () { show(cur - 1); }); });
+        // the Back at the top-left of the card: the previous step, or the landing page from step 1
+        var topBack = $('[data-topback]', root);
+        if (topBack) topBack.addEventListener('click', function (e) { e.preventDefault(); if (cur > 0) show(cur - 1); else window.location.href = '/'; });
         form.addEventListener('keydown', function (e) {
             if (e.key === 'Enter' && e.target.tagName === 'INPUT' && e.target.type !== 'file') { e.preventDefault(); var n = cur === names.length - 1 ? submitBtn : next; if (n) n.click(); }
         });

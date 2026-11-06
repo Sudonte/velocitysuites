@@ -88,7 +88,8 @@ class WebStepOneFeaturedAndResetTest extends TestCase
     public function test_every_address_gets_the_same_answer_and_only_a_registered_guest_gets_a_code(): void
     {
         $sent = [];
-        Mail::shouldReceive('raw')->andReturnUsing(function ($body, $cb) use (&$sent) { $sent[] = $body; });
+        Mail::shouldReceive('send')->andReturnUsing(function ($views, $data, $cb) use (&$sent) { $sent[] = $data['code']; });
+        Mail::shouldReceive('raw')->andReturnNull();
         $this->user('guest@example.test');
         $this->user('desk@example.test', 'receptionist');
 
@@ -109,19 +110,18 @@ class WebStepOneFeaturedAndResetTest extends TestCase
     public function test_the_code_is_stored_and_mailed_with_the_request_never_queued(): void
     {
         Queue::fake();
-        $body = null;
-        Mail::shouldReceive('raw')->once()->andReturnUsing(function ($text, $cb) use (&$body) { $body = $text; });
+        $sentData = null;
+        Mail::shouldReceive('send')->once()->andReturnUsing(function ($views, $data, $cb) use (&$sentData) { $sentData = $data; });
         $this->user('guest@example.test');
 
         $this->ask('guest@example.test')->assertOk();
 
-        $this->assertNotNull($body, 'the mail went out as part of the request');
+        $this->assertNotNull($sentData, 'the mail went out as part of the request');
         Queue::assertNothingPushed();
-        preg_match('/code is: (\d{6})/', $body, $m);
-        $this->assertNotEmpty($m, 'the mail carries a 6-digit code');
+        $this->assertMatchesRegularExpression('/^\d{6}$/', $sentData['code'], 'the mail carries a 6-digit code');
         $stored = DB::table('password_reset_tokens')->where('email', 'guest@example.test')->value('token');
-        $this->assertTrue(Hash::check($m[1], $stored), 'the code in the mail is the stored one');
-        $this->assertStringContainsString('expires in 15 minutes', $body);
+        $this->assertTrue(Hash::check($sentData['code'], $stored), 'the code in the mail is the stored one');
+        $this->assertSame('J', $sentData['name'], 'addressed by first name');
     }
 
     public function test_the_mail_leaves_after_the_response_so_the_answer_takes_no_longer_for_a_registered_address(): void
@@ -136,6 +136,7 @@ class WebStepOneFeaturedAndResetTest extends TestCase
     public function test_a_wrong_code_and_an_expired_code_are_refused_and_the_right_code_is_accepted(): void
     {
         Mail::shouldReceive('raw')->andReturnNull();
+        Mail::shouldReceive('send')->andReturnNull();
         $this->user('guest@example.test');
         $this->ask('guest@example.test')->assertOk();
         DB::table('password_reset_tokens')->where('email', 'guest@example.test')->update(['token' => Hash::make('123456'), 'created_at' => now()]);

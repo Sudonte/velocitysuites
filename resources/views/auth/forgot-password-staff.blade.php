@@ -8,6 +8,7 @@
 
 @section('content')
 <div class="auth-card vs-forgot" data-bs-theme="light">
+    <a href="{{ url('/') }}" class="vs-back" data-topback><i class="fas fa-arrow-left" aria-hidden="true"></i> Back</a>
     <div class="logo vs-reg-logo">
         <span class="logo-badge" style="width: 84px; height: 72px;"><img src="{{ asset('images/logo.jpg') }}" alt="Velocity Suites"></span>
         <p class="fw-bold text-brand text-uppercase mt-2 mb-0" style="letter-spacing: 1px; font-size: 1.35rem;">Velocity Suites</p>
@@ -36,3 +37,7 @@
     <p class="text-center mt-3 mb-0"><a href="{{ route('password.request') }}">Back to reset your password</a></p>
 </div>
 @endsection
+
+@push('scripts')
+<script src="{{ asset('js/portal/back-link.js') }}?v={{ filemtime(public_path('js/portal/back-link.js')) }}"></script>
+@endpush

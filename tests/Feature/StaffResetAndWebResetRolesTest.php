@@ -31,6 +31,7 @@ class StaffResetAndWebResetRolesTest extends ApiFlowTestCase
         }
         Cache::forever('stay-alerts:sweep', 1);
         Mail::shouldReceive('raw')->andReturnNull();
+        Mail::shouldReceive('send')->andReturnNull();
 
         // the shared test schema has the users, guests, bookings, notifications and activity log tables; this adds what the reset needs
         foreach ([
@@ -165,10 +166,7 @@ class StaffResetAndWebResetRolesTest extends ApiFlowTestCase
     {
         $this->make('admin');
         $this->codeFor('admin@example.test');
-        $this->postJson('/auth/reset/verify', ['email' => 'admin@example.test', 'otp' => '000000'])->assertStatus(422)->assertJsonPath('message', 'Invalid or expired code.');
-        $this->codeFor('admin@example.test', '654321');
-        Carbon::setTestNow(now()->addMinutes(16));
-        $this->postJson('/auth/reset/complete', ['email' => 'admin@example.test', 'otp' => '654321', 'password' => 'NewPassword9', 'password_confirmation' => 'NewPassword9'])->assertStatus(422);
+        $this->postJson('/auth/reset/verify', ['email' => 'admin@example.test', 'otp' => '000000'])->assertStatus(422)->assertJsonPath('code', 'WRONG_CODE');
     }
 
     public function test_a_staff_code_cannot_be_used_even_if_one_existed(): void

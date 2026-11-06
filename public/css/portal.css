@@ -573,3 +573,11 @@ button.vs-mi:hover, button.vs-mi:focus-visible { background: var(--vs-red-soft);
 /* the reset cards are always light (the pre-login layout has no dark mode): keep their own text colours whatever the page theme says */
 .vs-forgot[data-bs-theme="light"] { --text-dark: #000; --text-light: #1a1a1a; --border-color: #e0e0e0; --surface-color: #fff; color: #1a1a1a; }
 .vs-forgot[data-bs-theme="light"] .text-muted { color: #5f6368 !important; }
+
+/* v1.81 retry after a wrong code: one message under the boxes, a red outline (no "!") for a second; the Back button at the top-left of the auth cards */
+.vs-otp-box.bad { border-color: #c62828; box-shadow: 0 0 0 .2rem rgba(198, 40, 40, .22); }
+.vs-fmsg { min-height: 1.5rem; text-align: center; font-size: .92rem; margin-top: .5rem; color: #3c4043; }
+.vs-fmsg.err { color: #b3261e; font-weight: 600; }
+.vs-back { display: inline-flex; align-items: center; gap: .4rem; min-height: 2.75rem; padding: 0 .5rem; margin: -.4rem 0 .15rem -.5rem; color: #A62B34; font-weight: 600; font-size: .95rem; text-decoration: none; border-radius: 8px; }
+.vs-back:hover { color: #8a232b; text-decoration: underline; }
+.vs-back:focus-visible { outline: 2px solid #A62B34; outline-offset: 2px; }

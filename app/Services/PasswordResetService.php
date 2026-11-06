@@ -124,12 +124,10 @@ class PasswordResetService
     private function deliverOtp(User $user, string $otp): bool
     {
         try {
-            $body = "Hi,\n\nYour VelocitySuites password reset code is: {$otp}\n\n"
-                . "Enter this code to set a new password. This code expires in 15 minutes.\n\n"
-                . "If you didn't request this, you can safely ignore this email.\n\n- VelocitySuites";
             $startedAt = microtime(true);
-            Mail::raw($body, function ($message) use ($user, $otp) {
-                $message->to($user->email)->subject("Your VelocitySuites password reset code: {$otp}");
+            // the branded HTML email with its plain-text twin (resources/views/emails/reset-code*.blade.php)
+            Mail::send(['html' => 'emails.reset-code', 'text' => 'emails.reset-code-text'], ['code' => $otp, 'name' => trim((string) $user->first_name) ?: 'there'], function ($message) use ($user) {
+                $message->to($user->email)->subject('Your Velocity Suites password reset code');
             });
 
             Log::info('Password reset code sent', ['user_id' => $user->id, 'channel' => 'email', 'smtp_ms' => (int) round((microtime(true) - $startedAt) * 1000), 'at' => now()->toIso8601String()]);
@@ -186,6 +184,37 @@ class PasswordResetService
         Cache::forget($this->attemptsKey($email));
 
         return true;
+    }
+
+    /**
+     * What the website's reset page needs to tell the person: the same checks as verifyOtp() (same attempt budget per code - the code is
+     * destroyed on the last wrong try -, same 15-minute expiry) but with the reason. 'ok' | 'wrong' (with tries_left) | 'too_many' | 'expired'.
+     * A missing code counts as expired, so an unknown address looks exactly like a registered one that has no code waiting.
+     */
+    public function checkOtp(string $email, string $otp): array
+    {
+        if ($this->tooManyAttempts($email)) {
+            return ['status' => 'too_many'];
+        }
+
+        $row = DB::table('password_reset_tokens')->where('email', $email)->first();
+        if (! $row) {
+            return ['status' => 'expired'];
+        }
+        if (\Carbon\Carbon::parse($row->created_at)->addMinutes(15)->isPast()) {
+            DB::table('password_reset_tokens')->where('email', $email)->delete();
+
+            return ['status' => 'expired'];
+        }
+
+        if ($this->verifyOtp($email, $otp)) {
+            return ['status' => 'ok'];
+        }
+        if ($this->tooManyAttempts($email)) {
+            return ['status' => 'too_many'];
+        }
+
+        return ['status' => 'wrong', 'tries_left' => max(0, self::MAX_ATTEMPTS - (int) Cache::get($this->attemptsKey($email), 0))];
     }
 
     public function resetPassword(User $user, string $password): void

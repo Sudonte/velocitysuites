@@ -100,7 +100,7 @@ class MailFailureHonestyTest extends TestCase
     public function test_web_forgot_password_reports_failure_when_mail_send_throws(): void
     {
         $user = $this->makeGuest();
-        Mail::shouldReceive('raw')->once()->andThrow(new \Exception('simulated SMTP outage'));
+        Mail::shouldReceive('send')->once()->andThrow(new \Exception('simulated SMTP outage'));
 
         $response = $this->post('/forgot-password', ['email' => $user->email]);
 

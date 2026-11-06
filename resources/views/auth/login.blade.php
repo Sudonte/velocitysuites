@@ -4,6 +4,7 @@
 
 @section('content')
 <div class="auth-card" id="vsAuthRoot">
+    <a href="{{ url('/') }}" class="vs-back" data-topback><i class="fas fa-arrow-left" aria-hidden="true"></i> Back</a>
     <div class="logo">
         <span class="logo-badge" style="width: 84px; height: 72px;">
             <img src="{{ asset('images/logo.jpg') }}" alt="Velocity Suites">
@@ -107,6 +108,7 @@
 @endpush
 
 @push('scripts')
+<script src="{{ asset('js/portal/back-link.js') }}?v={{ filemtime(public_path('js/portal/back-link.js')) }}"></script>
 <script src="{{ asset('js/portal/core.js') }}?v={{ filemtime(public_path('js/portal/core.js')) }}"></script>
 <script src="{{ asset('js/portal/auth.js') }}?v={{ filemtime(public_path('js/portal/auth.js')) }}"></script>
 <script>VSAuth.login(document.getElementById('vsAuthRoot'));</script>
