@@ -97,6 +97,7 @@ class FailedLoginLockoutTest extends TestCase
     {
         return User::factory()->create([
             'role' => $role,
+            'email' => $role . '.' . uniqid() . '@' . (in_array($role, ['manager', 'receptionist'], true) ? 'hotel.com' : 'gmail.com'),
             'status' => 'active',
             'password' => Hash::make('correct-password'),
             'failed_login_attempts' => 0,
@@ -209,16 +210,14 @@ class FailedLoginLockoutTest extends TestCase
         }
     }
 
-    public function test_staff_never_get_a_code_and_the_answer_is_the_same_as_for_an_unknown_address(): void
+    public function test_staff_never_get_a_code_from_the_gmail_form_they_are_pointed_to_the_staff_request(): void
     {
-        $unknown = $this->post('/forgot-password', ['email' => 'nobody@example.test']);
         foreach (['receptionist', 'manager'] as $role) {
             $user = $this->makeUser($role);
 
             $response = $this->post('/forgot-password', ['email' => $user->email]);
 
-            $response->assertRedirect(route('password.otp.form', ['email' => $user->email]));
-            $this->assertSame($unknown->getSession()->get('status'), $response->getSession()->get('status'));
+            $response->assertSessionHasErrors(['email' => \App\Support\EmailDomain::STAFF_ON_GMAIL_FORM]);
             $this->assertDatabaseMissing('password_reset_tokens', ['email' => $user->email]);
             $this->assertDatabaseMissing('staff_password_reset_requests', ['user_id' => $user->id]);
         }
@@ -238,8 +237,9 @@ class FailedLoginLockoutTest extends TestCase
             $this->assertDatabaseMissing('password_reset_tokens', ['email' => $user->email]);
         }
         $guest = $this->makeUser('guest');
+        $guest->update(['email' => 'odd.guest@hotel.com']); // a guest account on a hotel address (not how they are made)
         $answers[] = $this->post(route('password.request.staff.send'), ['email' => $guest->email])->getSession()->get('status');
-        $answers[] = $this->post(route('password.request.staff.send'), ['email' => 'nobody@example.test'])->getSession()->get('status');
+        $answers[] = $this->post(route('password.request.staff.send'), ['email' => 'nobody@hotel.com'])->getSession()->get('status');
         $this->assertCount(1, array_unique($answers), 'staff, guest and unknown addresses all get the same confirmation');
         $this->assertSame('If this is a staff account, your request has been sent to the System Administrator.', $answers[0]);
         $this->assertDatabaseMissing('staff_password_reset_requests', ['user_id' => $guest->id]);

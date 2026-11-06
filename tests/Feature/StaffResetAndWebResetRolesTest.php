@@ -85,7 +85,7 @@ class StaffResetAndWebResetRolesTest extends ApiFlowTestCase
 
     private function make(string $role, string $email = null): User
     {
-        $u = User::create(['first_name' => ucfirst($role), 'last_name' => 'Tester', 'email' => $email ?? "$role@example.test", 'password' => 'OldPassword1', 'role' => $role]);
+        $u = User::create(['first_name' => ucfirst($role), 'last_name' => 'Tester', 'email' => $email ?? ($role . '@' . (in_array($role, ['guest', 'admin'], true) ? 'gmail.com' : 'hotel.com')), 'password' => 'OldPassword1', 'role' => $role, 'status' => 'active']);
         if ($role === 'guest') {
             DB::table('guests')->insert(['user_id' => $u->id, 'created_at' => now(), 'updated_at' => now()]);
         }
@@ -107,37 +107,38 @@ class StaffResetAndWebResetRolesTest extends ApiFlowTestCase
 
     public function test_guest_and_system_administrator_get_a_code_receptionist_and_manager_never_do_and_the_answer_is_the_same(): void
     {
-        foreach (['guest', 'admin', 'receptionist', 'manager'] as $role) {
+        foreach (['guest', 'admin'] as $role) {
             $this->make($role);
         }
+        // a staff role on a Gmail address (not how the hotel sets them up) still never gets a code from the Gmail form
+        $this->make('receptionist', 'desk.odd@gmail.com');
+        $this->make('manager', 'boss.odd@gmail.com');
         $answers = [];
-        foreach (['guest', 'admin', 'receptionist', 'manager'] as $role) {
-            Cache::forget('pwreset:cooldown:' . sha1("$role@example.test")); // the resend cooldown is per address
-            $r = $this->send("$role@example.test")->assertOk();
-            $answers[] = $r->json('message');
+        foreach (['guest@gmail.com', 'admin@gmail.com', 'desk.odd@gmail.com', 'boss.odd@gmail.com', 'nobody@gmail.com'] as $email) {
+            Cache::forget('pwreset:cooldown:' . sha1($email)); // the resend cooldown is per address
+            $answers[] = $this->send($email)->assertOk()->json('message');
         }
-        $answers[] = $this->send('nobody@example.test')->assertOk()->json('message');
-        $this->assertCount(1, array_unique($answers), 'one generic answer for every address');
+        $this->assertCount(1, array_unique($answers), 'one generic answer for every Gmail address');
         $this->assertSame("If an account exists for that email, we've sent a 6-digit code.", $answers[0]);
-        $this->assertDatabaseHas('password_reset_tokens', ['email' => 'guest@example.test']);
-        $this->assertDatabaseHas('password_reset_tokens', ['email' => 'admin@example.test']);
-        $this->assertDatabaseMissing('password_reset_tokens', ['email' => 'receptionist@example.test']);
-        $this->assertDatabaseMissing('password_reset_tokens', ['email' => 'manager@example.test']);
-        $this->assertDatabaseMissing('password_reset_tokens', ['email' => 'nobody@example.test']);
+        $this->assertDatabaseHas('password_reset_tokens', ['email' => 'guest@gmail.com']);
+        $this->assertDatabaseHas('password_reset_tokens', ['email' => 'admin@gmail.com']);
+        $this->assertDatabaseMissing('password_reset_tokens', ['email' => 'desk.odd@gmail.com']);
+        $this->assertDatabaseMissing('password_reset_tokens', ['email' => 'boss.odd@gmail.com']);
+        $this->assertDatabaseMissing('password_reset_tokens', ['email' => 'nobody@gmail.com']);
     }
 
     public function test_the_app_api_is_guest_only(): void
     {
         $this->make('guest');
         $this->make('admin');
-        $this->postJson('/api/forgot-password', ['email' => 'guest@example.test'])->assertOk();
-        $this->postJson('/api/forgot-password', ['email' => 'admin@example.test'])->assertOk();
-        $this->assertDatabaseHas('password_reset_tokens', ['email' => 'guest@example.test']);
-        $this->assertDatabaseMissing('password_reset_tokens', ['email' => 'admin@example.test']);
+        $this->postJson('/api/forgot-password', ['email' => 'guest@gmail.com'])->assertOk();
+        $this->postJson('/api/forgot-password', ['email' => 'admin@gmail.com'])->assertOk();
+        $this->assertDatabaseHas('password_reset_tokens', ['email' => 'guest@gmail.com']);
+        $this->assertDatabaseMissing('password_reset_tokens', ['email' => 'admin@gmail.com']);
 
-        $this->codeFor('admin@example.test');
-        $this->postJson('/api/reset-password', ['email' => 'admin@example.test', 'otp' => '123456', 'password' => 'NewPassword9', 'password_confirmation' => 'NewPassword9'])->assertStatus(422);
-        $this->assertTrue(Hash::check('OldPassword1', User::where('email', 'admin@example.test')->value('password')), 'the app cannot change an administrator password');
+        $this->codeFor('admin@gmail.com');
+        $this->postJson('/api/reset-password', ['email' => 'admin@gmail.com', 'otp' => '123456', 'password' => 'NewPassword9', 'password_confirmation' => 'NewPassword9'])->assertStatus(422);
+        $this->assertTrue(Hash::check('OldPassword1', User::where('email', 'admin@gmail.com')->value('password')), 'the app cannot change an administrator password');
     }
 
     // ---------------------------------------------------------------- signed in to their own dashboard
@@ -165,15 +166,15 @@ class StaffResetAndWebResetRolesTest extends ApiFlowTestCase
     public function test_a_wrong_code_is_refused_for_the_administrator_too(): void
     {
         $this->make('admin');
-        $this->codeFor('admin@example.test');
-        $this->postJson('/auth/reset/verify', ['email' => 'admin@example.test', 'otp' => '000000'])->assertStatus(422)->assertJsonPath('code', 'WRONG_CODE');
+        $this->codeFor('admin@gmail.com');
+        $this->postJson('/auth/reset/verify', ['email' => 'admin@gmail.com', 'otp' => '000000'])->assertStatus(422)->assertJsonPath('code', 'WRONG_CODE');
     }
 
     public function test_a_staff_code_cannot_be_used_even_if_one_existed(): void
     {
         $this->make('receptionist');
-        $this->codeFor('receptionist@example.test');
-        $this->postJson('/auth/reset/complete', ['email' => 'receptionist@example.test', 'otp' => '123456', 'password' => 'NewPassword9', 'password_confirmation' => 'NewPassword9'])->assertStatus(422);
+        $this->codeFor('receptionist@hotel.com');
+        $this->postJson('/auth/reset/complete', ['email' => 'receptionist@hotel.com', 'otp' => '123456', 'password' => 'NewPassword9', 'password_confirmation' => 'NewPassword9'])->assertStatus(422);
         $this->assertGuest();
     }
 
@@ -275,7 +276,7 @@ class StaffResetAndWebResetRolesTest extends ApiFlowTestCase
         $staff = $this->make('receptionist');
         $this->post(route('password.request.staff.send'), ['email' => $staff->email]);
         $list = $this->actingAs($admin)->get(route('admin.users.password-requests.index'))->assertOk()->getContent();
-        foreach (['Receptionist Tester', 'Receptionist', 'receptionist@example.test', 'Approve', 'Reject', 'Requested'] as $needle) {
+        foreach (['Receptionist Tester', 'Receptionist', 'receptionist@hotel.com', 'Approve', 'Reject', 'Requested'] as $needle) {
             $this->assertStringContainsString($needle, $list, $needle);
         }
         $req = StaffPasswordResetRequest::first();
@@ -294,7 +295,7 @@ class StaffResetAndWebResetRolesTest extends ApiFlowTestCase
         foreach (['Staff password reset', 'Email address', 'Send request', 'Your comfort is our service', 'images/logo.jpg'] as $needle) {
             $this->assertStringContainsString($needle, $page, $needle);
         }
-        $this->assertStringContainsString("If this is a staff account, your request has been sent to the System Administrator.", $this->post(route('password.request.staff.send'), ['email' => 'nobody@example.test'])->getSession()->get('status'));
+        $this->assertStringContainsString("If this is a staff account, your request has been sent to the System Administrator.", $this->post(route('password.request.staff.send'), ['email' => 'nobody@hotel.com'])->getSession()->get('status'));
     }
 
     public function test_the_new_password_can_never_be_the_temporary_one(): void

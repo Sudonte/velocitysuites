@@ -519,12 +519,7 @@ class GuestController extends Controller
         Log::info('Profile password-change code issued', ['user_id' => $user->id, 'channel' => 'email', 'at' => now()->toIso8601String()]);
 
         try {
-            $body = "Hi,\n\nYour VelocitySuites password change verification code is: {$otp}\n\n"
-                . "Enter this code on your Profile page to confirm your new password. This code expires in 15 minutes.\n\n"
-                . "If you didn't request this, you can safely ignore this email.\n\n- VelocitySuites";
-            Mail::raw($body, function ($message) use ($user, $otp) {
-                $message->to($user->email)->subject("Your VelocitySuites verification code: {$otp}");
-            });
+            \App\Support\CodeEmail::send($user->email, $otp, $user->first_name, 15, 'Use this code to confirm your new password:', "If you didn't request this, you can ignore this email. Your password won't change.");
         } catch (\Throwable $e) {
             Log::error("Failed to email profile password-change OTP to {$user->email}: " . $e->getMessage());
         }

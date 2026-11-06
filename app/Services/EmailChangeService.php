@@ -35,13 +35,7 @@ class EmailChangeService
         Log::info("Email change OTP requested for user {$user->id} -> {$newEmail}");
 
         try {
-            $body = "Hi,\n\nYou requested to change your VelocitySuites registered email to this address.\n\n"
-                . "Your verification code is: {$otp}\n\n"
-                . "Enter this code in the app to confirm the change. This code expires in 15 minutes.\n\n"
-                . "If you didn't request this, you can safely ignore this email - your account email will not change.\n\n- VelocitySuites";
-            Mail::raw($body, function ($message) use ($newEmail, $otp) {
-                $message->to($newEmail)->subject("Confirm your new VelocitySuites email: {$otp}");
-            });
+            \App\Support\CodeEmail::send($newEmail, $otp, $user->first_name, 15, 'Use this code to confirm your new email address:', "If you didn't request this, you can ignore this email. Your account email will not change.");
 
             return true;
         } catch (\Throwable $e) {

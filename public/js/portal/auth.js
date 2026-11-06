@@ -112,6 +112,12 @@
     }
 
     var EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+    // the two domains the hotel's accounts live on (case and spaces never matter): guests and the administrator use Gmail, hotel staff use @hotel.com
+    function isGmail(v) { return /^[^\s@]+@gmail\.com$/i.test(String(v).trim()); }
+    function isHotel(v) { return /^[^\s@]+@hotel\.com$/i.test(String(v).trim()); }
+    var GMAIL_MSG = 'Please use the Gmail address registered to your account (@gmail.com).';
+    var STAFF_ON_GMAIL_MSG = 'Hotel staff accounts can\u2019t reset here. Use \u201cHotel staff: Request a staff password reset\u201d below.';
+    var SIGNUP_GMAIL_MSG = 'Please use a Gmail address (@gmail.com) to create your account.';
 
     // ---- timer for "Resend code" ----
     function cooldown(btn, seconds, label) {
@@ -235,17 +241,33 @@
                 '<div class="form-text mb-3" id="feHelp">Enter the email registered to your Velocity Suites account</div>' +
                 '<button class="btn btn-velocity w-100" type="submit" data-busy-text="Sending">Send code</button></form>' +
                 '<p class="text-center mt-3 mb-3"><a href="/login">Back to sign in</a></p>' +
-                '<a class="btn btn-outline-secondary w-100" href="/forgot-password/staff">Hotel staff: Request a staff password reset</a>';
+                '<a class="btn btn-outline-secondary w-100" id="feStaff" href="/forgot-password/staff">Hotel staff: Request a staff password reset</a>';
             var f = $('#fEmail', host), inp = $('#fe', host);
+            var staffBtn = $('#feStaff', host);
+            function flag(msg, hotel) {
+                VS.fieldError(inp, msg);
+                staffBtn.classList.toggle('vs-staff-hl', !!hotel);   // a hotel address: point at the staff button
+            }
+            inp.addEventListener('input', function () { staffBtn.classList.remove('vs-staff-hl'); });
             f.addEventListener('submit', function (e) {
-                e.preventDefault(); VS.clearErrors(f);
-                if (!EMAIL_RE.test(inp.value.trim())) { VS.fieldError(inp, 'Enter a valid email address.'); return; }
-                state.email = inp.value.trim();
-                VS.busy(f.querySelector('button'), function () { return webPost('/auth/reset/send', { email: state.email }); }).then(function (r) {
-                    if (!r) return;
-                    // the same answer for every address: registered or not, staff or guest
-                    if (r.ok || r.status === 429) stepCode(r.status === 429 ? 'Please wait a moment before asking for another code. If you already asked, use the code we sent.' : null);
-                    else VS.alertBox('vsFAlert', r.message);
+                e.preventDefault(); VS.clearErrors(f); staffBtn.classList.remove('vs-staff-hl');
+                var typed = inp.value.trim();
+                if (!EMAIL_RE.test(typed)) { flag('Enter a valid email address.'); return; }
+                if (isHotel(typed)) { flag(STAFF_ON_GMAIL_MSG, true); return; }
+                if (!isGmail(typed)) { flag(GMAIL_MSG); return; }
+                state.email = typed.toLowerCase();
+                // asks first, with the address half-hidden; the answer afterwards is the same for every Gmail address
+                VS.confirm({ title: 'Send a reset code?', message: 'Send a reset code to ' + maskEmail(state.email) + '?', confirmText: 'Send code', cancelText: 'Cancel' }).then(function (yes) {
+                    if (!yes) return;
+                    VS.busy(f.querySelector('button'), function () { return webPost('/auth/reset/send', { email: state.email }); }).then(function (r) {
+                        if (!r) return;
+                        var code = r.data && r.data.code;
+                        if (code === 'STAFF_EMAIL') { flag(r.message, true); return; }
+                        if (code === 'NOT_GMAIL') { flag(r.message); return; }
+                        // the same answer for every address: registered or not, staff or guest
+                        if (r.ok || r.status === 429) stepCode(r.status === 429 ? 'Please wait a moment before asking for another code. If you already asked, use the code we sent.' : null);
+                        else VS.alertBox('vsFAlert', r.message);
+                    });
                 });
             });
         }
@@ -414,6 +436,7 @@
                 else if (ageOf(dob) < 18) { VS.fieldError(f('date_of_birth'), 'You must be 18 or older to create an account.'); ok = false; }
             } else if (n === 2) {
                 if (!EMAIL_RE.test(f('email').value.trim())) { VS.fieldError(f('email'), 'Enter a valid email address.'); ok = false; }
+                else if (!isGmail(f('email').value)) { VS.fieldError(f('email'), SIGNUP_GMAIL_MSG); ok = false; }
                 var m = f('mobile_number').value.replace(/[\s-]/g, '');
                 if (!/^(09\d{9}|\+639\d{9}|639\d{9})$/.test(m) && !/^\+?\d{7,15}$/.test(m)) { VS.fieldError(f('mobile_number'), 'Enter a valid mobile number, such as 09171234567.'); ok = false; }
             } else if (n === 3) {
@@ -431,6 +454,7 @@
             var t = e.target, id = t.id, msg = '';
             if (!t.value || !t.value.trim() && id !== 'password') { if (!t.value && ['first_name', 'last_name', 'email', 'mobile_number', 'password'].indexOf(id) < 0) return; }
             if (id === 'email' && t.value && !EMAIL_RE.test(t.value.trim())) msg = 'Enter a valid email address.';
+            else if (id === 'email' && t.value && !isGmail(t.value)) msg = SIGNUP_GMAIL_MSG;
             if (id === 'password_confirmation' && t.value && t.value !== f('password').value) msg = 'The passwords do not match.';
             if (id === 'date_of_birth' && t.value && ageOf(t.value) < 18) msg = 'You must be 18 or older to create an account.';
             if (id === 'first_name' && form.dataset.touched && !t.value.trim()) msg = 'Enter your first name.';
@@ -508,7 +532,7 @@
                 var errs = r.errors || {};
                 var map = { first_name: 0, last_name: 0, middle_name: 0, gender: 1, date_of_birth: 1, age: 1, email: 2, mobile_number: 2, address: 3, country: 3, region: 3, city: 3, barangay: 3, street: 3, password: 4 };
                 var k = Object.keys(errs)[0];
-                if (k && map[k] != null) { show(map[k]); VS.alertBox(alertId, errs[k][0]); } else VS.alertBox(alertId, r.message);
+                if (k && map[k] != null) { show(map[k]); if (k === 'email') VS.fieldError(f('email'), errs[k][0]); else VS.alertBox(alertId, errs[k][0]); } else VS.alertBox(alertId, r.message);
             });
         });
 

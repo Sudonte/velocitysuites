@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\User;
+use App\Support\CodeEmail;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -125,10 +126,8 @@ class PasswordResetService
     {
         try {
             $startedAt = microtime(true);
-            // the branded HTML email with its plain-text twin (resources/views/emails/reset-code*.blade.php)
-            Mail::send(['html' => 'emails.reset-code', 'text' => 'emails.reset-code-text'], ['code' => $otp, 'name' => trim((string) $user->first_name) ?: 'there'], function ($message) use ($user) {
-                $message->to($user->email)->subject('Your Velocity Suites password reset code');
-            });
+            // the branded HTML email with its plain-text twin (resources/views/emails/code*.blade.php)
+            CodeEmail::send($user->email, $otp, $user->first_name, 15, 'Use this code to reset your password:', "If you didn't request this, you can ignore this email. Your password won't change.", CodeEmail::RESET_SUBJECT);
 
             Log::info('Password reset code sent', ['user_id' => $user->id, 'channel' => 'email', 'smtp_ms' => (int) round((microtime(true) - $startedAt) * 1000), 'at' => now()->toIso8601String()]);
 

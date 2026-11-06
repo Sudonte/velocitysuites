@@ -149,13 +149,13 @@ class PasswordRuleEverywhereTest extends TestCase
 
     public function test_the_web_forgot_password_form_does_not_reveal_whether_the_email_exists(): void
     {
-        $guest = $this->user('guest@example.test');
+        $guest = $this->user('guest@gmail.com');
 
-        $unknown = $this->post('/forgot-password', ['email' => 'nobody@example.test']);
+        $unknown = $this->post('/forgot-password', ['email' => 'nobody@gmail.com']);
         $known = $this->post('/forgot-password', ['email' => $guest->email]);
 
         $unknown->assertSessionHasNoErrors();
-        $unknown->assertRedirect(route('password.otp.form', ['email' => 'nobody@example.test']));
+        $unknown->assertRedirect(route('password.otp.form', ['email' => 'nobody@gmail.com']));
         $known->assertRedirect(route('password.otp.form', ['email' => $guest->email]));
         $this->assertSame(\App\Http\Controllers\Auth\ForgotPasswordController::SENT_MESSAGE, session('status'));
         $unknown->assertSessionHas('status', \App\Http\Controllers\Auth\ForgotPasswordController::SENT_MESSAGE);

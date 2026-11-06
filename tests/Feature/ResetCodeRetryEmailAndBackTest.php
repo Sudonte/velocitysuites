@@ -59,7 +59,7 @@ class ResetCodeRetryEmailAndBackTest extends ApiFlowTestCase
 
     private function admin(): User
     {
-        return User::create(['first_name' => 'Ada', 'last_name' => 'Admin', 'email' => 'admin@retry.test', 'password' => 'OldPassword1', 'role' => 'admin']);
+        return User::create(['first_name' => 'Ada', 'last_name' => 'Admin', 'email' => 'admin@gmail.com', 'password' => 'OldPassword1', 'role' => 'admin', 'status' => 'active']);
     }
 
     private function code(string $email, string $code): void
@@ -141,14 +141,14 @@ class ResetCodeRetryEmailAndBackTest extends ApiFlowTestCase
         $r->assertStatus(422)->assertJsonPath('code', 'CODE_EXPIRED');
         $this->assertSame('This code has expired. Please request a new code.', $r->json('message'));
 
-        $unknown = $this->verify('nobody@retry.test', '123456');
+        $unknown = $this->verify('nobody@gmail.com', '123456');
         $unknown->assertStatus(422)->assertJsonPath('code', 'CODE_EXPIRED');
         $this->assertSame($r->json('message'), $unknown->json('message'));
     }
 
     public function test_the_apps_endpoints_answer_exactly_as_before(): void
     {
-        $guest = User::create(['first_name' => 'G', 'last_name' => 'T', 'email' => 'guest@retry.test', 'password' => 'OldPassword1', 'role' => 'guest']);
+        $guest = User::create(['first_name' => 'G', 'last_name' => 'T', 'email' => 'guest@gmail.com', 'password' => 'OldPassword1', 'role' => 'guest']);
         $this->code($guest->email, '123456');
         $wrong = $this->postJson('/api/verify-reset-otp', ['email' => $guest->email, 'otp' => '000000']);
         $wrong->assertStatus(422)->assertExactJson(['message' => 'Invalid or expired code.']);
@@ -165,19 +165,20 @@ class ResetCodeRetryEmailAndBackTest extends ApiFlowTestCase
 
     public function test_the_code_email_is_the_branded_html_with_a_plain_text_twin(): void
     {
-        $data = ['code' => '482913', 'name' => 'Maria'];
-        $html = view('emails.reset-code', $data)->render();
-        $text = view('emails.reset-code-text', $data)->render();
+        $data = ['code' => '482913', 'name' => 'Maria', 'minutes' => 15, 'intro' => 'Use this code to reset your password:',
+            'ignore' => "If you didn't request this, you can ignore this email. Your password won't change.", 'subject' => 'Your Velocity Suites password reset code'];
+        $html = view('emails.code', $data)->render();
+        $text = view('emails.code-text', $data)->render();
 
         foreach (['Velocity Suites', 'Your comfort is our service', 'Hi Maria,', 'Use this code to reset your password:', '482913', 'This code expires in 15 minutes.',
-            "If you didn't request this, you can ignore this email. Your password won't change.", '&copy; 2026 Velocity Suites', 'alt="Velocity Suites"', 'letter-spacing:12px'] as $needle) {
+            e("If you didn't request this, you can ignore this email. Your password won't change."), '&copy; 2026 Velocity Suites', 'alt="Velocity Suites"', 'letter-spacing:12px'] as $needle) {
             $this->assertStringContainsString($needle, $html, $needle);
         }
         $this->assertMatchesRegularExpression('#<img src="https://[^"]+/images/logo\.jpg" alt="Velocity Suites"#', str_replace(config('app.url'), 'https://velocitysuites.com', $html), 'the logo is an absolute image URL');
         $this->assertStringContainsString('prefers-color-scheme: dark', $html, 'readable in Gmail dark mode');
         // the order: greeting, instruction, code, expiry, ignore line, footer
         $body = preg_replace('#<div style="display:none.*?</div>#s', '', $html); // the hidden inbox preview line is not part of the visible order
-        $order = array_map(fn ($n) => strpos($body, $n), ['Hi Maria,', 'Use this code', '482913', 'expires in 15 minutes.', "didn't request this", '2026 Velocity Suites']);
+        $order = array_map(fn ($n) => strpos($body, $n), ['Hi Maria,', 'Use this code', '482913', 'expires in 15 minutes.', 'request this', '2026 Velocity Suites']);
         $sorted = $order;
         sort($sorted);
         $this->assertSame($sorted, $order);
@@ -189,7 +190,7 @@ class ResetCodeRetryEmailAndBackTest extends ApiFlowTestCase
 
     public function test_the_mail_is_sent_with_that_subject_and_both_versions(): void
     {
-        $u = User::create(['first_name' => 'Maria', 'last_name' => 'Lopez', 'email' => 'maria@retry.test', 'password' => 'x', 'role' => 'guest']);
+        $u = User::create(['first_name' => 'Maria', 'last_name' => 'Lopez', 'email' => 'maria@gmail.com', 'password' => 'x', 'role' => 'guest', 'status' => 'active']);
         $captured = [];
         $this->sendHook = function ($views, $data, $cb) use (&$captured) {
             $message = new class {
@@ -206,9 +207,9 @@ class ResetCodeRetryEmailAndBackTest extends ApiFlowTestCase
 
         $this->assertTrue(app(\App\Services\PasswordResetService::class)->sendOtp($u));
 
-        $this->assertSame(['html' => 'emails.reset-code', 'text' => 'emails.reset-code-text'], $captured['views']);
+        $this->assertSame(['html' => 'emails.code', 'text' => 'emails.code-text'], $captured['views']);
         $this->assertSame('Your Velocity Suites password reset code', $captured['subject']);
-        $this->assertSame('maria@retry.test', $captured['to']);
+        $this->assertSame('maria@gmail.com', $captured['to']);
         $this->assertSame('Maria', $captured['data']['name']);
         $this->assertMatchesRegularExpression('/^\d{6}$/', $captured['data']['code']);
     }

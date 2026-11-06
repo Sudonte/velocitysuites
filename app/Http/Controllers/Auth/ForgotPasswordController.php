@@ -59,6 +59,11 @@ class ForgotPasswordController extends Controller
     {
         $request->validate(['email' => 'required|email']);
 
+        // the same rule as the page: only a Gmail address belongs here (a hotel address is sent to the staff request)
+        if ($wrong = \App\Support\EmailDomain::gmailFormError((string) $request->email)) {
+            return back()->withInput()->withErrors(['email' => $wrong]);
+        }
+
         $user = User::whereRaw('LOWER(email) = ?', [strtolower(trim((string) $request->email))])->first();
 
         // The same answer whether or not the address has an account (the form must not reveal which emails are registered).
@@ -69,7 +74,7 @@ class ForgotPasswordController extends Controller
 
         // A manager or receptionist never gets a code and the answer is the same as for an unknown address (their reset is requested
         // from the System Administrator on the staff page).
-        if (in_array($user->role, ['manager', 'receptionist'], true)) {
+        if (in_array($user->role, ['manager', 'receptionist'], true) || $user->status !== 'active') {
             return redirect()->route('password.otp.form', ['email' => $request->email])
                 ->with('status', self::SENT_MESSAGE);
         }
@@ -93,10 +98,16 @@ class ForgotPasswordController extends Controller
     {
         $request->validate(['email' => 'required|email']);
 
+        // only a hotel staff address (@hotel.com) belongs on this form; a Gmail address is sent back to the code reset
+        if ($wrong = \App\Support\EmailDomain::staffFormError((string) $request->input('email'))) {
+            return back()->withInput()->withErrors(['email' => $wrong]);
+        }
+
         // case and surrounding spaces never matter ("Espedion.Manager@Hotel.com " is the same account)
         $email = strtolower(trim((string) $request->input('email')));
         $user = User::whereRaw('LOWER(email) = ?', [$email])->first();
-        if ($user && in_array($user->role, ['manager', 'receptionist'], true)) {
+        // a request is recorded ONLY for a registered, active Receptionist or Manager account
+        if ($user && $user->status === 'active' && in_array($user->role, ['manager', 'receptionist'], true)) {
             try {
                 $this->handleStaffRequest($user);
             } catch (\Throwable $e) {

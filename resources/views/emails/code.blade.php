@@ -1,4 +1,4 @@
-{{-- The password reset code email (guest and administrator): table layout with inline styles so Gmail (desktop, phone, light and dark) draws it the same --}}
+{{-- Every emailed code (sign-up, password reset, email change ...): table layout with inline styles so Gmail (desktop, phone, light and dark) draws it the same --}}
 @php
     $base = rtrim(config('app.url'), '/');
     $logo = $base . '/images/logo.jpg';
@@ -11,7 +11,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="color-scheme" content="light dark">
     <meta name="supported-color-schemes" content="light dark">
-    <title>Your Velocity Suites password reset code</title>
+    <title>{{ $subject }}</title>
     <style>
         @media (prefers-color-scheme: dark) {
             .vs-bg { background-color: #14161b !important; }
@@ -30,7 +30,7 @@
     </style>
 </head>
 <body class="vs-bg" style="margin:0;padding:0;background-color:#f4f4f6;-webkit-text-size-adjust:100%;">
-<div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;">Your password reset code is {{ $code }}. It expires in 15 minutes.</div>
+<div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;">Your code is {{ $code }}. It expires in {{ $minutes }} {{ $minutes === 1 ? 'minute' : 'minutes' }}.</div>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="vs-bg" style="background-color:#f4f4f6;">
     <tr>
         <td align="center" style="padding:24px 12px;">
@@ -51,7 +51,7 @@
                 <tr>
                     <td class="vs-pad" style="padding:20px 32px 8px 32px;font-family:Arial,Helvetica,sans-serif;">
                         <p class="vs-text" style="margin:0 0 12px 0;font-size:16px;line-height:24px;color:#1b1b1f;">Hi {{ $name }},</p>
-                        <p class="vs-text" style="margin:0;font-size:16px;line-height:24px;color:#1b1b1f;">Use this code to reset your password:</p>
+                        <p class="vs-text" style="margin:0;font-size:16px;line-height:24px;color:#1b1b1f;">{{ $intro }}</p>
                     </td>
                 </tr>
                 <tr>
@@ -67,8 +67,8 @@
                 </tr>
                 <tr>
                     <td class="vs-pad" style="padding:8px 32px 24px 32px;font-family:Arial,Helvetica,sans-serif;">
-                        <p class="vs-text" style="margin:0 0 12px 0;font-size:16px;line-height:24px;font-weight:700;color:#1b1b1f;text-align:center;">This code expires in 15 minutes.</p>
-                        <p class="vs-muted" style="margin:0;font-size:14px;line-height:21px;color:#5f6368;">If you didn't request this, you can ignore this email. Your password won't change.</p>
+                        <p class="vs-text" style="margin:0 0 12px 0;font-size:16px;line-height:24px;font-weight:700;color:#1b1b1f;text-align:center;">This code expires in {{ $minutes }} {{ $minutes === 1 ? 'minute' : 'minutes' }}.</p>
+                        <p class="vs-muted" style="margin:0;font-size:14px;line-height:21px;color:#5f6368;">{{ $ignore }}</p>
                     </td>
                 </tr>
                 <tr>

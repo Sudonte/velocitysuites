@@ -581,3 +581,6 @@ button.vs-mi:hover, button.vs-mi:focus-visible { background: var(--vs-red-soft);
 .vs-back { display: inline-flex; align-items: center; gap: .4rem; min-height: 2.75rem; padding: 0 .5rem; margin: -.4rem 0 .15rem -.5rem; color: #A62B34; font-weight: 600; font-size: .95rem; text-decoration: none; border-radius: 8px; }
 .vs-back:hover { color: #8a232b; text-decoration: underline; }
 .vs-back:focus-visible { outline: 2px solid #A62B34; outline-offset: 2px; }
+
+/* the staff-request button, pointed at when a hotel address is typed on the guest / administrator reset form */
+.vs-forgot .vs-staff-hl { border-color: #C7333E; color: #A62B34; background: #fdecec; box-shadow: 0 0 0 3px rgba(199, 51, 62, .25); font-weight: 600; }

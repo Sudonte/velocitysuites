@@ -132,9 +132,10 @@ class StaffRequestAlwaysRecordedTest extends ApiFlowTestCase
 
     public function test_guest_and_unknown_emails_create_nothing_but_get_the_same_message(): void
     {
-        $guest = $this->make('guest', 'guest@x.test', 'Gus');
+        // a guest whose address is @hotel.com (not how accounts are made) and an unknown @hotel.com address: the same answer, nothing recorded
+        $guest = $this->make('guest', 'guest@hotel.com', 'Gus');
         $a = $this->ask($guest->email)->getSession()->get('status');
-        $b = $this->ask('nobody@x.test')->getSession()->get('status');
+        $b = $this->ask('nobody@hotel.com')->getSession()->get('status');
         $this->assertSame(self::MESSAGE, $a);
         $this->assertSame($a, $b);
         $this->assertSame(0, StaffPasswordResetRequest::count());

@@ -22,15 +22,14 @@
         <div class="alert alert-success" role="status">{{ session('status') }}</div>
     @endif
 
-    @if ($errors->any())
-        <div class="alert alert-danger" role="alert">{{ $errors->first() }}</div>
-    @endif
-
-    <form method="POST" action="{{ route('password.request.staff.send') }}" novalidate>
+    <form method="POST" action="{{ route('password.request.staff.send') }}" novalidate id="vsStaffForm">
         @csrf
         <label class="form-label fw-semibold" for="email">Email address</label>
         <input type="email" class="form-control @error('email') is-invalid @enderror" id="email" name="email" value="{{ old('email') }}" autocomplete="email" required autofocus aria-describedby="emailHelp">
-        <div class="form-text mb-3" id="emailHelp">Enter the email registered to your Velocity Suites staff account</div>
+        @error('email')
+            <div class="invalid-feedback vs-fb d-block" role="alert">@if ($message === \App\Support\EmailDomain::GMAIL_ON_STAFF_FORM)Guest and administrator accounts reset with a code. Go back to <a href="{{ route('password.request') }}">“Reset your password”</a>.@else{{ $message }}@endif</div>
+        @enderror
+        <div class="form-text mb-3" id="emailHelp">Enter the email registered to your Velocity Suites staff account (@hotel.com)</div>
         <button type="submit" class="btn btn-velocity w-100">Send request</button>
     </form>
 
@@ -39,5 +38,46 @@
 @endsection
 
 @push('scripts')
+<script src="{{ asset('js/portal/core.js') }}?v={{ filemtime(public_path('js/portal/core.js')) }}"></script>
+<script>
+(function () {
+    // Only an @hotel.com address belongs here (case and spaces ignored); the server checks the same. Then the request is confirmed before it is sent.
+    var form = document.getElementById('vsStaffForm'), input = document.getElementById('email');
+    var NOT_HOTEL = 'Please use your hotel staff email (@hotel.com).';
+    var LINK = '{{ route('password.request') }}';
+    function problem(v) {
+        v = v.trim();
+        if (/^[^\s@]+@hotel\.com$/i.test(v)) return '';
+        return /^[^\s@]+@gmail\.com$/i.test(v) ? 'Guest and administrator accounts reset with a code. Go back to \u201cReset your password\u201d.' : NOT_HOTEL;
+    }
+    function show(msg) {
+        clear();
+        input.classList.add('is-invalid');
+        var d = document.createElement('div');
+        d.className = 'invalid-feedback vs-fb d-block'; d.setAttribute('role', 'alert');
+        if (msg === 'gmail') {
+            // the quoted phrase is the link back to the code reset
+            d.appendChild(document.createTextNode('Guest and administrator accounts reset with a code. Go back to '));
+            var a = document.createElement('a'); a.href = LINK; a.textContent = '“Reset your password”'; d.appendChild(a);
+            d.appendChild(document.createTextNode('.'));
+        } else d.textContent = msg;
+        input.insertAdjacentElement('afterend', d);
+        input.focus();
+    }
+    function clear() { input.classList.remove('is-invalid'); var o = form.querySelector('.vs-fb'); if (o) o.remove(); }
+    input.addEventListener('input', clear);
+    var confirmed = false;
+    form.addEventListener('submit', function (e) {
+        if (confirmed) return;
+        e.preventDefault();
+        var msg = problem(input.value);
+        if (msg) { show(msg); return; }
+        clear();
+        VS.confirm({ title: 'Send a request?', message: 'Send a password reset request to the System Administrator?', confirmText: 'Send request', cancelText: 'Cancel' }).then(function (yes) {
+            if (yes) { confirmed = true; form.submit(); }
+        });
+    });
+})();
+</script>
 <script src="{{ asset('js/portal/back-link.js') }}?v={{ filemtime(public_path('js/portal/back-link.js')) }}"></script>
 @endpush

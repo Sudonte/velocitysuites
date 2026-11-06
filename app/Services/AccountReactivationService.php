@@ -130,16 +130,8 @@ class AccountReactivationService
     private function sendOtpEmail(string $email, string $otp): void
     {
         try {
-            $body = "Hi,\n\n"
-                . "We received a request to reactivate your VelocitySuites account.\n\n"
-                . "Your verification code is: {$otp}\n\n"
-                . "Enter this code in the app to reactivate your account. This code expires in "
-                . self::EXPIRY_MINUTES . " minutes.\n\n"
-                . "If you didn't attempt to reactivate your account, you can safely ignore this email.\n\n"
-                . "- VelocitySuites";
-            Mail::raw($body, function ($message) use ($email, $otp) {
-                $message->to($email)->subject("Your VelocitySuites reactivation code: {$otp}");
-            });
+            $first = \App\Models\User::where('email', $email)->value('first_name');
+            \App\Support\CodeEmail::send($email, $otp, $first, self::EXPIRY_MINUTES, 'Use this code to reactivate your account:', "If you didn't try to reactivate your account, you can ignore this email.");
         } catch (\Throwable $e) {
             Log::error("Failed to email reactivation OTP to {$email}: " . $e->getMessage());
         }

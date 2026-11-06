@@ -6,7 +6,7 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Schema;
 
-/** Registration accepts any well-formed email address, not only Gmail; malformed ones are still rejected. */
+/** Sign-up accepts only Gmail addresses (case and spaces ignored); malformed ones are rejected too. */
 class AnyEmailRegistrationTest extends ApiFlowTestCase
 {
     protected function setUp(): void
@@ -35,18 +35,21 @@ class AnyEmailRegistrationTest extends ApiFlowTestCase
         ];
     }
 
-    public function test_non_gmail_addresses_pass_email_validation(): void
+    public function test_only_gmail_addresses_can_sign_up_and_the_message_names_the_rule(): void
     {
-        foreach (['ana@yahoo.com', 'ana.reyes@outlook.ph', 'team@mail.example.co.uk'] as $email) {
-            $response = $this->postJson('/api/register', $this->payload($email));
-            $this->assertArrayNotHasKey('email', $response->json('errors') ?? [], "$email was rejected: ".$response->getContent());
+        foreach (['ana@yahoo.com', 'ana.reyes@outlook.ph', 'team@mail.example.co.uk', 'ana@hotel.com', 'ana@gmail.com.ph', 'ana@notgmail.com'] as $email) {
+            $this->postJson('/api/register', $this->payload($email))->assertStatus(422)
+                ->assertJsonPath('errors.email.0', 'Please use a Gmail address (@gmail.com) to create your account.');
         }
     }
 
-    public function test_gmail_still_passes_and_malformed_addresses_are_rejected(): void
+    public function test_gmail_passes_whatever_the_case_or_spaces_and_malformed_addresses_are_rejected(): void
     {
-        $ok = $this->postJson('/api/register', $this->payload('ana@gmail.com'));
-        $this->assertArrayNotHasKey('email', $ok->json('errors') ?? []);
+        foreach (['ana@gmail.com', '  Ana.Reyes@GMAIL.com '] as $email) {
+            $ok = $this->postJson('/api/register', $this->payload($email));
+            $this->assertArrayNotHasKey('email', $ok->json('errors') ?? [], $email);
+        }
+        $this->assertDatabaseHas('registration_otps', ['email' => 'ana.reyes@gmail.com']);
 
         foreach (['plain', 'a@', '@example.com', 'a b@example.com'] as $bad) {
             $this->postJson('/api/register', $this->payload($bad))->assertStatus(422)->assertJsonValidationErrors('email');

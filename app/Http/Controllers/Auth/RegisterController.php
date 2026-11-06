@@ -31,12 +31,14 @@ class RegisterController extends Controller
     public function register(Request $request)
     {
         $isPhilippines = strcasecmp((string) $request->input('country'), 'Philippines') === 0;
+        // case and surrounding spaces never matter for the address
+        $request->merge(['email' => \App\Support\EmailDomain::clean($request->input('email'))]);
 
         $validated = $request->validate([
             'first_name' => 'required|string|max:100',
             'last_name' => 'required|string|max:100',
             'middle_name' => 'nullable|string|max:100',
-            'email' => ['required', 'email:rfc', 'max:255', 'unique:users'],
+            'email' => ['bail', 'required', 'email:rfc', 'max:255', new \App\Rules\GmailAddress, 'unique:users'],
             // 8+ characters with at least one letter and one number (the same rule the app's sign-up checklist shows)
             'password' => ['required', 'confirmed', Password::min(8)->letters()->numbers()],
             'age' => 'required|integer|min:18',
@@ -133,9 +135,8 @@ class RegisterController extends Controller
             'booking_intent' => $bookingIntent, // Preserve booking intent through registration
         ]));
 
-        if (! $this->sendOtpEmail($validated['email'], $otp)) {
-            return back()->withInput()->with('error', "We couldn't send the verification email right now. Please try again in a few minutes.");
-        }
+        // the code is stored above; the email leaves the moment the response has been sent (no queue)
+        $this->sendOtpEmailAfterResponse($validated['email'], $otp, $validated['first_name']);
 
         return redirect()->route('verify-otp')->with('info', 'OTP sent to your email. Please verify to complete registration.');
     }
@@ -280,9 +281,7 @@ class RegisterController extends Controller
             'otp_created_at' => now(),
         ]));
 
-        if (! $this->sendOtpEmail($registrationData['email'], $otp)) {
-            return back()->with('error', "We couldn't resend the verification email right now. Please try again in a few minutes.");
-        }
+        $this->sendOtpEmailAfterResponse($registrationData['email'], $otp, $registrationData['first_name'] ?? null);
 
         return back()->with('success', 'OTP resent to your email.');
     }
@@ -294,15 +293,16 @@ class RegisterController extends Controller
      * a dead TODO (Mail::send(...) commented out) so the web registration
      * flow generated a code but never actually delivered it anywhere.
      */
-    private function sendOtpEmail(string $email, string $otp): bool
+    private function sendOtpEmailAfterResponse(string $email, string $otp, ?string $firstName): void
+    {
+        app()->terminating(fn () => $this->sendOtpEmail($email, $otp, $firstName));
+    }
+
+    private function sendOtpEmail(string $email, string $otp, ?string $firstName = null): bool
     {
         try {
-            $body = "Hi,\n\nYour VelocitySuites verification code is: {$otp}\n\n"
-                . "Enter this code to finish creating your account. This code expires in 5 minutes.\n\n"
-                . "If you didn't request this, you can safely ignore this email.\n\n- VelocitySuites";
-            Mail::raw($body, function ($message) use ($email, $otp) {
-                $message->to($email)->subject("Your VelocitySuites verification code: {$otp}");
-            });
+            // the branded email (the same one every guest code uses), then the plain-text twin
+            \App\Support\CodeEmail::send($email, $otp, $firstName, 5, 'Use this code to finish creating your account:', "If you didn't create an account, ignore this email.");
 
             return true;
         } catch (\Throwable $e) {

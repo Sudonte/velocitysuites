@@ -168,12 +168,14 @@ class AuthController extends Controller
         // verifyOtp()), just read here to pick the right mobile rule.
         $country = trim((string) $request->input('country', ''));
         $isPhilippines = strcasecmp($country, 'Philippines') === 0;
+        // case and surrounding spaces never matter for the address
+        $request->merge(['email' => \App\Support\EmailDomain::clean($request->input('email'))]);
 
         $validated = $request->validate([
             'first_name' => 'required|string|max:100',
             'last_name' => 'required|string|max:100',
             'middle_name' => 'nullable|string|max:100',
-            'email' => ['required', 'email:rfc', 'max:255', 'unique:users'],
+            'email' => ['bail', 'required', 'email:rfc', 'max:255', new \App\Rules\GmailAddress, 'unique:users'],
             // 8+ characters with at least one letter and one number (the same rule the app's sign-up checklist shows)
             'password' => ['required', 'confirmed', PasswordPolicy::rule()],
             'age' => 'required|integer|min:18',
@@ -415,14 +417,14 @@ class AuthController extends Controller
             ], 429);
         }
 
-        $user = User::where('email', $validated['email'])->first();
+        $user = User::whereRaw('LOWER(email) = ?', [strtolower(trim($validated['email']))])->first();
 
         // The app is for guests: only a guest account is sent a code here. An administrator resets on the website
         // (Auth\WebResetController), a manager or receptionist through the System Administrator, so a direct API call
         // can't be used to get a code for a staff account either. The response
         // stays identical either way to avoid leaking whether the email is registered
         // or what role it belongs to.
-        if ($user && $user->role === 'guest') {
+        if ($user && $user->role === 'guest' && $user->status === 'active') {
             // The code is stored now and the mail goes out the moment the response is sent (no queue, no worker to wait for), so the answer
             // takes the same short time for a registered and an unknown address - the SMTP round trip must not tell them apart.
             $this->passwordReset->sendOtp($user, true);
@@ -662,20 +664,21 @@ class AuthController extends Controller
 
         return ($channel === 'mobile' && ! empty($payload['mobile_number']))
             ? $this->sendOtpSms($payload['mobile_number'], $otp)
-            : $this->sendOtpEmail($email, $otp);
+            : $this->sendOtpEmailAfterResponse($email, $otp, (string) ($payload['first_name'] ?? ''));
     }
 
-    private function sendOtpEmail(string $email, string $otp): bool
+    /** The code is stored by now; the email leaves the moment the response has been sent (no queue). */
+    private function sendOtpEmailAfterResponse(string $email, string $otp, string $firstName): bool
+    {
+        app()->terminating(fn () => $this->sendOtpEmail($email, $otp, $firstName));
+
+        return true;
+    }
+
+    private function sendOtpEmail(string $email, string $otp, string $firstName): bool
     {
         try {
-            $body = "Hi,\n\n"
-                . "Your VelocitySuites verification code is: {$otp}\n\n"
-                . "Enter this code in the app to finish creating your account. This code expires in 5 minutes.\n\n"
-                . "If you didn't request this, you can safely ignore this email.\n\n"
-                . "- VelocitySuites";
-            Mail::raw($body, function ($message) use ($email, $otp) {
-                $message->to($email)->subject("Your VelocitySuites verification code: {$otp}");
-            });
+            \App\Support\CodeEmail::send($email, $otp, $firstName, 5, 'Use this code to finish creating your account:', "If you didn't create an account, ignore this email.");
 
             return true;
         } catch (\Throwable $e) {

@@ -92,6 +92,7 @@ class MailFailureHonestyTest extends TestCase
     {
         return User::factory()->create([
             'role' => 'guest',
+            'email' => 'guest' . uniqid() . '@gmail.com',
             'status' => 'active',
             'password' => Hash::make($password),
         ]);
@@ -111,18 +112,22 @@ class MailFailureHonestyTest extends TestCase
         $response->assertSessionMissing('status');
     }
 
-    public function test_web_registration_reports_failure_when_mail_send_throws(): void
+    public function test_web_registration_resend_leaves_after_the_response_so_a_mail_failure_is_logged_not_shown(): void
     {
-        Mail::shouldReceive('raw')->once()->andThrow(new \Exception('simulated SMTP outage'));
+        // the code is stored first and the email leaves right after the response (no queue): a refusal by the mail server can no longer be
+        // reported on that page, so it must at least never break the page and must be on record
+        \Illuminate\Support\Facades\Log::spy();
+        Mail::shouldReceive('send')->once()->andThrow(new \Exception('simulated SMTP outage'));
 
         $response = $this->withSession(['registration_data' => [
-            'email' => 'newguest@example.com',
+            'email' => 'newguest@gmail.com',
+            'first_name' => 'Newguest',
             'otp' => '000000',
             'otp_created_at' => now(),
-        ]])->post('/resend-otp', ['email' => 'newguest@example.com']);
+        ]])->post('/resend-otp', ['email' => 'newguest@gmail.com']);
 
-        $response->assertSessionHas('error');
-        $response->assertSessionMissing('success');
+        $response->assertSessionHas('success');
+        \Illuminate\Support\Facades\Log::shouldHaveReceived('error')->once();
     }
 
     public function test_api_email_change_request_reports_failure_when_mail_send_throws(): void
@@ -138,7 +143,7 @@ class MailFailureHonestyTest extends TestCase
             'updated_at' => now(),
         ]);
 
-        Mail::shouldReceive('raw')->once()->andThrow(new \Exception('simulated SMTP outage'));
+        Mail::shouldReceive('send')->once()->andThrow(new \Exception('simulated SMTP outage'));
 
         $response = $this->withHeaders(['Authorization' => "Bearer {$plainToken}"])
             ->postJson('/api/guest/profile/email/request', [

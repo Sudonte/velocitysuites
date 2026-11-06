@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Auth;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Services\PasswordResetService;
+use App\Support\EmailDomain;
 use App\Support\PasswordPolicy;
 use App\Support\PortalToken;
 use Illuminate\Http\JsonResponse;
@@ -34,14 +35,21 @@ class WebResetController extends Controller
     {
         $validated = $request->validate(['email' => 'required|email']);
 
+        // Only a Gmail address belongs on this form (case and spaces ignored): a hotel address is pointed to the staff request, anything else to Gmail
+        $email = EmailDomain::clean($validated['email']);
+        if ($wrong = EmailDomain::gmailFormError($email)) {
+            return response()->json(['code' => $email !== '' && EmailDomain::isHotel($email) ? 'STAFF_EMAIL' : 'NOT_GMAIL', 'message' => $wrong, 'errors' => ['email' => [$wrong]]], 422);
+        }
+
         // Cooldown keyed on the address alone (not on whether it is registered), shared with the app's endpoint.
         $cooldownKey = 'pwreset:cooldown:' . sha1(strtolower($validated['email']));
         if (! Cache::add($cooldownKey, 1, now()->addSeconds(PasswordResetService::RESEND_COOLDOWN_SECONDS))) {
             return response()->json(['message' => 'Please wait ' . PasswordResetService::RESEND_COOLDOWN_SECONDS . ' seconds before requesting another code.', 'retry_after' => PasswordResetService::RESEND_COOLDOWN_SECONDS], 429);
         }
 
-        $user = User::where('email', $validated['email'])->first();
-        if ($user && in_array($user->role, self::ROLES, true)) {
+        // a code goes ONLY to a registered, active Guest or System Administrator account
+        $user = User::whereRaw('LOWER(email) = ?', [$email])->first();
+        if ($user && $user->status === 'active' && in_array($user->role, self::ROLES, true)) {
             // stored now, mailed the moment the response is sent: the answer takes the same time for every address
             $this->passwordReset->sendOtp($user, true);
         }
@@ -76,8 +84,8 @@ class WebResetController extends Controller
         if ($refused = $this->refusal($this->passwordReset->checkOtp($validated['email'], $validated['otp']))) {
             return $refused;
         }
-        $user = User::where('email', $validated['email'])->first();
-        if (! $user || ! in_array($user->role, self::ROLES, true)) {
+        $user = User::whereRaw('LOWER(email) = ?', [EmailDomain::clean($validated['email'])])->first();
+        if (! $user || $user->status !== 'active' || ! in_array($user->role, self::ROLES, true)) {
             return response()->json(['message' => 'Invalid or expired code.'], 422);
         }
 
