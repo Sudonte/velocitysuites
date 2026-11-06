@@ -145,4 +145,9 @@ Route::middleware(['auth.api', 'role:guest'])->group(function () {
     Route::put('/notifications/{notification}/read', [NotificationController::class, 'markAsRead']);
     Route::put('/notifications/{notification}/unread', [NotificationController::class, 'markAsUnread']);
     Route::put('/notifications/read-all', [NotificationController::class, 'markAllAsRead']);
+    // The website's System notifications (announcements) with the guest's own read state; additive, the app does not use them.
+    Route::get('/guest/system-notices', [\App\Http\Controllers\Api\GuestNoticeController::class, 'index']);
+    Route::put('/guest/system-notices/read-all', [\App\Http\Controllers\Api\GuestNoticeController::class, 'readAll']);
+    Route::put('/guest/system-notices/{announcement}/read', [\App\Http\Controllers\Api\GuestNoticeController::class, 'read']);
+    Route::put('/guest/system-notices/{announcement}/unread', [\App\Http\Controllers\Api\GuestNoticeController::class, 'unread']);
 });

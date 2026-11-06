@@ -23,15 +23,19 @@ class Announcement extends Model
         'images',
         'status',
         'published_at',
+        'ends_at',
         'target_audience',
         'notified_at',
+        'last_edited_at',
     ];
 
     protected $casts = [
         'images' => 'array',
         'target_audience' => 'array',
         'published_at' => 'date',
+        'ends_at' => 'date',
         'notified_at' => 'datetime',
+        'last_edited_at' => 'datetime',
     ];
 
     public const AUDIENCES = ['public', 'guest', 'manager', 'receptionist'];
@@ -100,6 +104,9 @@ class Announcement extends Model
             ->where(function ($q) {
                 $q->whereNull('published_at')->orWhereDate('published_at', '<=', now());
             })
+            ->where(function ($q) {
+                $q->whereNull('ends_at')->orWhereDate('ends_at', '>=', now());
+            })
             ->where(function ($q) use ($audience) {
                 $q->whereNull('target_audience')
                     ->orWhereJsonLength('target_audience', 0)
@@ -119,5 +126,49 @@ class Announcement extends Model
         $path = $this->images[0] ?? null;
 
         return $path ? Storage::disk('public')->url($path) : null;
+    }
+
+    /** What the admin list shows: Draft, Scheduled (published, start date still ahead), Published, Expired (end date passed) or Archived. */
+    public function displayStatus(): string
+    {
+        if ($this->isArchived()) {
+            return 'Archived';
+        }
+        if ($this->status !== 'published') {
+            return 'Draft';
+        }
+        $today = now()->startOfDay();
+        if ($this->ends_at !== null && $this->ends_at->lt($today)) {
+            return 'Expired';
+        }
+        if ($this->published_at !== null && $this->published_at->gt($today)) {
+            return 'Scheduled';
+        }
+
+        return 'Published';
+    }
+
+    /** Guests / Staff / Public / All, in one short phrase (an empty audience means everyone). */
+    public function audienceShort(): string
+    {
+        $roles = $this->target_audience ?: self::AUDIENCES;
+        $parts = [];
+        if (in_array('guest', $roles, true)) {
+            $parts[] = 'Guests';
+        }
+        if (array_intersect(['manager', 'receptionist'], $roles)) {
+            $parts[] = 'Staff';
+        }
+        if (in_array('public', $roles, true)) {
+            $parts[] = 'Public';
+        }
+
+        return count($parts) === 3 ? 'All' : (implode(' + ', $parts) ?: 'All');
+    }
+
+    /** When it last became news to a guest: the last edit, else when it went live (the notification time), else its publish date. */
+    public function noticeAt(): \Illuminate\Support\Carbon
+    {
+        return $this->last_edited_at ?? $this->notified_at ?? ($this->published_at ? $this->published_at->copy()->startOfDay() : $this->created_at);
     }
 }

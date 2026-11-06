@@ -23,6 +23,7 @@ class AppDownloadTest extends ApiFlowTestCase
             $table->json('images')->nullable();
             $table->string('status')->default('draft');
             $table->date('published_at')->nullable();
+            $table->date('ends_at')->nullable();
             $table->json('target_audience')->nullable();
             $table->timestamps();
         });

@@ -17,7 +17,7 @@ class GuestPaymentEntryPointsTest extends ApiFlowTestCase
         parent::setUp();
         foreach ([
             'api_tokens' => function (Blueprint $t) { $t->id(); $t->unsignedBigInteger('user_id'); $t->string('token')->unique(); $t->string('device_name')->nullable(); $t->timestamp('last_used_at')->nullable(); $t->timestamp('expires_at')->nullable(); $t->timestamps(); },
-            'announcements' => function (Blueprint $t) { $t->id(); $t->string('title'); $t->text('content'); $t->json('images')->nullable(); $t->string('status')->default('draft'); $t->date('published_at')->nullable(); $t->json('target_audience')->nullable(); $t->timestamp('notified_at')->nullable(); $t->timestamps(); },
+            'announcements' => function (Blueprint $t) { $t->id(); $t->string('title'); $t->text('content'); $t->json('images')->nullable(); $t->string('status')->default('draft'); $t->date('published_at')->nullable(); $t->date('ends_at')->nullable(); $t->json('target_audience')->nullable(); $t->timestamp('notified_at')->nullable(); $t->timestamps(); },
             'registration_otps' => function (Blueprint $t) { $t->id(); $t->string('email')->unique(); $t->string('otp'); $t->json('payload')->nullable(); $t->integer('attempts')->default(0); $t->timestamp('expires_at')->nullable(); $t->timestamps(); },
             'promotion_amenity' => function (Blueprint $t) { $t->id(); $t->unsignedBigInteger('promotion_id'); $t->unsignedBigInteger('amenity_id'); $t->unsignedInteger('quantity')->default(1); $t->timestamps(); },
         ] as $name => $def) {

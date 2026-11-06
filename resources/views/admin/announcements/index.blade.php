@@ -3,15 +3,57 @@
 @section('title', 'Announcements - Admin')
 @section('livePage', '1')
 
+@push('styles')
+<style>
+    .ann-filters .form-label { margin-bottom: .25rem; }
+    .ann-filters .btn { height: calc(2.25rem + 2px); }
+    .ann-chip { display: inline-flex; align-items: center; padding: .18rem .65rem; border-radius: 999px; font-size: .78rem; font-weight: 700; white-space: nowrap; }
+    .ann-chip.draft { background: #e9ecef; color: #343a40; }
+    .ann-chip.scheduled { background: #dbeafe; color: #1e40af; }
+    .ann-chip.published { background: #dcfce7; color: #166534; }
+    .ann-chip.expired { background: #fef3c7; color: #8a5a00; }
+    .ann-chip.archived { background: #e5e7eb; color: #4b5563; }
+    [data-bs-theme="dark"] .ann-chip.draft { background: #2f343c; color: #d5d8dd; }
+    [data-bs-theme="dark"] .ann-chip.scheduled { background: #1e3a5f; color: #bcd6ff; }
+    [data-bs-theme="dark"] .ann-chip.published { background: #1d3322; color: #a5d6a7; }
+    [data-bs-theme="dark"] .ann-chip.expired { background: #3a2f17; color: #f2c36b; }
+    [data-bs-theme="dark"] .ann-chip.archived { background: #2a2d34; color: #c6c6c6; }
+    .ann-table th { font-size: .78rem; text-transform: uppercase; letter-spacing: .03em; white-space: nowrap; }
+    .ann-table td { vertical-align: middle; }
+    .ann-title { font-weight: 700; color: var(--text-dark); overflow-wrap: anywhere; }
+    .ann-muted { color: var(--text-light); font-size: .88rem; }
+    .ann-num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .ann-actions { display: inline-flex; gap: .35rem; justify-content: flex-end; flex-wrap: nowrap; }
+    .ann-card .ann-actions { justify-content: flex-start; flex-wrap: wrap; }
+    .ann-actions .btn { white-space: nowrap; }
+    .ann-filters .btn-primary { background: #b3262f; border-color: #b3262f; color: #fff; }
+    .ann-filters .btn-primary:hover { background: #8f1f26; border-color: #8f1f26; }
+    [data-bs-theme="dark"] .ann-actions .btn-outline-primary { color: #ff9aa1; border-color: #ff9aa1; }
+    [data-bs-theme="dark"] .ann-actions .btn-outline-secondary { color: #d5d8dd; border-color: #8b9098; }
+    [data-bs-theme="dark"] .ann-actions .btn-outline-success { color: #8fd694; border-color: #8fd694; }
+    [data-bs-theme="dark"] .ann-actions .btn:hover { background: #2f343c; }
+    .ann-card { border: 1px solid var(--border-color); border-radius: 12px; background: var(--surface-color); padding: .9rem 1rem; margin-bottom: .75rem; }
+    .ann-card dl { display: grid; grid-template-columns: 6.2rem 1fr; gap: .25rem .75rem; margin: .6rem 0; font-size: .9rem; }
+    .ann-card dt { color: var(--text-light); font-weight: 600; }
+    .ann-card dd { margin: 0; color: var(--text-dark); }
+</style>
+@endpush
+
 @section('content')
+@php
+    $statusFilter = in_array($view, ['archived', 'all'], true) ? $view : 'active';
+    $range = function ($a) {
+        if ($a->published_at && $a->ends_at) {
+            $sameYear = $a->published_at->year === $a->ends_at->year;
+            return $a->published_at->format($sameYear ? 'M j' : 'M j, Y') . ' – ' . $a->ends_at->format('M j, Y');
+        }
+        if ($a->published_at) { return 'From ' . $a->published_at->format('M j, Y'); }
+        if ($a->ends_at) { return 'Until ' . $a->ends_at->format('M j, Y'); }
+        return '—';
+    };
+@endphp
 <div class="container-fluid py-4">
-    <x-page-header icon="fas fa-bullhorn" title="Announcements & Updates" subtitle="Create, publish, and manage announcements sent to Guests, Managers, Receptionists, and the mobile app.">
-        <x-slot:actions>
-            <a href="{{ route('admin.announcements.create') }}" class="btn btn-primary">
-                <i class="fas fa-plus"></i> New Announcement
-            </a>
-        </x-slot:actions>
-    </x-page-header>
+    <x-page-header icon="fas fa-bullhorn" title="Announcements & Updates" subtitle="Create, publish, and manage announcements sent to Guests, Managers, Receptionists, and the mobile app." />
 
     @if (session('success'))
         <div class="alert alert-success alert-dismissible fade show" role="alert">
@@ -21,172 +63,118 @@
     @endif
 
     <x-card bodyClass="card-body" class="mb-4">
-        <form method="GET" action="{{ route('admin.announcements.index') }}"  class="row g-3 align-items-end">
-            <input type="hidden" name="view" value="{{ $view }}">
-            <div class="col-md-5">
-                <label class="form-label small text-muted mb-1">Search</label>
-                <input type="text" name="search" class="form-control"
-                       placeholder="Search by title or content" value="{{ request('search') }}">
+        <form method="GET" action="{{ route('admin.announcements.index') }}" class="row g-3 align-items-end ann-filters">
+            <div class="col-12 col-md-6 col-lg-6">
+                <label class="form-label small text-muted" for="annSearch">Search</label>
+                <input type="text" id="annSearch" name="search" class="form-control" placeholder="Search by title or message" value="{{ request('search') }}">
             </div>
-            <div class="col-md-3">
-                <label class="form-label small text-muted mb-1">Status</label>
-                <select name="status" class="form-control">
-                    <option value="">All Status</option>
-                    <option value="draft" {{ request('status') === 'draft' ? 'selected' : '' }}>Draft</option>
-                    <option value="published" {{ request('status') === 'published' ? 'selected' : '' }}>Published</option>
-                    <option value="archived" {{ request('status') === 'archived' ? 'selected' : '' }}>Unpublished</option>
+            <div class="col-6 col-md-3 col-lg-2">
+                <label class="form-label small text-muted" for="annStatus">Status</label>
+                <select name="status" id="annStatus" class="form-select" onchange="this.form.submit()">
+                    <option value="active" {{ $statusFilter === 'active' ? 'selected' : '' }}>Active</option>
+                    <option value="archived" {{ $statusFilter === 'archived' ? 'selected' : '' }}>Archived</option>
+                    <option value="all" {{ $statusFilter === 'all' ? 'selected' : '' }}>All</option>
                 </select>
             </div>
-            <div class="col-md-2">
-                <label class="form-label small text-muted mb-1">Sort By</label>
-                <select name="sort" class="form-control">
-                    <option value="newest" {{ request('sort', 'newest') === 'newest' ? 'selected' : '' }}>Newest First</option>
-                    <option value="oldest" {{ request('sort') === 'oldest' ? 'selected' : '' }}>Oldest First</option>
-                    <option value="published_desc" {{ request('sort') === 'published_desc' ? 'selected' : '' }}>Publication Date &darr;</option>
-                    <option value="published_asc" {{ request('sort') === 'published_asc' ? 'selected' : '' }}>Publication Date &uarr;</option>
-                    <option value="title_asc" {{ request('sort') === 'title_asc' ? 'selected' : '' }}>Title A-Z</option>
-                    <option value="title_desc" {{ request('sort') === 'title_desc' ? 'selected' : '' }}>Title Z-A</option>
-                </select>
+            <div class="col-6 col-md-3 col-lg-1">
+                <button type="submit" class="btn btn-outline-secondary w-100" aria-label="Search"><i class="fas fa-search"></i></button>
             </div>
-            <div class="col-md-2">
-                <button type="submit" class="btn btn-primary w-100">
-                    <i class="fas fa-search"></i> Apply
-                </button>
+            <div class="col-12 col-lg-3 text-lg-end">
+                <a href="{{ route('admin.announcements.create') }}" class="btn btn-primary d-inline-flex align-items-center justify-content-center w-100"><i class="fas fa-plus me-1"></i> New announcement</a>
             </div>
         </form>
     </x-card>
 
-    <ul class="nav nav-tabs mb-0">
-        <li class="nav-item"><a class="nav-link {{ $view === 'active' ? 'active' : '' }}" href="{{ route('admin.announcements.index') }}">Active</a></li>
-        <li class="nav-item"><a class="nav-link {{ $view === 'archived' ? 'active' : '' }}" href="{{ route('admin.announcements.index', ['view' => 'archived']) }}"><i class="fas fa-box-archive"></i> Archived</a></li>
-    </ul>
+    @if ($announcements->isEmpty())
+        <x-card bodyClass="card-body">
+            <x-empty-state icon="fas fa-bullhorn" message="{{ $statusFilter === 'archived' ? 'No archived announcements.' : 'No announcements found.' }}" />
+            <p class="text-center"><a href="{{ route('admin.announcements.create') }}">Create one now</a></p>
+        </x-card>
+    @else
+        <div class="text-muted small fw-semibold mb-2">{{ $announcements->total() }} {{ \Illuminate\Support\Str::plural('announcement', $announcements->total()) }}</div>
 
-    <x-card bodyClass="table-responsive">
-        <table class="table table-hover align-middle mb-0">
-            <thead>
-                <tr>
-                    <th>Announcement</th>
-                    <th>Target Audience</th>
-                    <th>Published</th>
-                    <th>Status</th>
-                    <th class="text-end">Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-                @forelse($announcements as $announcement)
-                    <tr>
-                        <td style="max-width: 340px;">
-                            <strong class="d-block">{{ $announcement->title }}</strong>
-                            <small class="text-muted">{{ Str::limit($announcement->content, 80) }}</small>
-                        </td>
-                        <td>
-                            @forelse($announcement->target_audience ?? [] as $audience)
-                                <span class="badge announcement-audience-badge">{{ \App\Models\Announcement::audienceLabel($audience) }}</span>
-                            @empty
-                                <span class="badge announcement-audience-badge announcement-audience-badge-all">All Audiences</span>
-                            @endforelse
-                        </td>
-                        <td>{{ $announcement->published_at?->format('M d, Y') ?? '—' }}</td>
-                        <td>
-                            <x-status-badge :status="$announcement->status" domain="announcement_status" />
-                        </td>
-                        <td class="text-end">
-                            <div class="d-inline-flex flex-wrap justify-content-end gap-1">
-                                <button type="button" class="btn btn-outline-primary btn-sm btn-icon" title="View full details"
-                                        data-bs-toggle="modal" data-bs-target="#announcementViewModal{{ $announcement->id }}" aria-label="View">
-                                    <i class="fas fa-eye"></i></button>
-                                <a href="{{ route('admin.announcements.edit', $announcement) }}" class="btn btn-outline-secondary btn-sm btn-icon" title="Edit" aria-label="Edit">
-                                    <i class="fas fa-pen"></i></a>
-                                @if($announcement->status === 'published')
-                                    <form action="{{ route('admin.announcements.unpublish', $announcement) }}" method="POST" class="d-inline"
-                                          data-confirm="It will stop appearing on the public Home page and dashboards." data-confirm-title="Unpublish &quot;{{ $announcement->title }}&quot;?" data-confirm-button="Unpublish" data-confirm-variant="warning">
-                                        @csrf
-                                        @method('PUT')
-                                        <button type="submit" class="btn btn-sm btn-outline-warning btn-icon" title="Unpublish" aria-label="Unpublish">
-                                            <i class="fas fa-eye-slash"></i></button>
-                                    </form>
-                                @else
-                                    <form action="{{ route('admin.announcements.publish', $announcement) }}" method="POST" class="d-inline"
-                                          data-confirm="This will notify the selected target audience." data-confirm-title="Publish &quot;{{ $announcement->title }}&quot; now?" data-confirm-button="Publish Now" data-confirm-variant="primary">
-                                        @csrf
-                                        @method('PUT')
-                                        <button type="submit" class="btn btn-outline-primary btn-sm btn-icon" title="Publish" aria-label="Publish">
-                                            <i class="fas fa-eye"></i></button>
-                                    </form>
-                                @endif
-                                @if($announcement->isArchived())
-                                    <form action="{{ route('admin.announcements.unarchive', $announcement) }}" method="POST" class="d-inline">
-                                        @csrf
-                                        @method('PUT')
-                                        <button type="submit" class="btn btn-outline-success btn-sm btn-icon" title="Restore" aria-label="Restore">
-                                            <i class="fas fa-box-open"></i></button>
-                                    </form>
-                                @else
-                                    <form action="{{ route('admin.announcements.archive', $announcement) }}" method="POST" class="d-inline" data-confirm="It is switched off and moves to the Archived tab, where it can be restored." data-confirm-title="Archive this announcement?" data-confirm-button="Archive" data-confirm-variant="secondary">
-                                        @csrf
-                                        @method('PUT')
-                                        <button type="submit" class="btn btn-outline-secondary btn-sm btn-icon" title="Archive" aria-label="Archive">
-                                            <i class="fas fa-box-archive"></i></button>
-                                    </form>
-                                @endif
-                            </div>
-                        </td>
-                    </tr>
+        {{-- desktop: a table --}}
+        <div class="d-none d-md-block">
+            <x-card bodyClass="table-responsive">
+                <table class="table table-hover align-middle mb-0 ann-table">
+                    <thead>
+                        <tr><th>Title</th><th>Status</th><th>Audience</th><th>Publish &ndash; End</th><th>Last updated</th><th class="text-end">Actions</th></tr>
+                    </thead>
+                    <tbody>
+                        @foreach ($announcements as $a)
+                            @php $st = $a->displayStatus(); @endphp
+                            <tr>
+                                <td style="max-width: 360px;"><span class="ann-title">{{ $a->title }}</span></td>
+                                <td><span class="ann-chip {{ strtolower($st) }}">{{ $st }}</span></td>
+                                <td>{{ $a->audienceShort() }}</td>
+                                <td class="ann-num">{{ $range($a) }}</td>
+                                <td class="ann-num ann-muted">{{ $a->updated_at->format('M j, Y g:i A') }}</td>
+                                <td class="text-end">@include('admin.announcements.partials.actions', ['a' => $a])</td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </x-card>
+        </div>
 
-                    <div class="modal fade" id="announcementViewModal{{ $announcement->id }}" tabindex="-1" aria-hidden="true">
-                        <div class="modal-dialog modal-dialog-centered modal-lg">
-                            <div class="modal-content">
-                                <div class="modal-header">
-                                    <h5 class="modal-title">{{ $announcement->title }}</h5>
-                                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                                </div>
-                                <div class="modal-body">
-                                    <div class="d-flex flex-wrap gap-2 mb-3">
-                                        <x-status-badge :status="$announcement->status" domain="announcement_status" />
-                                        @forelse($announcement->target_audience ?? [] as $audience)
-                                            <span class="badge announcement-audience-badge">{{ \App\Models\Announcement::audienceLabel($audience) }}</span>
-                                        @empty
-                                            <span class="badge announcement-audience-badge announcement-audience-badge-all">All Audiences</span>
-                                        @endforelse
-                                    </div>
-                                    @if($announcement->first_image_url)
-                                        <img src="{{ $announcement->first_image_url }}" alt="{{ $announcement->title }}" class="img-fluid rounded mb-3">
-                                    @endif
-                                    <p class="mb-3" style="white-space: pre-line;">{{ $announcement->content }}</p>
-                                    <dl class="row small text-muted mb-0">
-                                        <dt class="col-sm-4">Published</dt>
-                                        <dd class="col-sm-8">{{ $announcement->published_at?->format('F d, Y') ?? 'Not yet published' }}</dd>
-                                        <dt class="col-sm-4">Notifications sent</dt>
-                                        <dd class="col-sm-8">{{ $announcement->notified_at?->format('F d, Y g:i A') ?? 'Not yet sent' }}</dd>
-                                        <dt class="col-sm-4">Last updated</dt>
-                                        <dd class="col-sm-8">{{ $announcement->updated_at->format('F d, Y g:i A') }}</dd>
-                                    </dl>
-                                </div>
-                                <div class="modal-footer">
-                                    <a href="{{ route('admin.announcements.edit', $announcement) }}" class="btn btn-outline-secondary">
-                                        <i class="fas fa-pen"></i> Edit
-                                    </a>
-                                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Close</button>
-                                </div>
-                            </div>
-                        </div>
+        {{-- phones: one card per announcement --}}
+        <div class="d-md-none">
+            @foreach ($announcements as $a)
+                @php $st = $a->displayStatus(); @endphp
+                <div class="ann-card">
+                    <div class="d-flex justify-content-between align-items-start gap-2">
+                        <span class="ann-title">{{ $a->title }}</span>
+                        <span class="ann-chip {{ strtolower($st) }}">{{ $st }}</span>
                     </div>
-                @empty
-                    <tr>
-                        <td colspan="5">
-                            <x-empty-state icon="fas fa-bullhorn" message="No announcements found." />
-                            <p class="text-center">
-                                <a href="{{ route('admin.announcements.create') }}">Create one now</a>
-                            </p>
-                        </td>
-                    </tr>
-                @endforelse
-            </tbody>
-        </table>
-    </x-card>
+                    <dl>
+                        <dt>Audience</dt><dd>{{ $a->audienceShort() }}</dd>
+                        <dt>Dates</dt><dd class="ann-num">{{ $range($a) }}</dd>
+                        <dt>Updated</dt><dd class="ann-num">{{ $a->updated_at->format('M j, Y g:i A') }}</dd>
+                    </dl>
+                    @include('admin.announcements.partials.actions', ['a' => $a])
+                </div>
+            @endforeach
+        </div>
+    @endif
 
     <div class="d-flex justify-content-center mt-4">
         <x-pagination :paginator="$announcements" />
     </div>
 </div>
+
+{{-- View: the full message, images and every detail live here, not in the list --}}
+<div class="modal fade" id="annViewModal" tabindex="-1" aria-labelledby="annViewTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content">
+            <div class="modal-header"><h5 class="modal-title" id="annViewTitle"></h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
+            <div class="modal-body">
+                <div class="d-flex flex-wrap gap-2 mb-3" id="annViewChips"></div>
+                <div id="annViewImages" class="mb-3"></div>
+                <p class="mb-3" id="annViewText" style="white-space: pre-line;"></p>
+                <dl class="row small mb-0" id="annViewMeta"></dl>
+            </div>
+            <div class="modal-footer"><a href="#" class="btn btn-outline-secondary" id="annViewEdit"><i class="fas fa-pen"></i> Edit</a><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Close</button></div>
+        </div>
+    </div>
+</div>
 @endsection
+
+@push('scripts')
+<script>
+(function () {
+    var modalEl = document.getElementById('annViewModal'), esc = function (s) { var d = document.createElement('div'); d.textContent = s == null ? '' : s; return d.innerHTML; };
+    document.querySelectorAll('[data-ann-view]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            var a = JSON.parse(btn.getAttribute('data-ann-view'));
+            document.getElementById('annViewTitle').textContent = a.title;
+            document.getElementById('annViewChips').innerHTML = '<span class="ann-chip ' + esc(a.status.toLowerCase()) + '">' + esc(a.status) + '</span><span class="badge text-bg-secondary align-self-center">' + esc(a.audience) + '</span>';
+            document.getElementById('annViewImages').innerHTML = (a.images || []).map(function (u) { return '<img src="' + esc(u) + '" alt="" class="img-fluid rounded mb-2 d-block">'; }).join('');
+            document.getElementById('annViewText').textContent = a.content;
+            document.getElementById('annViewMeta').innerHTML = [['Publish date', a.published], ['End date', a.ends], ['Notifications sent', a.notified], ['Last edited', a.edited], ['Last updated', a.updated]].map(function (r) { return '<dt class="col-sm-4">' + r[0] + '</dt><dd class="col-sm-8">' + esc(r[1]) + '</dd>'; }).join('');
+            document.getElementById('annViewEdit').href = a.edit;
+            bootstrap.Modal.getOrCreateInstance(modalEl).show();
+        });
+    });
+})();
+</script>
+@endpush

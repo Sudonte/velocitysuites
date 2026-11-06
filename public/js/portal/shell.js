@@ -9,6 +9,30 @@
     VS.noteCats = CATS;
     VS.noteCat = function (n) { var c = String(n.category || 'booking').toLowerCase(); return CATS[c] ? c : 'booking'; };
 
+    /**
+     * The guest's notifications as the website shows them: the app's own list (/api/notifications) plus the live announcements as
+     * "System" notifications (/api/guest/system-notices, with their own read state). The one-time announcement rows the server stored when
+     * an announcement first went live are left out here - the live announcement itself replaces them, so nothing shows twice, and an
+     * archived or expired announcement disappears. Resolves { ok, list (newest first), unread, message }.
+     */
+    VS.loadNotes = function (perPage, opts) {
+        return Promise.all([VS.api('/notifications', { query: { per_page: 200 }, quiet401: opts && opts.quiet401 }), VS.api('/guest/system-notices', { quiet401: opts && opts.quiet401 })]).then(function (rs) {
+            if (!rs[0].ok) return { ok: false, message: rs[0].message, list: [], unread: 0 };
+            var rows = rs[0].data.data || [], notices = rs[1].ok ? (rs[1].data.data || []) : null;
+            if (notices) rows = rows.filter(function (n) { return String(n.category || '').toLowerCase() !== 'announcement'; });
+            var list = rows.concat(notices || []).sort(function (a, b) { return new Date(b.created_at) - new Date(a.created_at); });
+            return { ok: true, list: perPage ? list.slice(0, perPage) : list, all: list, unread: list.filter(function (n) { return !n.is_read; }).length };
+        });
+    };
+    /** Read / unread for one notification: a System notification keeps its state in /guest/system-notices, the others in /notifications. */
+    VS.noteMark = function (n, action) {
+        return VS.api(n.announcement_id ? '/guest/system-notices/' + n.announcement_id + '/' + action : '/notifications/' + n.id + '/' + action, { method: 'PUT' });
+    };
+    VS.noteReadAll = function () {
+        return Promise.all([VS.api('/notifications/read-all', { method: 'PUT' }), VS.api('/guest/system-notices/read-all', { method: 'PUT' })]).then(function (rs) { return rs[0]; });
+    };
+    VS.noteWhen = function (n) { return (n.updated ? 'Updated ' : '') + VS.dateTime(n.created_at); };
+
     function target(n) {
         if (n.receipt_number) return { href: '/guest/receipts/' + encodeURIComponent(n.receipt_number), label: 'View receipt' };
         if (n.reference_id && /booking|payment|reservation|amenity|receipt/.test(VS.noteCat(n))) return { href: '/guest/reservations/' + n.reference_id, label: 'View transaction' };
@@ -29,10 +53,10 @@
     VS.openNote = function (n, changed) {
         if (!n) return;
         var t = target(n);
-        var html = '<p>' + VS.esc(n.message).replace(/\n/g, '<br>') + '</p><div class="small text-muted">' + VS.esc(VS.dateTime(n.created_at)) + '</div>';
+        var html = '<p>' + VS.esc(n.message).replace(/\n/g, '<br>') + '</p><div class="small text-muted">' + VS.esc(VS.noteWhen(n)) + '</div>';
         if (!n.is_read) {
             n.is_read = true;
-            VS.api('/notifications/' + n.id + '/read', { method: 'PUT' }).then(function () { refreshCount(); if (changed) changed(); });
+            VS.noteMark(n, 'read').then(function () { refreshCount(); if (changed) changed(); });
             if (changed) changed();
         }
         var wrap = document.createElement('div'); wrap.className = 'modal fade'; wrap.tabIndex = -1;
@@ -45,7 +69,7 @@
         var tg = wrap.querySelector('[data-toggle]');
         tg.onclick = function () {
             var toUnread = n.is_read;
-            VS.api('/notifications/' + n.id + (toUnread ? '/unread' : '/read'), { method: 'PUT' }).then(function (r) {
+            VS.noteMark(n, toUnread ? 'unread' : 'read').then(function (r) {
                 if (r.ok) { n.is_read = !toUnread; tg.textContent = n.is_read ? 'Mark as unread' : 'Mark as read'; refreshCount(); if (changed) changed(); }
             });
         };
@@ -53,10 +77,10 @@
 
     var list = null;
     function refreshCount() {
-        return VS.api('/notifications', { query: { per_page: 6 }, quiet401: true }).then(function (r) {
+        return VS.loadNotes(6, { quiet401: true }).then(function (r) {
             if (!r.ok) return;
-            list = r.data.data || [];
-            setBadge(r.data.unread_count || 0);
+            list = r.list;
+            setBadge(r.unread);
             paint();
         });
     }
@@ -68,7 +92,7 @@
         host.innerHTML = list.length ? list.map(function (n) {
             return '<button type="button" class="vs-bell-item' + (n.is_read ? '' : ' unread') + '" data-id="' + n.id + '">' +
                 '<span class="vs-bell-dot" aria-hidden="true"></span><span class="vs-bell-text"><strong>' + VS.esc(n.title) + '</strong>' + (n.is_read ? '' : '<span class="visually-hidden"> (unread)</span>') +
-                '<span class="vs-bell-msg">' + VS.esc(String(n.message || '').replace(/\s+/g, ' ')) + '</span><span class="vs-bell-time">' + VS.esc(VS.dateTime(n.created_at)) + '</span></span></button>';
+                '<span class="vs-bell-msg">' + VS.esc(String(n.message || '').replace(/\s+/g, ' ')) + '</span><span class="vs-bell-time">' + VS.esc(VS.noteWhen(n)) + '</span></span></button>';
         }).join('') : '<div class="vs-bell-empty">No notifications yet</div>';
         host.querySelectorAll('[data-id]').forEach(function (b) {
             b.onclick = function () {
@@ -85,7 +109,7 @@
         bell.addEventListener('show.bs.dropdown', refreshCount);
         var all = document.getElementById('vsBellReadAll');
         all.addEventListener('click', function () {
-            VS.busy(all, function () { return VS.api('/notifications/read-all', { method: 'PUT' }); }).then(function (r) {
+            VS.busy(all, function () { return VS.noteReadAll(); }).then(function (r) {
                 if (r && r.ok) { (list || []).forEach(function (n) { n.is_read = true; }); setBadge(0); paint(); }
             });
         });

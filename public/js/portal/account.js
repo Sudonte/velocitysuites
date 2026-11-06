@@ -19,6 +19,20 @@
         }
     }
 
+    var ICONS = { booking: 'fa-calendar-check', reservation: 'fa-bookmark', payment: 'fa-credit-card', checkin: 'fa-key', promotion: 'fa-tag', system: 'fa-bullhorn' };
+    var CHIPS = { booking: 'Booking', reservation: 'Reservation', payment: 'Payment', checkin: 'Check-in', promotion: 'Promotions', system: 'System' };
+    function manilaDay(d) { return new Date(d).toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' }); }
+    /** Today / Yesterday / Earlier this week / Older, by the hotel's (Manila) calendar day. */
+    function groupOf(n) {
+        var d = manilaDay(n.created_at), t = manilaDay(new Date()), diff = Math.round((new Date(t) - new Date(d)) / 86400000);
+        return diff <= 0 ? 'Today' : diff === 1 ? 'Yesterday' : diff < 7 ? 'Earlier this week' : 'Older';
+    }
+    function shortTime(n) {
+        var g = groupOf(n), dt = new Date(n.created_at);
+        if (g === 'Today') return dt.toLocaleTimeString('en-US', { timeZone: 'Asia/Manila', hour: 'numeric', minute: '2-digit' });
+        return dt.toLocaleDateString('en-US', { timeZone: 'Asia/Manila', month: 'short', day: 'numeric', year: g === 'Older' ? 'numeric' : undefined });
+    }
+
     Acc.notifications = function (root) {
         var host = root.querySelector('#vsNotes'), form = root.querySelector('#vsNoteFilters'), all = [];
         function labels() {
@@ -31,6 +45,15 @@
             }).join('');
             sel.value = cur;
         }
+        function item(n) {
+            var t = typeOf(n), un = !n.is_read;
+            return '<button type="button" class="vs-nt' + (un ? ' unread' : '') + '" data-id="' + VS.esc(n.id) + '">' +
+                '<span class="vs-nt-ic ' + t + '" aria-hidden="true"><i class="fas ' + (ICONS[t] || 'fa-bell') + '"></i></span>' +
+                '<span class="vs-nt-body"><span class="vs-nt-top"><span class="vs-nt-title">' + VS.esc(n.title) + (un ? '<span class="visually-hidden"> (unread)</span>' : '') + '</span><span class="vs-nt-time">' + VS.esc(shortTime(n)) + '</span></span>' +
+                '<span class="vs-nt-msg">' + VS.esc(String(n.message || '').replace(/\s+/g, ' ')) + '</span>' +
+                '<span class="vs-nt-meta"><span class="vs-chip gray">' + CHIPS[t] + '</span>' + (n.updated ? '<span class="vs-chip wait">Updated</span>' : '') + '</span></span>' +
+                (un ? '<span class="vs-nt-dot" aria-hidden="true"></span>' : '') + '</button>';
+        }
         function paint() {
             var q = form.elements.q.value.trim().toLowerCase().split(/\s+/).filter(Boolean), f = form.elements.filter.value || 'All';
             var list = all.filter(function (n) {
@@ -39,24 +62,30 @@
                 return q.every(function (w) { return hay.indexOf(w) >= 0; });
             });
             var label = FILTERS.filter(function (x) { return x[0] === f; })[0][1];
-            host.innerHTML = list.length ? list.map(function (n) {
-                return '<button type="button" class="vs-card vs-note w-100 text-start ' + (n.is_read ? '' : 'unread') + '" data-id="' + n.id + '"><div class="d-flex justify-content-between gap-2"><span class="fw-bold">' + VS.esc(n.title) + '</span><span class="vs-chip gray">' + VS.esc((FILTERS.filter(function (x) { return x[0] === typeOf(n); })[0] || ['', 'System'])[1].replace('Bookings', 'Booking').replace('Reservations', 'Reservation').replace('Payments', 'Payment')) + '</span></div><div class="text-muted small">' + VS.esc(n.message).slice(0, 140) + '</div><div class="small text-muted mt-1">' + VS.esc(VS.dateTime(n.created_at)) + (n.is_read ? '' : ' · <strong class="text-danger">New</strong>') + '</div></button>';
-            }).join('') : (all.length === 0
+            if (list.length) {
+                var html = '';
+                ['Today', 'Yesterday', 'Earlier this week', 'Older'].forEach(function (g) {
+                    var items = list.filter(function (n) { return groupOf(n) === g; });
+                    if (items.length) html += '<section class="vs-ng" aria-label="' + g + '"><h2 class="vs-ng-h">' + g + '</h2><div class="vs-ng-list">' + items.map(item).join('') + '</div></section>';
+                });
+                host.innerHTML = html;
+            } else host.innerHTML = all.length === 0
                 ? VS.empty('fa-bell', 'No notifications yet', 'You have no notifications at this time. New updates and alerts will appear here.')
                 : f === 'Unread' && !q.length ? VS.empty('fa-bell', 'No unread notifications', 'You\u2019re all caught up.')
                 : q.length ? VS.empty('fa-magnifying-glass', 'Nothing matches', 'Try another word.')
-                : VS.empty('fa-bell', 'No ' + label + ' notifications', 'Nothing in this category yet.'));
-            host.querySelectorAll('[data-id]').forEach(function (b) { b.onclick = function () { open(all.find(function (x) { return x.id == b.dataset.id; })); }; });
+                : VS.empty('fa-bell', 'No ' + label + ' notifications', 'Nothing in this category yet.');
+            host.querySelectorAll('[data-id]').forEach(function (b) { b.onclick = function () { open(all.find(function (x) { return String(x.id) === b.dataset.id; })); }; });
             var u = all.filter(function (n) { return !n.is_read; }).length;
-            root.querySelector('#vsNoteCount').textContent = u ? u + ' unread' : 'All caught up';
+            root.querySelector('#vsNoteCount').textContent = u + ' unread';
+            root.querySelector('#vsReadAll').disabled = u === 0;
             labels();
         }
         function open(n) { VS.openNote(n, paint); }
         function load() {
             host.innerHTML = VS.skeleton(4);
-            VS.api('/notifications', { query: { per_page: 200 } }).then(function (r) {
+            VS.loadNotes(0).then(function (r) {
                 if (!r.ok) { host.innerHTML = VS.errorState(r.message, 'vsNoteRetry'); document.getElementById('vsNoteRetry').onclick = load; return; }
-                all = r.data.data || []; labels(); paint();
+                all = r.list; labels(); paint(); if (VS.setUnread) VS.setUnread(r.unread);
             });
         }
         form.addEventListener('input', VS.debounce(paint, 200)); form.addEventListener('change', paint); form.addEventListener('submit', function (e) { e.preventDefault(); });
@@ -64,7 +93,7 @@
             var btn = e.currentTarget;
             VS.confirm({ title: 'Mark all as read?', message: 'Mark all notifications as read? This can\u2019t be undone.', confirmText: 'Mark all as read' }).then(function (yes) {
                 if (!yes) return;
-                VS.busy(btn, function () { return VS.api('/notifications/read-all', { method: 'PUT' }); }).then(function (r) { if (r && r.ok) { all.forEach(function (n) { n.is_read = true; }); paint(); if (VS.setUnread) VS.setUnread(0); VS.toast('All notifications marked as read', 'success'); } });
+                VS.busy(btn, function () { return VS.noteReadAll(); }).then(function (r) { if (r && r.ok) { all.forEach(function (n) { n.is_read = true; }); paint(); if (VS.setUnread) VS.setUnread(0); VS.toast('All notifications marked as read', 'success'); } });
             });
         };
         load();

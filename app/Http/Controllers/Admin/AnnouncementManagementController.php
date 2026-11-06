@@ -23,8 +23,12 @@ class AnnouncementManagementController extends Controller
     public function index(Request $request): View
     {
         $query = Announcement::query();
-        $view = $request->get('view') === 'archived' ? 'archived' : 'active';
-        $view === 'archived' ? $query->archived() : $query->notArchived();
+        $view = in_array($request->get('status'), ['archived', 'all'], true) ? $request->get('status') : 'active';
+        if ($view === 'archived') {
+            $query->archived();
+        } elseif ($view === 'active') {
+            $query->notArchived();
+        }
 
         if ($request->filled('search')) {
             $search = $request->search;
@@ -32,10 +36,6 @@ class AnnouncementManagementController extends Controller
                 $q->where('title', 'like', "%{$search}%")
                   ->orWhere('content', 'like', "%{$search}%");
             });
-        }
-
-        if ($request->filled('status')) {
-            $query->where('status', $request->status);
         }
 
         match ($request->get('sort', 'newest')) {
@@ -87,7 +87,12 @@ class AnnouncementManagementController extends Controller
             $validated['images'] = $newImages;
         }
 
-        $announcement->update($validated);
+        // an edit of what guests read (title, text or images) makes it an "Updated" System notification again, unread for every guest
+        $announcement->fill($validated);
+        if ($announcement->isDirty(['title', 'content', 'images'])) {
+            $announcement->last_edited_at = now();
+        }
+        $announcement->save();
         $this->notifyIfPublished($announcement->fresh());
 
         Activity::log('Updated announcement', $announcement->title, $announcement);
@@ -136,7 +141,7 @@ class AnnouncementManagementController extends Controller
         $announcement->unarchive();
         \App\Support\Activity::log('Restored announcement', $this->archiveLabel($announcement), $announcement);
 
-        return redirect()->route('admin.announcements.index', ['view' => 'archived'])->with('success', ucfirst('announcement') . ' restored - it is draft until you switch it on.');
+        return redirect()->route('admin.announcements.index', ['status' => 'archived'])->with('success', ucfirst('announcement') . ' restored - it is draft until you switch it on.');
     }
 
     private function archiveLabel(Announcement $announcement): string
@@ -166,11 +171,14 @@ class AnnouncementManagementController extends Controller
 
     private function validated(Request $request): array
     {
+        $endRule = $request->filled('published_at') ? 'nullable|date|after_or_equal:published_at' : 'nullable|date';
+
         return $request->validate([
             'title' => 'required|string|max:255',
             'content' => 'required|string',
             'status' => 'required|in:draft,published,archived',
             'published_at' => 'nullable|date',
+            'ends_at' => $endRule,
             'target_audience' => 'nullable|array',
             'target_audience.*' => 'in:' . implode(',', Announcement::AUDIENCES),
         ]);

@@ -80,6 +80,14 @@
                                 @error('published_at')<div class="invalid-feedback">{{ $message }}</div>@enderror
                             </div>
                         </div>
+                        <div class="col-md-6">
+                            <div class="form-group mb-3">
+                                <label for="ends_at">End Date</label>
+                                <input type="date" class="form-control @error('ends_at') is-invalid @enderror" id="ends_at" name="ends_at" value="{{ old('ends_at', optional($announcement->ends_at)->toDateString()) }}">
+                                <small class="text-muted">Optional. After this date the announcement is Expired and guests no longer see it.</small>
+                                @error('ends_at')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                            </div>
+                        </div>
                     </div>
 
                     <div class="form-group mb-4">
