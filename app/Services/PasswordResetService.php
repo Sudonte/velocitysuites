@@ -99,7 +99,7 @@ class PasswordResetService
      * to avoid account enumeration - see Api\AuthController::forgotPassword())
      * need this to avoid lying about delivery that didn't happen.
      */
-    public function sendOtp(User $user): bool
+    public function sendOtp(User $user, bool $mailAfterResponse = false): bool
     {
         $otp = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
         Cache::forget($this->attemptsKey($user->email)); // a fresh code starts with a fresh attempt budget
@@ -110,16 +110,29 @@ class PasswordResetService
             ['token' => Hash::make($otp), 'created_at' => now()]
         );
 
+        // The code is stored first; the email then leaves either now, or the moment the response has been sent (never through a queue).
+        if ($mailAfterResponse) {
+            app()->terminating(fn () => $this->deliverOtp($user, $otp));
+
+            return true;
+        }
+
+        return $this->deliverOtp($user, $otp);
+    }
+
+    /** Sends the code by email right away (SMTP) and logs how long the mail server took to accept it - never the code itself. */
+    private function deliverOtp(User $user, string $otp): bool
+    {
         try {
             $body = "Hi,\n\nYour VelocitySuites password reset code is: {$otp}\n\n"
                 . "Enter this code to set a new password. This code expires in 15 minutes.\n\n"
                 . "If you didn't request this, you can safely ignore this email.\n\n- VelocitySuites";
+            $startedAt = microtime(true);
             Mail::raw($body, function ($message) use ($user, $otp) {
                 $message->to($user->email)->subject("Your VelocitySuites password reset code: {$otp}");
             });
 
-            // Only the fact that a code went out - never the code itself.
-            Log::info('Password reset code sent', ['user_id' => $user->id, 'channel' => 'email', 'at' => now()->toIso8601String()]);
+            Log::info('Password reset code sent', ['user_id' => $user->id, 'channel' => 'email', 'smtp_ms' => (int) round((microtime(true) - $startedAt) * 1000), 'at' => now()->toIso8601String()]);
 
             return true;
         } catch (\Throwable $e) {

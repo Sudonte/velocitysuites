@@ -125,15 +125,17 @@
     R.selection = function (cfg) {
         var saved = R.loadSelection() || {};
         var earliest = VS.addDays(VS.today(), 2);
-        var st = { check_in: saved.check_in && saved.check_in >= earliest ? saved.check_in : earliest, check_out: '', rooms: saved.rooms || {}, types: saved.types || {} };
+        var st = { check_in: saved.check_in && saved.check_in >= earliest ? saved.check_in : earliest, check_out: '', rooms: saved.rooms || {}, types: saved.types || {}, chosen: !!saved.chosen };
         st.check_out = saved.check_out && saved.check_out > st.check_in ? saved.check_out : VS.addDays(st.check_in, 1);
         cfg.ci.min = earliest; cfg.ci.value = st.check_in; cfg.co.min = VS.addDays(st.check_in, 1); cfg.co.value = st.check_out;
         var list = [], bar = null, sel = {};
 
-        function persist(intent) { if (!Object.keys(st.rooms).length && !intent) { R.clearSelection(); return; } var v = { check_in: st.check_in, check_out: st.check_out, rooms: st.rooms, types: st.types }; if (intent) v.intent = intent; R.saveSelection(v); }
+        function persist(intent) { if (!Object.keys(st.rooms).length && !intent) { R.clearSelection(); return; } var v = { check_in: st.check_in, check_out: st.check_out, rooms: st.rooms, types: st.types, chosen: st.chosen }; if (intent) v.intent = intent; R.saveSelection(v); }
         sel.qty = function (id) { return st.rooms[id] || 0; };
         sel.max = function (rt) { return rt.is_fully_booked ? 0 : Math.max(0, rt.available_count || 0); };
         sel.dates = function () { return { check_in: st.check_in, check_out: st.check_out }; };
+        /** The guest picked the dates themselves (the pickers start on the earliest dates): only then are they carried into the booking wizard as chosen. */
+        sel.markChosen = function () { st.chosen = true; persist(); };
 
         sel.sync = function (rooms) {
             list = R.flatUnits(rooms);
@@ -235,6 +237,30 @@
             sel = R.selection({ ci: datesHost.querySelector('[data-ci]'), co: datesHost.querySelector('[data-co]'), signed: !!opts.signed });
             sel.bind(el);
         }
+        var chipsHost = document.getElementById('vsFeaturedChips'), typeFilter = '', last = [];
+        function showCards() {
+            var list = typeFilter ? last.filter(function (rt) { return rt.name === typeFilter; }) : last.slice(0, 6);
+            el.innerHTML = list.length ? list.map(function (rt) { return R.card(rt, sel ? new URLSearchParams(sel.dates()).toString() : '', sel); }).join('')
+                : '<div class="col-12">' + VS.empty('fa-bed', 'No rooms of that type right now', 'Choose another room type.') + '</div>';
+            VS.reveal(el);
+        }
+        /** "All rooms" and one chip per active room type, in the order the rooms are listed; the chosen chip shows only that type. */
+        function paintChips() {
+            if (!chipsHost) return;
+            var names = []; last.forEach(function (rt) { if (names.indexOf(rt.name) < 0) names.push(rt.name); });
+            // the hotel's own order: Standard, Deluxe, Superior, Family Suite, Executive Suite (any other type after them, in list order)
+            var ORDER = ['standard', 'deluxe', 'superior', 'family', 'executive'];
+            function rank(n) { var l = String(n).toLowerCase(); for (var i = 0; i < ORDER.length; i++) if (l.indexOf(ORDER[i]) === 0) return i; return ORDER.length; }
+            names = names.map(function (n, i) { return { n: n, r: rank(n), i: i }; }).sort(function (a, b) { return a.r - b.r || a.i - b.i; }).map(function (x) { return x.n; });
+            if (typeFilter && names.indexOf(typeFilter) < 0) typeFilter = '';
+            chipsHost.innerHTML = [''].concat(names).map(function (n) {
+                var on = n === typeFilter;
+                return '<button type="button" class="vs-fchip' + (on ? ' on' : '') + '" role="radio" aria-checked="' + (on ? 'true' : 'false') + '" data-type="' + VS.esc(n) + '">' + VS.esc(n || 'All rooms') + '</button>';
+            }).join('');
+            chipsHost.querySelectorAll('[data-type]').forEach(function (b) {
+                b.onclick = function () { typeFilter = b.getAttribute('data-type'); paintChips(); showCards(); };
+            });
+        }
         function run() {
             var q = sel ? sel.dates() : {};
             el.innerHTML = '<div class="col-12">' + VS.skeleton(3) + '</div>';
@@ -242,8 +268,7 @@
                 if (res.error) { el.innerHTML = '<div class="col-12">' + VS.errorState(res.error, 'vsFeaturedRetry') + '</div>'; var b = document.getElementById('vsFeaturedRetry'); if (b) b.onclick = run; return; }
                 if (!res.rooms.length) { el.innerHTML = '<div class="col-12">' + VS.empty('fa-bed', 'No rooms right now', 'Please check back later.') + '</div>'; return; }
                 if (sel) sel.sync(res.rooms);
-                el.innerHTML = res.rooms.slice(0, 6).map(function (rt) { return R.card(rt, sel ? new URLSearchParams(sel.dates()).toString() : '', sel); }).join('');
-                VS.reveal(el);
+                last = res.rooms; paintChips(); showCards();
             });
         }
         if (datesHost) R.bindDates(datesHost, sel, run);
@@ -269,7 +294,7 @@
             if (!co.value || co.value <= ci.value) { VS.fieldError(co, 'Stay at least 1 night: check-out must be after check-in.'); return false; }
             nights(); return true;
         }
-        function change(from) { if (check(from)) { if (sel) sel.setDates(ci.value, co.value); run(); } }
+        function change(from) { if (check(from)) { if (sel) { sel.markChosen(); sel.setDates(ci.value, co.value); } run(); } }
         ci.addEventListener('change', function () { change('in'); }); co.addEventListener('change', function () { change('out'); });
         nights();
     };
@@ -393,13 +418,13 @@
                 if (note) note.innerHTML = clamped ? '<div class="alert alert-warning vs-alert mb-3" role="status">Some rooms are not available for these dates, so we lowered your selection.</div>' : '';
             });
         }
-        form.addEventListener('submit', function (e) { e.preventDefault(); run(); });
+        form.addEventListener('submit', function (e) { e.preventDefault(); sel.markChosen(); run(); });
         form.elements.sort.addEventListener('change', function () { state.sort = this.value; paint(cache); });
         form.elements.room_type.addEventListener('change', function () { paint(cache); });
         form.elements.only_available.addEventListener('change', function () { paint(cache); });
         form.querySelector('[data-clear]').addEventListener('click', function () { form.reset(); sel.setDates(VS.addDays(VS.today(), 2), VS.addDays(VS.today(), 3)); ci.value = VS.addDays(VS.today(), 2); co.value = VS.addDays(VS.today(), 3); run(); });
-        ci.addEventListener('change', function () { if (ci.value) { co.min = VS.addDays(ci.value, 1); if (!co.value || co.value <= ci.value) co.value = VS.addDays(ci.value, 1); run(); } });
-        co.addEventListener('change', function () { run(); });
+        ci.addEventListener('change', function () { if (ci.value) { co.min = VS.addDays(ci.value, 1); if (!co.value || co.value <= ci.value) co.value = VS.addDays(ci.value, 1); sel.markChosen(); run(); } });
+        co.addEventListener('change', function () { sel.markChosen(); run(); });
         run();
     };
 })();

@@ -104,6 +104,8 @@
     }
 
     document.addEventListener('DOMContentLoaded', function () {
+        // a one-time message left by the page before ("Password changed. Welcome back!")
+        try { var fl = JSON.parse(sessionStorage.getItem('vs_flash') || 'null'); sessionStorage.removeItem('vs_flash'); if (fl && fl.m) VS.toast(fl.m, fl.t || 'success'); } catch (e) { /* none */ }
         var bell = document.getElementById('vsBell');
         if (!bell) return;
         bell.addEventListener('show.bs.dropdown', refreshCount);

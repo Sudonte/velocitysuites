@@ -156,7 +156,7 @@ class GuestShellTest extends ApiFlowTestCase
         $this->assertStringContainsString("vs_selection", $auth);
         $this->assertStringContainsString("'/new?sel=1'", $auth);
         $wizard = file_get_contents(public_path('js/portal/wizard.js'));
-        foreach (['applySelection', 'roomsFor(sv.check_in, sv.check_out)', 'no longer available', 'clearSelection'] as $needle) {
+        foreach (['applySelection', 'is not free for these dates', 'no longer be booked', 'clearSelection'] as $needle) {
             $this->assertStringContainsString($needle, $wizard, $needle);
         }
     }

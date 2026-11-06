@@ -809,7 +809,10 @@
                 <h2 class="mt-3">Featured <span class="text-brand">rooms</span></h2>
                 <p class="text-muted">The same rooms and availability you see in the Velocity Suites app</p>
             </div>
-            <div class="vs-card" id="vsFeaturedDates"></div>
+            <div class="vs-featbar">
+                <div class="vs-fchips" id="vsFeaturedChips" role="radiogroup" aria-label="Filter rooms by type"></div>
+                <div class="vs-card vs-featdates" id="vsFeaturedDates"></div>
+            </div>
             <div class="row g-4" id="vsFeaturedRooms" aria-live="polite"></div>
             <div class="text-center mt-5">
                 <a href="{{ route('public.rooms.index') }}" class="btn btn-velocity">View All Rooms</a>

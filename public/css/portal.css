@@ -541,3 +541,31 @@ button.vs-mi:hover, button.vs-mi:focus-visible { background: var(--vs-red-soft);
 [data-bs-theme="dark"] .vs-nt-ic.promotion { color: #f2c36b; }
 [data-bs-theme="dark"] .vs-nt-dot { background: #ff6b75; }
 @media (max-width: 575px) { .vs-nt { padding-right: 1.9rem; gap: .65rem; } .vs-nt-ic { width: 2.1rem; height: 2.1rem; } .vs-nt-dot { right: .65rem; } }
+
+/* v1.79 Featured rooms: type chips (scroll sideways on phones) beside the dates on desktop; Selected rooms card and Next reason in the wizard */
+.vs-featbar { display: flex; flex-direction: column; gap: .75rem; margin-bottom: 1.25rem; }
+.vs-featbar .vs-featdates { margin: 0; }
+.vs-fchips { display: flex; gap: .5rem; overflow-x: auto; scroll-snap-type: x proximity; padding: .15rem .1rem .4rem; -webkit-overflow-scrolling: touch; scrollbar-width: thin; min-width: 0; }
+.vs-fchip { flex: 0 0 auto; scroll-snap-align: start; border: 1px solid var(--vs-line); background: var(--vs-surface); color: var(--vs-ink); border-radius: 999px; padding: .5rem 1rem; font-weight: 600; font-size: .92rem; white-space: nowrap; min-height: 2.5rem; transition: border-color .15s ease, background .15s ease; }
+.vs-fchip:hover { border-color: var(--vs-red); }
+.vs-fchip:focus-visible { outline: 2px solid var(--vs-red); outline-offset: 2px; }
+.vs-fchip.on { background: var(--vs-red); border-color: var(--vs-red); color: #fff; }
+@media (min-width: 1200px) { .vs-featbar { flex-direction: row; align-items: flex-start; justify-content: space-between; } .vs-featbar .vs-fchips { flex: 1 1 auto; flex-wrap: wrap; overflow: visible; } .vs-featbar .vs-featdates { flex: 0 0 31rem; } }
+[data-bs-theme="dark"] .vs-fchip.on { background: #b3262f; border-color: #b3262f; }
+.vs-selrooms { border: 1px solid var(--vs-line); border-radius: 12px; padding: .75rem .9rem; margin: .5rem 0 1rem; background: var(--vs-red-soft); }
+.vs-selrooms header { display: flex; align-items: center; justify-content: space-between; gap: .75rem; margin-bottom: .35rem; }
+.vs-sr-line { font-weight: 600; color: var(--vs-ink); padding: .1rem 0; overflow-wrap: anywhere; }
+.vs-sr-total { color: var(--vs-muted); font-size: .92rem; margin-top: .35rem; }
+.vs-next-reason[hidden] { display: none; }
+@media (min-width: 1200px) { .vs-featdates .vs-daterow > .col-md-3 { flex: 0 0 auto; width: 50%; } .vs-featdates .vs-daterow > .col-md-6 { flex: 0 0 auto; width: 100%; } }
+
+/* v1.79 forgot password: one centered card, strength bar */
+.vs-forgot { max-width: 460px; }
+.vs-forgot .logo { text-align: center; margin-bottom: 1rem; }
+.vs-strength { display: grid; grid-template-columns: repeat(4, 1fr); gap: .3rem; }
+.vs-strength span { height: .4rem; border-radius: 999px; background: var(--vs-line, #e7e7ea); }
+.vs-strength span.on.s1 { background: #c62828; } .vs-strength span.on.s2 { background: #b26a00; } .vs-strength span.on.s3 { background: #2e7d32; } .vs-strength span.on.s4 { background: #1b5e20; }
+#fStrengthLbl { color: var(--vs-muted, #5f6368); min-height: 1.2rem; }
+.vs-forgot .vs-otp { justify-content: center; }
+/* a disabled primary button stays readable (Next waiting for the dates, Save waiting for a valid password) */
+.btn-velocity:disabled, .btn-velocity.disabled { opacity: 1; background: #6b6f76; border-color: #6b6f76; color: #fff; cursor: not-allowed; }

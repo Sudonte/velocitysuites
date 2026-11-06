@@ -204,15 +204,19 @@
 
     A.forgot = function (root) {
         var host = $('#vsForgot', root), email = VS.qs('email') || '', state = { email: email, otp: '' };
-        var stepNo = 1;
+        var SENT = 'If an account exists for that email, we\u2019ve sent a 6-digit code.';
 
-        function head(t, s) { return '<h1 class="h4 fw-bold mb-1">' + t + '</h1><p class="text-muted">' + s + '</p><div id="vsFAlert"></div>'; }
+        /** Every step: its title, one line under it and the (empty) alert area; the logo header is on the page itself. */
+        function head(t, s) { return '<h1 class="h4 fw-bold text-center mb-1">' + t + '</h1>' + (s ? '<p class="text-muted text-center mb-3">' + s + '</p>' : '') + '<div id="vsFAlert" aria-live="polite"></div>'; }
+        function dots(n) { var el = $('#vsFStep', root); if (el) el.textContent = 'Step ' + n + ' of 3'; }
 
         function stepEmail() {
+            dots(1);
             host.innerHTML = (VS.qs('from') === 'signin' ? '<div class="alert alert-warning vs-alert">Sign-in did not work three times. Reset your password to get back in.</div>' : '') +
-                head('Reset your password', 'Enter your email and we will send you a code.') +
-                '<form id="fEmail" novalidate><label class="form-label fw-semibold" for="fe">Email address</label><input class="form-control mb-3" id="fe" type="email" autocomplete="email" value="' + VS.esc(state.email) + '">' +
-                '<button class="btn btn-velocity w-100" type="submit">Send code</button></form>' +
+                head('Reset your password', '') +
+                '<form id="fEmail" novalidate><label class="form-label fw-semibold" for="fe">Email address</label><input class="form-control" id="fe" type="email" autocomplete="email" aria-describedby="feHelp" value="' + VS.esc(state.email) + '">' +
+                '<div class="form-text mb-3" id="feHelp">Enter the email registered to your Velocity Suites account</div>' +
+                '<button class="btn btn-velocity w-100" type="submit" data-busy-text="Sending">Send code</button></form>' +
                 '<p class="text-center mt-3 mb-0"><a href="/login">Back to sign in</a></p>';
             var f = $('#fEmail', host), inp = $('#fe', host);
             f.addEventListener('submit', function (e) {
@@ -221,24 +225,27 @@
                 state.email = inp.value.trim();
                 VS.busy(f.querySelector('button'), function () { return VS.api('/forgot-password', { method: 'POST', body: { email: state.email }, quiet401: true }); }).then(function (r) {
                     if (!r) return;
-                    if (r.ok || r.status === 429) { if (r.status === 429) VS.toast(r.message, 'warning'); stepCode(); }
+                    // the same answer for every address: registered or not, staff or guest
+                    if (r.ok || r.status === 429) stepCode(r.status === 429 ? 'Please wait a moment before asking for another code. If you already asked, use the code we sent.' : null);
                     else VS.alertBox('vsFAlert', r.message);
                 });
             });
         }
 
-        function stepCode() {
-            host.innerHTML = head('Enter the code', 'We sent a 6-digit code to ' + maskEmail(state.email) + '. It expires in 15 minutes.') +
-                '<div id="vsOtpHost" class="mb-3"></div><button class="btn btn-velocity w-100 mb-2" id="fGo">Continue</button><button class="btn btn-link w-100" id="fResend">Resend code</button>' +
-                '<p class="text-center mb-0"><a href="#" id="fChange">Use a different email</a></p>';
-            var otp = otpBoxes($('#vsOtpHost', host), function (v) { if (v.length === 6) go.click(); });
+        function stepCode(note) {
+            dots(2);
+            host.innerHTML = head('Enter the code', 'We sent a 6-digit code to ' + VS.esc(maskEmail(state.email))) +
+                '<div class="alert alert-info vs-alert" role="status">' + VS.esc(note || SENT) + ' It expires in 15 minutes.</div>' +
+                '<div id="vsOtpHost" class="mb-3"></div><button class="btn btn-velocity w-100 mb-2" id="fGo" data-busy-text="Checking">Continue</button><button class="btn btn-outline-secondary w-100" id="fResend">Resend code</button>' +
+                '<p class="text-center mt-3 mb-0"><a href="#" id="fChange">Change email</a></p>';
+            var otp = otpBoxes($('#vsOtpHost', host), function (v) { VS.clearErrors(host); var al = $('#vsFAlert', host); if (al && v.length < 6) al.innerHTML = ''; if (v.length === 6) go.click(); });
             otp.focus();
             var go = $('#fGo', host), resend = $('#fResend', host);
             cooldown(resend, 30, 'Resend code');
             $('#fChange', host).onclick = function (e) { e.preventDefault(); stepEmail(); };
             resend.onclick = function () {
                 VS.api('/forgot-password', { method: 'POST', body: { email: state.email }, quiet401: true }).then(function (r) {
-                    VS.toast(r.ok ? 'We sent a new code.' : r.message, r.ok ? 'success' : 'warning'); cooldown(resend, 30, 'Resend code');
+                    VS.toast(r.ok ? 'We sent a new code if the account exists.' : r.message, r.ok ? 'success' : 'warning'); cooldown(resend, 30, 'Resend code');
                 });
             };
             go.onclick = function () {
@@ -246,29 +253,50 @@
                 if (v.length !== 6) { VS.alertBox('vsFAlert', 'Enter the 6-digit code.'); return; }
                 VS.busy(go, function () { return VS.api('/verify-reset-otp', { method: 'POST', body: { email: state.email, otp: v }, quiet401: true }); }).then(function (r) {
                     if (!r) return;
-                    if (r.ok) { state.otp = v; stepPassword(); } else { otp.invalid(); VS.alertBox('vsFAlert', r.message || 'Invalid or expired code.'); }
+                    if (r.ok) { state.otp = v; stepPassword(); } else { otp.invalid(); VS.alertBox('vsFAlert', r.message || 'That code is wrong or has expired. Check it or ask for a new one.'); }
                 });
             };
         }
 
+        /** 0-4 for the strength bar: length, a letter and a number are the rule; 12+ characters and a symbol make it stronger. */
+        function strength(v) {
+            if (!v) return 0;
+            var st = pwState(v);
+            if (!(st.len && st.letter && st.num)) return 1;
+            var sc = 2; if (v.length >= 12) sc++; if (/[^A-Za-z0-9]/.test(v)) sc++;
+            return Math.min(4, sc);
+        }
+
         function stepPassword() {
+            dots(3);
             host.innerHTML = head('Create a new password', 'Choose a password you have not used before.') +
                 '<form id="fPw" novalidate><label class="form-label fw-semibold" for="np">New password</label>' +
                 '<div class="input-group mb-1"><input class="form-control" id="np" type="password" autocomplete="new-password"><button type="button" class="btn btn-outline-secondary" data-eye="np" aria-label="Show password"><i class="fas fa-eye"></i></button></div>' +
+                '<div class="vs-strength mb-2" aria-hidden="true"><span></span><span></span><span></span><span></span></div><div class="small fw-semibold mb-2" id="fStrengthLbl" aria-live="polite"></div>' +
                 '<div id="fCheck" class="small mb-3"></div>' +
-                '<label class="form-label fw-semibold" for="cp">Confirm password</label><input class="form-control mb-3" id="cp" type="password" autocomplete="new-password">' +
-                '<button class="btn btn-velocity w-100" type="submit">Change password and sign in</button></form>';
-            var f = $('#fPw', host), np = $('#np', host), cp = $('#cp', host);
+                '<label class="form-label fw-semibold" for="cp">Confirm new password</label><div class="input-group mb-1"><input class="form-control" id="cp" type="password" autocomplete="new-password"><button type="button" class="btn btn-outline-secondary" data-eye="cp" aria-label="Show password"><i class="fas fa-eye"></i></button></div>' +
+                '<div class="small mb-3" id="fMatch" aria-live="polite"></div>' +
+                '<button class="btn btn-velocity w-100" type="submit" id="fSave" data-busy-text="Saving" disabled>Save and sign in</button></form>';
+            var f = $('#fPw', host), np = $('#np', host), cp = $('#cp', host), save = $('#fSave', host), bars = host.querySelectorAll('.vs-strength span'), lbl = $('#fStrengthLbl', host), match = $('#fMatch', host);
             eyeToggle(host); checklist(np, $('#fCheck', host));
+            function update() {
+                var sc = strength(np.value);
+                bars.forEach(function (b, i) { b.className = i < sc ? 'on s' + sc : ''; });
+                lbl.textContent = np.value ? ['', 'Weak', 'Fair', 'Good', 'Strong'][sc] : '';
+                var same = cp.value !== '' && np.value === cp.value;
+                match.innerHTML = cp.value === '' ? '' : same ? '<span class="text-success"><i class="fas fa-circle-check me-1"></i>The passwords match</span>' : '<span class="text-danger"><i class="fas fa-circle-exclamation me-1"></i>The passwords do not match</span>';
+                save.disabled = !(pwOk(np.value) && same);
+            }
+            np.addEventListener('input', update); cp.addEventListener('input', update); update();
             f.addEventListener('submit', function (e) {
                 e.preventDefault(); VS.clearErrors(f);
                 if (!pwOk(np.value)) { VS.fieldError(np.closest('.input-group'), 'Use at least 8 characters with a letter and a number.'); return; }
-                if (np.value !== cp.value) { VS.fieldError(cp, 'The passwords do not match.'); return; }
-                VS.busy(f.querySelector('button[type=submit]'), function () {
+                if (np.value !== cp.value) { VS.fieldError(cp.closest('.input-group'), 'The passwords do not match.'); return; }
+                VS.busy(save, function () {
                     return VS.api('/reset-password', { method: 'POST', quiet401: true, body: { email: state.email, otp: state.otp, password: np.value, password_confirmation: cp.value, device_name: 'Web' } });
                 }).then(function (r) {
                     if (!r) return;
-                    if (r.ok && r.data && r.data.token) { enter(r.data.token, 'vsFAlert'); return; }
+                    if (r.ok && r.data && r.data.token) { try { sessionStorage.setItem('vs_flash', JSON.stringify({ m: 'Password changed. Welcome back!', t: 'success' })); } catch (er) { /* none */ } enter(r.data.token, 'vsFAlert'); return; }
                     if (r.status === 422 && /code/i.test(r.message)) { stepCode(); VS.alertBox('vsFAlert', r.message); return; }
                     VS.alertBox('vsFAlert', r.message || 'We could not change the password.');
                 });

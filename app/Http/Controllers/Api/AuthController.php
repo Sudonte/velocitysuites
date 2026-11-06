@@ -425,7 +425,9 @@ class AuthController extends Controller
         // stays identical either way to avoid leaking whether the email is registered
         // or what role it belongs to.
         if ($user && ! in_array($user->role, ['manager', 'receptionist'], true)) {
-            $this->passwordReset->sendOtp($user);
+            // The code is stored now and the mail goes out the moment the response is sent (no queue, no worker to wait for), so the answer
+            // takes the same short time for a registered and an unknown address - the SMTP round trip must not tell them apart.
+            $this->passwordReset->sendOtp($user, true);
         }
 
         return response()->json(['message' => "If an account exists for that email, we've sent a code."]);

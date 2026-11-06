@@ -95,6 +95,8 @@
         }
         function paintSummary() {
             var types = allTypes(), r = roomsTotal(types), a = amenitiesTotal();
+            // nothing confirmed yet: no total (a zero would read as a price for dates that were not chosen)
+            if (!S.stays.length && S.step === 0) { sum.innerHTML = '<div class="text-muted small">Choose your dates to see the total</div>'; return; }
             sum.innerHTML = '<div class="vs-row"><span>Rooms</span><span>' + VS.money(r) + '</span></div><div class="vs-row"><span>Amenities</span><span>' + VS.money(a) + '</span></div>' +
                 '<div class="vs-row vs-strong"><span>Grand total</span><span class="vs-pay">' + VS.money(r + a) + '</span></div>';
         }
@@ -135,7 +137,7 @@
         function stepStays() {
             var d = S.draft;
             main.innerHTML = '<h2 class="vs-section-title">Dates and rooms</h2><p class="text-muted">Choose your check-in and check-out dates to see available rooms. You can add more than one date range; each one is listed below.</p><div id="vsStepErr"></div>' +
-                '<div id="vsStayList"></div><section class="vs-card" id="vsEditor"></section>' + nav();
+                '<div id="vsStayList"></div><section class="vs-card" id="vsEditor"></section><p class="vs-next-reason small fw-semibold text-muted text-end mb-0 mt-3" id="vsNextReason" role="status" hidden></p>' + nav();
             paintStays(); paintEditor();
             bindNav(function () {
                 var cur = S.draft;
@@ -149,8 +151,10 @@
             var host = main.querySelector('#vsStayList'), types = allTypes();
             var editing = S.draft && S.draft.editing != null ? S.draft.editing : null;
             var head = '<h3 class="h5 fw-bold mb-2" id="vsYourDates">Your dates and rooms</h3>';
+            orderBlocks();
+            if (!S.stays.length && S.draft && S.draft.carried && Object.keys(S.draft.rooms).length) { host.innerHTML = ''; updateNext(); return; } // the Selected rooms card says it
             if (!S.stays.length) {
-                host.innerHTML = '<section class="vs-datelist" aria-labelledby="vsYourDates">' + head + '<div class="vs-datelist-empty"><i class="fas fa-calendar-plus"></i><div><div class="fw-semibold">Nothing chosen yet</div><div class="small text-muted">Pick your check-in and check-out dates below, choose your rooms, then confirm. Each date range appears here as its own card.</div></div></div></section>';
+                host.innerHTML = '<section class="vs-datelist" aria-labelledby="vsYourDates">' + head + '<div class="vs-datelist-empty"><i class="fas fa-calendar-plus"></i><div><div class="fw-semibold">Nothing chosen yet</div><div class="small text-muted">Pick your check-in and check-out dates above, choose your rooms, then confirm. Each date range appears here as its own card.</div></div></div></section>';
                 return;
             }
             host.innerHTML = '<section class="vs-datelist" aria-labelledby="vsYourDates">' + head + '<p class="small text-muted">' + VS.plural(S.stays.length, 'date range') + ' · check everything here before you continue.</p>' + S.stays.map(function (s, i) {
@@ -165,6 +169,7 @@
                     '<div class="d-flex gap-2"><button type="button" class="btn btn-sm btn-outline-velocity" data-edit="' + i + '"' + (on ? ' disabled' : '') + '>Edit</button><button type="button" class="btn btn-sm btn-light" data-remove="' + i + '">Remove</button></div></header>' +
                     lines + '<div class="vs-dl-sub"><span>Subtotal for these dates</span><span class="vs-num fw-bold">' + VS.money(sub) + '</span></div></article>';
             }).join('') + '<div class="vs-dl-total"><span>Total for all dates</span><span class="vs-num">' + VS.money(roomsTotal(types)) + '</span></div></section>';
+            updateNext();
             host.querySelectorAll('[data-edit]').forEach(function (b) { b.onclick = function () {
                 var s = S.stays[+b.dataset.edit]; S.draft = { check_in: s.check_in, check_out: s.check_out, rooms: JSON.parse(JSON.stringify(s.rooms)), editing: +b.dataset.edit }; save(); paintStays(); paintEditor();
                 main.querySelector('#vsEditor').scrollIntoView({ behavior: VS.reducedMotion ? 'auto' : 'smooth' });
@@ -176,13 +181,48 @@
                 });
             }; });
         }
+        /** While the first date range is not confirmed the date step is FIRST on the page; once there is a confirmed range, the list of ranges comes first. */
+        function orderBlocks() {
+            var list = main.querySelector('#vsStayList'), ed = main.querySelector('#vsEditor');
+            if (!list || !ed) return;
+            if (!S.stays.length) main.insertBefore(ed, list); else main.insertBefore(list, ed);
+        }
+        function datesOk(d) { return !!(d.check_in && d.check_out && d.check_out > d.check_in); }
+        /** Next stays off until the dates are confirmed, with the reason in one short line above it. */
+        function updateNext() {
+            var n = main.querySelector('[data-next]'), r = main.querySelector('#vsNextReason');
+            if (!n || !r || S.step !== 0) return;
+            var d = S.draft, pending = Object.keys(d.rooms).some(function (k) { return d.rooms[k] > 0; }), reason = '';
+            if (pending) reason = datesOk(d) ? 'Confirm these dates to continue' : 'Choose your dates first';
+            else if (!S.stays.length) reason = datesOk(d) ? 'Choose at least one room' : 'Choose your dates first';
+            n.disabled = !!reason; r.textContent = reason; r.hidden = !reason;
+        }
+        function rateOf(d, id) { var t = (d.types || {})[id] || allTypes()[id]; return t ? Number(t.rate) : 0; }
+        function nameOf(d, id) { var t = (d.types || {})[id] || allTypes()[id]; return t ? (t.name || unitName(t)) : 'Room'; }
+        /** The rooms the guest arrived with: "Deluxe Room × 2 · ₱1,200.00 per night", no night count and no total until the dates are chosen. */
+        function paintSelectedRooms() {
+            var host = main.querySelector('#vsSelRooms'); if (!host) return;
+            var d = S.draft, ids = Object.keys(d.rooms).filter(function (k) { return d.rooms[k] > 0; });
+            if (S.stays.length || !d.carried || !ids.length) { host.innerHTML = ''; return; }
+            var ok = datesOk(d), n = ok ? nights(d) : 0, count = ids.reduce(function (a, k) { return a + d.rooms[k]; }, 0), total = ids.reduce(function (a, k) { return a + d.rooms[k] * rateOf(d, k) * n; }, 0);
+            host.innerHTML = '<section class="vs-selrooms" aria-labelledby="vsSelRoomsTitle"><header><h3 class="h6 fw-bold mb-0" id="vsSelRoomsTitle">Selected rooms</h3><div class="d-flex gap-2"><button type="button" class="btn btn-sm btn-outline-velocity" data-sr-edit>Edit</button><button type="button" class="btn btn-sm btn-light" data-sr-remove>Remove</button></div></header>' +
+                ids.map(function (k) { return '<div class="vs-sr-line">' + VS.esc(nameOf(d, k)) + ' \u00d7 ' + d.rooms[k] + ' \u00b7 <span class="vs-num">' + VS.money(rateOf(d, k)) + ' per night</span></div>'; }).join('') +
+                '<div class="vs-sr-total vs-num">' + (ok ? VS.esc(VS.plural(count, 'room') + ' \u00d7 ' + VS.plural(n, 'night') + ' = ' + VS.money(total)) : 'Choose your dates to see the total') + '</div></section>';
+            host.querySelector('[data-sr-edit]').onclick = function () { var i = main.querySelector('#wIn'); if (i) { i.scrollIntoView({ block: 'center', behavior: VS.reducedMotion ? 'auto' : 'smooth' }); i.focus(); } };
+            host.querySelector('[data-sr-remove]').onclick = function () {
+                VS.confirm({ title: 'Remove the selected rooms?', message: 'The rooms you selected are removed from this booking.', confirmText: 'Remove', danger: true }).then(function (yes) {
+                    if (!yes) return; d.rooms = {}; d.types = {}; d.carried = false; d.note = ''; window.VSRooms.clearSelection(); save(); paintStays(); paintEditor();
+                });
+            };
+        }
         function reindexAmenities(removed) { var n = {}; Object.keys(S.amenities).forEach(function (k) { k = +k; if (k < removed) n[k] = S.amenities[k]; else if (k > removed) n[k - 1] = S.amenities[k]; }); S.amenities = n; }
 
         function paintEditor() {
             var d = S.draft, host = main.querySelector('#vsEditor');
-            var title = d.editing != null ? 'Edit ' + VS.date(S.stays[d.editing].check_in) + ' → ' + VS.date(S.stays[d.editing].check_out) : (S.stays.length ? 'Add another date range' : 'Choose dates and rooms');
-            host.innerHTML = '<h3 class="h6 fw-bold">' + VS.esc(title) + '</h3><div class="row g-3 mb-2"><div class="col-6"><label class="form-label small fw-semibold" for="wIn">Check-in</label><input type="date" class="form-control" id="wIn" min="' + earliest + '" value="' + VS.esc(d.check_in) + '"></div>' +
-                '<div class="col-6"><label class="form-label small fw-semibold" for="wOut">Check-out</label><input type="date" class="form-control" id="wOut" min="' + VS.addDays(d.check_in || earliest, 1) + '" value="' + VS.esc(d.check_out) + '"></div></div><div id="vsDateErr"></div><div id="vsRoomPick"></div>';
+            var title = d.editing != null ? 'Edit ' + VS.date(S.stays[d.editing].check_in) + ' → ' + VS.date(S.stays[d.editing].check_out) : (S.stays.length ? 'Add another date' : (d.carried ? 'Choose your dates' : 'Choose dates and rooms'));
+            var hint = d.editing == null && !S.stays.length && d.carried && !datesOk(d) ? '<p class="text-muted mb-2">Pick check-in and check-out for the rooms you selected</p>' : '';
+            host.innerHTML = '<h3 class="h6 fw-bold">' + VS.esc(title) + '</h3>' + hint + '<div class="row g-3 mb-2"><div class="col-6"><label class="form-label small fw-semibold" for="wIn">Check-in</label><input type="date" class="form-control" id="wIn" min="' + earliest + '" value="' + VS.esc(d.check_in) + '"></div>' +
+                '<div class="col-6"><label class="form-label small fw-semibold" for="wOut">Check-out</label><input type="date" class="form-control" id="wOut" min="' + VS.addDays(d.check_in || earliest, 1) + '" value="' + VS.esc(d.check_out) + '"></div></div><div id="vsDateErr"></div><div id="vsSelRooms"></div><div id="vsRoomPick"></div>';
             var ci = host.querySelector('#wIn'), co = host.querySelector('#wOut');
             function changed() {
                 VS.clearErrors(host);
@@ -190,21 +230,35 @@
                 d.check_in = ci.value; if (ci.value) { co.min = VS.addDays(ci.value, 1); if (co.value && co.value <= ci.value) co.value = ''; }
                 d.check_out = co.value;
                 if (d.check_in && d.check_out && d.check_out <= d.check_in) { VS.fieldError(co, 'Check-out must be after check-in.'); d.check_out = ''; }
-                d.rooms = {}; save(); paintRooms();
+                // rooms the guest arrived with stay selected (and are re-checked for the new dates); a plain draft starts its room choice again
+                if (d.carried) { d.recheck = true; d.note = ''; } else d.rooms = {};
+                save(); paintSelectedRooms(); paintRooms();
             }
             ci.onchange = changed; co.onchange = changed;
-            paintRooms();
+            paintSelectedRooms(); paintRooms();
         }
 
         function paintRooms() {
             var d = S.draft, host = main.querySelector('#vsRoomPick');
-            if (!d.check_in || !d.check_out) { host.innerHTML = '<p class="text-muted mb-0">Pick both dates to see the rooms.</p>'; return; }
+            if (!d.check_in || !d.check_out) { host.innerHTML = '<p class="text-muted mb-0">Pick both dates to see the rooms.</p>'; updateNext(); return; }
             host.innerHTML = VS.skeleton(3);
             roomsFor(d.check_in, d.check_out).then(function (list) {
                 if (!list) { host.innerHTML = VS.errorState('We could not load the rooms.', 'vsRoomsRetry'); host.querySelector('#vsRoomsRetry').onclick = paintRooms; return; }
                 var others = S.stays.filter(function (s, i) { return i !== d.editing && overlap(s, d); });
                 function usedElsewhere(key) { return others.reduce(function (a, s) { return a + (s.rooms[key] || 0); }, 0); }
                 var units = window.VSRooms.flatUnits(list), keyOf = window.VSRooms.unitKey;
+                if (d.carried && d.recheck) {
+                    // the rooms the guest arrived with, against what is free for these dates: lowered with a note, or dropped with a note
+                    d.recheck = false; var notes = [];
+                    Object.keys(d.rooms).forEach(function (K) {
+                        var t = units.filter(function (x) { return keyOf(x) === K; })[0], want = d.rooms[K], label = t ? (t.option_key ? t.name + ' (other, up to ' + t.capacity + ' guests)' : t.name) : nameOf(d, K);
+                        var free = t ? Math.max(0, (t.is_fully_booked ? 0 : (t.available_count || 0)) - usedElsewhere(K)) : 0;
+                        if (want <= free) return;
+                        if (free > 0) { d.rooms[K] = free; notes.push('Only ' + free + ' of ' + label + ' is free for these dates, so your selection was lowered from ' + want + ' to ' + free + '.'); }
+                        else { delete d.rooms[K]; notes.push(label + ' is not free for these dates, so it was removed from your selection.'); }
+                    });
+                    d.note = notes.join(' '); save(); paintSelectedRooms();
+                }
                 var rows = units.map(function (t) {
                     var K = keyOf(t), free = Math.max(0, (t.is_fully_booked ? 0 : (t.available_count || 0)) - usedElsewhere(K)), qty = d.rooms[K] || 0;
                     var label = t.name + (t.option_key ? ' (other, up to ' + t.capacity + ' guests)' : '');
@@ -215,17 +269,18 @@
                         '<div class="d-flex align-items-center gap-2"><button class="btn btn-sm btn-outline-velocity" data-dec aria-label="Fewer ' + VS.esc(label) + ' rooms"' + (qty ? '' : ' disabled') + '>\u2212</button><span class="vs-num fw-bold" style="min-width:1.5rem;text-align:center">' + qty + '</span><button class="btn btn-sm btn-velocity" data-inc aria-label="More ' + VS.esc(label) + ' rooms"' + (qty >= free ? ' disabled' : '') + '>+</button></div></div>';
                 }).join('');
                 var n = nights(d), preview = units.reduce(function (a, t) { return a + (d.rooms[keyOf(t)] || 0) * Number(t.rate) * n; }, 0);
-                host.innerHTML = rows + '<div class="d-flex justify-content-between align-items-center flex-wrap gap-2"><div class="vs-num fw-bold">' + VS.plural(n, 'night') + ' \u00b7 ' + VS.money(preview) + '</div>' +
-                    '<div class="d-flex gap-2">' + (d.editing != null ? '<button class="btn btn-light" id="wCancelEdit">Cancel edit</button>' : '') + '<button class="btn btn-velocity" id="wConfirm">' + (d.editing != null ? 'Save this stay' : 'Confirm this stay') + '</button></div></div>';
+                host.innerHTML = (d.note ? '<div class="alert alert-warning vs-alert" role="status" id="vsLowerNote">' + VS.esc(d.note) + '</div>' : '') + rows + '<div class="d-flex justify-content-between align-items-center flex-wrap gap-2"><div class="vs-num fw-bold">' + VS.plural(n, 'night') + ' \u00b7 ' + VS.money(preview) + '</div>' +
+                    '<div class="d-flex gap-2">' + (d.editing != null ? '<button class="btn btn-light" id="wCancelEdit">Cancel edit</button>' : '') + '<button class="btn btn-velocity" id="wConfirm">' + (d.editing != null ? 'Save this stay' : 'Confirm these dates') + '</button></div></div>';
                 host.querySelectorAll('[data-type]').forEach(function (row) {
                     var id = row.dataset.type;
                     var t = units.find(function (x) { return keyOf(x) === id; });
                     var free = Math.max(0, (t.is_fully_booked ? 0 : (t.available_count || 0)) - usedElsewhere(id));
-                    row.querySelector('[data-inc]').onclick = function () { d.rooms[id] = Math.min(free, (d.rooms[id] || 0) + 1); save(); paintRooms(); };
-                    row.querySelector('[data-dec]').onclick = function () { d.rooms[id] = Math.max(0, (d.rooms[id] || 0) - 1); if (!d.rooms[id]) delete d.rooms[id]; save(); paintRooms(); };
+                    row.querySelector('[data-inc]').onclick = function () { d.rooms[id] = Math.min(free, (d.rooms[id] || 0) + 1); if (d.carried) { d.types = d.types || {}; d.types[id] = { name: t.name, rate: Number(t.rate) }; } save(); paintSelectedRooms(); paintRooms(); };
+                    row.querySelector('[data-dec]').onclick = function () { d.rooms[id] = Math.max(0, (d.rooms[id] || 0) - 1); if (!d.rooms[id]) delete d.rooms[id]; save(); paintSelectedRooms(); paintRooms(); };
                 });
                 var ce = host.querySelector('#wCancelEdit'); if (ce) ce.onclick = function () { S.draft = { check_in: '', check_out: '', rooms: {}, editing: null }; save(); paintStays(); paintEditor(); };
                 host.querySelector('#wConfirm').onclick = confirmStay;
+                updateNext();
             });
         }
 
@@ -239,7 +294,7 @@
             var stay = { check_in: d.check_in, check_out: d.check_out, rooms: JSON.parse(JSON.stringify(d.rooms)) };
             if (d.editing != null) { S.stays[d.editing] = stay; delete S.amenities[d.editing]; } else S.stays.push(stay);
             S.draft = { check_in: '', check_out: '', rooms: {}, editing: null };
-            VS.toast('Stay added.', 'success'); save(); frame(); paintStays(); paintEditor();
+            VS.toast('Dates confirmed.', 'success'); save(); frame(); paintStays(); paintEditor();
         }
 
         // ================================================= STEP 2 - amenities per room
@@ -537,28 +592,17 @@
         // booking payment page reads this state
         W.draftForPayment = function () { return { fd: payload(), total: roomsTotal(allTypes()) + amenitiesTotal() }; };
 
-        // Availability is checked again here: counts are lowered to what is free now, and the stay is added for the guest to review.
+        // The rooms (and, if the guest chose them there, the dates) picked on the landing page or the Rooms page: they open as the stay being
+        // filled in. Chosen dates are carried over and availability is checked again (a lower count or a dropped room says so inline);
+        // without chosen dates the guest is asked for them first, with the rooms shown as a compact card.
         function applySelection(sv) {
-            var note = '';
-            if (sv.expired) { note = 'Your room selection expired. Choose your dates and rooms again.'; }
-            else if (sv.check_in < earliest || sv.check_out <= sv.check_in) { note = 'Those dates can no longer be booked (the earliest check-in is ' + VS.date(earliest) + '). Choose new dates.'; }
-            if (note) { window.VSRooms.clearSelection(); VS.alertBox('vsStepErr', note, 'warning'); return; }
-            roomsFor(sv.check_in, sv.check_out).then(function (list) {
-                if (!list) { VS.alertBox('vsStepErr', 'We could not check availability. Please choose your rooms again.', 'warning'); return; }
-                var rooms = {}, lowered = false;
-                Object.keys(sv.rooms).forEach(function (id) {
-                    var t = window.VSRooms.flatUnits(list).filter(function (x) { return window.VSRooms.unitKey(x) === String(id); })[0];
-                    var free = t && !t.is_fully_booked ? Math.max(0, t.available_count || 0) : 0, want = sv.rooms[id], got = Math.min(want, free);
-                    if (got < want) lowered = true;
-                    if (got > 0) rooms[id] = got;
-                });
-                window.VSRooms.clearSelection();
-                if (!Object.keys(rooms).length) { VS.alertBox('vsStepErr', 'Those rooms are no longer available for ' + VS.date(sv.check_in) + ' to ' + VS.date(sv.check_out) + '. Choose other dates or rooms.', 'warning'); return; }
-                S.stays.push({ check_in: sv.check_in, check_out: sv.check_out, rooms: rooms });
-                save(); frame(); paintStays(); paintEditor();
-                if (lowered) VS.alertBox('vsStepErr', 'Some rooms were no longer available, so we lowered your selection to what is free now. Review it below.', 'warning');
-                else VS.toast('Your rooms are added. Review them, then continue.', 'success');
-            });
+            if (sv.expired) { window.VSRooms.clearSelection(); VS.alertBox('vsStepErr', 'Your room selection expired. Choose your dates and rooms again.', 'warning'); return; }
+            var chosen = !!sv.chosen && sv.check_in >= earliest && sv.check_out > sv.check_in;
+            window.VSRooms.clearSelection();
+            S.draft = { check_in: chosen ? sv.check_in : '', check_out: chosen ? sv.check_out : '', rooms: JSON.parse(JSON.stringify(sv.rooms || {})), types: JSON.parse(JSON.stringify(sv.types || {})), editing: null, carried: true, recheck: true, note: '' };
+            if (sv.chosen && !chosen) S.draft.note = 'Those dates can no longer be booked (the earliest check-in is ' + VS.date(earliest) + '). Choose new dates.';
+            save(); frame(); paintStays(); paintEditor();
+            if (S.draft.note && !chosen) { VS.alertBox('vsDateErr', S.draft.note, 'warning'); S.draft.note = ''; save(); }
         }
 
         // ---- start: preselect a room from the Room Details link
