@@ -11,6 +11,9 @@
     ]);
     $stillToArrive = $booking->stayList()->filter(fn ($st) => $booking->stateOf($st) === 'upcoming')->count();
     $isLastRoom = $remainingCount === 1 && $stillToArrive === 0;
+    // Only the stays past their own 12 NN: another stay of this booking may still have days to go.
+    $dueStayIds = $booking->dueCheckOutStays()->pluck('id')->all();
+    $earliestExtension = \App\Support\CheckInWindow::date()->addDay()->toDateString();
 @endphp
 <div class="modal-header modal-header-brand">
     <h5 class="modal-title"><i class="fas fa-door-open"></i> Check Out Rooms</h5>
@@ -39,7 +42,7 @@
 
     <p class="text-muted small mb-2">
         <i class="fas fa-circle-info"></i>
-        This booking has {{ $booking->rooms->count() }} rooms{{ $stayGroups->count() > 1 ? ' in ' . $stayGroups->count() . ' stays' : '' }}. Tick the rooms leaving now, or check out all of them -
+        This booking has {{ $booking->rooms->count() }} {{ \Illuminate\Support\Str::plural('room', $booking->rooms->count()) }}{{ $stayGroups->count() > 1 ? ' in ' . $stayGroups->count() . ' stays' : '' }}. Tick the rooms leaving now, or check out all of them -
         each room keeps its own check-out date, and a room that already left is never re-billed.
         The booking closes (and billing opens) once every room of every stay is out.
     </p>
@@ -64,7 +67,7 @@
     <div class="row g-3" id="roomsCardGrid">
         @foreach($stayGroups as $group)
         @if($stayGroups->count() > 1)
-            <div class="col-12"><h6 class="mb-0 mt-2"><i class="fas fa-layer-group"></i> Stay {{ $group['stay']->position }} &middot; {{ $group['stay']->check_in->format('M d') }} &rarr; {{ $group['stay']->check_out->format('M d, Y') }}
+            <div class="col-12"><h6 class="mb-0 mt-2">@if(in_array($group['stay']->id, $dueStayIds, true))<span class="unread-dot" title="Past 12:00 NN check-out"></span>@endif<i class="fas fa-layer-group"></i> Stay {{ $group['stay']->position }} &middot; {{ $group['stay']->check_in->format('M d') }} &rarr; {{ $group['stay']->check_out->format('M d, Y') }}
                 @if($group['stay']->no_show_at) <span class="badge bg-dark">No-show</span> <span class="small text-muted">still charged in full</span>
                 @elseif($group['rooms']->isEmpty()) <span class="badge bg-light text-dark border">Not arrived yet</span> @endif</h6>
                 @if(! $group['stay']->no_show_at && $group['rooms']->isEmpty() && ! $booking->noShowBlockedReason($group['stay']))
@@ -75,8 +78,12 @@
                 @endif
             </div>
         @endif
+        @php $bookedRates = \App\Support\BookedRates::forStay($booking, $group['stay'], $group['rooms'], $firstStayId); @endphp
         @foreach($group['rooms'] as $room)
-            @php $isCheckedOut = (bool) $room->pivot->checked_out_at; @endphp
+            @php
+                $isCheckedOut = (bool) $room->pivot->checked_out_at;
+                $isDue = ! $isCheckedOut && in_array($group['stay']->id, $dueStayIds, true);
+            @endphp
             <div class="col-md-6" data-room-card="{{ $room->id }}">
                 <div class="card h-100 {{ $isCheckedOut ? 'border-secondary' : 'border-primary' }}">
                     <div class="card-body">
@@ -84,6 +91,7 @@
                             @unless($isCheckedOut)
                                 <input type="checkbox" class="form-check-input me-1 room-select" value="{{ $room->id }}" data-room-number="{{ $room->room_number }}" aria-label="Select Room {{ $room->room_number }}">
                             @endunless
+                            @if($isDue)<span class="unread-dot" title="Past 12:00 NN check-out"></span>@endif
                             <i class="fas fa-door-closed"></i> Room {{ $room->room_number }}
                         </h6>
                         <p class="text-muted small mb-2">{{ $room->roomType->name ?? '' }}</p>
@@ -94,6 +102,17 @@
                                 &middot; {{ \Illuminate\Support\Carbon::parse($room->pivot->checked_out_at)->format('M d, Y g:i A') }}
                             </span>
                         @else
+                            @if($isDue)
+                                <p class="small text-danger mb-2"><i class="fas fa-clock"></i> Check-out was due at 12:00 NN on {{ $group['stay']->check_out->format('M j, Y') }}. Extend the stay or check the guest out.</p>
+                                <label class="form-label small mb-1" for="extendDate{{ $room->id }}">Extend until</label>
+                                <div class="input-group input-group-sm mb-2">
+                                    <input type="date" class="form-control extend-date" id="extendDate{{ $room->id }}" min="{{ $earliestExtension }}" value="{{ $earliestExtension }}">
+                                    <button type="button" class="btn btn-outline-primary btn-extend-room" data-room-id="{{ $room->id }}" data-room-number="{{ $room->room_number }}"
+                                            data-due="{{ $group['stay']->check_out->format('Y-m-d') }}" data-rate="{{ (float) ($bookedRates[$room->id] ?? $room->room_rate) }}">
+                                        <i class="fas fa-calendar-plus"></i> Extend Stay
+                                    </button>
+                                </div>
+                            @endif
                             @if($isLastRoom)
                                 <span class="badge bg-warning text-dark mb-2 d-block">
                                     <i class="fas fa-triangle-exclamation"></i>

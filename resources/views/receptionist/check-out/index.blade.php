@@ -71,8 +71,9 @@
                 </thead>
                 <tbody id="checkOutTableBody" data-live-sync="checkout-rows">
                     @forelse($bookings as $booking)
+                        @php $dueStays = $tab === 'expected' ? $booking->dueCheckOutStays() : collect(); @endphp
                         <tr data-booking-id="{{ $booking->id }}">
-                            <td>@unless($booking->viewed_at)<span class="unread-dot" title="New"></span>@endunless{{ $booking->guest_display_name }}</td>
+                            <td>@if($dueStays->isNotEmpty())<span class="unread-dot" title="Past 12:00 NN check-out"></span>@elseif(! $booking->viewed_at)<span class="unread-dot" title="New"></span>@endif{{ $booking->guest_display_name }}</td>
                             <td>
                                 {{-- Each room's OWN type, not the booking's single legacy
                                      room_type_id - a Standard + Superior multi-room booking
@@ -85,8 +86,10 @@
                                 @endif
                             </td>
                             <td>
-                                {{ $booking->check_out->format('M d, Y') }}
-                                @if($tab === 'expected' && $booking->check_out->isAfter(today()))
+                                {{ $dueStays->isNotEmpty() ? $dueStays->first()->check_out->format('M d, Y') : $booking->check_out->format('M d, Y') }}
+                                @if($dueStays->isNotEmpty())
+                                    <span class="badge bg-danger" title="Extend the stay or check the guest out">Past 12 NN</span>
+                                @elseif($tab === 'expected' && $booking->check_out->isAfter(today()))
                                     <span class="badge bg-info" title="Departing before the scheduled date">Early</span>
                                 @endif
                             </td>
@@ -107,14 +110,14 @@
                             </td>
                             @if($tab === 'expected')
                                 <td>
-                                    @if($booking->rooms->count() > 1 || $booking->stayCount() > 1)
+                                    @if($booking->rooms->count() > 1 || $booking->stayCount() > 1 || $dueStays->isNotEmpty())
                                         {{-- Multi-room: each room checks out independently -
                                              see the Rooms Panel modal below. Billing only
                                              starts once every room in this booking has
                                              checked out. --}}
                                         <button type="button" class="btn btn-sm btn-outline-primary btn-view-rooms"
                                             data-booking-id="{{ $booking->id }}">
-                                            <i class="fas fa-eye"></i> View Rooms
+                                            <i class="fas fa-eye"></i> {{ $dueStays->isNotEmpty() ? 'Extend or Check Out' : 'View Rooms' }}
                                         </button>
                                     @else
                                         <button type="button" class="btn btn-sm btn-primary btn-start-checkout"
@@ -241,6 +244,7 @@ document.addEventListener('DOMContentLoaded', function () {
         rooms: @json(route('receptionist.check-out.rooms', ['booking' => '__ID__'])),
         roomCheckout: @json(route('receptionist.check-out.rooms.checkout', ['booking' => '__BOOKING__', 'room' => '__ROOM__'])),
         roomsCheckout: @json(route('receptionist.check-out.rooms.checkout-many', ['booking' => '__ID__'])),
+        roomExtend: @json(route('receptionist.check-out.rooms.extend', ['booking' => '__BOOKING__', 'room' => '__ROOM__'])),
     };
 
     function buildUrl(template, id) {
@@ -441,6 +445,43 @@ document.addEventListener('DOMContentLoaded', function () {
             } else {
                 window.showNotice({ variant: 'danger', message: err.message });
             }
+            btn.disabled = false;
+        }
+    });
+
+    // ---- Rooms Panel: extend a room that is past its 12 NN check-out ----
+    roomsPanelContent.addEventListener('click', async function (e) {
+        const btn = e.target.closest('.btn-extend-room');
+        if (!btn) return;
+        const card = btn.closest('[data-room-card]');
+        const newDate = card.querySelector('.extend-date').value;
+        const errorBox = roomsPanelContent.querySelector('#roomsErrorAlert');
+        const showMessage = (box, kind, text) => {
+            box.className = 'alert alert-' + kind;
+            box.textContent = text;
+        };
+        if (!newDate) {
+            showMessage(errorBox, 'danger', 'Choose the new check-out date for Room ' + btn.dataset.roomNumber + '.');
+            return;
+        }
+        const nights = Math.round((new Date(newDate) - new Date(btn.dataset.due)) / 86400000);
+        const added = (parseFloat(btn.dataset.rate) * nights).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        const proceed = await window.confirmAction({
+            title: 'Extend Room ' + btn.dataset.roomNumber + '?',
+            message: 'The new check-out is ' + new Date(newDate + 'T00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) + ' at 12:00 NN: ' + nights + ' more night(s), \u20B1' + added + ' added to the bill.',
+            button: 'Extend Stay',
+            variant: 'primary',
+        }, btn);
+        if (!proceed) return;
+
+        btn.disabled = true;
+        try {
+            const url = urls.roomExtend.replace('__BOOKING__', activeBookingId).replace('__ROOM__', btn.dataset.roomId);
+            const data = await fetchJson(url, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ check_out: newDate }) });
+            roomsPanelContent.innerHTML = data.html;
+            showMessage(roomsPanelContent.querySelector('#roomsErrorAlert'), 'success', data.message);
+        } catch (err) {
+            showMessage(errorBox, 'danger', err.message);
             btn.disabled = false;
         }
     });

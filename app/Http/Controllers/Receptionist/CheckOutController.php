@@ -54,6 +54,11 @@ class CheckOutController extends Controller
                 ->orWhereRaw('(SELECT COUNT(*) FROM stays WHERE stays.booking_id = bookings.id) <= 1')
                 ->orWhereExists(fn ($s) => $s->select(\DB::raw(1))->from('booking_rooms')->whereColumn('booking_rooms.booking_id', 'bookings.id')->whereNull('booking_rooms.checked_out_at'))))
             ->when($tab === 'checked_out', fn ($q) => $this->filterCheckedOut($q, $filters))
+            // Past 12 NN first: those need the desk to extend the stay or check the guest out.
+            ->when($tab === 'expected', fn ($q) => $q->orderByRaw(
+                'EXISTS (SELECT 1 FROM stays WHERE stays.booking_id = bookings.id AND stays.checked_in_at IS NOT NULL AND stays.checked_out_at IS NULL AND stays.no_show_at IS NULL AND stays.check_out < ?) DESC',
+                [\App\Support\HotelClock::lastDueCheckOutDay()->addDay()->toDateString()]
+            ))
             ->orderByRaw('viewed_at IS NULL DESC')
             ->orderBy('check_out', $tab === 'expected' ? 'asc' : 'desc')
             ->simplePaginate(15)
@@ -257,6 +262,40 @@ class CheckOutController extends Controller
                 ? "Room {$room->room_number} checked out. {$remaining} room(s) still checked in."
                 : "Room {$room->room_number} checked out. That stay is done; the next stay has not arrived yet.",
             'html' => view('receptionist.check-out.partials.rooms-panel', compact('booking'))->render(),
+        ]);
+    }
+
+    /**
+     * Extend one room that is past its 12 NN check-out to a new check-out date, if a room of its kind is free on every added night
+     * (App\Services\StayExtensionService). The added nights go on the bill at the price booked.
+     */
+    public function extendRoom(Request $request, Booking $booking, Room $room, \App\Services\StayExtensionService $extensions)
+    {
+        $validated = $request->validate(['check_out' => 'required|date_format:Y-m-d']);
+
+        $result = $extensions->extend($booking, $room, $validated['check_out']);
+        if (isset($result['error'])) {
+            return response()->json(['message' => $result['error']], 422);
+        }
+
+        $until = $result['stay']->check_out->format('M j, Y');
+        Activity::log('Extended stay', "Booking #{$booking->id} - Room {$room->room_number} until {$until}", $booking);
+        if ($guest = $booking->account_guest?->user) {
+            $this->notificationService->toUser(
+                $guest,
+                'Stay Extended',
+                "Your stay in Room {$room->room_number} (Booking #{$booking->id}) was extended. Your new check-out is on {$until} at 12:00 NN.",
+                'booking',
+                $booking->reservation_id ?? $booking->id
+            );
+        }
+
+        $fresh = $booking->fresh(['rooms.roomType', 'stays']);
+
+        return response()->json([
+            'final' => false,
+            'message' => "Room {$room->room_number} now checks out on {$until}.",
+            'html' => view('receptionist.check-out.partials.rooms-panel', ['booking' => $fresh, 'pendingAmenityCount' => $fresh->pendingAmenityRequestCount()])->render(),
         ]);
     }
 

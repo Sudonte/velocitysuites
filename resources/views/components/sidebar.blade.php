@@ -442,18 +442,20 @@
                 // per-user - viewed_at is a shared flag any receptionist can
                 // clear) so every page navigation doesn't pay for two more
                 // queries; a short TTL is fine for a "something new" dot.
+                // The 12 NN check-out and 2 PM check-in alerts go out from here too, so they work without cron (at most once a minute).
+                \App\Services\StayAlerts::sweepThrottled();
                 $sidebarHasNewCheckIns = \Illuminate\Support\Facades\Cache::remember(
                     'sidebar:has_new_checkins', now()->addSeconds(20),
                     fn () => \App\Models\Booking::where('booking_status', \App\Models\Booking::STATUS_ACTIVE)
                         ->whereNotNull('verified_at')
                         ->whereNull('viewed_at')
-                        ->exists()
+                        ->exists() || \App\Models\Stay::checkInDue()->exists()
                 );
                 $sidebarHasNewCheckOuts = \Illuminate\Support\Facades\Cache::remember(
                     'sidebar:has_new_checkouts', now()->addSeconds(20),
                     fn () => \App\Models\Booking::where('booking_status', \App\Models\Booking::STATUS_CHECKED_IN)
                         ->whereNull('viewed_at')
-                        ->exists()
+                        ->exists() || \App\Models\Stay::checkOutDue()->exists()
                 );
             @endphp
             <ul class="nav flex-column">

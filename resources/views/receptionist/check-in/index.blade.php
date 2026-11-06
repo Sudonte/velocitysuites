@@ -121,7 +121,8 @@
                 @else
                     @forelse($bookings as $booking)
                         <tr>
-                            <td>@unless($booking->viewed_at)<span class="unread-dot" title="New"></span>@endunless{{ $booking->guest_display_name }}</td>
+                            @php $dueIn = $booking->dueCheckInStays(); @endphp
+                            <td>@if($dueIn->isNotEmpty())<span class="unread-dot" title="Past 2:00 PM check-in"></span>@elseif(! $booking->viewed_at)<span class="unread-dot" title="New"></span>@endif{{ $booking->guest_display_name }}@if($dueIn->isNotEmpty()) <span class="badge bg-danger" title="The guest can check in now">Past 2 PM</span>@endif</td>
                             <td>
                                 {{-- Full multi-room-type breakdown (room_lines) when this
                                      booking has one, not just the single legacy room_type_id -

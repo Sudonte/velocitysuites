@@ -109,8 +109,12 @@ class TransactionTimeline
             if ($booking->hasSeveralStays()) {
                 // Several stays: each one's own arrival and departure, in the order they happened.
                 $moments = [];
+                $arrivals = [];
                 foreach ($booking->stayList() as $stay) {
-                    if ($stay->checked_in_at) {
+                    // a room extended on its own became a stay of its own, with the same arrival: that arrival is one step
+                    $arrival = $stay->check_in->format('Y-m-d') . '|' . $stay->checked_in_at;
+                    if ($stay->checked_in_at && ! isset($arrivals[$arrival])) {
+                        $arrivals[$arrival] = true;
                         $moments[] = [$stay->checked_in_at, self::step('stay_'.$stay->id.'_checked_in', 'Checked in (' . $stay->check_in->format('M j') . ' → ' . $stay->check_out->format('M j') . ')', self::VERIFIED, $stay->checked_in_at)];
                     }
                     if ($stay->no_show_at) {

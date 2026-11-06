@@ -292,7 +292,7 @@ final class StayBill
         $paid = $booking->paidTotal();
 
         $breakdown = $settledAtCheckIn
-            ? self::receiptBreakdown($billing, $snapshot, $discount, $discountName, $roomAtCheckIn, $amenityAtCheckIn, $discountAtCheckIn, $promoAtCheckIn, $promoName, $roomCharge, $amenityCharge, $amenityLines, $guestFee, $extraCharges, $extraChargesTotal, $discountAmount, $total, $paid)
+            ? self::receiptBreakdown($billing, $snapshot, $discount, $discountName, $roomAtCheckIn, $amenityAtCheckIn, $discountAtCheckIn, $promoAtCheckIn, $promoName, $roomCharge, $amenityCharge, $amenityLines, $guestFee, $extraCharges, $extraChargesTotal, $discountAmount, $total, $paid, $stayList->contains(fn ($st) => $st->extended_at !== null) ? 'Extended stay' : 'Adjustment')
             : null;
 
         // The same figures stay by stay (the discount is the transaction's: one ID, one discount, taken off the whole bill).
@@ -376,7 +376,7 @@ final class StayBill
     private static function receiptBreakdown(
         Billing $billing, array $snapshot, ?Discount $discount, ?string $discountName, float $roomAtCheckIn, float $amenityAtCheckIn, float $discountAtCheckIn,
         float $promoAtCheckIn, ?string $promoName, float $roomCharge, float $amenityCharge, array $amenityLines, float $guestFee, array $extraCharges, float $extraChargesTotal,
-        $discountAmount, float $total, float $paid,
+        $discountAmount, float $total, float $paid, string $roomChangeName = 'Adjustment',
     ): array {
         $checkinSubtotal = round($roomAtCheckIn + $amenityAtCheckIn, 2);
         $checkinTotal = round(max(0.0, $checkinSubtotal - $promoAtCheckIn - $discountAtCheckIn), 2);
@@ -393,7 +393,7 @@ final class StayBill
         $legacy = round(($roomCharge - $roomAtCheckIn) + $guestFee, 2);
         $chargeLines = array_map(fn ($c) => ['name' => $c['description'], 'quantity' => 1, 'unit_price' => $c['amount'], 'subtotal' => $c['amount']], $extraCharges);
         if (abs($legacy) >= 0.005) {
-            $chargeLines[] = ['name' => 'Adjustment', 'quantity' => 1, 'unit_price' => $legacy, 'subtotal' => $legacy];
+            $chargeLines[] = ['name' => $roomChangeName, 'quantity' => 1, 'unit_price' => $legacy, 'subtotal' => $legacy];
         }
         $chargesTotal = round($extraChargesTotal + (abs($legacy) >= 0.005 ? $legacy : 0.0), 2);
         $afterSubtotal = round($newAmenitiesTotal - $discountOnAdded + $chargesTotal, 2);

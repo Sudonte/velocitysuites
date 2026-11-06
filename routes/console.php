@@ -39,3 +39,7 @@ Schedule::command('catalog:refresh-dates')->dailyAt('00:10');
 // expiry command above) - a missed reminder just means the guest sees one
 // later or not at all before their deadline, not an incorrect state.
 Schedule::command('reservations:send-payment-reminders')->hourly();
+
+// Every five minutes so the 12 NN check-out and 2 PM check-in alerts reach the desk on time. Same cron-setup caveat as above; the same sweep
+// also runs from the receptionist's sidebar (StayAlerts::sweepThrottled()), so the alerts still arrive before hPanel cron is configured.
+Schedule::command('stays:send-due-alerts')->everyFiveMinutes();

@@ -27,7 +27,35 @@ class Stay extends Model
         'checked_in_at' => 'datetime',
         'checked_out_at' => 'datetime',
         'no_show_at' => 'datetime',
+        'checkin_alerted_at' => 'datetime',
+        'checkout_alerted_at' => 'datetime',
+        'extended_at' => 'datetime',
     ];
+
+    /** Checked in, a room still in the house, and past 12 NN on its check-out day. */
+    public function scopeCheckOutDue($query)
+    {
+        $beforeDay = \App\Support\HotelClock::lastDueCheckOutDay()->addDay()->toDateString();
+
+        return $query->whereNull('stays.checked_out_at')->whereNull('stays.no_show_at')
+            ->where('stays.check_out', '<', $beforeDay)
+            ->whereHas('booking', fn ($b) => $b->where('booking_status', Booking::STATUS_CHECKED_IN))
+            ->where(fn ($q) => $q->whereNotNull('stays.checked_in_at')
+                ->orWhereRaw('(SELECT COUNT(*) FROM stays s2 WHERE s2.booking_id = stays.booking_id) = 1'))
+            ->whereExists(fn ($r) => $r->select(\Illuminate\Support\Facades\DB::raw(1))->from('booking_rooms as br')
+                ->whereColumn('br.booking_id', 'stays.booking_id')->whereNull('br.checked_out_at')
+                ->where(fn ($w) => $w->whereColumn('br.stay_id', 'stays.id')->orWhereNull('br.stay_id')));
+    }
+
+    /** Still to arrive on a booking the front desk has verified, and past 2 PM on its check-in day. */
+    public function scopeCheckInDue($query)
+    {
+        $beforeDay = \App\Support\HotelClock::lastDueCheckInDay()->addDay()->toDateString();
+
+        return $query->whereNull('stays.checked_in_at')->whereNull('stays.checked_out_at')->whereNull('stays.no_show_at')
+            ->where('stays.check_in', '<', $beforeDay)
+            ->whereHas('booking', fn ($b) => $b->awaitingCheckIn()->whereNotNull('verified_at')->whereNull('hidden_at'));
+    }
 
     public function booking()
     {

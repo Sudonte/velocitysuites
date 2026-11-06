@@ -232,6 +232,11 @@ deny-all rule is active).
   one-time promotions and discounts whose end date has passed and moves yearly
   promotions to their next dates. Covered by the existing `schedule:run` cron
   entry - nothing to add.
+- `stays:send-due-alerts` runs every five minutes (added 2026-11-06): tells the
+  receptionists about stays past the 12 NN check-out and the 2 PM check-in, once
+  per stay. Covered by the existing `schedule:run` cron entry - nothing to add.
+  It also runs from the receptionist's sidebar (at most once a minute), so the
+  alerts arrive even if that cron entry is not set up yet.
 - No-shows are marked by hand by receptionists (Bookings > booking > Mark as
   No-Show); nothing marks them automatically.
 

@@ -471,6 +471,23 @@ class Booking extends Model
         app(\App\Services\IncludedAmenityService::class)->grant($this, $stay);
     }
 
+    /** The checked-in stays with a room still in the house that are past 12 NN on their check-out day. */
+    public function dueCheckOutStays(): \Illuminate\Support\Collection
+    {
+        $firstId = $this->stayList()->first()?->id;
+
+        return $this->stayList()->filter(fn (Stay $stay) => $this->stateOf($stay) === Stay::IN_HOUSE
+            && \App\Support\HotelClock::checkOutIsDue($stay->check_out)
+            && $this->rooms->contains(fn ($room) => $room->pivot->checked_out_at === null && ($room->pivot->stay_id ?? $firstId) === $stay->id))->values();
+    }
+
+    /** The stays still to arrive that are past 2 PM on their check-in day. */
+    public function dueCheckInStays(): \Illuminate\Support\Collection
+    {
+        return $this->stayList()->filter(fn (Stay $stay) => $this->stateOf($stay) === Stay::UPCOMING
+            && \App\Support\HotelClock::checkInIsDue($stay->check_in))->values();
+    }
+
     /**
      * After rooms leave: a stay whose rooms have ALL been checked out is itself checked out (its moment is the last room's). Returns true
      * when every stay of the booking is now done - the moment the bill is settled and the final receipt is issued.
