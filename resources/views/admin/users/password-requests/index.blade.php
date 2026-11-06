@@ -43,12 +43,13 @@
     <x-card bodyClass="card-body" class="mb-4">
         <form method="GET" action="{{ route('admin.users.password-requests.index') }}" class="row g-3">
             <div class="col-md-4">
-                <select name="status" class="form-control">
-                    <option value="">All Statuses</option>
-                    <option value="pending" {{ request('status') === 'pending' ? 'selected' : '' }}>Pending</option>
-                    <option value="approved" {{ request('status') === 'approved' ? 'selected' : '' }}>Approved</option>
-                    <option value="rejected" {{ request('status') === 'rejected' ? 'selected' : '' }}>Rejected</option>
-                    <option value="completed" {{ request('status') === 'completed' ? 'selected' : '' }}>Completed</option>
+                <select name="status" class="form-control" aria-label="Status">
+                    <option value="pending" {{ $status === 'pending' ? 'selected' : '' }}>Pending{{ $pendingCount ? " ({$pendingCount})" : '' }}</option>
+                    <option value="" {{ $status === '' ? 'selected' : '' }}>All statuses</option>
+                    <option value="approved" {{ $status === 'approved' ? 'selected' : '' }}>Approved</option>
+                    <option value="rejected" {{ $status === 'rejected' ? 'selected' : '' }}>Rejected</option>
+                    <option value="completed" {{ $status === 'completed' ? 'selected' : '' }}>Completed</option>
+                    <option value="expired" {{ $status === 'expired' ? 'selected' : '' }}>Expired</option>
                 </select>
             </div>
             <div class="col-md-2">
@@ -143,7 +144,7 @@
                 @empty
                     <tr>
                         <td colspan="7">
-                            <x-empty-state icon="fas fa-key" message="No password reset requests." />
+                            <x-empty-state icon="fas fa-key" message="{{ $status === 'pending' ? 'No pending password reset requests.' : 'No password reset requests.' }}" />
                         </td>
                     </tr>
                 @endforelse

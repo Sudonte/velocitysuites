@@ -59,7 +59,7 @@ class ForgotPasswordController extends Controller
     {
         $request->validate(['email' => 'required|email']);
 
-        $user = User::where('email', $request->email)->first();
+        $user = User::whereRaw('LOWER(email) = ?', [strtolower(trim((string) $request->email))])->first();
 
         // The same answer whether or not the address has an account (the form must not reveal which emails are registered).
         if (! $user) {
@@ -93,29 +93,61 @@ class ForgotPasswordController extends Controller
     {
         $request->validate(['email' => 'required|email']);
 
-        $user = User::where('email', $request->email)->first();
+        // case and surrounding spaces never matter ("Espedion.Manager@Hotel.com " is the same account)
+        $email = strtolower(trim((string) $request->input('email')));
+        $user = User::whereRaw('LOWER(email) = ?', [$email])->first();
         if ($user && in_array($user->role, ['manager', 'receptionist'], true)) {
-            $this->handleStaffRequest($user);
+            try {
+                $this->handleStaffRequest($user);
+            } catch (\Throwable $e) {
+                // the person still gets the generic message (nothing about the account is revealed), but the failure is on record
+                Log::error("Staff password reset request for user #{$user->id} could not be saved: " . $e->getMessage());
+            }
         }
 
         return redirect()->route('password.request.staff')->with('status', self::STAFF_MESSAGE);
     }
 
+    /**
+     * Records the request so the System Administrator sees it: one open (pending) request per account - asking again only refreshes
+     * its requested time - and an earlier approved request that was never used, or whose temporary password has run out, is closed as
+     * "expired" so it can never hide a new one.
+     */
     private function handleStaffRequest(User $user): void
     {
-        $existing = StaffPasswordResetRequest::where('user_id', $user->id)
-            ->whereIn('status', ['pending', 'approved'])
-            ->latest()
-            ->first();
+        $created = null;
+        \Illuminate\Support\Facades\DB::transaction(function () use ($user, &$created) {
+            // an approved request still waiting for its sign-in stays "approved" only while the temporary password is valid and was not yet used
+            $approved = StaffPasswordResetRequest::where('user_id', $user->id)->where('status', 'approved')->get();
+            foreach ($approved as $old) {
+                $stillGood = $user->must_change_password && ($user->temporary_password_expires_at === null || $user->temporary_password_expires_at->isFuture())
+                    && $old->processed_at !== null && $old->processed_at->gt(now()->subHours(24));
+                if (! $stillGood) {
+                    $old->update(['status' => 'expired']);
+                }
+            }
 
-        if ($existing && ! ($existing->status === 'pending' && $existing->isExpired())) {
+            $pending = StaffPasswordResetRequest::where('user_id', $user->id)->where('status', 'pending')->latest('id')->first();
+            if ($pending) {
+                $pending->forceFill(['created_at' => now()])->save(); // keep ONE pending request and bring it to the top
+                StaffPasswordResetRequest::where('user_id', $user->id)->where('status', 'pending')->where('id', '!=', $pending->id)->update(['status' => 'expired']);
+
+                return;
+            }
+            $stillApproved = StaffPasswordResetRequest::where('user_id', $user->id)->where('status', 'approved')->exists();
+            if ($stillApproved) {
+                return; // an approved request with a live temporary password: the person should sign in with it
+            }
+
+            $created = StaffPasswordResetRequest::create(['user_id' => $user->id, 'status' => 'pending']);
+        });
+
+        if (! $created) {
             return;
         }
 
-        $created = StaffPasswordResetRequest::create(['user_id' => $user->id, 'status' => 'pending']);
         \App\Support\Activity::logFor($user, 'Password reset requested', "{$user->role} asked the System Administrator for a password reset (request #{$created->id})");
-
-        $this->notifications->notifyAdmin('Password Reset Request', "{$user->full_name} ({$user->role}) requested a password reset.", 'account');
+        $this->notifications->notifyAdmin('Password Reset Request', "Password reset request from {$user->full_name} (" . ucfirst($user->role) . ')', 'account', $created->id);
 
         app()->terminating(fn () => $this->emailStaffStatus(
             $user,

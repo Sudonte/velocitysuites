@@ -26,13 +26,17 @@ class PasswordResetRequestController extends Controller
     {
         $query = StaffPasswordResetRequest::with(['user', 'processedBy']);
 
-        if ($request->filled('status')) {
-            $query->where('status', $request->status);
+        // Pending requests are what needs the administrator: they are the default view and always sort to the top
+        $status = $request->has('status') ? (string) $request->get('status') : 'pending';
+        if ($status !== '') {
+            $query->where('status', $status);
         }
+        $query->orderByRaw("CASE WHEN status = 'pending' THEN 0 ELSE 1 END")->orderByDesc('created_at')->orderByDesc('id');
 
-        $requests = $query->latest()->paginate(\App\Support\PerPage::resolve($request))->withQueryString();
+        $requests = $query->paginate(\App\Support\PerPage::resolve($request))->withQueryString();
+        $pendingCount = StaffPasswordResetRequest::where('status', 'pending')->count();
 
-        return view('admin.users.password-requests.index', compact('requests'));
+        return view('admin.users.password-requests.index', compact('requests', 'status', 'pendingCount'));
     }
 
     public function approve(StaffPasswordResetRequest $staffPasswordResetRequest): RedirectResponse

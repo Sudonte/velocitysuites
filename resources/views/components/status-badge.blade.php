@@ -38,7 +38,7 @@ $maps = [
         // 'approved' distinctly not 'success' - the temp password has been
         // assigned but the staff member hasn't actually completed the
         // change yet; 'completed' is the true done state.
-        'pending' => 'warning', 'approved' => 'info', 'rejected' => 'danger', 'completed' => 'success',
+        'pending' => 'warning', 'approved' => 'info', 'rejected' => 'danger', 'completed' => 'success', 'expired' => 'secondary',
     ],
     'active_flag' => [
         // generic active/inactive used by promotions and amenities catalog
