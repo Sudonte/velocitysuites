@@ -202,8 +202,7 @@ class StaffResetAndWebResetRolesTest extends ApiFlowTestCase
 
             $this->assertSame('approved', $req->status);
             $this->assertSame($staff->email, $tp['email']);
-            $this->assertMatchesRegularExpression('/^(?=.*[A-Za-z])(?=.*\d).{12}$/', $tp['password'], 'random, 12 characters, letter and number (the shared rule)');
-            $this->assertNotSame('velocitysuites123', $tp['password'], 'not the shared default');
+            $this->assertSame('velocitysuites123', $tp['password'], 'the hotel temporary password');
             $fresh = $staff->fresh();
             $this->assertTrue($fresh->must_change_password);
             $this->assertEqualsWithDelta(now()->addHours(24)->timestamp, $fresh->temporary_password_expires_at->timestamp, 5);
@@ -232,18 +231,6 @@ class StaffResetAndWebResetRolesTest extends ApiFlowTestCase
             $this->post('/login', ['email' => $staff->email, 'password' => 'Permanent-Pw-9'])->assertRedirect(route("$role.dashboard"));
             $this->post('/logout');
             $this->app['auth']->forgetGuards();
-        }
-    }
-
-    public function test_every_approval_makes_its_own_password(): void
-    {
-        $seen = [];
-        foreach (range(1, 25) as $i) {
-            $seen[] = PasswordResetRequestController::temporaryPassword();
-        }
-        $this->assertCount(25, array_unique($seen));
-        foreach ($seen as $pw) {
-            $this->assertMatchesRegularExpression('/^(?=.*[A-Za-z])(?=.*\d).{12}$/', $pw);
         }
     }
 
@@ -294,7 +281,7 @@ class StaffResetAndWebResetRolesTest extends ApiFlowTestCase
         $req = StaffPasswordResetRequest::first();
         $after = $this->actingAs($admin)->followingRedirects()->put(route('admin.users.password-requests.approve', $req))->getContent();
         $this->assertStringContainsString('tempPasswordCopy', $after);
-        $this->assertStringContainsString('Shown only now', $after);
+        $this->assertStringContainsString('Approved. Temporary password: velocitysuites123 (valid for 24 hours; must be changed at first login).', $after);
         $this->assertStringContainsString('24 hours', $after);
         // gone on the next visit
         $again = $this->actingAs($admin)->get(route('admin.users.password-requests.index'))->getContent();
@@ -308,5 +295,40 @@ class StaffResetAndWebResetRolesTest extends ApiFlowTestCase
             $this->assertStringContainsString($needle, $page, $needle);
         }
         $this->assertStringContainsString("If this is a staff account, your request has been sent to the System Administrator.", $this->post(route('password.request.staff.send'), ['email' => 'nobody@example.test'])->getSession()->get('status'));
+    }
+
+    public function test_the_new_password_can_never_be_the_temporary_one(): void
+    {
+        $staff = $this->make('manager');
+        [, $tp] = $this->approved($staff);
+        $this->post('/login', ['email' => $staff->email, 'password' => $tp['password']])->assertRedirect(route('force-password-change.show'));
+
+        $this->post(route('force-password-change.update'), ['password' => 'velocitysuites123', 'password_confirmation' => 'velocitysuites123'])
+            ->assertSessionHasErrors(['password' => 'Choose a new password that is different from the temporary one.']);
+        $this->assertTrue($staff->fresh()->must_change_password, 'still on the temporary password');
+        $this->post(route('force-password-change.update'), ['password' => 'Different-Pw-9', 'password_confirmation' => 'Different-Pw-9'])->assertRedirect(route('manager.dashboard'));
+    }
+
+    public function test_the_users_list_reset_button_uses_the_same_rule(): void
+    {
+        $admin = $this->make('admin');
+        $desk = $this->make('receptionist');
+        $resp = $this->actingAs($admin)->put(route('admin.users.resetPassword', $desk));
+        $resp->assertRedirect(route('admin.users.index'))
+            ->assertSessionHas('success', 'Approved. Temporary password: velocitysuites123 (valid for 24 hours; must be changed at first login).');
+
+        $fresh = $desk->fresh();
+        $this->assertTrue(Hash::check('velocitysuites123', $fresh->password));
+        $this->assertTrue($fresh->must_change_password);
+        $this->assertEqualsWithDelta(now()->addHours(24)->timestamp, $fresh->temporary_password_expires_at->timestamp, 5);
+
+        $this->app['auth']->forgetGuards();
+        $this->flushSession();
+        $this->post('/login', ['email' => $desk->email, 'password' => 'velocitysuites123'])->assertRedirect(route('force-password-change.show'));
+        $this->post('/logout');
+        $this->app['auth']->forgetGuards();
+        Carbon::setTestNow(now()->addHours(25));
+        $this->post('/login', ['email' => $desk->email, 'password' => 'velocitysuites123'])->assertSessionHas('error');
+        $this->assertGuest();
     }
 }

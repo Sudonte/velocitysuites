@@ -62,9 +62,10 @@
     var pw = document.getElementById('password'), cf = document.getElementById('password_confirmation'), save = document.getElementById('pwSave'), match = document.getElementById('pwMatch');
     function rules(v) { return { len: v.length >= 8, letter: /[A-Za-z]/.test(v), num: /\d/.test(v) }; }
     function update() {
-        var r = rules(pw.value), ok = r.len && r.letter && r.num;
+        var r = rules(pw.value), notTemp = pw.value !== 'velocitysuites123', ok = r.len && r.letter && r.num && notTemp;
         document.querySelectorAll('#pwRules li').forEach(function (li) { var on = r[li.dataset.k]; li.className = on ? 'text-success' : 'text-muted'; li.querySelector('i').className = (on ? 'fas fa-circle-check' : 'far fa-circle') + ' me-1'; });
         var same = cf.value !== '' && pw.value === cf.value;
+        if (!notTemp) { match.innerHTML = '<span class="text-danger">Choose a new password that is different from the temporary one.</span>'; save.disabled = true; return; }
         match.innerHTML = cf.value === '' ? '' : same ? '<span class="text-success">The passwords match</span>' : '<span class="text-danger">The passwords do not match</span>';
         save.disabled = !(ok && same);
     }

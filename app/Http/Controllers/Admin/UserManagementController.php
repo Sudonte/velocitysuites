@@ -216,7 +216,13 @@ class UserManagementController extends Controller
         abort_unless($this->isElevatedStaff($user), 404);
 
         $temporaryPassword = self::DEFAULT_STAFF_PASSWORD;
-        $user->update(['password' => $temporaryPassword, 'must_change_password' => true, 'failed_login_attempts' => 0]);
+        $user->update([
+            'password' => $temporaryPassword,
+            'must_change_password' => true,
+            'temporary_password_expires_at' => now()->addHours(PasswordResetRequestController::TEMPORARY_PASSWORD_HOURS),
+            'failed_login_attempts' => 0,
+            'last_failed_login_at' => null,
+        ]);
 
         // Keep the two reset paths from ever showing contradictory state -
         // this direct button is effectively an approval too, so any request
@@ -231,7 +237,7 @@ class UserManagementController extends Controller
         Activity::log('Reset staff password', $user->full_name, $user);
 
         return redirect()->route('admin.users.index')
-            ->with('success', "Password reset. Default password: {$temporaryPassword} (they'll be asked to set a new one on next login).");
+            ->with('success', "Approved. Temporary password: {$temporaryPassword} (valid for 24 hours; must be changed at first login).");
     }
 
     /**

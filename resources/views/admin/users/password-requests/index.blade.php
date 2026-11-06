@@ -21,7 +21,7 @@
                 <code class="fs-5 px-2 py-1 rounded bg-body-secondary" id="tempPasswordValue" style="user-select: all;">{{ $tp['password'] }}</code>
                 <button type="button" class="btn btn-sm btn-outline-dark" id="tempPasswordCopy"><i class="fas fa-copy"></i> Copy</button>
             </div>
-            <div class="small">Shown only now &ndash; it is not saved or emailed. Give it to {{ $tp['name'] }} in person; it works until <strong>{{ $tp['expires'] }}</strong> (24 hours) and must be changed at first sign-in.</div>
+            <div class="small">Tell {{ $tp['name'] }} to sign in with it. It works until <strong>{{ $tp['expires'] }}</strong> (24 hours) and must be changed at first login.</div>
         </div>
     @endif
 

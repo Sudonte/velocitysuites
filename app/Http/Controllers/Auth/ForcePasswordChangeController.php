@@ -35,7 +35,9 @@ class ForcePasswordChangeController extends Controller
     public function update(Request $request): RedirectResponse
     {
         $validated = $request->validate([
-            'password' => ['required', 'string', PasswordPolicy::rule(), 'confirmed'],
+            'password' => ['required', 'string', PasswordPolicy::rule(), 'confirmed', \Illuminate\Validation\Rule::notIn([\App\Http\Controllers\Admin\UserManagementController::DEFAULT_STAFF_PASSWORD])],
+        ], [
+            'password.not_in' => 'Choose a new password that is different from the temporary one.',
         ]);
 
         $user = auth()->user();

@@ -44,8 +44,8 @@ class PasswordResetRequestController extends Controller
         abort_unless($staffPasswordResetRequest->status === 'pending', 422, 'Only a pending request can be approved.');
 
         $user = $staffPasswordResetRequest->user;
-        // A password made for this one account and this one approval: random, shown once to the administrator, good for 24 hours.
-        $temporaryPassword = self::temporaryPassword();
+        // The hotel's temporary password (the same one a new staff account starts with): good for 24 hours, and the first sign-in must replace it.
+        $temporaryPassword = UserManagementController::DEFAULT_STAFF_PASSWORD;
 
         $user->update([
             'password' => $temporaryPassword,
@@ -75,7 +75,7 @@ class PasswordResetRequestController extends Controller
         );
 
         return redirect()->route('admin.users.password-requests.index')
-            ->with('success', "Request approved for {$user->full_name}.")
+            ->with('success', "Approved. Temporary password: {$temporaryPassword} (valid for 24 hours; must be changed at first login).")
             ->with('temporary_password', [
                 'name' => $user->full_name,
                 'role' => ucfirst($user->role),
@@ -86,19 +86,6 @@ class PasswordResetRequestController extends Controller
     }
 
     public const TEMPORARY_PASSWORD_HOURS = 24;
-
-    /** 12 characters from an alphabet without look-alikes, always with a letter and a number (the shared password rule). */
-    public static function temporaryPassword(): string
-    {
-        $letters = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz';
-        $all = $letters . '23456789';
-        $out = $letters[random_int(0, strlen($letters) - 1)];
-        for ($i = 0; $i < 10; $i++) {
-            $out .= $all[random_int(0, strlen($all) - 1)];
-        }
-
-        return $out . '23456789'[random_int(0, 7)];
-    }
 
     public function reject(Request $request, StaffPasswordResetRequest $staffPasswordResetRequest): RedirectResponse
     {
