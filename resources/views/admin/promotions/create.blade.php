@@ -103,7 +103,7 @@
                     <li class="mb-3">
                         <i class="fas fa-spa text-brand"></i>
                         <strong>Amenities, a discount, or both</strong>
-                        <p class="mb-0 ms-4 text-sm text-muted">E.g. "Book a Deluxe, get 2 Breakfast Buffets and 10% off". Free amenities appear on the bill at ₱0.00; the discount comes off the room rate or the total from before check-in - you choose which.</p>
+                        <p class="mb-0 ms-4 text-sm text-muted">E.g. "Book a Deluxe Room, get 2 Breakfast Buffets and 10% off". Free amenities appear on the bill at ₱0.00; the discount comes off the room rate or the total from before check-in - you choose which.</p>
                     </li>
                     <li class="mb-3">
                         <i class="fas fa-id-card text-brand"></i>

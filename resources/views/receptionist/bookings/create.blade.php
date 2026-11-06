@@ -62,7 +62,7 @@
 
                     <h6 class="form-section-heading">Room(s)</h6>
                     <p class="text-muted small mb-2">
-                        <i class="fas fa-info-circle"></i> Add one row per room type - e.g. Deluxe x1 + Executive x1 all land under this one booking.
+                        <i class="fas fa-info-circle"></i> Add one row per room type - e.g. Deluxe Room x1 + Executive Suite Room x1 all land under this one booking.
                     </p>
                     @include('receptionist.partials.room-lines-input')
 

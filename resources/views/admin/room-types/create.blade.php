@@ -26,7 +26,7 @@
                         <div class="mb-3">
                             <label class="form-label">Name <span class="text-danger">*</span></label>
                             <input type="text" name="name" class="form-control @error('name') is-invalid @enderror"
-                                   value="{{ old('name') }}" placeholder="e.g. Deluxe, Suite, Standard" required>
+                                   value="{{ old('name') }}" placeholder="e.g. Deluxe Room, Family Suite Room, Standard Room" required>
                             @error('name')<div class="invalid-feedback">{{ $message }}</div>@enderror
                         </div>
 
