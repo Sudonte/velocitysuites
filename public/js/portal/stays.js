@@ -56,6 +56,37 @@
     function nextCheckIn(it) { return (it.stays && it.stays[0] ? it.stays[0].check_in : String(it.check_in).slice(0, 10)); }
     S.dates = dates; S.idLabel = idLabel;
 
+    // ---- the compact summary shared by the Booking & Reservation cards and the Transaction History rows (display only)
+    S.chipLabel = function (st) { return st.key === 'pending' ? 'Waiting for verification' : st.label; };
+    /** "Deluxe Room ×2, Executive Suite Room ×1" */
+    S.roomsLine = function (it) {
+        var set = {}, order = [];
+        (it.stays || []).forEach(function (s) { (s.rooms || []).forEach(function (r) { if (!(r.room_type in set)) { set[r.room_type] = 0; order.push(r.room_type); } set[r.room_type] += Number(r.quantity || 0); }); });
+        return order.map(function (k) { return k + ' ×' + set[k]; }).join(', ');
+    };
+    /** "Nov 10 → Nov 12, 2026 · 2 nights · 2 guests"; several date ranges: the overall span and "· 2 date ranges". */
+    S.spanLine = function (it, guests) {
+        var st = it.stays && it.stays.length ? it.stays : [{ check_in: String(it.check_in).slice(0, 10), check_out: String(it.check_out).slice(0, 10) }];
+        var from = st.map(function (x) { return x.check_in; }).sort()[0], to = st.map(function (x) { return x.check_out; }).sort().reverse()[0];
+        var a = VS.date(from), b = VS.date(to);
+        if (from && to && from.slice(0, 4) === to.slice(0, 4)) a = a.replace(/, \d{4}$/, '');
+        var parts = [a + ' → ' + b];
+        if (st.length > 1) parts.push(VS.plural(st.length, 'date range')); else if (st[0].nights) parts.push(VS.plural(st[0].nights, 'night'));
+        if (guests) parts.push(guests);
+        return parts.join(' · ');
+    };
+    /** Balance cell: red when owed, green "Fully paid" at 0, a dash for a closed transaction. */
+    S.balanceCell = function (m, st) {
+        if (/cancelled|rejected|noshow/.test(st.key)) return '<span class="vs-sc-amt vs-sc-none">—</span>';
+        if (m.remaining <= 0.009 && m.total > 0.009) return '<span class="vs-sc-amt vs-sc-paid">Fully paid</span>';
+        return '<span class="vs-sc-amt vs-num vs-sc-owed">' + VS.money(m.remaining) + '</span>';
+    };
+    /** Total and Balance, plus the money waiting for verification when there is some. */
+    S.moneyBlock = function (m, st) {
+        return '<div class="vs-sc-money"><div><span class="vs-sc-lbl">Total</span><span class="vs-sc-amt vs-num">' + VS.money(m.total) + '</span></div><div><span class="vs-sc-lbl">Balance</span>' + S.balanceCell(m, st) + '</div></div>' +
+            (m.waiting > 0.009 ? '<div class="vs-sc-wait"><span>Waiting for verification</span><span class="vs-num">' + VS.money(m.waiting) + '</span></div>' : '');
+    };
+
     // ------------------------------------------------------------------ the list
 
     function loadAll() {
@@ -181,46 +212,32 @@
             var sm = root.querySelector('#vsStaySummary'), cc = c[tab];
             if (sm) sm.textContent = cc.active + ' active \u00b7 ' + cc.completed + ' completed \u00b7 ' + cc.cancelled + ' cancelled';
         }
-        /** What happens next, in one line (the app's wording). */
-        function nextStep(r, st, m) {
-            if (r.historical) return '';
-            var x = r.x, pa = S.payAction(x);
-            if (/cancelled|rejected/.test(st.key)) return '';
-            if (/completed|noshow/.test(st.key)) return st.key === 'noshow' ? '' : 'Stay completed';
-            if (m.waiting > 0.009) return 'Waiting for front desk verification';
-            if (pa.a === 'PAY_NOW') return 'Pay now to secure your reservation';
-            if (st.key === 'checkedin') return m.remaining > 0.009 ? 'Balance is paid at check-out' : 'Fully paid';
-            if (st.key === 'confirmed') return m.remaining > 0.009 ? 'Pay at check-in' : 'Ready for your stay';
-            if (pa.a === 'FRONT_DESK' && x.kind === 'reservation') return pa.text;
-            return 'Waiting for front desk verification';
-        }
+        /** Guests on one line: "2 guests". */
         function guestsText(it) {
-            var a = Number(it.adults || 0), c = Number(it.children || 0), n = a + c || Number(it.number_of_guests || 0);
-            return n ? VS.plural(n, 'guest') + (c ? ' (' + VS.plural(a, 'adult') + ', ' + c + (c === 1 ? ' minor' : ' minors') + ')' : '') : '';
+            var n = Number(it.adults || 0) + Number(it.children || 0) || Number(it.number_of_guests || 0);
+            return n ? VS.plural(n, 'guest') : '';
         }
         function card(r) {
-            var x = r.x, it = x.it, s = r.historical ? { label: 'Completed', cls: 'gray', key: 'completed', note: 'This reservation became a booking.' } : S.status(it, x.kind), m = S.money(it);
+            var x = r.x, it = x.it, s = r.historical ? { label: 'Completed', cls: 'gray', key: 'completed' } : S.status(it, x.kind), m = S.money(it);
             var id = r.historical || x.kind === 'reservation' ? 'Reservation #' + it.id : 'Booking #' + it.id;
             if (!r.historical && x.kind === 'reservation' && it.booking && r.tab === 'booking') id = 'Booking #' + (it.booking.id || it.id);
             var href = '/guest/' + (r.historical || (x.kind === 'reservation' && r.tab === 'reservation') ? 'reservations' : (x.kind === 'reservation' ? 'reservations' : 'bookings')) + '/' + it.id;
-            var acts = ['<a class="btn btn-light btn-sm vs-act" href="' + href + '">View details</a>'];
+            var primary = '', menu = [];
             if (!r.historical) {
                 var pa = S.payAction(x);
-                if (pa.a === 'PAY_NOW') acts.unshift('<a class="btn btn-velocity btn-sm vs-act" href="' + pa.href + '">Pay now</a>');
-                if (S.canEdit(x)) acts.push('<a class="btn btn-outline-velocity btn-sm vs-act" href="/guest/reserve/' + it.id + '/edit">Edit</a>');
-                if (S.cancelRule(x).can) acts.push('<button type="button" class="btn btn-outline-danger btn-sm vs-act" data-cancel="' + it.id + '" data-kind="' + x.kind + '">Cancel ' + x.kind + '</button>');
-                if (/cancelled|rejected|completed|noshow/.test(s.key)) acts.push('<button type="button" class="btn btn-outline-danger btn-sm vs-act" data-delete="' + it.id + '" data-kind="' + x.kind + '">Delete</button>');
+                if (pa.a === 'PAY_NOW') primary = '<a class="btn btn-velocity btn-sm vs-act" href="' + pa.href + '">Pay now</a>';
+                if (S.canEdit(x)) menu.push('<li><a class="dropdown-item" href="/guest/reserve/' + it.id + '/edit">Edit</a></li>');
+                if (S.cancelRule(x).can) menu.push('<li><button type="button" class="dropdown-item text-danger" data-cancel="' + it.id + '" data-kind="' + x.kind + '">Cancel ' + x.kind + '</button></li>');
+                if (/cancelled|rejected|completed|noshow/.test(s.key)) menu.push('<li><button type="button" class="dropdown-item text-danger" data-delete="' + it.id + '" data-kind="' + x.kind + '">Delete</button></li>');
             }
-            var rooms = S.firstRoomTypes(it), guests = guestsText(it), next = nextStep(r, s, m);
-            return '<article class="vs-card vs-stay-card vs-reveal">' +
-                '<div class="d-flex justify-content-between align-items-start gap-2"><div class="min-w-0"><a class="fw-bold text-decoration-none vs-stretch" style="color:inherit" href="' + href + '">' + VS.esc(id) + '</a><div class="text-muted small">' + VS.esc(dates(it)) + '</div></div>' +
-                '<span class="vs-chip ' + s.cls + '">' + s.label + '</span></div>' +
-                '<div class="vs-facts mt-2">' + (rooms ? '<div><i class="fas fa-bed" aria-hidden="true"></i><span>' + VS.esc(rooms) + '</span></div>' : '') + (guests ? '<div><i class="fas fa-user-group" aria-hidden="true"></i><span>' + VS.esc(guests) + '</span></div>' : '') + '</div>' +
-                (s.note ? '<div class="small text-muted mt-1">' + VS.esc(s.note) + '</div>' : '') +
-                '<div class="row text-center g-2 mt-2"><div class="col-4"><div class="small text-muted">Total</div><div class="vs-num fw-bold">' + VS.money(m.total) + '</div></div><div class="col-4"><div class="small text-muted">Paid</div><div class="vs-num fw-bold">' + VS.money(m.paid) + '</div></div><div class="col-4"><div class="small text-muted">Balance</div><div class="vs-num fw-bold">' + VS.money(m.remaining) + '</div></div></div>' +
-                (m.waiting > 0.009 ? '<div class="vs-row small mt-1"><span>Waiting for verification</span><span class="vs-num fw-semibold">' + VS.money(m.waiting) + '</span></div>' : '') +
-                (next ? '<div class="small mt-2 vs-next"><i class="fas fa-circle-info me-1" aria-hidden="true"></i>' + VS.esc(next) + '</div>' : '') +
-                '<div class="d-flex flex-wrap gap-2 mt-2 vs-acts">' + acts.join('') + '</div></article>';
+            var more = menu.length ? '<div class="dropdown vs-more"><button type="button" class="btn btn-light btn-sm vs-act" data-bs-toggle="dropdown" aria-expanded="false" aria-label="More actions for ' + VS.esc(id) + '" title="More actions"><i class="fas fa-ellipsis-vertical" aria-hidden="true"></i></button><ul class="dropdown-menu dropdown-menu-end">' + menu.join('') + '</ul></div>' : '';
+            var guests = guestsText(it);
+            return '<article class="vs-card vs-stay-card vs-sc vs-reveal">' +
+                '<div class="vs-sc-top"><a class="vs-sc-id vs-stretch" href="' + href + '">' + VS.esc(id) + '</a><span class="vs-chip ' + s.cls + '">' + VS.esc(S.chipLabel(s)) + '</span></div>' +
+                '<div class="vs-sc-rooms">' + VS.esc(S.roomsLine(it) || 'Rooms to be confirmed') + '</div>' +
+                '<div class="vs-sc-dates">' + VS.esc(S.spanLine(it, guests)) + '</div>' +
+                S.moneyBlock(m, s) +
+                '<div class="vs-sc-acts vs-acts"><a class="btn btn-outline-velocity btn-sm vs-act" href="' + href + '">View details</a>' + primary + more + '</div></article>';
         }
         function paint() {
             paintTabs(); syncUrl();

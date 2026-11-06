@@ -117,15 +117,18 @@
             VS.clearErrors(form);
             if (bad) { VS.fieldError(fi.to, 'Check-out date must be on or after the check-in date.'); }
             var list = bad ? [] : all.filter(function (r) { return matches(r, f); }).sort(function (a, b) { return new Date(b.x.it.created_at) - new Date(a.x.it.created_at); });
-            var active = [f.type, f.bstat, f.room, f.from, f.to].filter(Boolean).length;
-            root.querySelector('#vsHistCount').textContent = VS.plural(list.length, 'result');
-            root.querySelector('#vsHistToggle').textContent = (root.querySelector('#vsHistPanel').classList.contains('d-none') ? 'Show filters' : 'Hide filters') + (active ? ' (' + active + ' active)' : '');
+            root.querySelector('#vsHistCount').textContent = VS.plural(list.length, 'transaction');
             host.innerHTML = list.length ? list.map(function (r) {
-                var x = r.x, s = r.st, m = r.m, payChip = { paid: ['ok', 'Paid'], partial: ['wait', 'Partially paid'], pending: ['wait', 'Pending'], cancelled: ['bad', 'Cancelled'], rejected: ['bad', 'Rejected'] }[r.pay];
-                return '<a class="vs-card vs-stay-card d-block text-decoration-none" href="/guest/' + (x.kind === 'reservation' ? 'reservations' : 'bookings') + '/' + x.it.id + '"><div class="d-flex justify-content-between gap-2"><div><div class="fw-bold">' + VS.esc(S.idLabel(x.it, x.kind)) + (x.it.hidden_by_guest ? ' <span class="small text-muted fw-normal">(removed from Booking & Reservation)</span>' : '') + '</div><div class="small text-muted">Created ' + VS.esc(VS.dateTime(x.it.created_at)) + '</div><div class="small">' + VS.esc(S.dates(x.it)) + '</div></div><div class="text-end"><span class="vs-chip ' + s.cls + '">' + s.label + '</span><div class="mt-1"><span class="vs-chip ' + payChip[0] + '">' + payChip[1] + '</span></div></div></div>' +
-                    '<div class="vs-row mt-1"><span>Total</span><span>' + VS.money(m.total) + '</span></div><div class="vs-row"><span>Paid</span><span>' + VS.money(m.paid) + '</span></div></a>';
+                var x = r.x, s = r.st, m = r.m, href = '/guest/' + (x.kind === 'reservation' ? 'reservations' : 'bookings') + '/' + x.it.id, id = S.idLabel(x.it, x.kind);
+                var n = Number(x.it.adults || 0) + Number(x.it.children || 0) || Number(x.it.number_of_guests || 0);
+                return '<article class="vs-card vs-stay-card vs-hrow"><div class="vs-hc vs-hc-id"><a class="vs-sc-id vs-stretch" href="' + href + '">' + VS.esc(id) + '</a><span class="vs-chip ' + s.cls + '">' + VS.esc(S.chipLabel(s)) + '</span>' +
+                    (x.it.hidden_by_guest ? '<span class="vs-hc-note">Removed from Booking &amp; Reservation</span>' : '') + '</div>' +
+                    '<div class="vs-hc vs-hc-what"><div class="vs-sc-rooms">' + VS.esc(S.roomsLine(x.it) || 'Rooms to be confirmed') + '</div><div class="vs-sc-dates">' + VS.esc(S.spanLine(x.it, n ? VS.plural(n, 'guest') : '')) + '</div></div>' +
+                    '<div class="vs-hc vs-hc-tot"><span class="vs-sc-lbl">Total</span><span class="vs-sc-amt vs-num">' + VS.money(m.total) + '</span></div>' +
+                    '<div class="vs-hc vs-hc-bal"><span class="vs-sc-lbl">Balance</span>' + S.balanceCell(m, s) + '</div>' +
+                    '<div class="vs-hc vs-hc-act vs-acts"><a class="btn btn-outline-velocity btn-sm vs-act" href="' + href + '">View details</a></div></article>';
             }).join('') : (!all.length ? VS.empty('fa-clock-rotate-left', 'No transactions yet', 'Everything you book or reserve is recorded here.', '<a class="btn btn-velocity" href="/rooms">Browse rooms</a>')
-                : VS.empty('fa-filter', 'No transactions match', 'Try another transaction number, room type, or date.', '<button class="btn btn-light btn-sm" data-clear2>Clear filters</button>'));
+                : VS.empty('fa-filter', 'No transactions match your filters', 'Try another transaction number, room type or date.', '<button class="btn btn-light btn-sm" data-clear2>Clear filters</button>'));
             var c2 = host.querySelector('[data-clear2]'); if (c2) c2.onclick = clear;
         }
         function clear() { form.reset(); paint(); }
@@ -147,7 +150,6 @@
         form.elements.bstat.innerHTML = BSTAT.map(function (t) { return '<option value="' + t[0] + '">' + t[1] + '</option>'; }).join('');
         form.addEventListener('input', VS.debounce(paint, 150)); form.addEventListener('change', paint); form.addEventListener('submit', function (e) { e.preventDefault(); });
         form.querySelector('[data-clear]').onclick = clear;
-        root.querySelector('#vsHistToggle').onclick = function () { root.querySelector('#vsHistPanel').classList.toggle('d-none'); paint(); };
         load();
     };
 

@@ -482,3 +482,34 @@ button.vs-mi:hover, button.vs-mi:focus-visible { background: var(--vs-red-soft);
 .vs-photo-missing::after { content: "Image unavailable"; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #495057; font-weight: 600; }
 [data-bs-theme="dark"] .vs-room-photo { background: #2a2d34; }
 [data-bs-theme="dark"] .vs-photo-missing::after { color: #c6c6c6; }
+
+/* v1.76 Booking & Reservation cards and Transaction History rows: the same compact summary everywhere, aligned labels and amounts */
+.vs-sc { display: flex; flex-direction: column; gap: .35rem; margin-bottom: 1rem; }
+.vs-sc-top { display: flex; align-items: center; justify-content: space-between; gap: .75rem; }
+.vs-sc-id { font-weight: 700; font-size: 1.05rem; color: var(--vs-ink); text-decoration: none; min-width: 0; }
+.vs-sc-id:hover { color: var(--vs-ink); text-decoration: underline; }
+.vs-sc-rooms { font-weight: 600; color: var(--vs-ink); overflow-wrap: anywhere; }
+.vs-sc-dates { color: var(--vs-muted); font-size: .92rem; font-variant-numeric: tabular-nums; }
+.vs-sc-money { display: grid; grid-template-columns: 1fr 1fr; gap: .75rem; margin-top: .25rem; padding-top: .6rem; border-top: 1px solid var(--vs-line); }
+.vs-sc-lbl { display: block; font-size: .78rem; color: var(--vs-muted); font-weight: 600; text-transform: uppercase; letter-spacing: .03em; }
+.vs-sc-amt { display: block; font-weight: 700; font-size: 1.05rem; color: var(--vs-ink); font-variant-numeric: tabular-nums; }
+.vs-sc-owed { color: #a8261e; }
+.vs-sc-paid { color: var(--vs-green); }
+.vs-sc-none { color: var(--vs-muted); font-weight: 600; }
+.vs-sc-wait { display: flex; justify-content: space-between; gap: 1rem; font-size: .9rem; color: var(--vs-amber); font-weight: 600; }
+.vs-sc-acts { display: flex; align-items: center; gap: .5rem; margin-top: auto; padding-top: .6rem; }
+.vs-sc-acts .vs-more { margin-left: auto; }
+.vs-sc:hover, .vs-sc:focus-within, .vs-hrow:hover, .vs-hrow:focus-within { z-index: 3; transform: none; }
+.vs-filters .form-label { margin-bottom: .25rem; }
+.vs-filters .vs-clear, .vs-empty .btn-light { display: inline-flex; align-items: center; justify-content: center; height: calc(2.25rem + 2px); padding: 0 1rem; background: var(--vs-surface); border: 1px solid var(--vs-line); color: var(--vs-ink); font-weight: 600; border-radius: 10px; }
+.vs-filters .vs-clear:hover, .vs-empty .btn-light:hover { border-color: var(--vs-red); color: var(--vs-red); background: var(--vs-surface); }
+[data-bs-theme="dark"] .vs-sc-owed { color: #ff8a80; }
+[data-bs-theme="dark"] .vs-sc-id:hover { color: #fff; }
+@media (min-width: 992px) { #vsStayCards > .vs-sc { margin-bottom: 0; } }
+
+.vs-hrow { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1.8fr) 8.5rem 8.5rem auto; gap: .5rem 1.25rem; align-items: center; padding: .9rem 1.25rem; margin-bottom: .75rem; }
+.vs-hc { min-width: 0; }
+.vs-hc-id { display: flex; flex-direction: column; align-items: flex-start; gap: .3rem; }
+.vs-hc-note { font-size: .78rem; color: var(--vs-muted); }
+.vs-hc-act { text-align: right; white-space: nowrap; }
+@media (max-width: 991px) { .vs-hrow { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } .vs-hc-id { flex-direction: row; align-items: center; justify-content: space-between; flex-wrap: wrap; grid-column: 1 / -1; } .vs-hc-what { grid-column: 1 / -1; } .vs-hc-act { grid-column: 1 / -1; text-align: left; } }

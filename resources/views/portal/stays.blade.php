@@ -10,16 +10,16 @@
         <button type="button" role="tab" class="vs-tab active" data-tab="booking" aria-selected="true">Bookings</button>
         <button type="button" role="tab" class="vs-tab" data-tab="reservation" aria-selected="false">Reservations</button>
     </div>
-    <form id="vsStayFilters" class="vs-card" novalidate>
+    <div class="vs-tabsum" id="vsStaySummary" aria-live="polite">&nbsp;</div>
+    <form id="vsStayFilters" class="vs-card vs-filters" novalidate>
         <div class="row g-2 align-items-end">
             <div class="col-12 col-lg-4"><label class="form-label small fw-semibold" for="sq">Search</label><input class="form-control" id="sq" name="q" type="search" placeholder="Transaction number, room type or date"></div>
-            <div class="col-12 col-sm-6 col-lg-2"><label class="form-label small fw-semibold" for="ss">Status</label><select class="form-select" id="ss" name="status"></select></div>
-            <div class="col-12 col-sm-6 col-lg-2"><label class="form-label small fw-semibold" for="so">Sort by</label><select class="form-select" id="so" name="sort"><option value="newest">Newest first</option><option value="oldest">Oldest first</option></select></div>
-            <div class="col-8 col-lg-3"><label class="form-label small fw-semibold" for="sr">Room type</label><select class="form-select" id="sr" name="room"><option value="">All room types</option></select></div>
-            <div class="col-4 col-lg-1"><button type="button" class="btn btn-light w-100" data-clear>Clear</button></div>
+            <div class="col-12 col-md-6 col-lg-2"><label class="form-label small fw-semibold" for="ss">Status</label><select class="form-select" id="ss" name="status"></select></div>
+            <div class="col-12 col-md-6 col-lg-2"><label class="form-label small fw-semibold" for="so">Sort by</label><select class="form-select" id="so" name="sort"><option value="newest">Newest first</option><option value="oldest">Oldest first</option></select></div>
+            <div class="col-12 col-md-6 col-lg-3"><label class="form-label small fw-semibold" for="sr">Room type</label><select class="form-select" id="sr" name="room"><option value="">All room types</option></select></div>
+            <div class="col-12 col-md-6 col-lg-1"><button type="button" class="btn btn-light w-100 vs-clear" data-clear>Clear</button></div>
         </div>
     </form>
-    <div class="vs-tabsum" id="vsStaySummary" aria-live="polite">&nbsp;</div>
     <div class="d-flex justify-content-between align-items-baseline mb-2"><h2 class="vs-section-title mb-0" id="vsStayListTitle">Bookings</h2><span class="text-muted small" id="vsStayCount" aria-live="polite">&nbsp;</span></div>
     <div id="vsStayCards" aria-live="polite"></div>
 </div>
