@@ -22,21 +22,43 @@ use Illuminate\View\View;
  */
 class PasswordResetRequestController extends Controller
 {
+    public const STATUSES = ['pending', 'approved', 'rejected', 'completed', 'expired'];
+
     public function index(Request $request): View
     {
-        $query = StaffPasswordResetRequest::with(['user', 'processedBy']);
+        $query = StaffPasswordResetRequest::with(['user', 'processedBy'])->whereHas('user', fn ($u) => $u->whereIn('role', ['manager', 'receptionist']));
 
-        // Pending requests are what needs the administrator: they are the default view and always sort to the top
-        $status = $request->has('status') ? (string) $request->get('status') : 'pending';
+        // everything by default; the filters live in the URL so a refresh or Back keeps them
+        $status = in_array($request->query('status'), self::STATUSES, true) ? (string) $request->query('status') : '';
+        $role = in_array($request->query('role'), ['receptionist', 'manager'], true) ? (string) $request->query('role') : '';
+        $search = trim((string) $request->query('search', ''));
+
         if ($status !== '') {
             $query->where('status', $status);
         }
+        if ($role !== '') {
+            $query->whereHas('user', fn ($u) => $u->where('role', $role));
+        }
+        if ($search !== '') {
+            // every word must be found in the name or the email (so "althea espedion" and "espedion.manager" both work)
+            foreach (preg_split('/\s+/', mb_strtolower($search)) as $word) {
+                $like = '%' . $word . '%';
+                $query->whereHas('user', fn ($u) => $u->where(function ($w) use ($like) {
+                    $w->whereRaw('LOWER(email) LIKE ?', [$like])->orWhereRaw('LOWER(first_name) LIKE ?', [$like])->orWhereRaw('LOWER(last_name) LIKE ?', [$like]);
+                }));
+            }
+        }
+        // Pending requests are what needs the administrator: they always sit at the top, newest first
         $query->orderByRaw("CASE WHEN status = 'pending' THEN 0 ELSE 1 END")->orderByDesc('created_at')->orderByDesc('id');
 
-        $requests = $query->paginate(\App\Support\PerPage::resolve($request))->withQueryString();
-        $pendingCount = StaffPasswordResetRequest::where('status', 'pending')->count();
+        $requests = $query->paginate(\App\Support\PerPage::resolve($request))->withQueryString(); // 10 per page unless the Rows control says otherwise
 
-        return view('admin.users.password-requests.index', compact('requests', 'status', 'pendingCount'));
+        $counts = StaffPasswordResetRequest::whereHas('user', fn ($u) => $u->whereIn('role', ['manager', 'receptionist']))
+            ->selectRaw('status, COUNT(*) as c')->groupBy('status')->pluck('c', 'status');
+        $counts = collect(self::STATUSES)->mapWithKeys(fn ($st) => [$st => (int) ($counts[$st] ?? 0)])->all();
+        $counts['all'] = array_sum($counts);
+
+        return view('admin.users.password-requests.index', compact('requests', 'status', 'role', 'search', 'counts'));
     }
 
     public function approve(StaffPasswordResetRequest $staffPasswordResetRequest): RedirectResponse

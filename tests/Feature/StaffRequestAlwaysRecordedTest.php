@@ -154,28 +154,7 @@ class StaffRequestAlwaysRecordedTest extends ApiFlowTestCase
         $this->assertStringContainsString("Staff password reset request for user #{$manager->id} could not be saved", $logged);
     }
 
-    public function test_the_admin_list_defaults_to_pending_with_pending_first_a_count_and_all_statuses_still_works(): void
-    {
-        $admin = $this->make('admin', 'admin@x.test', 'Ada');
-        $a = $this->make('manager', 'a@hotel.com', 'Anna');
-        $b = $this->make('receptionist', 'b@hotel.com', 'Bea');
-        $done = StaffPasswordResetRequest::create(['user_id' => $a->id, 'status' => 'completed']);
-        $done->forceFill(['created_at' => now()])->save(); // the newest overall, but finished
-        $this->ask($b->email);
-        StaffPasswordResetRequest::where('user_id', $b->id)->update(['created_at' => now()->subDay()]);
-
-        $html = $this->actingAs($admin)->get(route('admin.users.password-requests.index'))->assertOk()->getContent();
-        $this->assertStringContainsString('b@hotel.com', $html);
-        $this->assertStringNotContainsString('a@hotel.com', $html, 'the default view is Pending only');
-        $this->assertStringContainsString('<option value="pending" selected>Pending (1)</option>', $html);
-        $this->assertStringContainsString('Approve', $html);
-        $this->assertStringContainsString('Reject', $html);
-
-        $all = $this->actingAs($admin)->get(route('admin.users.password-requests.index', ['status' => '']))->getContent();
-        $this->assertStringContainsString('a@hotel.com', $all);
-        $this->assertStringContainsString('b@hotel.com', $all);
-        $this->assertLessThan(strpos($all, 'a@hotel.com'), strpos($all, 'b@hotel.com'), 'pending first, even though it is older');
-    }
+    // (the admin list's default view and filters are covered in AdminPasswordRequestsListTest)
 
     public function test_the_user_management_button_shows_the_pending_count(): void
     {
