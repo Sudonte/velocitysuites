@@ -513,3 +513,5 @@ button.vs-mi:hover, button.vs-mi:focus-visible { background: var(--vs-red-soft);
 .vs-hc-note { font-size: .78rem; color: var(--vs-muted); }
 .vs-hc-act { text-align: right; white-space: nowrap; }
 @media (max-width: 991px) { .vs-hrow { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } .vs-hc-id { flex-direction: row; align-items: center; justify-content: space-between; flex-wrap: wrap; grid-column: 1 / -1; } .vs-hc-what { grid-column: 1 / -1; } .vs-hc-act { grid-column: 1 / -1; text-align: left; } }
+.vs-stay-card a.vs-sc-id, .vs-stay-card a.vs-sc-id:hover { color: var(--vs-ink); }
+[data-bs-theme="dark"] .vs-stay-card a.vs-sc-id:hover { color: #fff; }
