@@ -7,7 +7,7 @@ use Illuminate\Console\Command;
 
 /**
  * Tells the receptionists about stays past 12 NN check-out or 2 PM check-in. Safe to run on any cadence: each stay is only told once.
- * The same sweep also runs from the receptionist's sidebar (StayAlerts::sweepThrottled()), so it works even before cron is set up.
+ * The same sweep also runs from the staff pages (StayAlerts::sweepThrottled()), so it works even before cron is set up.
  */
 class SendStayDueAlerts extends Command
 {

@@ -235,8 +235,8 @@ deny-all rule is active).
 - `stays:send-due-alerts` runs every five minutes (added 2026-11-06): tells the
   receptionists about stays past the 12 NN check-out and the 2 PM check-in, once
   per stay. Covered by the existing `schedule:run` cron entry - nothing to add.
-  It also runs from the receptionist's sidebar (at most once a minute), so the
-  alerts arrive even if that cron entry is not set up yet.
+  It also runs from the open staff pages' live updates (at most every few
+  seconds), so the alerts arrive even if that cron entry is not set up yet.
 - No-shows are marked by hand by receptionists (Bookings > booking > Mark as
   No-Show); nothing marks them automatically.
 

@@ -442,7 +442,7 @@
                 // per-user - viewed_at is a shared flag any receptionist can
                 // clear) so every page navigation doesn't pay for two more
                 // queries; a short TTL is fine for a "something new" dot.
-                // The 12 NN check-out and 2 PM check-in alerts go out from here too, so they work without cron (at most once a minute).
+                // The 12 NN check-out and 2 PM check-in alerts go out from here too, so they work without cron.
                 \App\Services\StayAlerts::sweepThrottled();
                 $sidebarHasNewCheckIns = \Illuminate\Support\Facades\Cache::remember(
                     'sidebar:has_new_checkins', now()->addSeconds(20),

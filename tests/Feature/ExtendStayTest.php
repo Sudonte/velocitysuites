@@ -161,6 +161,43 @@ class ExtendStayTest extends ApiFlowTestCase
         $this->actingAs($this->receptionist())->get(route('receptionist.check-in.index'))->assertOk()->assertSee('Past 2:00 PM check-in')->assertSee('Past 2 PM');
     }
 
+    public function test_a_page_left_open_is_told_when_12_nn_and_2_pm_pass_with_no_other_change(): void
+    {
+        $desk = $this->receptionist();
+        $stamp = fn () => $this->actingAs($desk)->getJson(route('staff.live-stamp'))->assertOk()->json('stamp');
+
+        $this->at('2026-11-03 11:59');
+        $before = $stamp();
+        $this->at('2026-11-03 11:59:30');
+        $this->assertSame($before, $stamp(), 'nothing happened');
+
+        $this->at('2026-11-03 12:00');
+        $noon = $stamp();
+        $this->assertNotSame($before, $noon, '12 NN changes the fingerprint');
+
+        $this->at('2026-11-03 14:00');
+        $this->assertNotSame($noon, $stamp(), '2 PM changes the fingerprint');
+    }
+
+    public function test_polling_alone_sends_the_alert_and_the_sidebar_dot_is_not_served_from_the_old_cache(): void
+    {
+        $desk = $this->receptionist();
+        $type = $this->makeRoomTypeWithRooms('Deluxe', 1000, 2, 2);
+        [$booking] = $this->inHouse($type);
+        $booking->update(['viewed_at' => now()]);
+
+        $this->at('2026-11-03 11:59');
+        $this->actingAs($desk)->getJson(route('staff.live-stamp'))->assertOk();
+        $this->actingAs($desk)->get(route('receptionist.dashboard'))->assertOk(); // caches "no dot" in the sidebar
+        $this->assertFalse(\Illuminate\Support\Facades\Cache::get('sidebar:has_new_checkouts'));
+
+        $this->at('2026-11-03 12:00:10');
+        $this->actingAs($desk)->getJson(route('staff.live-stamp'))->assertOk();
+
+        $this->assertSame(1, Notification::where('category', 'check_out')->count(), 'no page was opened, no cron ran');
+        $this->assertFalse(\Illuminate\Support\Facades\Cache::has('sidebar:has_new_checkouts'));
+    }
+
     public function test_an_unverified_booking_is_not_announced_for_check_in(): void
     {
         $this->receptionist();

@@ -23,10 +23,10 @@ class StayAlerts
         return [$this->sweepCheckOuts(), $this->sweepCheckIns()];
     }
 
-    /** At most once a minute, from a page a receptionist has open: an alert must never break the page. */
+    /** At most every few seconds, from a staff page that is open: an alert must never break the page. */
     public static function sweepThrottled(): void
     {
-        if (! Cache::add('stay-alerts:sweep', 1, now()->addMinute())) {
+        if (! Cache::add('stay-alerts:sweep', 1, now()->addSeconds(5))) {
             return;
         }
         try {
