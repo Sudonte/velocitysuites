@@ -492,6 +492,23 @@ class Booking extends Model
      * After rooms leave: a stay whose rooms have ALL been checked out is itself checked out (its moment is the last room's). Returns true
      * when every stay of the booking is now done - the moment the bill is settled and the final receipt is issued.
      */
+    /**
+     * Every assigned room has been checked out (and no date range is still to arrive) but the booking is still CHECKED_IN: nothing is left to tick,
+     * so the only next step is billing. The desk must be able to open it from here (a closed billing window or a page refresh used to strand it).
+     */
+    public function isAllRoomsOutNotClosed(): bool
+    {
+        if ($this->booking_status !== self::STATUS_CHECKED_IN) {
+            return false;
+        }
+        $pivots = DB::table('booking_rooms')->where('booking_id', $this->id)->get();
+        if ($pivots->isEmpty() || $pivots->contains(fn ($p) => $p->checked_out_at === null)) {
+            return false;
+        }
+
+        return $this->stayList()->every(fn (Stay $s) => $s->checked_out_at !== null || $s->no_show_at !== null || $this->stateOf($s) !== 'upcoming');
+    }
+
     public function recordStayCheckOuts(): bool
     {
         $this->ensureStays();

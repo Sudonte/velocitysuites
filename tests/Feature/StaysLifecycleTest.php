@@ -441,4 +441,66 @@ class StaysLifecycleTest extends ApiFlowTestCase
         $labels = array_column($payload['transaction_history'], 'label');
         $this->assertCount(1, array_filter($labels, fn ($l) => str_starts_with($l, 'No-show (')));
     }
+
+    // ---------------------------------------------------------------- a booking whose rooms are all out but that is not closed
+
+    public function test_all_rooms_out_with_an_unpaid_balance_shows_continue_to_billing_and_completes_after_full_payment(): void
+    {
+        [, $desk, $booking, $deluxeRoom, $suiteRoom] = $this->twoStayBooking();
+        [$stay1, $stay2] = $booking->stayList()->all();
+        $this->checkInTogether($desk, $booking, [$stay1, $stay2], [
+            $stay1->id => [(string) $deluxeRoom->room_type_id => [$deluxeRoom->id]],
+            $stay2->id => [(string) $suiteRoom->room_type_id => [$suiteRoom->id]],
+        ], ['payment_method' => 'cash', 'amount_received' => 500])->assertOk();
+        $booking = $booking->fresh();
+
+        // every room leaves, but the desk never opens (or closes) the billing: the booking is stuck "checked in"
+        $this->actingAs($desk)->putJson(route('receptionist.check-out.rooms.checkout-many', $booking), ['all' => 1])->assertOk()->assertJsonPath('final', true);
+        $booking = $booking->fresh();
+        $this->assertSame(Booking::STATUS_CHECKED_IN, $booking->booking_status);
+        $this->assertTrue($booking->isAllRoomsOutNotClosed());
+
+        // the list row and the rooms panel both say what to do next
+        $list = $this->actingAs($desk)->get(route('receptionist.check-out.index'))->assertOk()->getContent();
+        $this->assertStringContainsString('All rooms are out', $list);
+        $this->assertStringContainsString('class="btn btn-sm btn-success btn-continue-billing"', $list);
+        $panel = $this->actingAs($desk)->get(route('receptionist.check-out.rooms', $booking))->assertOk()->getContent();
+        $this->assertStringContainsString('All rooms are out.', $panel);
+        $this->assertStringContainsString('Continue to billing', $panel);
+
+        // billing opens and shows the remaining balance; a part payment is refused, the full balance completes it and issues Receipt 3
+        $this->actingAs($desk)->get(route('receptionist.check-out.billing', $booking))->assertOk();
+        $billing = $booking->fresh()->billing()->first();
+        $this->actingAs($desk)->postJson(route('receptionist.billing.payment.store', $billing), ['payment_method' => 'cash', 'amount_paid' => 700, 'amount_received' => 700])->assertStatus(422);
+        $this->assertSame(Booking::STATUS_CHECKED_IN, $booking->fresh()->booking_status);
+        $this->actingAs($desk)->postJson(route('receptionist.billing.payment.store', $billing), ['payment_method' => 'cash', 'amount_paid' => 1500, 'amount_received' => 1500])->assertSuccessful();
+        $done = $booking->fresh();
+        $this->assertSame(Booking::STATUS_COMPLETED, $done->booking_status);
+        $this->assertFalse($done->isAllRoomsOutNotClosed());
+        $this->assertSame(1, Receipt::where('booking_id', $done->id)->where('receipt_type', Receipt::CHECKOUT_FINAL)->count(), 'Receipt 3 issued');
+        $this->assertStringNotContainsString('class="btn btn-sm btn-success btn-continue-billing"', $this->actingAs($desk)->get(route('receptionist.check-out.index'))->getContent());
+    }
+
+    public function test_a_date_range_nobody_arrived_for_offers_a_no_show_and_then_continues_to_billing(): void
+    {
+        [, $desk, $booking, $deluxeRoom] = $this->twoStayBooking();
+        [$stay1, $stay2] = $booking->stayList()->all();
+        $this->checkIn($desk, $booking, $stay1, [(string) $deluxeRoom->room_type_id => [$deluxeRoom->id]])->assertOk();
+        $this->actingAs($desk)->putJson(route('receptionist.check-out.rooms.checkout-many', $booking->fresh()), ['all' => 1])->assertOk();
+        $booking = $booking->fresh();
+        $this->assertSame(Booking::STATUS_CHECKED_IN, $booking->booking_status);
+        $this->assertFalse($booking->isAllRoomsOutNotClosed(), 'a date range is still to arrive: not billable yet');
+
+        $panel = $this->actingAs($desk)->get(route('receptionist.check-out.rooms', $booking))->assertOk()->getContent();
+        $this->assertStringContainsString('Mark as no-show', $panel);
+        $this->assertStringContainsString('has not been checked in', $panel);
+        $this->assertStringNotContainsString('Continue to billing', $panel);
+
+        $this->actingAs($desk)->postJson(route('receptionist.check-out.stays.no-show', [$booking, $stay2]), ['reason' => 'Did not arrive'])->assertOk()->assertJsonPath('final', true);
+        $booking = $booking->fresh();
+        $this->assertTrue($booking->isAllRoomsOutNotClosed());
+        $this->assertStringContainsString('Continue to billing', $this->actingAs($desk)->get(route('receptionist.check-out.rooms', $booking))->getContent());
+        // still charged in full: the bill carries both ranges
+        $this->assertEquals(3000.0, \App\Support\StayBill::forBooking($booking, \App\Support\StayBill::FINAL)['room_charge']);
+    }
 }

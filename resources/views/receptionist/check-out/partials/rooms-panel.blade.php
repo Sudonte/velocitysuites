@@ -11,6 +11,8 @@
     ]);
     $stillToArrive = $booking->stayList()->filter(fn ($st) => $booking->stateOf($st) === 'upcoming')->count();
     $isLastRoom = $remainingCount === 1 && $stillToArrive === 0;
+    // every room is already out but the booking is still open: the next step is billing (the desk used to be stuck here)
+    $allRoomsOut = $remainingCount === 0 && $booking->rooms->isNotEmpty() && $stillToArrive === 0;
     // Only the stays past their own 12 NN: another stay of this booking may still have days to go.
     $dueStayIds = $booking->dueCheckOutStays()->pluck('id')->all();
     $earliestExtension = \App\Support\CheckInWindow::date()->addDay()->toDateString();
@@ -48,6 +50,14 @@
     </p>
     @if($stillToArrive > 0)
         <div class="alert alert-info py-2 small"><i class="fas fa-layer-group"></i> {{ $stillToArrive }} more {{ $stillToArrive === 1 ? 'stay has' : 'stays have' }} not arrived yet. Billing opens after the last stay checks out.</div>
+    @endif
+    @if($allRoomsOut)
+        <div class="alert alert-success d-flex flex-wrap justify-content-between align-items-center gap-2" role="status" id="allRoomsOutNotice">
+            <div><i class="fas fa-circle-check"></i> <strong>All rooms are out.</strong> Continue to billing to settle the balance, take the full payment and close this booking.</div>
+            <button type="button" class="btn btn-success btn-continue-billing" data-booking-id="{{ $booking->id }}"><i class="fas fa-arrow-right"></i> Continue to billing</button>
+        </div>
+    @elseif($remainingCount === 0 && $booking->rooms->isNotEmpty() && $stillToArrive > 0)
+        <div class="alert alert-warning py-2 small" role="status"><i class="fas fa-user-slash"></i> Every room is out, but a date range has not been checked in. Mark it as a no-show (still charged in full) to continue to billing.</div>
     @endif
     @if($remainingCount > 0)
         <div class="d-flex flex-wrap gap-2 align-items-center mb-3">

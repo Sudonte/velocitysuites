@@ -110,7 +110,12 @@
                             </td>
                             @if($tab === 'expected')
                                 <td>
-                                    @if($booking->rooms->count() > 1 || $booking->stayCount() > 1 || $dueStays->isNotEmpty())
+                                    @if($booking->isAllRoomsOutNotClosed())
+                                        {{-- Every room already left but the booking is not closed: the next step is billing. --}}
+                                        <button type="button" class="btn btn-sm btn-success btn-continue-billing" data-booking-id="{{ $booking->id }}">
+                                            <i class="fas fa-arrow-right"></i> All rooms are out &middot; Continue to billing
+                                        </button>
+                                    @elseif($booking->rooms->count() > 1 || $booking->stayCount() > 1 || $dueStays->isNotEmpty())
                                         {{-- Multi-room: each room checks out independently -
                                              see the Rooms Panel modal below. Billing only
                                              starts once every room in this booking has
@@ -297,12 +302,39 @@ document.addEventListener('DOMContentLoaded', function () {
             return;
         }
 
+        // ---- Every room is already out but the booking is not closed: straight to billing ----
+        const continueBtn = e.target.closest('.btn-continue-billing');
+        if (continueBtn) {
+            activeBookingId = continueBtn.dataset.bookingId;
+            openBillingFor(continueBtn);
+            return;
+        }
+
         // ---- Multi-room bookings: open the room-by-room checkout picker ----
         const viewRoomsBtn = e.target.closest('.btn-view-rooms');
         if (viewRoomsBtn) {
             activeBookingId = viewRoomsBtn.dataset.bookingId;
             openRoomsPanel();
         }
+    });
+
+    /** Opens the check-out billing (remaining balance, full payment) for a booking whose rooms are all out. */
+    async function openBillingFor(btn) {
+        if (btn) btn.disabled = true;
+        try {
+            const html = await fetchHtml(buildUrl(urls.billing, activeBookingId));
+            if (roomsModalEl.classList.contains('show')) roomsModal.hide();
+            billingPanelContent.innerHTML = html;
+            billingModal.show();
+        } catch (err) {
+            window.showNotice({ variant: 'danger', message: err.message });
+        } finally {
+            if (btn) btn.disabled = false;
+        }
+    }
+    roomsPanelContent.addEventListener('click', function (e) {
+        const btn = e.target.closest('.btn-continue-billing');
+        if (btn) { activeBookingId = btn.dataset.bookingId; openBillingFor(btn); }
     });
 
     async function openRoomsPanel() {
