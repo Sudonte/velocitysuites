@@ -209,20 +209,40 @@ class FailedLoginLockoutTest extends TestCase
         }
     }
 
-    public function test_staff_forgot_password_creates_approval_request_not_otp(): void
+    public function test_staff_never_get_a_code_and_the_answer_is_the_same_as_for_an_unknown_address(): void
     {
+        $unknown = $this->post('/forgot-password', ['email' => 'nobody@example.test']);
         foreach (['receptionist', 'manager'] as $role) {
             $user = $this->makeUser($role);
 
             $response = $this->post('/forgot-password', ['email' => $user->email]);
 
-            $response->assertRedirect(route('password.staff-request.status', ['email' => $user->email]));
-            $this->assertDatabaseHas('staff_password_reset_requests', [
-                'user_id' => $user->id,
-                'status' => 'pending',
-            ]);
+            $response->assertRedirect(route('password.otp.form', ['email' => $user->email]));
+            $this->assertSame($unknown->getSession()->get('status'), $response->getSession()->get('status'));
+            $this->assertDatabaseMissing('password_reset_tokens', ['email' => $user->email]);
+            $this->assertDatabaseMissing('staff_password_reset_requests', ['user_id' => $user->id]);
+        }
+    }
+
+    public function test_the_staff_request_form_creates_one_request_and_gives_the_same_confirmation_for_every_address(): void
+    {
+        $answers = [];
+        foreach (['receptionist', 'manager'] as $role) {
+            $user = $this->makeUser($role);
+            $response = $this->post(route('password.request.staff.send'), ['email' => $user->email]);
+            $response->assertRedirect(route('password.request.staff'));
+            $answers[] = $response->getSession()->get('status');
+            $this->assertDatabaseHas('staff_password_reset_requests', ['user_id' => $user->id, 'status' => 'pending']);
+            $this->post(route('password.request.staff.send'), ['email' => $user->email]);
+            $this->assertSame(1, \DB::table('staff_password_reset_requests')->where('user_id', $user->id)->count(), 'never a second open request');
             $this->assertDatabaseMissing('password_reset_tokens', ['email' => $user->email]);
         }
+        $guest = $this->makeUser('guest');
+        $answers[] = $this->post(route('password.request.staff.send'), ['email' => $guest->email])->getSession()->get('status');
+        $answers[] = $this->post(route('password.request.staff.send'), ['email' => 'nobody@example.test'])->getSession()->get('status');
+        $this->assertCount(1, array_unique($answers), 'staff, guest and unknown addresses all get the same confirmation');
+        $this->assertSame('If this is a staff account, your request has been sent to the System Administrator.', $answers[0]);
+        $this->assertDatabaseMissing('staff_password_reset_requests', ['user_id' => $guest->id]);
     }
 
     public function test_admin_forgot_password_uses_otp_not_approval_request(): void

@@ -1,76 +1,38 @@
 @extends('layouts.guest')
 
-@section('title', 'Forgot Password - Velocity Suites')
+@section('title', 'Staff password reset - Velocity Suites')
+
+@push('styles')
+<link rel="stylesheet" href="{{ asset('css/portal.css') }}?v={{ filemtime(public_path('css/portal.css')) }}">
+@endpush
 
 @section('content')
-<div class="auth-card">
-    <div class="logo">
-        <span class="logo-badge" style="width: 84px; height: 72px;">
-            <img src="{{ asset('images/logo.jpg') }}" alt="Velocity Suites">
-        </span>
-        <p class="text-muted mt-2">Reset Password</p>
+<div class="auth-card vs-forgot" data-bs-theme="light">
+    <div class="logo vs-reg-logo">
+        <span class="logo-badge" style="width: 84px; height: 72px;"><img src="{{ asset('images/logo.jpg') }}" alt="Velocity Suites"></span>
+        <p class="fw-bold text-brand text-uppercase mt-2 mb-0" style="letter-spacing: 1px; font-size: 1.35rem;">Velocity Suites</p>
+        <p class="text-muted mb-1">Your comfort is our service</p>
     </div>
 
+    <h1 class="h4 fw-bold text-center mb-1">Staff password reset</h1>
+    <p class="text-muted text-center mb-3">Receptionists and managers are reset by the System Administrator. Send a request and you will be given a temporary password.</p>
+
     @if (session('status'))
-        <div class="alert alert-success" role="alert">
-            {{ session('status') }}
-        </div>
-    @endif
-
-    @php
-        $isLockoutMessage = session('error') && str_contains(session('error'), 'Too many failed login attempts');
-    @endphp
-
-    @if ($isLockoutMessage)
-        <div class="alert alert-warning" role="alert">
-            <i class="fas fa-exclamation-triangle"></i> <strong>Account Locked</strong>
-            <p class="mb-0 mt-1">Your account has been locked after 3 consecutive failed login attempts. Enter your
-                email below to request a password reset.</p>
-        </div>
-    @elseif (session('error'))
-        <div class="alert alert-error" role="alert">
-            {{ session('error') }}
-        </div>
+        <div class="alert alert-success" role="status">{{ session('status') }}</div>
     @endif
 
     @if ($errors->any())
-        <div class="alert alert-error" role="alert">
-            <strong>Error!</strong>
-            <ul class="mb-0">
-                @foreach ($errors->all() as $error)
-                    <li>{{ $error }}</li>
-                @endforeach
-            </ul>
-        </div>
+        <div class="alert alert-danger" role="alert">{{ $errors->first() }}</div>
     @endif
 
-    <p class="text-muted mb-3">
-        Enter your registered email address to reset your password. Guest and Administrator accounts receive a
-        6-digit verification code by email; Manager and Receptionist accounts are reset by the System Administrator
-        after a quick approval.
-    </p>
-
-    <form method="POST" action="{{ route('password.email') }}">
+    <form method="POST" action="{{ route('password.request.staff.send') }}" novalidate>
         @csrf
-
-        <div class="form-group">
-            <label for="email">Email Address</label>
-            <input type="email" class="form-control @error('email') is-invalid @enderror"
-                   id="email" name="email" value="{{ old('email') }}" required autofocus>
-            @error('email')
-                <div class="invalid-feedback">{{ $message }}</div>
-            @enderror
-        </div>
-
-        <button type="submit" class="btn btn-primary w-100 mb-2">
-            <i class="fas fa-paper-plane"></i> Send Verification Code
-        </button>
+        <label class="form-label fw-semibold" for="email">Email address</label>
+        <input type="email" class="form-control @error('email') is-invalid @enderror" id="email" name="email" value="{{ old('email') }}" autocomplete="email" required autofocus aria-describedby="emailHelp">
+        <div class="form-text mb-3" id="emailHelp">Enter the email registered to your Velocity Suites staff account</div>
+        <button type="submit" class="btn btn-velocity w-100">Send request</button>
     </form>
 
-    <hr>
-
-    <div class="text-center">
-        <p><a href="{{ route('login') }}">Back to Login</a></p>
-    </div>
+    <p class="text-center mt-3 mb-0"><a href="{{ route('password.request') }}">Back to reset your password</a></p>
 </div>
 @endsection

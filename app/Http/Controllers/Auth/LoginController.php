@@ -75,6 +75,13 @@ class LoginController extends Controller
             return back()->withInput($request->only('email'))->with('error', $blocked);
         }
 
+        // A temporary password from the System Administrator works for 24 hours only.
+        if ($user->temporaryPasswordExpired()) {
+            Activity::logFor($user, 'Sign-in refused', 'Temporary password expired (web)');
+
+            return back()->withInput($request->only('email'))->with('error', 'Your temporary password has expired. Request a new staff password reset from the Forgot password page.');
+        }
+
         // Every role takes the same path to Forgot Password (Auth\ForgotPasswordController::sendResetLink() branches from there:
         // Guest/Admin get the OTP email, Manager/Receptionist a request to the System Administrator).
         if ($locked) {

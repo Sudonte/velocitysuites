@@ -89,6 +89,11 @@ Route::middleware(['guest', 'throttle:20,1'])->group(function () {
     Route::get('/forgot-password', [ForgotPasswordController::class, 'showLinkRequestForm'])->name('password.request');
     Route::get('/forgot-password/staff', [ForgotPasswordController::class, 'showStaffForm'])->name('password.request.staff');
     Route::post('/forgot-password', [ForgotPasswordController::class, 'sendResetLink'])->name('password.email');
+    // The website's emailed-code reset (Guest and System Administrator), in three calls; staff request a reset from the System Administrator instead
+    Route::post('/auth/reset/send', [\App\Http\Controllers\Auth\WebResetController::class, 'send'])->name('password.web.send');
+    Route::post('/auth/reset/verify', [\App\Http\Controllers\Auth\WebResetController::class, 'verify'])->name('password.web.verify');
+    Route::post('/auth/reset/complete', [\App\Http\Controllers\Auth\WebResetController::class, 'complete'])->name('password.web.complete');
+    Route::post('/forgot-password/staff', [ForgotPasswordController::class, 'sendStaffRequest'])->name('password.request.staff.send');
     Route::get('/reset-password/verify-otp', [ForgotPasswordController::class, 'showOtpForm'])->name('password.otp.form');
     Route::post('/reset-password/verify-otp', [ForgotPasswordController::class, 'verifyOtp'])->name('password.otp.verify');
     Route::post('/reset-password/resend-otp', [ForgotPasswordController::class, 'resendOtp'])->name('password.otp.resend');

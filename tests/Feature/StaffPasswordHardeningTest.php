@@ -38,6 +38,7 @@ class StaffPasswordHardeningTest extends TestCase
             $table->integer('failed_login_attempts')->default(0);
             $table->timestamp('last_failed_login_at')->nullable();
             $table->boolean('must_change_password')->default(false);
+            $table->timestamp('temporary_password_expires_at')->nullable();
             $table->timestamp('last_login_at')->nullable();
             $table->timestamp('deleted_at')->nullable();
             $table->timestamp('restore_deadline')->nullable();

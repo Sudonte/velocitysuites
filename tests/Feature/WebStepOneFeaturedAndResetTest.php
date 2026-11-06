@@ -181,7 +181,7 @@ class WebStepOneFeaturedAndResetTest extends TestCase
         $js = file_get_contents(public_path('js/portal/auth.js'));
         foreach (['Reset your password', 'Email address', 'Enter the email registered to your Velocity Suites account', 'Send code',
             'sent a 6-digit code', 'Enter the code', 'We sent a 6-digit code to ', 'Change email', 'Resend code', 'Create a new password', 'New password',
-            'Confirm new password', 'vs-strength', 'Save and sign in', 'Password changed. Welcome back!', 'save.disabled = !(pwOk(np.value) && same)', "VS.api('/verify-reset-otp'", 'otp.invalid()'] as $needle) {
+            'Confirm new password', 'vs-strength', 'Save and sign in', 'Password changed. Welcome back!', 'save.disabled = !(pwOk(np.value) && same)', "webPost('/auth/reset/verify'", 'otp.invalid()'] as $needle) {
             $this->assertStringContainsString($needle, $js, $needle);
         }
         $this->assertStringContainsString('vs_flash', file_get_contents(public_path('js/portal/shell.js')), 'the welcome message shows after the sign-in');
@@ -208,17 +208,18 @@ class WebStepOneFeaturedAndResetTest extends TestCase
         $this->assertStringContainsString('chosen: st.chosen', $rooms);
     }
 
-    public function test_the_featured_rooms_have_type_chips_beside_the_dates(): void
+    public function test_the_featured_rooms_have_a_room_type_dropdown_on_one_row_with_the_dates(): void
     {
         $html = file_get_contents(resource_path('views/welcome.blade.php'));
-        $this->assertStringContainsString('id="vsFeaturedChips"', $html);
-        $this->assertStringContainsString('id="vsFeaturedDates"', $html);
-        $this->assertStringContainsString('class="vs-featbar"', $html);
+        foreach (['id="vsFeaturedType"', 'for="vsFeaturedType"', '>Room type<', 'All room types', 'id="vsFeaturedDates"', 'id="vsFeaturedApply"', 'class="vs-card vs-featbar"'] as $needle) {
+            $this->assertStringContainsString($needle, $html, $needle);
+        }
+        $this->assertStringNotContainsString('vsFeaturedChips', $html);
         $rooms = file_get_contents(public_path('js/portal/rooms.js'));
-        foreach (["n || 'All rooms'", 'role="radio"', "rt.name === typeFilter", 'paintChips', 'showCards'] as $needle) {
+        foreach (["var ORDER = ['standard', 'deluxe', 'superior', 'family', 'executive']", 'fillTypes', 'showCards', "rt.name === typeFilter", "typeHost.addEventListener('change'"] as $needle) {
             $this->assertStringContainsString($needle, $rooms, $needle);
         }
         $css = file_get_contents(public_path('css/portal.css'));
-        $this->assertStringContainsString('.vs-fchips { display: flex; gap: .5rem; overflow-x: auto;', $css, 'chips scroll sideways on phones');
+        $this->assertStringContainsString('grid-template-columns: minmax(12rem, 1.1fr) minmax(0, 2fr) 10rem', $css, 'type, dates and Search share one row on desktop');
     }
 }

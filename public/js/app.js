@@ -926,3 +926,12 @@ document.addEventListener('submit', function (event) {
         document.querySelectorAll('[data-desk-payment]').forEach(sync);
     });
 })();
+
+// A one-time message left by the page before (e.g. "Password changed. Welcome back!" after the website's password reset)
+document.addEventListener('DOMContentLoaded', function () {
+    try {
+        var fl = JSON.parse(sessionStorage.getItem('vs_flash') || 'null');
+        sessionStorage.removeItem('vs_flash');
+        if (fl && fl.m && typeof showToast === 'function') showToast(fl.m, fl.t || 'success');
+    } catch (e) { /* none */ }
+});

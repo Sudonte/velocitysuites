@@ -417,14 +417,12 @@ class AuthController extends Controller
 
         $user = User::where('email', $validated['email'])->first();
 
-        // Same policy as the web's Auth\ForgotPasswordController::sendResetLink() -
-        // managers/receptionists never self-reset, only the System Administrator can
-        // reset their password (see Admin\UserManagementController::resetPassword()).
-        // Enforced here too so the same rule can't be bypassed via a direct API call
-        // that the Android UI simply never exposes for staff accounts. The response
+        // The app is for guests: only a guest account is sent a code here. An administrator resets on the website
+        // (Auth\WebResetController), a manager or receptionist through the System Administrator, so a direct API call
+        // can't be used to get a code for a staff account either. The response
         // stays identical either way to avoid leaking whether the email is registered
         // or what role it belongs to.
-        if ($user && ! in_array($user->role, ['manager', 'receptionist'], true)) {
+        if ($user && $user->role === 'guest') {
             // The code is stored now and the mail goes out the moment the response is sent (no queue, no worker to wait for), so the answer
             // takes the same short time for a registered and an unknown address - the SMTP round trip must not tell them apart.
             $this->passwordReset->sendOtp($user, true);
@@ -527,7 +525,8 @@ class AuthController extends Controller
         }
 
         $user = User::where('email', $validated['email'])->first();
-        if (! $user) {
+        // the app is for guests: an administrator resets on the website, a manager or receptionist through the System Administrator
+        if (! $user || $user->role !== 'guest') {
             return response()->json(['message' => 'Invalid or expired code.'], 422);
         }
 

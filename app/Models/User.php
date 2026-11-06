@@ -31,6 +31,7 @@ class User extends Authenticatable
         'failed_login_attempts',
         'last_failed_login_at',
         'must_change_password',
+        'temporary_password_expires_at',
         'last_login_at',
         'email_verified_at',
         'deleted_at',
@@ -130,6 +131,7 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'must_change_password' => 'boolean',
+            'temporary_password_expires_at' => 'datetime',
             'is_test_account' => 'boolean',
             'last_login_at' => 'datetime',
             'last_failed_login_at' => 'datetime',
@@ -365,5 +367,11 @@ class User extends Authenticatable
         ], fn ($p) => filled($p));
 
         return $parts ? implode(', ', $parts) : null;
+    }
+
+    /** The temporary password an administrator issued has passed its 24 hours (it can no longer be used to sign in). */
+    public function temporaryPasswordExpired(): bool
+    {
+        return (bool) $this->must_change_password && $this->temporary_password_expires_at !== null && $this->temporary_password_expires_at->isPast();
     }
 }

@@ -42,6 +42,7 @@ class PasswordRuleEverywhereTest extends TestCase
             $table->string('status', 20)->default('active');
             $table->string('password')->default('x');
             $table->boolean('must_change_password')->default(false);
+            $table->timestamp('temporary_password_expires_at')->nullable();
             $table->unsignedInteger('failed_login_attempts')->default(0);
             $table->timestamp('last_failed_login_at')->nullable();
             $table->timestamp('last_login_at')->nullable();

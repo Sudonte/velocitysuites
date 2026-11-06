@@ -40,7 +40,7 @@ class ForcePasswordChangeController extends Controller
 
         $user = auth()->user();
 
-        $user->update(['password' => $validated['password'], 'must_change_password' => false]);
+        $user->update(['password' => $validated['password'], 'must_change_password' => false, 'temporary_password_expires_at' => null]);
 
         // Closes the loop on a Manager/Receptionist password-reset request:
         // if this account got here via an approved request (see

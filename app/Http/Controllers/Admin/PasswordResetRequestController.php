@@ -40,13 +40,17 @@ class PasswordResetRequestController extends Controller
         abort_unless($staffPasswordResetRequest->status === 'pending', 422, 'Only a pending request can be approved.');
 
         $user = $staffPasswordResetRequest->user;
-        $temporaryPassword = UserManagementController::DEFAULT_STAFF_PASSWORD;
+        // A password made for this one account and this one approval: random, shown once to the administrator, good for 24 hours.
+        $temporaryPassword = self::temporaryPassword();
 
         $user->update([
             'password' => $temporaryPassword,
             'must_change_password' => true,
+            'temporary_password_expires_at' => now()->addHours(self::TEMPORARY_PASSWORD_HOURS),
             'failed_login_attempts' => 0,
+            'last_failed_login_at' => null,
         ]);
+        $user->forceFill(['last_failed_login_at' => null])->save();
 
         $staffPasswordResetRequest->update([
             'status' => 'approved',
@@ -63,11 +67,33 @@ class PasswordResetRequestController extends Controller
         $this->emailStatus(
             $user,
             'Your VelocitySuites password reset request has been approved',
-            "Hi {$user->first_name},\n\nYour password reset request has been approved. Please contact the System Administrator to receive your temporary password, then log in to set a new permanent one.\n\n- VelocitySuites"
+            "Hi {$user->first_name},\n\nYour password reset request has been approved. The System Administrator will give you your temporary password (it works for 24 hours); sign in with it and set a new permanent one.\n\n- VelocitySuites"
         );
 
         return redirect()->route('admin.users.password-requests.index')
-            ->with('success', "Request approved. {$user->full_name}'s temporary password is: {$temporaryPassword} - they'll be asked to set a new one on next login.");
+            ->with('success', "Request approved for {$user->full_name}.")
+            ->with('temporary_password', [
+                'name' => $user->full_name,
+                'role' => ucfirst($user->role),
+                'email' => $user->email,
+                'password' => $temporaryPassword,
+                'expires' => $user->temporary_password_expires_at->copy()->timezone('Asia/Manila')->format('M j, Y g:i A'),
+            ]);
+    }
+
+    public const TEMPORARY_PASSWORD_HOURS = 24;
+
+    /** 12 characters from an alphabet without look-alikes, always with a letter and a number (the shared password rule). */
+    public static function temporaryPassword(): string
+    {
+        $letters = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz';
+        $all = $letters . '23456789';
+        $out = $letters[random_int(0, strlen($letters) - 1)];
+        for ($i = 0; $i < 10; $i++) {
+            $out .= $all[random_int(0, strlen($all) - 1)];
+        }
+
+        return $out . '23456789'[random_int(0, 7)];
     }
 
     public function reject(Request $request, StaffPasswordResetRequest $staffPasswordResetRequest): RedirectResponse

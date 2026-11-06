@@ -67,8 +67,11 @@ class ForgotPasswordController extends Controller
                 ->with('status', self::SENT_MESSAGE);
         }
 
+        // A manager or receptionist never gets a code and the answer is the same as for an unknown address (their reset is requested
+        // from the System Administrator on the staff page).
         if (in_array($user->role, ['manager', 'receptionist'], true)) {
-            return $this->handleStaffRequest($user);
+            return redirect()->route('password.otp.form', ['email' => $request->email])
+                ->with('status', self::SENT_MESSAGE);
         }
 
         if (! $this->passwordReset->sendOtp($user)) {
@@ -79,41 +82,46 @@ class ForgotPasswordController extends Controller
             ->with('status', self::SENT_MESSAGE);
     }
 
+    public const STAFF_MESSAGE = 'If this is a staff account, your request has been sent to the System Administrator.';
+
     /**
-     * Creates (or reuses, if one is already outstanding) a
-     * StaffPasswordResetRequest and sends the admin to their queue -
-     * never creates a second open request for the same user, so
-     * resubmitting the form just re-shows the existing request's status.
+     * The staff reset request (Manager and Receptionist): the same confirmation for every address, so the page never says whether the
+     * email has an account or what role it has. A real staff account gets one open request for the System Administrator (never a second
+     * while one is outstanding) and a confirmation email that leaves after the response, so the answer takes the same time for everyone.
      */
-    private function handleStaffRequest(User $user)
+    public function sendStaffRequest(Request $request)
+    {
+        $request->validate(['email' => 'required|email']);
+
+        $user = User::where('email', $request->email)->first();
+        if ($user && in_array($user->role, ['manager', 'receptionist'], true)) {
+            $this->handleStaffRequest($user);
+        }
+
+        return redirect()->route('password.request.staff')->with('status', self::STAFF_MESSAGE);
+    }
+
+    private function handleStaffRequest(User $user): void
     {
         $existing = StaffPasswordResetRequest::where('user_id', $user->id)
             ->whereIn('status', ['pending', 'approved'])
             ->latest()
             ->first();
 
-        $needsNewRequest = ! $existing || ($existing->status === 'pending' && $existing->isExpired());
-
-        if ($needsNewRequest) {
-            StaffPasswordResetRequest::create(['user_id' => $user->id, 'status' => 'pending']);
-
-            $this->notifications->notifyAdmin(
-                'Password Reset Request',
-                "{$user->full_name} ({$user->role}) requested a password reset.",
-                'account'
-            );
-
-            $this->emailStaffStatus(
-                $user,
-                'Your VelocitySuites password reset request has been submitted',
-                "Hi {$user->first_name},\n\nYour password reset request has been submitted and is awaiting System Administrator approval. You'll be able to log in with a temporary password once it's approved - please check back or contact the System Administrator directly.\n\n- VelocitySuites"
-            );
+        if ($existing && ! ($existing->status === 'pending' && $existing->isExpired())) {
+            return;
         }
 
-        return redirect()->route('password.staff-request.status', ['email' => $user->email])
-            ->with('status', $needsNewRequest
-                ? 'Your password reset request has been submitted to the System Administrator.'
-                : 'You already have a password reset request in progress.');
+        $created = StaffPasswordResetRequest::create(['user_id' => $user->id, 'status' => 'pending']);
+        \App\Support\Activity::logFor($user, 'Password reset requested', "{$user->role} asked the System Administrator for a password reset (request #{$created->id})");
+
+        $this->notifications->notifyAdmin('Password Reset Request', "{$user->full_name} ({$user->role}) requested a password reset.", 'account');
+
+        app()->terminating(fn () => $this->emailStaffStatus(
+            $user,
+            'Your VelocitySuites password reset request has been submitted',
+            "Hi {$user->first_name},\n\nYour password reset request was sent to the System Administrator. You will be given a temporary password to sign in with once it is approved.\n\n- VelocitySuites"
+        ));
     }
 
     private function emailStaffStatus(User $user, string $subject, string $body): void
@@ -127,25 +135,10 @@ class ForgotPasswordController extends Controller
         }
     }
 
-    /**
-     * Status page for a Manager/Receptionist's password reset request -
-     * reachable while logged out, looked up by the email they submitted
-     * (same ?email= query-param convention the OTP flow already uses).
-     */
+    /** The old status page looked a request up by email, which told anyone whether an address was a staff account: it now just shows the same confirmation. */
     public function showStaffRequestStatus(Request $request)
     {
-        $user = User::where('email', $request->query('email'))
-            ->whereIn('role', ['manager', 'receptionist'])
-            ->first();
-
-        $resetRequest = $user
-            ? StaffPasswordResetRequest::where('user_id', $user->id)->latest()->first()
-            : null;
-
-        return view('auth.staff-reset-status', [
-            'email' => $request->query('email'),
-            'resetRequest' => $resetRequest,
-        ]);
+        return redirect()->route('password.request.staff')->with('status', self::STAFF_MESSAGE);
     }
 
     public function showOtpForm(Request $request)

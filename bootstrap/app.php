@@ -12,6 +12,7 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        $middleware->appendToGroup('web', \App\Http\Middleware\EnsurePasswordChanged::class);
         $middleware->alias([
             'role' => \App\Http\Middleware\CheckRole::class,
             'account.status' => \App\Http\Middleware\CheckAccountStatus::class,

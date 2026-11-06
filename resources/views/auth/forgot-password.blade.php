@@ -15,7 +15,6 @@
         <p class="small fw-semibold text-muted mb-0" id="vsFStep" aria-live="polite">Step 1 of 3</p>
     </div>
     <div id="vsForgot"></div>
-    <p class="text-center text-muted small mt-3 mb-0">Hotel staff: <a href="{{ route('password.request.staff') }}">request a staff password reset</a>.</p>
 </div>
 @endsection
 

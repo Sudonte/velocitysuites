@@ -237,30 +237,25 @@
             sel = R.selection({ ci: datesHost.querySelector('[data-ci]'), co: datesHost.querySelector('[data-co]'), signed: !!opts.signed });
             sel.bind(el);
         }
-        var chipsHost = document.getElementById('vsFeaturedChips'), typeFilter = '', last = [];
+        var typeHost = document.getElementById('vsFeaturedType'), typeFilter = '', last = [];
         function showCards() {
             var list = typeFilter ? last.filter(function (rt) { return rt.name === typeFilter; }) : last.slice(0, 6);
             el.innerHTML = list.length ? list.map(function (rt) { return R.card(rt, sel ? new URLSearchParams(sel.dates()).toString() : '', sel); }).join('')
                 : '<div class="col-12">' + VS.empty('fa-bed', 'No rooms of that type right now', 'Choose another room type.') + '</div>';
             VS.reveal(el);
         }
-        /** "All rooms" and one chip per active room type, in the order the rooms are listed; the chosen chip shows only that type. */
-        function paintChips() {
-            if (!chipsHost) return;
+        /** The "Room type" dropdown: All room types, then the active types in the hotel's order (Standard, Deluxe, Superior, Family Suite, Executive Suite). */
+        function fillTypes() {
+            if (!typeHost) return;
             var names = []; last.forEach(function (rt) { if (names.indexOf(rt.name) < 0) names.push(rt.name); });
-            // the hotel's own order: Standard, Deluxe, Superior, Family Suite, Executive Suite (any other type after them, in list order)
             var ORDER = ['standard', 'deluxe', 'superior', 'family', 'executive'];
             function rank(n) { var l = String(n).toLowerCase(); for (var i = 0; i < ORDER.length; i++) if (l.indexOf(ORDER[i]) === 0) return i; return ORDER.length; }
             names = names.map(function (n, i) { return { n: n, r: rank(n), i: i }; }).sort(function (a, b) { return a.r - b.r || a.i - b.i; }).map(function (x) { return x.n; });
             if (typeFilter && names.indexOf(typeFilter) < 0) typeFilter = '';
-            chipsHost.innerHTML = [''].concat(names).map(function (n) {
-                var on = n === typeFilter;
-                return '<button type="button" class="vs-fchip' + (on ? ' on' : '') + '" role="radio" aria-checked="' + (on ? 'true' : 'false') + '" data-type="' + VS.esc(n) + '">' + VS.esc(n || 'All rooms') + '</button>';
-            }).join('');
-            chipsHost.querySelectorAll('[data-type]').forEach(function (b) {
-                b.onclick = function () { typeFilter = b.getAttribute('data-type'); paintChips(); showCards(); };
-            });
+            typeHost.innerHTML = '<option value="">All room types</option>' + names.map(function (n) { return '<option value="' + VS.esc(n) + '">' + VS.esc(n) + '</option>'; }).join('');
+            typeHost.value = typeFilter;
         }
+        if (typeHost) typeHost.addEventListener('change', function () { typeFilter = typeHost.value; showCards(); });
         function run() {
             var q = sel ? sel.dates() : {};
             el.innerHTML = '<div class="col-12">' + VS.skeleton(3) + '</div>';
@@ -268,10 +263,11 @@
                 if (res.error) { el.innerHTML = '<div class="col-12">' + VS.errorState(res.error, 'vsFeaturedRetry') + '</div>'; var b = document.getElementById('vsFeaturedRetry'); if (b) b.onclick = run; return; }
                 if (!res.rooms.length) { el.innerHTML = '<div class="col-12">' + VS.empty('fa-bed', 'No rooms right now', 'Please check back later.') + '</div>'; return; }
                 if (sel) sel.sync(res.rooms);
-                last = res.rooms; paintChips(); showCards();
+                last = res.rooms; fillTypes(); showCards();
             });
         }
         if (datesHost) R.bindDates(datesHost, sel, run);
+        var apply = document.getElementById('vsFeaturedApply'); if (apply) apply.addEventListener('click', function () { var ci = datesHost.querySelector('[data-ci]'), co = datesHost.querySelector('[data-co]'); ci.dispatchEvent(new Event('change')); });
         run();
     };
 

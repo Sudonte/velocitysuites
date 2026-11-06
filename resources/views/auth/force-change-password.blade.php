@@ -6,8 +6,7 @@
 <div class="container py-5" style="max-width: 480px;">
     <x-card title="Set a New Password" icon="fas fa-lock" bodyClass="card-body">
         <p class="text-muted">
-            Your account is still using the default password. For security, please set your own
-            permanent password before continuing to the dashboard.
+            You signed in with a temporary password. For security, set your own permanent password before continuing to your dashboard.
         </p>
 
         @if ($errors->any())
@@ -34,6 +33,11 @@
                     <div class="invalid-feedback d-block">{{ $message }}</div>
                 @enderror
             </div>
+            <ul class="list-unstyled small mb-3" id="pwRules" aria-live="polite">
+                <li data-k="len"><i class="far fa-circle me-1"></i>At least 8 characters</li>
+                <li data-k="letter"><i class="far fa-circle me-1"></i>A letter</li>
+                <li data-k="num"><i class="far fa-circle me-1"></i>A number</li>
+            </ul>
 
             <div class="form-group mb-3">
                 <label for="password_confirmation">Confirm New Password *</label>
@@ -43,10 +47,28 @@
                 </div>
             </div>
 
-            <button type="submit" class="btn btn-primary w-100">
-                <i class="fas fa-save"></i> Set Password & Continue
+            <div class="small mb-3" id="pwMatch" aria-live="polite"></div>
+            <button type="submit" class="btn btn-primary w-100" id="pwSave" disabled>
+                <i class="fas fa-save"></i> Set Password &amp; Continue
             </button>
         </form>
     </x-card>
 </div>
 @endsection
+
+@push('scripts')
+<script>
+(function () {
+    var pw = document.getElementById('password'), cf = document.getElementById('password_confirmation'), save = document.getElementById('pwSave'), match = document.getElementById('pwMatch');
+    function rules(v) { return { len: v.length >= 8, letter: /[A-Za-z]/.test(v), num: /\d/.test(v) }; }
+    function update() {
+        var r = rules(pw.value), ok = r.len && r.letter && r.num;
+        document.querySelectorAll('#pwRules li').forEach(function (li) { var on = r[li.dataset.k]; li.className = on ? 'text-success' : 'text-muted'; li.querySelector('i').className = (on ? 'fas fa-circle-check' : 'far fa-circle') + ' me-1'; });
+        var same = cf.value !== '' && pw.value === cf.value;
+        match.innerHTML = cf.value === '' ? '' : same ? '<span class="text-success">The passwords match</span>' : '<span class="text-danger">The passwords do not match</span>';
+        save.disabled = !(ok && same);
+    }
+    pw.addEventListener('input', update); cf.addEventListener('input', update); update();
+})();
+</script>
+@endpush

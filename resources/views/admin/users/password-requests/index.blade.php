@@ -13,6 +13,18 @@
         </x-slot:actions>
     </x-page-header>
 
+    @if (session('temporary_password'))
+        @php $tp = session('temporary_password'); @endphp
+        <div class="alert alert-warning border-warning" role="alert" id="tempPasswordBox">
+            <div class="fw-bold mb-1"><i class="fas fa-key"></i> Temporary password for {{ $tp['name'] }} ({{ $tp['role'] }}, {{ $tp['email'] }})</div>
+            <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+                <code class="fs-5 px-2 py-1 rounded bg-body-secondary" id="tempPasswordValue" style="user-select: all;">{{ $tp['password'] }}</code>
+                <button type="button" class="btn btn-sm btn-outline-dark" id="tempPasswordCopy"><i class="fas fa-copy"></i> Copy</button>
+            </div>
+            <div class="small">Shown only now &ndash; it is not saved or emailed. Give it to {{ $tp['name'] }} in person; it works until <strong>{{ $tp['expires'] }}</strong> (24 hours) and must be changed at first sign-in.</div>
+        </div>
+    @endif
+
     <!-- Alerts -->
     @if (session('success'))
         <div class="alert alert-success alert-dismissible fade show" role="alert">
@@ -91,7 +103,7 @@
                             @if($req->status === 'pending')
                                 <div class="d-flex gap-2">
                                     <form action="{{ route('admin.users.password-requests.approve', $req) }}" method="POST"
-                                          data-confirm="{{ $req->user->full_name }} will be reset to the default password." data-confirm-title="Approve this request?" data-confirm-button="Approve Request" data-confirm-variant="success">
+                                          data-confirm="A temporary password valid for 24 hours is made for {{ $req->user->full_name }} and shown to you once." data-confirm-title="Approve this request?" data-confirm-button="Approve Request" data-confirm-variant="success">
                                         @csrf
                                         @method('PUT')
                                         <button type="submit" class="btn btn-sm btn-success">
@@ -145,3 +157,17 @@
     </div>
 </div>
 @endsection
+
+@push('scripts')
+<script>
+(function () {
+    var btn = document.getElementById('tempPasswordCopy'), val = document.getElementById('tempPasswordValue');
+    if (!btn || !val) return;
+    btn.addEventListener('click', function () {
+        function done() { btn.innerHTML = '<i class="fas fa-check"></i> Copied'; setTimeout(function () { btn.innerHTML = '<i class="fas fa-copy"></i> Copy'; }, 2000); }
+        if (navigator.clipboard && window.isSecureContext) { navigator.clipboard.writeText(val.textContent.trim()).then(done); return; }
+        var r = document.createRange(); r.selectNodeContents(val); var sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r); try { document.execCommand('copy'); done(); } catch (e) { /* the text is selected for a manual copy */ }
+    });
+})();
+</script>
+@endpush

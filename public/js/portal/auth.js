@@ -202,6 +202,17 @@
 
     // ================================================= FORGOT / RESET =================================================
 
+    /** POST JSON to the website itself (session + CSRF), answering { ok, status, data, message } like VS.api. */
+    function webPost(path, body) {
+        return fetch(path, { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': VS.csrf() }, body: JSON.stringify(body) })
+            .then(function (r) {
+                return r.json().catch(function () { return {}; }).then(function (d) {
+                    var first = d.errors ? (Object.keys(d.errors).map(function (k) { return d.errors[k][0]; })[0] || '') : '';
+                    return { ok: r.ok, status: r.status, data: d, message: (first && /password/i.test(first)) ? first : (d.message || first || 'Something went wrong. Please try again.') };
+                });
+            }).catch(function () { return { ok: false, status: 0, data: {}, message: 'We could not reach the server. Check your connection and try again.' }; });
+    }
+
     A.forgot = function (root) {
         var host = $('#vsForgot', root), email = VS.qs('email') || '', state = { email: email, otp: '' };
         var SENT = 'If an account exists for that email, we\u2019ve sent a 6-digit code.';
@@ -217,13 +228,14 @@
                 '<form id="fEmail" novalidate><label class="form-label fw-semibold" for="fe">Email address</label><input class="form-control" id="fe" type="email" autocomplete="email" aria-describedby="feHelp" value="' + VS.esc(state.email) + '">' +
                 '<div class="form-text mb-3" id="feHelp">Enter the email registered to your Velocity Suites account</div>' +
                 '<button class="btn btn-velocity w-100" type="submit" data-busy-text="Sending">Send code</button></form>' +
-                '<p class="text-center mt-3 mb-0"><a href="/login">Back to sign in</a></p>';
+                '<p class="text-center mt-3 mb-3"><a href="/login">Back to sign in</a></p>' +
+                '<a class="btn btn-outline-secondary w-100" href="/forgot-password/staff">Hotel staff: Request a staff password reset</a>';
             var f = $('#fEmail', host), inp = $('#fe', host);
             f.addEventListener('submit', function (e) {
                 e.preventDefault(); VS.clearErrors(f);
                 if (!EMAIL_RE.test(inp.value.trim())) { VS.fieldError(inp, 'Enter a valid email address.'); return; }
                 state.email = inp.value.trim();
-                VS.busy(f.querySelector('button'), function () { return VS.api('/forgot-password', { method: 'POST', body: { email: state.email }, quiet401: true }); }).then(function (r) {
+                VS.busy(f.querySelector('button'), function () { return webPost('/auth/reset/send', { email: state.email }); }).then(function (r) {
                     if (!r) return;
                     // the same answer for every address: registered or not, staff or guest
                     if (r.ok || r.status === 429) stepCode(r.status === 429 ? 'Please wait a moment before asking for another code. If you already asked, use the code we sent.' : null);
@@ -244,14 +256,14 @@
             cooldown(resend, 30, 'Resend code');
             $('#fChange', host).onclick = function (e) { e.preventDefault(); stepEmail(); };
             resend.onclick = function () {
-                VS.api('/forgot-password', { method: 'POST', body: { email: state.email }, quiet401: true }).then(function (r) {
+                webPost('/auth/reset/send', { email: state.email }).then(function (r) {
                     VS.toast(r.ok ? 'We sent a new code if the account exists.' : r.message, r.ok ? 'success' : 'warning'); cooldown(resend, 30, 'Resend code');
                 });
             };
             go.onclick = function () {
                 var v = otp.value();
                 if (v.length !== 6) { VS.alertBox('vsFAlert', 'Enter the 6-digit code.'); return; }
-                VS.busy(go, function () { return VS.api('/verify-reset-otp', { method: 'POST', body: { email: state.email, otp: v }, quiet401: true }); }).then(function (r) {
+                VS.busy(go, function () { return webPost('/auth/reset/verify', { email: state.email, otp: v }); }).then(function (r) {
                     if (!r) return;
                     if (r.ok) { state.otp = v; stepPassword(); } else { otp.invalid(); VS.alertBox('vsFAlert', r.message || 'That code is wrong or has expired. Check it or ask for a new one.'); }
                 });
@@ -293,10 +305,14 @@
                 if (!pwOk(np.value)) { VS.fieldError(np.closest('.input-group'), 'Use at least 8 characters with a letter and a number.'); return; }
                 if (np.value !== cp.value) { VS.fieldError(cp.closest('.input-group'), 'The passwords do not match.'); return; }
                 VS.busy(save, function () {
-                    return VS.api('/reset-password', { method: 'POST', quiet401: true, body: { email: state.email, otp: state.otp, password: np.value, password_confirmation: cp.value, device_name: 'Web' } });
+                    return webPost('/auth/reset/complete', { email: state.email, otp: state.otp, password: np.value, password_confirmation: cp.value });
                 }).then(function (r) {
                     if (!r) return;
-                    if (r.ok && r.data && r.data.token) { try { sessionStorage.setItem('vs_flash', JSON.stringify({ m: 'Password changed. Welcome back!', t: 'success' })); } catch (er) { /* none */ } enter(r.data.token, 'vsFAlert'); return; }
+                    if (r.ok && r.data && r.data.redirect) {
+                        try { sessionStorage.setItem('vs_flash', JSON.stringify({ m: 'Password changed. Welcome back!', t: 'success' })); } catch (er) { /* none */ }
+                        // each person lands on THEIR dashboard (a guest first on the rooms they had picked, if any)
+                        window.location.href = (/\/guest\/dashboard/.test(r.data.redirect) && selectionTarget()) || r.data.redirect; return;
+                    }
                     if (r.status === 422 && /code/i.test(r.message)) { stepCode(); VS.alertBox('vsFAlert', r.message); return; }
                     VS.alertBox('vsFAlert', r.message || 'We could not change the password.');
                 });
