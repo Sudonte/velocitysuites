@@ -108,6 +108,15 @@ class Stay extends Model
         return $this->check_in->format('M j') . ' - ' . $this->check_out->format('M j');
     }
 
+    /** The whole duration of these stays, first check-in to last check-out: "Nov 22 – Nov 28, 2026" (the year on both sides when they differ). */
+    public static function durationLabel(\Illuminate\Support\Collection $stays): string
+    {
+        $from = $stays->min('check_in');
+        $to = $stays->max('check_out');
+
+        return $from->format($from->year === $to->year ? 'M d' : 'M d, Y') . ' – ' . $to->format('M d, Y');
+    }
+
     /** The same dates as another stay (both the check-in AND the check-out day)? */
     public function sameDatesAs(self $other): bool
     {

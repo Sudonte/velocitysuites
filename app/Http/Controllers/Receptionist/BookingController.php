@@ -71,7 +71,7 @@ class BookingController extends Controller
             $tab = 'pending';
         }
 
-        $query = Booking::with(['reservation.guest.user', 'reservation.payments', 'guest.user', 'payments', 'roomType', 'room', 'rooms']);
+        $query = Booking::with(['reservation.guest.user', 'reservation.payments', 'guest.user', 'payments', 'roomType', 'room', 'rooms', 'stays']);
 
         match ($tab) {
             'pending' => $query->where('booking_status', Booking::STATUS_ACTIVE)->whereNull('verified_at'),

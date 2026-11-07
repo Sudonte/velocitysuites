@@ -150,7 +150,7 @@
                                 <tr class="{{ $loop->index >= 5 ? 'preview-extra d-none' : '' }}">
                                     <td>{{ $item->booking->guest_display_name }}</td>
                                     <td>{{ $item->stayCount }} {{ \Illuminate\Support\Str::plural('stay', $item->stayCount) }}</td>
-                                    <td>{{ $item->from->format($item->from->year === $item->to->year ? 'M d' : 'M d, Y') }} &ndash; {{ $item->to->format('M d, Y') }}</td>
+                                    <td>{{ $item->duration }}</td>
                                     <td><x-status-badge :status="$item->booking->display_status" domain="booking" /></td>
                                     <td>
                                         <a href="{{ route('receptionist.bookings.show', $item->booking) }}" class="btn btn-outline-primary btn-sm btn-icon" title="View" aria-label="View">

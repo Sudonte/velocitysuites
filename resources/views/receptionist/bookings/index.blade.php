@@ -112,21 +112,13 @@
                         </div>
                     </div>
                     <div class="monitoring-item-row">
-                        <span class="text-muted">Room Type</span>
-                        <span>{{ $booking->roomType->name ?? 'N/A' }}{{ $booking->rooms_requested > 1 ? ' ×'.$booking->rooms_requested : '' }}</span>
+                        <span class="text-muted">Stays</span>
+                        <span>{{ $booking->stayCount() }} {{ \Illuminate\Support\Str::plural('stay', $booking->stayCount()) }}</span>
                     </div>
                     <div class="monitoring-item-row">
-                        <span class="text-muted">Stay</span>
-                        <span>{{ $booking->check_in->format('M d') }}&ndash;{{ $booking->check_out->format('M d, Y') }}@if($booking->stayCount() > 1) &middot; {{ $booking->stayCount() }} stays @endif</span>
+                        <span class="text-muted">Duration of Stay</span>
+                        <span>{{ \App\Models\Stay::durationLabel($booking->stayList()) }}</span>
                     </div>
-                    @if($booking->stayCount() > 1)
-                        @foreach($booking->stayList() as $st)
-                            <div class="monitoring-item-row small">
-                                <span class="text-muted">Stay {{ $st->position }}</span>
-                                <span>{{ $st->check_in->format('M d') }}&ndash;{{ $st->check_out->format('M d') }}</span>
-                            </div>
-                        @endforeach
-                    @endif
                     <div class="monitoring-item-row">
                         <span class="text-muted">Total</span>
                         <span>{{ $bookingTotal !== null ? '₱' . number_format($bookingTotal, 2) : 'N/A' }}</span>
@@ -213,9 +205,8 @@
                 <tr>
                     <th>Booking #</th>
                     <th>Guest</th>
-                    <th class="d-none d-md-table-cell">Room Type</th>
-                    <th>Check-In</th>
-                    <th>Check-Out</th>
+                    <th>Stays</th>
+                    <th>Duration of Stay</th>
                     <th class="d-none d-md-table-cell">Total</th>
                     @if($tab === 'pending')
                         <th>Payment</th>
@@ -245,29 +236,11 @@
                                 </div>
                                 <div>
                                     {{ $booking->guest_display_name }}
-                                    <small class="d-block text-muted d-md-none">
-                                        {{ $booking->roomType->name ?? 'N/A' }}
-                                        @if($booking->rooms_requested > 1)&times;{{ $booking->rooms_requested }}@endif
-                                    </small>
                                 </div>
                             </div>
                         </td>
-                        <td class="d-none d-md-table-cell">
-                            {{ $booking->roomType->name ?? 'N/A' }}
-                            @if($booking->rooms_requested > 1)
-                                <span class="badge bg-secondary">&times;{{ $booking->rooms_requested }} rooms</span>
-                            @endif
-                        </td>
-                        <td>
-                            {{ $booking->check_in->format('M d, Y') }}
-                            @if($booking->stayCount() > 1)
-                                <div class="small"><span class="badge bg-info text-dark"><i class="fas fa-layer-group"></i> {{ $booking->stayCount() }} stays</span></div>
-                                @foreach($booking->stayList() as $st)
-                                    <div class="small text-muted">Stay {{ $st->position }}: {{ $st->check_in->format('M d') }}&ndash;{{ $st->check_out->format('M d') }}</div>
-                                @endforeach
-                            @endif
-                        </td>
-                        <td>{{ $booking->check_out->format('M d, Y') }}</td>
+                        <td>{{ $booking->stayCount() }} {{ \Illuminate\Support\Str::plural('stay', $booking->stayCount()) }}</td>
+                        <td>{{ \App\Models\Stay::durationLabel($booking->stayList()) }}</td>
                         <td class="d-none d-md-table-cell">{{ $bookingTotal !== null ? '₱' . number_format($bookingTotal, 2) : 'N/A' }}</td>
                         @if($tab === 'pending')
                             <td>
@@ -344,9 +317,9 @@
                     <tr>
                         @php
                             $colspan = match ($tab) {
-                                'pending' => 8,
-                                'verified' => 7,
-                                default => 8,
+                                'pending' => 7,
+                                'verified' => 6,
+                                default => 7,
                             };
                         @endphp
                         <td colspan="{{ $colspan }}">

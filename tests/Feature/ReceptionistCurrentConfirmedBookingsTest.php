@@ -8,7 +8,7 @@ use App\Models\Reservation;
 use App\Models\RoomType;
 use App\Models\User;
 
-/** The receptionist dashboard's Current Confirmed Bookings: the same set as the Confirmed Bookings tab, by stays and whole duration. */
+/** The receptionist dashboard's Current Confirmed Bookings (the same set as the Confirmed Bookings tab) and the Bookings page: by stays and whole duration. */
 class ReceptionistCurrentConfirmedBookingsTest extends ApiFlowTestCase
 {
     private function booking(array $extra = []): Booking
@@ -65,7 +65,7 @@ class ReceptionistCurrentConfirmedBookingsTest extends ApiFlowTestCase
         $this->assertCount(1, $rows);
         $this->assertSame(2, $rows[0]->stayCount);
         $this->assertStringContainsString('2 stays', $html);
-        $this->assertStringContainsString('Nov 09 &ndash; Nov 16, 2026', $html);
+        $this->assertStringContainsString('Nov 09 – Nov 16, 2026', $html);
     }
 
     public function test_a_group_booked_together_is_one_row(): void
@@ -79,7 +79,34 @@ class ReceptionistCurrentConfirmedBookingsTest extends ApiFlowTestCase
 
         $this->assertCount(1, $rows);
         $this->assertSame(2, $rows[0]->stayCount);
-        $this->assertStringContainsString('Dec 30, 2026 &ndash; Jan 04, 2027', $html);
+        $this->assertStringContainsString('Dec 30, 2026 – Jan 04, 2027', $html);
+    }
+
+    public function test_every_tab_of_the_bookings_page_shows_stays_and_duration_instead_of_room_type_and_dates(): void
+    {
+        $desk = User::firstOrCreate(['email' => 'recep-current@example.test'], [
+            'first_name' => 'Rec', 'last_name' => 'Eption', 'password' => bcrypt('x'), 'role' => 'receptionist', 'status' => 'active',
+        ]);
+        $verified = $this->booking();
+        $verified->ensureStays();
+        $verified->stays()->create(['position' => 2, 'check_in' => '2026-11-14', 'check_out' => '2026-11-16']);
+        $this->booking(['verified_at' => null]);
+        $this->booking(['booking_status' => Booking::STATUS_CANCELLED]);
+        $this->booking(['hidden_at' => now()]);
+
+        foreach (['pending', 'verified', 'rejected', 'archived'] as $tab) {
+            $html = $this->actingAs($desk)->get(route('receptionist.bookings.index', ['tab' => $tab]))->assertOk()->getContent();
+
+            $this->assertStringContainsString('Duration of Stay', $html, $tab);
+            $this->assertStringContainsString('<th>Stays</th>', $html, $tab);
+            foreach (['Room Type', '<th>Check-In</th>', '<th>Check-Out</th>'] as $gone) {
+                $this->assertStringNotContainsString($gone, $html, $tab);
+            }
+        }
+
+        $html = $this->actingAs($desk)->get(route('receptionist.bookings.index', ['tab' => 'verified']))->getContent();
+        $this->assertStringContainsString('2 stays', $html);
+        $this->assertStringContainsString('Nov 09 – Nov 16, 2026', $html);
     }
 
     public function test_one_stay_reads_in_the_singular(): void
@@ -89,6 +116,6 @@ class ReceptionistCurrentConfirmedBookingsTest extends ApiFlowTestCase
         [$html] = $this->dashboard();
 
         $this->assertStringContainsString('1 stay<', $html);
-        $this->assertStringContainsString('Nov 09 &ndash; Nov 10, 2026', $html);
+        $this->assertStringContainsString('Nov 09 – Nov 10, 2026', $html);
     }
 }

@@ -103,7 +103,7 @@ class ReceptionistController extends Controller
                     'booking' => $bookings->first(),
                     'stayCount' => $stays->count(),
                     'from' => $stays->min('check_in'),
-                    'to' => $stays->max('check_out'),
+                    'duration' => \App\Models\Stay::durationLabel($stays),
                 ];
             })
             ->sortBy('from')
