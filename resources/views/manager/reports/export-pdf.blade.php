@@ -13,6 +13,6 @@
 
     @include('reports.partials.pdf-body', ['report' => $report, 'withRevenue' => true, 'periodLabel' => $periodLabel])
 
-    <p class="footer-note">Velocity Suites &middot; Confidential internal report &middot; Generated {{ $generatedAt->format('M d, Y h:i A') }}</p>
+    <p class="footer-note">Velocity Suites &middot; Confidential internal report &middot; Generated {{ \App\Support\HotelTime::format($generatedAt, 'M d, Y h:i A') }}</p>
 </body>
 </html>

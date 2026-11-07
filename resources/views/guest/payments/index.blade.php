@@ -100,7 +100,7 @@
             <tbody>
                 @forelse($payments as $payment)
                     <tr>
-                        <td>{{ ($payment->payment_date ?? $payment->created_at)->format('M d, Y h:i A') }}</td>
+                        <td>{{ \App\Support\HotelTime::format(($payment->payment_date ?? $payment->created_at), 'M d, Y h:i A') }}</td>
                         <td>{{ $payment->billing_id ? '#' . $payment->billing_id : ($payment->reservation_id ? 'Deposit' : 'Booking Payment') }}</td>
                         <td>
                             @if($payment->billing)

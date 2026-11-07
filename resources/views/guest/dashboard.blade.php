@@ -258,7 +258,7 @@
                     <tbody>
                         @foreach($recentPayments as $payment)
                             <tr>
-                                <td>{{ ($payment->payment_date ?? $payment->created_at)->format('M d, Y H:i') }}</td>
+                                <td>{{ \App\Support\HotelTime::format(($payment->payment_date ?? $payment->created_at), 'M d, Y H:i') }}</td>
                                 <td>
                                     @if($payment->billing)
                                         {{ $payment->billing->booking->room->room_name ?? $payment->billing->booking->roomType->name }}

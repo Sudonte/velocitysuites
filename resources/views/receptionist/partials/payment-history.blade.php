@@ -103,7 +103,7 @@
                                 {{ \App\Support\CheckInSettlement::label($tx, $transactionTypeLabels[$tx['transaction_type']] ?? $tx['transaction_type']) }}
                             </div>
                             <div class="small text-muted">
-                                {{ $tx['payment_date'] ? \Carbon\Carbon::parse($tx['payment_date'])->format('F j, Y \a\t g:i A') : '—' }}
+                                {{ $tx['payment_date'] ? \App\Support\HotelTime::format($tx['payment_date'], 'F j, Y \a\t g:i A') : '—' }}
                             </div>
                             @if($tx['payment_percentage'])
                                 <div class="small">Payment Percentage: <strong>{{ $tx['payment_percentage'] }}%</strong></div>

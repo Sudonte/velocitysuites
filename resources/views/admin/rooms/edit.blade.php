@@ -169,7 +169,7 @@
 
             <x-card title="Quick Actions" bodyClass="card-body">
                 @if($room->isArchived())
-                    <p class="text-muted small">Archived {{ $room->archived_at->format('M d, Y') }} - not bookable, assignable or counted.</p>
+                    <p class="text-muted small">Archived {{ \App\Support\HotelTime::format($room->archived_at, 'M d, Y') }} - not bookable, assignable or counted.</p>
                     <form action="{{ route('admin.rooms.restore', $room) }}" method="POST"
                           data-confirm="Room {{ $room->room_number }} will return to inventory and count toward availability again."
                           data-confirm-title="Restore Room {{ $room->room_number }}?" data-confirm-button="Restore Room" data-confirm-variant="success">

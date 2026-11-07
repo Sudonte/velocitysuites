@@ -1026,7 +1026,7 @@
                                     @endif
                                     <p class="text-muted small mb-3">
                                         <i class="fas fa-calendar-alt"></i>
-                                        {{ optional($announcement->published_at)->format('M d, Y') ?? $announcement->created_at->format('M d, Y') }}
+                                        {{ optional($announcement->published_at)->format('M d, Y') ?? \App\Support\HotelTime::format($announcement->created_at, 'M d, Y') }}
                                     </p>
                                     <p class="mb-0" style="white-space: pre-line;">{{ $announcement->content }}</p>
                                 </div>

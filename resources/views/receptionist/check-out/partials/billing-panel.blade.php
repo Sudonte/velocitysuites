@@ -28,7 +28,7 @@
 
     @if($settledAtCheckIn)
         <div class="alert alert-success py-2 small">
-            <i class="fas fa-check-circle"></i> The stay was paid in full at check-in ({{ $settledAtCheckIn->format('M j, Y g:i A') }}).
+            <i class="fas fa-check-circle"></i> The stay was paid in full at check-in ({{ \App\Support\HotelTime::format($settledAtCheckIn, 'M j, Y g:i A') }}).
             Items marked <span class="badge bg-success">Paid at check-in</span> are not charged again - only what was added since is due now.
         </div>
     @endif

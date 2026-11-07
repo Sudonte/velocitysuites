@@ -16,7 +16,7 @@
 <body>
     <h1>Velocity Suites - Reservations</h1>
     <p class="subtitle">
-        Generated on: {{ $generatedAt->format('M d, Y h:i A') }} &middot; Total Records: {{ $reservations->count() }}
+        Generated on: {{ \App\Support\HotelTime::format($generatedAt, 'M d, Y h:i A') }} &middot; Total Records: {{ $reservations->count() }}
     </p>
 
     <table>

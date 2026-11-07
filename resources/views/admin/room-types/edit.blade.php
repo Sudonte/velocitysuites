@@ -58,7 +58,7 @@
                                         </button>
                                     @else
                                         <small class="text-muted d-block">
-                                            <i class="fas fa-lock"></i> Locked until {{ $roomType->nextImageChangeDate()->format('M d, Y g:i A') }} -
+                                            <i class="fas fa-lock"></i> Locked until {{ \App\Support\HotelTime::format($roomType->nextImageChangeDate(), 'M d, Y g:i A') }} -
                                             the main image can be uploaded, replaced, or removed once every 24 hours.
                                         </small>
                                     @endif

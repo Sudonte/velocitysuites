@@ -76,8 +76,8 @@
                             @if($booking->hasSeveralStays())
                                 <div><dt>Stays</dt><dd>{{ $booking->stayCount() }} (listed below)</dd></div>
                             @endif
-                            <div><dt>Booking / Creation Date</dt><dd>{{ $booking->created_at?->format('F d, Y') ?? 'N/A' }}</dd></div>
-                            <div><dt>Creation Time</dt><dd>{{ $booking->created_at?->format('h:i A') ?? 'N/A' }}</dd></div>
+                            <div><dt>Booking / Creation Date</dt><dd>{{ \App\Support\HotelTime::format($booking->created_at, 'F d, Y') ?? 'N/A' }}</dd></div>
+                            <div><dt>Creation Time</dt><dd>{{ \App\Support\HotelTime::format($booking->created_at, 'g:i A') ?? 'N/A' }}</dd></div>
                         </dl>
                     </x-card>
                 </div>
@@ -190,7 +190,7 @@
                                     <dd>{{ $booking->selected_payment_percentage ? (int) $booking->selected_payment_percentage . '%' : 'N/A' }}</dd>
                                 </div>
                                 <div><dt>Submitted Amount</dt><dd>₱{{ number_format($gcashPayment->amount_paid, 2) }}</dd></div>
-                                <div><dt>Payment Date &amp; Time</dt><dd>{{ $gcashPayment->payment_date?->format('M d, Y h:i A') ?? 'Not recorded' }}</dd></div>
+                                <div><dt>Payment Date &amp; Time</dt><dd>{{ \App\Support\HotelTime::format($gcashPayment->payment_date, 'M d, Y h:i A') ?? 'Not recorded' }}</dd></div>
                             </dl>
                         </div>
                         <div class="col-md-6">
@@ -423,7 +423,7 @@
                             <li class="pb-3 mb-3 border-bottom">
                                 <div class="d-flex justify-content-between">
                                     <strong>{{ $entry->action }}</strong>
-                                    <small class="text-muted">{{ $entry->created_at?->format('M d, Y h:i A') }}</small>
+                                    <small class="text-muted">{{ \App\Support\HotelTime::format($entry->created_at, 'M d, Y h:i A') }}</small>
                                 </div>
                                 @if($entry->description)
                                     <div class="text-muted small">{{ $entry->description }}</div>
@@ -450,7 +450,7 @@
                         @endif
                     </p>
                     @if($booking->statusChangedBy)
-                        <p class="text-muted small mb-2"><i class="fas fa-user"></i> Cancelled by {{ $booking->statusChangedBy->full_name }}{{ $booking->cancelled_at ? ' on ' . $booking->cancelled_at->format('M d, Y h:i A') : '' }}</p>
+                        <p class="text-muted small mb-2"><i class="fas fa-user"></i> Cancelled by {{ $booking->statusChangedBy->full_name }}{{ $booking->cancelled_at ? ' on ' . \App\Support\HotelTime::format($booking->cancelled_at, 'M d, Y h:i A') : '' }}</p>
                     @endif
                     @include('receptionist.bookings.partials.archive-toggle', ['booking' => $booking])
                 </x-card>
@@ -458,7 +458,7 @@
                 <x-card title="No-Show" icon="fas fa-user-slash" bodyClass="card-body">
                     <p class="mb-2">The guest didn't check in, so this booking was marked as a no-show{{ $booking->rejection_reason ? ': ' . $booking->rejection_reason : '.' }}</p>
                     <p class="text-muted small mb-3">
-                        <i class="fas fa-user"></i> Marked by {{ $booking->statusChangedBy?->full_name ?? 'staff' }}{{ $booking->no_show_at ? ' on ' . $booking->no_show_at->format('M d, Y h:i A') : '' }}
+                        <i class="fas fa-user"></i> Marked by {{ $booking->statusChangedBy?->full_name ?? 'staff' }}{{ $booking->no_show_at ? ' on ' . \App\Support\HotelTime::format($booking->no_show_at, 'M d, Y h:i A') : '' }}
                     </p>
                     <div class="d-flex flex-wrap gap-2">
                         <form action="{{ route('receptionist.bookings.undo-no-show', $booking) }}" method="POST"
@@ -513,7 +513,7 @@
                         This booking has been verified, completed, and archived - it's read-only now, no further
                         verification, assignment, or other changes can be made.
                     </p>
-                    <p class="text-muted small mb-3"><i class="fas fa-box-archive"></i> Archived {{ $booking->hidden_at->format('M d, Y h:i A') }}</p>
+                    <p class="text-muted small mb-3"><i class="fas fa-box-archive"></i> Archived {{ \App\Support\HotelTime::format($booking->hidden_at, 'M d, Y h:i A') }}</p>
                     @include('receptionist.bookings.partials.archive-toggle', ['booking' => $booking])
                 </x-card>
             @else

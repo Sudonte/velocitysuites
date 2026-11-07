@@ -242,7 +242,7 @@ class GuestController extends Controller
 
         $csv = "Date,Bill #,Room,Method,Reference,Amount,Status\n";
         foreach ($payments as $payment) {
-            $date = ($payment->payment_date ?? $payment->created_at)->format('Y-m-d H:i');
+            $date = \App\Support\HotelTime::format(($payment->payment_date ?? $payment->created_at), 'Y-m-d H:i');
             $room = $payment->billing
                 ? ($payment->billing->booking->room->room_number ?? $payment->billing->booking->roomType->name)
                 : ($payment->reservation ?? $payment->booking)?->roomType->name;

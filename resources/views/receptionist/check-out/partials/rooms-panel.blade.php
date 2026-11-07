@@ -109,7 +109,7 @@
                         @if($isCheckedOut)
                             <span class="badge bg-secondary mb-2">
                                 <i class="fas fa-check"></i> Checked Out
-                                &middot; {{ \Illuminate\Support\Carbon::parse($room->pivot->checked_out_at)->format('M d, Y g:i A') }}
+                                &middot; {{ \App\Support\HotelTime::format($room->pivot->checked_out_at, 'M d, Y g:i A') }}
                             </span>
                         @else
                             @if($isDue)

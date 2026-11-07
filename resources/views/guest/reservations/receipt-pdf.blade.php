@@ -137,7 +137,7 @@
                         $statusClass = 'badge-' . ($tx['verification_status'] ?? $tx['payment_status']);
                     @endphp
                     <tr>
-                        <td>{{ $tx['payment_date'] ? \Carbon\Carbon::parse($tx['payment_date'])->format('M d, Y') : 'N/A' }}</td>
+                        <td>{{ $tx['payment_date'] ? \App\Support\HotelTime::format($tx['payment_date'], 'M d, Y') : 'N/A' }}</td>
                         <td>{{ ucfirst($tx['payment_method']) }}</td>
                         <td>{{ \App\Support\CheckInSettlement::label($tx, ucwords(str_replace('_', ' ', strtolower($tx['transaction_type'])))) }}</td>
                         <td class="{{ $statusClass }}">{{ $statusLabel }}</td>

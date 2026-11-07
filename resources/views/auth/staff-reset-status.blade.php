@@ -36,13 +36,13 @@
     @elseif ($resetRequest->status === 'approved')
         <div class="alert alert-success" role="alert">
             <i class="fas fa-check-circle"></i> Your request was <strong>approved</strong>
-            on {{ $resetRequest->processed_at?->format('M d, Y g:i A') }}. Please contact the System Administrator to
+            on {{ \App\Support\HotelTime::format($resetRequest->processed_at, 'M d, Y g:i A') }}. Please contact the System Administrator to
             receive your temporary password, then log in below to set a new permanent one.
         </div>
     @elseif ($resetRequest->status === 'rejected')
         <div class="alert alert-error" role="alert">
             <i class="fas fa-times-circle"></i> Your request was <strong>rejected</strong>
-            on {{ $resetRequest->processed_at?->format('M d, Y g:i A') }}.
+            on {{ \App\Support\HotelTime::format($resetRequest->processed_at, 'M d, Y g:i A') }}.
             @if ($resetRequest->rejection_reason)
                 <br>Reason: {{ $resetRequest->rejection_reason }}
             @endif
@@ -50,7 +50,7 @@
         </div>
     @elseif ($resetRequest->status === 'completed')
         <div class="alert alert-success" role="alert">
-            <i class="fas fa-check-circle"></i> This request was already completed on {{ $resetRequest->completed_at?->format('M d, Y g:i A') }}.
+            <i class="fas fa-check-circle"></i> This request was already completed on {{ \App\Support\HotelTime::format($resetRequest->completed_at, 'M d, Y g:i A') }}.
             Your password has been changed - log in with your new password below.
         </div>
     @endif

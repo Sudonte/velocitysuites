@@ -310,7 +310,7 @@ class RoomTypeManagementController extends Controller
             if ($roomType->image && ! $roomType->canChangeImage()) {
                 return back()->withErrors([
                     'image' => 'This room type\'s main image was changed recently. It can be changed again on '
-                        . $roomType->nextImageChangeDate()->format('M d, Y g:i A') . '.',
+                        . \App\Support\HotelTime::format($roomType->nextImageChangeDate(), 'M d, Y g:i A') . '.',
                 ])->withInput();
             }
 
@@ -356,7 +356,7 @@ class RoomTypeManagementController extends Controller
         if (! $roomType->canChangeImage()) {
             return back()->with('error',
                 'This room type\'s main image was changed recently. It can be changed again on '
-                    . $roomType->nextImageChangeDate()->format('M d, Y g:i A') . '.');
+                    . \App\Support\HotelTime::format($roomType->nextImageChangeDate(), 'M d, Y g:i A') . '.');
         }
 
         Storage::disk('public')->delete($roomType->image);

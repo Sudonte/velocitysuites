@@ -34,7 +34,7 @@
                             {{ $payment->payment_method === 'gcash' ? 'GCash' : ucfirst($payment->payment_method) }} &middot; ₱{{ number_format($payment->amount_paid, 2) }}
                             @php $stageLabel = \App\Support\CheckInSettlement::label(['reference_number' => $payment->reference_number], $payment->billing_id && $payment->payment_stage === 'final' ? 'Paid at Check-out' : ''); @endphp
                             @if($stageLabel)<span class="badge bg-light text-dark border">{{ $stageLabel }}</span>@endif
-                            <small class="text-muted d-block">{{ ($payment->payment_date ?? $payment->created_at)->format('M d, Y') }}{{ $payment->reference_number ? ' - ' . $payment->reference_number : '' }}</small>
+                            <small class="text-muted d-block">{{ \App\Support\HotelTime::format(($payment->payment_date ?? $payment->created_at), 'M d, Y') }}{{ $payment->reference_number ? ' - ' . $payment->reference_number : '' }}</small>
                         </div>
                         <x-status-badge :status="$payment->verification_status ?? $payment->payment_status" :domain="$payment->verification_status ? 'verification_status' : 'payment'" />
                     </div>

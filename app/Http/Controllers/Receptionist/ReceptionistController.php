@@ -205,10 +205,10 @@ class ReceptionistController extends Controller
         }
 
         if ($request->filled('date_from')) {
-            $query->whereDate('created_at', '>=', $request->date_from);
+            $query->where('created_at', '>=', \App\Support\HotelTime::dayStartUtc($request->date_from));
         }
         if ($request->filled('date_to')) {
-            $query->whereDate('created_at', '<=', $request->date_to);
+            $query->where('created_at', '<', \App\Support\HotelTime::dayEndUtc($request->date_to));
         }
 
         $amenityRequests = $query->latest()->paginate(15)->withQueryString();
@@ -311,10 +311,10 @@ class ReceptionistController extends Controller
         }
 
         if ($request->filled('date_from')) {
-            $query->whereDate('created_at', '>=', $request->date_from);
+            $query->where('created_at', '>=', \App\Support\HotelTime::dayStartUtc($request->date_from));
         }
         if ($request->filled('date_to')) {
-            $query->whereDate('created_at', '<=', $request->date_to);
+            $query->where('created_at', '<', \App\Support\HotelTime::dayEndUtc($request->date_to));
         }
 
         $amenityRequests = $query->latest('archived_at')->paginate(15)->withQueryString();

@@ -40,7 +40,7 @@
                             <div><dt>Email</dt><dd>{{ $guest->user->email }}</dd></div>
                             <div><dt>Mobile</dt><dd>{{ $guest->mobile_number ?: 'Not provided' }}</dd></div>
                             <div><dt>Address</dt><dd>{{ $guest->address ?: 'Not provided' }}</dd></div>
-                            <div><dt>Member since</dt><dd>{{ $guest->user->created_at?->format('M d, Y') }}</dd></div>
+                            <div><dt>Member since</dt><dd>{{ \App\Support\HotelTime::format($guest->user->created_at, 'M d, Y') }}</dd></div>
                             <div><dt>Account</dt><dd><x-status-badge :status="$guest->user->status" domain="active_flag" /></dd></div>
                         </dl>
                     </x-card>
@@ -75,8 +75,8 @@
                             <tr>
                                 <td>{{ $b->check_in->format('M d, Y') }} &ndash; {{ $b->check_out->format('M d, Y') }}</td>
                                 <td class="small">{{ $roomsOf($b) }}</td>
-                                <td>{{ $b->checked_in_at?->format('M d, Y g:i A') ?? '-' }}</td>
-                                <td>{{ $b->checked_out_at?->format('M d, Y g:i A') ?? '-' }}</td>
+                                <td>{{ \App\Support\HotelTime::format($b->checked_in_at, 'M d, Y g:i A') ?? '-' }}</td>
+                                <td>{{ \App\Support\HotelTime::format($b->checked_out_at, 'M d, Y g:i A') ?? '-' }}</td>
                                 <td><x-status-badge :status="$b->display_status" domain="booking" /></td>
                                 <td class="text-end"><a href="{{ $stayUrl($b) }}" class="btn btn-sm btn-outline-primary">View</a></td>
                             </tr>
@@ -99,7 +99,7 @@
                                 <td>{{ $r->roomType->name ?? 'N/A' }}@if($r->rooms_requested > 1) &times;{{ $r->rooms_requested }}@endif</td>
                                 <td>{{ $r->check_in->format('M d, Y') }} &ndash; {{ $r->check_out->format('M d, Y') }}</td>
                                 <td>{{ $r->number_of_guests }}</td>
-                                <td>{{ $r->created_at?->format('M d, Y') }}</td>
+                                <td>{{ \App\Support\HotelTime::format($r->created_at, 'M d, Y') }}</td>
                                 <td>
                                     @if($r->booking)
                                         <x-status-badge :status="$r->booking->display_status" domain="booking" />
@@ -124,7 +124,7 @@
                     <tbody>
                         @forelse($payments as $p)
                             <tr>
-                                <td>{{ ($p->payment_date ?? $p->created_at)?->format('M d, Y g:i A') }}</td>
+                                <td>{{ \App\Support\HotelTime::format(($p->payment_date ?? $p->created_at), 'M d, Y g:i A') }}</td>
                                 <td>{{ $p->payment_method === 'gcash' ? 'GCash' : ucfirst($p->payment_method) }}</td>
                                 <td>{{ $p->reference_number ?: '-' }}</td>
                                 <td>{{ ucfirst($p->payment_stage ?? '-') }}</td>
@@ -151,7 +151,7 @@
                     <div class="pb-2 mb-2 {{ $loop->last ? '' : 'border-bottom' }}">
                         <div class="d-flex justify-content-between flex-wrap gap-2">
                             <strong>{{ $entry->action }}</strong>
-                            <small class="text-muted">{{ $entry->created_at?->format('M d, Y g:i A') }}</small>
+                            <small class="text-muted">{{ \App\Support\HotelTime::format($entry->created_at, 'M d, Y g:i A') }}</small>
                         </div>
                         @if($entry->description)<div class="small text-muted">{{ $entry->description }}</div>@endif
                         @if($entry->user)<div class="small text-muted">by {{ $entry->user->full_name }}</div>@endif

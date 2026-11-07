@@ -152,7 +152,7 @@
                                     <span class="badge bg-success"><i class="fas fa-check-circle"></i> Completed</span>
                                 @endif
                                 @if($tab === 'archived' && $booking->hidden_at)
-                                    <br><small class="text-muted">Archived {{ $booking->hidden_at->format('M d, Y') }}</small>
+                                    <br><small class="text-muted">Archived {{ \App\Support\HotelTime::format($booking->hidden_at, 'M d, Y') }}</small>
                                 @endif
                             </span>
                         </div>
@@ -292,7 +292,7 @@
                                     <span class="badge bg-success"><i class="fas fa-check-circle"></i> Completed</span>
                                 @endif
                                 @if($tab === 'archived' && $booking->hidden_at)
-                                    <br><small class="text-muted"><i class="fas fa-box-archive"></i> Archived {{ $booking->hidden_at->format('M d, Y') }}</small>
+                                    <br><small class="text-muted"><i class="fas fa-box-archive"></i> Archived {{ \App\Support\HotelTime::format($booking->hidden_at, 'M d, Y') }}</small>
                                 @endif
                             </td>
                         @endif

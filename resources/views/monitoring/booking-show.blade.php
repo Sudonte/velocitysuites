@@ -72,7 +72,7 @@
                 </div>
                 <div class="row mb-0">
                     <div class="col-md-4"><strong>Confirmed At:</strong></div>
-                    <div class="col-md-8">{{ $booking->confirmed_at?->format('M d, Y h:i A') ?? 'N/A' }}</div>
+                    <div class="col-md-8">{{ \App\Support\HotelTime::format($booking->confirmed_at, 'M d, Y h:i A') ?? 'N/A' }}</div>
                 </div>
             </x-card>
 

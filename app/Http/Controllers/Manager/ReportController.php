@@ -56,7 +56,7 @@ class ReportController extends Controller
             'generatedAt' => now(),
         ])->setPaper('a4', 'portrait');
 
-        return $pdf->download('Velocity-Suites-Manager-Report_' . now()->format('Y-m-d_His') . '.pdf');
+        return $pdf->download('Velocity-Suites-Manager-Report_' . \App\Support\HotelTime::format(now(), 'Y-m-d_His') . '.pdf');
     }
 
     /** Daily Guest Arrivals for ?arrival_date= (default today) as a PDF [REQ065]. */
@@ -83,7 +83,7 @@ class ReportController extends Controller
     {
         $raw = (string) $request->get('arrival_date', '');
 
-        return preg_match('/^\d{4}-\d{2}-\d{2}$/', $raw) && strtotime($raw) ? \Carbon\Carbon::parse($raw)->startOfDay() : today();
+        return preg_match('/^\d{4}-\d{2}-\d{2}$/', $raw) && strtotime($raw) ? \Carbon\Carbon::parse($raw)->startOfDay() : \App\Support\CheckInWindow::date();
     }
 
     /** Cached briefly (keyed by every filter) and shared by the screen and the PDF. */

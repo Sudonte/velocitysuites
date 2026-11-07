@@ -16,7 +16,7 @@
 <body>
     <h1>Velocity Suites - Payment History</h1>
     <p class="subtitle">
-        Generated on: {{ $generatedAt->format('M d, Y h:i A') }} &middot; Total Records: {{ $payments->count() }}
+        Generated on: {{ \App\Support\HotelTime::format($generatedAt, 'M d, Y h:i A') }} &middot; Total Records: {{ $payments->count() }}
     </p>
 
     <table>
@@ -39,7 +39,7 @@
                         : ($payment->reservation ?? $payment->booking)?->roomType->name;
                 ?>
                 <tr>
-                    <td>{{ ($payment->payment_date ?? $payment->created_at)->format('M d, Y h:i A') }}</td>
+                    <td>{{ \App\Support\HotelTime::format(($payment->payment_date ?? $payment->created_at), 'M d, Y h:i A') }}</td>
                     <td>{{ $payment->billing_id ? '#' . $payment->billing_id : ($payment->reservation_id ? 'Deposit' : 'Booking Payment') }}</td>
                     <td>{{ $room }}</td>
                     <td>{{ ucfirst($payment->payment_method) }}</td>

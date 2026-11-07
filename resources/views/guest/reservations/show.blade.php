@@ -390,7 +390,7 @@
                             <div class="timeline-marker" style="background-color: var(--success-color);"></div>
                             <div class="timeline-content">
                                 <strong>Booking Confirmed</strong><br>
-                                <small class="text-muted">{{ $booking->confirmed_at?->format('M d, Y h:i A') }}</small>
+                                <small class="text-muted">{{ \App\Support\HotelTime::format($booking->confirmed_at, 'M d, Y h:i A') }}</small>
                             </div>
                         </div>
                         @if(in_array($booking->booking_status, [\App\Models\Booking::STATUS_CHECKED_IN, \App\Models\Booking::STATUS_COMPLETED]))

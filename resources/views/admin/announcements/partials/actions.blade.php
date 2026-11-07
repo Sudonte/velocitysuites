@@ -3,8 +3,8 @@
         'title' => $a->title, 'content' => $a->content, 'status' => $a->displayStatus(), 'audience' => $a->audienceShort(),
         'images' => collect($a->images ?? [])->map(fn ($p) => \Illuminate\Support\Facades\Storage::disk('public')->url($p))->values(),
         'published' => $a->published_at?->format('F j, Y') ?? 'Not set', 'ends' => $a->ends_at?->format('F j, Y') ?? 'No end date',
-        'notified' => $a->notified_at?->format('F j, Y g:i A') ?? 'Not yet sent', 'edited' => $a->last_edited_at?->format('F j, Y g:i A') ?? 'Not edited since publishing',
-        'updated' => $a->updated_at->format('F j, Y g:i A'), 'edit' => route('admin.announcements.edit', $a),
+        'notified' => \App\Support\HotelTime::format($a->notified_at, 'F j, Y g:i A') ?? 'Not yet sent', 'edited' => \App\Support\HotelTime::format($a->last_edited_at, 'F j, Y g:i A') ?? 'Not edited since publishing',
+        'updated' => \App\Support\HotelTime::format($a->updated_at, 'F j, Y g:i A'), 'edit' => route('admin.announcements.edit', $a),
     ];
 @endphp
 <div class="ann-actions">

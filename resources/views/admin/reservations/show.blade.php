@@ -140,7 +140,7 @@
                                     <p class="mb-3">₱{{ number_format($payment->amount_paid, 2) }}</p>
 
                                     <p class="mb-1"><strong>Payment Date &amp; Time:</strong></p>
-                                    <p class="mb-0">{{ $payment->payment_date?->format('M d, Y h:i A') ?? 'Not recorded' }}</p>
+                                    <p class="mb-0">{{ \App\Support\HotelTime::format($payment->payment_date, 'M d, Y h:i A') ?? 'Not recorded' }}</p>
                                 </div>
                                 <div class="col-md-6">
                                     <p class="mb-1"><strong>Uploaded Receipt:</strong></p>

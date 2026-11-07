@@ -109,7 +109,7 @@
                     @if($announcement->notified_at)
                         <div class="alert alert-info d-flex align-items-center gap-2 mb-4">
                             <i class="fas fa-bell"></i>
-                            <div>Notifications for this announcement were already sent on {{ $announcement->notified_at->format('F d, Y g:i A') }}. Changing the target audience now only affects where it's <em>displayed</em> going forward - it will not re-notify anyone.</div>
+                            <div>Notifications for this announcement were already sent on {{ \App\Support\HotelTime::format($announcement->notified_at, 'F d, Y g:i A') }}. Changing the target audience now only affects where it's <em>displayed</em> going forward - it will not re-notify anyone.</div>
                         </div>
                     @endif
 

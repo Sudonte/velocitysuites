@@ -78,8 +78,8 @@
                 <div><dt>Check-In</dt><dd>{{ $reservation->check_in->format('M d, Y') }}</dd></div>
                 <div><dt>Check-Out</dt><dd>{{ $reservation->check_out->format('M d, Y') }}</dd></div>
                 <div><dt>Nights</dt><dd>{{ $nights }}</dd></div>
-                <div><dt>Booking / Creation Date</dt><dd>{{ $reservation->created_at?->format('M d, Y') ?? 'N/A' }}</dd></div>
-                <div><dt>Creation Time</dt><dd>{{ $reservation->created_at?->format('h:i A') ?? 'N/A' }}</dd></div>
+                <div><dt>Booking / Creation Date</dt><dd>{{ \App\Support\HotelTime::format($reservation->created_at, 'M d, Y') ?? 'N/A' }}</dd></div>
+                <div><dt>Creation Time</dt><dd>{{ \App\Support\HotelTime::format($reservation->created_at, 'g:i A') ?? 'N/A' }}</dd></div>
             </dl>
         </x-card>
 
@@ -194,7 +194,7 @@
             @if($reservation->payment_deadline)
                 <p class="mb-0 mt-2">
                     <strong>Payment Deadline:</strong>
-                    <span class="text-danger">{{ \Illuminate\Support\Carbon::parse($reservation->payment_deadline)->format('M d, Y h:i A') }}</span>
+                    <span class="text-danger">{{ \App\Support\HotelTime::format($reservation->payment_deadline, 'M d, Y h:i A') }}</span>
                     <small class="text-muted d-block">Unpaid past this deadline auto-cancels the reservation.</small>
                 </p>
             @endif
@@ -299,7 +299,7 @@
                         <li class="pb-2 mb-2 border-bottom">
                             <div class="d-flex justify-content-between">
                                 <strong>{{ $entry->action }}</strong>
-                                <small class="text-muted">{{ $entry->created_at?->format('M d, Y h:i A') }}</small>
+                                <small class="text-muted">{{ \App\Support\HotelTime::format($entry->created_at, 'M d, Y h:i A') }}</small>
                             </div>
                             @if($entry->description)
                                 <div class="text-muted small">{{ $entry->description }}</div>

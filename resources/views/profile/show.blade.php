@@ -77,7 +77,7 @@
                         <dd class="col-sm-8">{{ $user->created_at->copy()->timezone('Asia/Manila')->format('M d, Y h:i A') }}</dd>
 
                         <dt class="col-sm-4">Last Login</dt>
-                        <dd class="col-sm-8">{{ $user->last_login_at ? $user->last_login_at->format('M d, Y h:i A') : 'Never' }}</dd>
+                        <dd class="col-sm-8">{{ $user->last_login_at ? \App\Support\HotelTime::format($user->last_login_at, 'M d, Y h:i A') : 'Never' }}</dd>
                     </dl>
                 </x-card>
 

@@ -108,7 +108,7 @@
                                 <td><span class="ann-chip {{ strtolower($st) }}">{{ $st }}</span></td>
                                 <td>{{ $a->audienceShort() }}</td>
                                 <td class="ann-num">{{ $range($a) }}</td>
-                                <td class="ann-num ann-muted">{{ $a->updated_at->format('M j, Y g:i A') }}</td>
+                                <td class="ann-num ann-muted">{{ \App\Support\HotelTime::format($a->updated_at, 'M j, Y g:i A') }}</td>
                                 <td class="text-end">@include('admin.announcements.partials.actions', ['a' => $a])</td>
                             </tr>
                         @endforeach
@@ -129,7 +129,7 @@
                     <dl>
                         <dt>Audience</dt><dd>{{ $a->audienceShort() }}</dd>
                         <dt>Dates</dt><dd class="ann-num">{{ $range($a) }}</dd>
-                        <dt>Updated</dt><dd class="ann-num">{{ $a->updated_at->format('M j, Y g:i A') }}</dd>
+                        <dt>Updated</dt><dd class="ann-num">{{ \App\Support\HotelTime::format($a->updated_at, 'M j, Y g:i A') }}</dd>
                     </dl>
                     @include('admin.announcements.partials.actions', ['a' => $a])
                 </div>

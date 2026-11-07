@@ -114,7 +114,7 @@
                     </div>
                     <div class="monitoring-item-row">
                         <span class="text-muted">Archived</span>
-                        <span>{{ $req->archived_at?->format('M d, Y') }}</span>
+                        <span>{{ \App\Support\HotelTime::format($req->archived_at, 'M d, Y') }}</span>
                     </div>
                     <button type="button" class="btn btn-outline-primary btn-sm w-100 mt-2 btn-icon" data-bs-toggle="modal"
                             data-bs-target="#amenityRequestDetail{{ $req->id }}" title="View Details" aria-label="View Details">
@@ -163,7 +163,7 @@
                             <td>{{ $req->quantity }}</td>
                             <td>₱{{ number_format($req->subtotal, 2) }}</td>
                             <td class="d-none d-lg-table-cell">{{ $req->created_at->copy()->timezone('Asia/Manila')->format('M d, Y h:i A') }}</td>
-                            <td class="d-none d-lg-table-cell">{{ $req->archived_at?->format('M d, Y h:i A') }}</td>
+                            <td class="d-none d-lg-table-cell">{{ \App\Support\HotelTime::format($req->archived_at, 'M d, Y h:i A') }}</td>
                             <td><x-status-badge :status="$req->status" domain="amenity_request" /></td>
                             <td class="text-nowrap">
                                 <button type="button" class="btn btn-outline-primary btn-sm btn-icon" data-bs-toggle="modal"
@@ -267,7 +267,7 @@
                         </div>
                         <div class="room-type-detail-row">
                             <span class="room-type-detail-label">Archived:</span>
-                            <span class="room-type-detail-value">{{ $req->archived_at?->format('M d, Y g:i A') }}</span>
+                            <span class="room-type-detail-value">{{ \App\Support\HotelTime::format($req->archived_at, 'M d, Y g:i A') }}</span>
                         </div>
                         <div class="room-type-detail-row">
                             <span class="room-type-detail-label">Status:</span>

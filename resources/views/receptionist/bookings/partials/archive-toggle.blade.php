@@ -1,6 +1,6 @@
 {{-- Archive / Restore for a closed booking - archiving is reversible, nothing is deleted. --}}
 @if($booking->hidden_at)
-    <p class="text-muted small mb-2"><i class="fas fa-box-archive"></i> Archived {{ $booking->hidden_at->format('M d, Y h:i A') }}</p>
+    <p class="text-muted small mb-2"><i class="fas fa-box-archive"></i> Archived {{ \App\Support\HotelTime::format($booking->hidden_at, 'M d, Y h:i A') }}</p>
     <form action="{{ route('receptionist.bookings.restore', $booking) }}" method="POST" class="d-inline">
         @csrf
         @method('PUT')

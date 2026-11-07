@@ -45,8 +45,8 @@ class ManagerNotificationController extends Controller
                 });
             })
             ->when($validated['category'] ?? null, fn ($query, $category) => $query->where('category', $category))
-            ->when($dateFrom, fn ($query, $date) => $query->whereDate('created_at', '>=', $date))
-            ->when($dateTo, fn ($query, $date) => $query->whereDate('created_at', '<=', $date))
+            ->when($dateFrom, fn ($query, $date) => $query->where('created_at', '>=', \App\Support\HotelTime::dayStartUtc($date)))
+            ->when($dateTo, fn ($query, $date) => $query->where('created_at', '<', \App\Support\HotelTime::dayEndUtc($date)))
             ->latest()
             ->simplePaginate(20)
             ->withQueryString();

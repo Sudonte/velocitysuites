@@ -102,10 +102,10 @@ class Announcement extends Model
     {
         return $query->where('status', 'published')
             ->where(function ($q) {
-                $q->whereNull('published_at')->orWhereDate('published_at', '<=', now());
+                $q->whereNull('published_at')->orWhereDate('published_at', '<=', \App\Support\CheckInWindow::date());
             })
             ->where(function ($q) {
-                $q->whereNull('ends_at')->orWhereDate('ends_at', '>=', now());
+                $q->whereNull('ends_at')->orWhereDate('ends_at', '>=', \App\Support\CheckInWindow::date());
             })
             ->where(function ($q) use ($audience) {
                 $q->whereNull('target_audience')
@@ -137,7 +137,7 @@ class Announcement extends Model
         if ($this->status !== 'published') {
             return 'Draft';
         }
-        $today = now()->startOfDay();
+        $today = \App\Support\CheckInWindow::date(); // the hotel's day, not the server's
         if ($this->ends_at !== null && $this->ends_at->lt($today)) {
             return 'Expired';
         }

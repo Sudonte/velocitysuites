@@ -12,7 +12,7 @@
                 <p class="report-title">{{ $reportTitle }}</p>
             </td>
             <td class="meta">
-                Generated: {{ $generatedAt->format('M d, Y h:i A') }}<br>
+                Generated: {{ \App\Support\HotelTime::format($generatedAt, 'M d, Y h:i A') }}<br>
                 Period: {{ $periodLabel ?? 'All-time' }}
             </td>
         </tr>
