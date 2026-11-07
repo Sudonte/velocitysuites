@@ -82,21 +82,32 @@ class ReceptionistController extends Controller
             ->where('booking_status', Booking::STATUS_CHECKED_IN)
             ->get();
 
-        // Current Booking & Reservations widget - deliberately queries
-        // Reservation (not just Booking, unlike the earlier version of this
-        // widget) so both not-yet-converted reservation requests
-        // (pending_review/ready_for_booking) and already-converted,
-        // still-awaiting-check-in bookings (booking_status=confirmed) show
-        // up together, distinguished by a Type badge in the view - "current"
-        // meaning still active/actionable, not completed/cancelled/rejected.
+        // Current Confirmed Bookings widget - the same set as the Bookings
+        // module's "Confirmed Bookings" tab, queried from Booking so a direct
+        // booking (no reservation behind it) shows up too. Bookings of one
+        // group (booked together) are one row: how many stays, and the whole
+        // duration from the first check-in to the last check-out.
         // No cap - small enough that "Expand" can show every matching row.
-        $currentReservations = Reservation::with(['guest.user', 'roomType', 'booking.room'])
-            ->where(function ($q) {
-                $q->whereIn('status', Reservation::ACTIVE_STATUSES)
-                    ->orWhereHas('booking', fn ($q2) => $q2->where('booking_status', Booking::STATUS_ACTIVE));
-            })
+        $currentConfirmedBookings = Booking::with(['reservation.guest.user', 'guest.user', 'stays'])
+            ->where('booking_status', Booking::STATUS_ACTIVE)
+            ->whereNotNull('verified_at')
+            ->whereNull('hidden_at')
             ->orderBy('check_in')
-            ->get();
+            ->orderBy('id')
+            ->get()
+            ->groupBy(fn (Booking $booking) => $booking->group_id ? "group-{$booking->group_id}" : "booking-{$booking->id}")
+            ->map(function ($bookings) {
+                $stays = $bookings->flatMap(fn (Booking $booking) => $booking->stayList());
+
+                return (object) [
+                    'booking' => $bookings->first(),
+                    'stayCount' => $stays->count(),
+                    'from' => $stays->min('check_in'),
+                    'to' => $stays->max('check_out'),
+                ];
+            })
+            ->sortBy('from')
+            ->values();
 
         // Recent Booking Activities - the curated log (see App\Support\Activity),
         // filtered to booking/reservation-relevant entries only; user-
@@ -120,7 +131,7 @@ class ReceptionistController extends Controller
             'inHouseGuests',
             'pendingArrivals',
             'todayDepartures',
-            'currentReservations',
+            'currentConfirmedBookings',
             'recentBookingActivities'
         ));
     }

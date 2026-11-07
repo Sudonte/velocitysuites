@@ -130,64 +130,46 @@
         </div>
     </div>
 
-    <!-- Current Booking & Reservations -->
+    <!-- Current Confirmed Bookings -->
     <div class="row">
         <div class="col-12">
-            <x-collapsible-card id="receptionistCurrentBookingReservations" title="Current Booking & Reservations" icon="fas fa-calendar-check" bodyClass="table-responsive" class="mb-4">
-                <div id="receptionistCurrentBookingReservations-list" data-preview-list data-preview-persist-key="dash-preview-receptionistCurrentBookingReservations">
+            <x-collapsible-card id="receptionistCurrentConfirmedBookings" title="Current Confirmed Bookings" icon="fas fa-calendar-check" bodyClass="table-responsive" class="mb-4">
+                <div id="receptionistCurrentConfirmedBookings-list" data-preview-list data-preview-persist-key="dash-preview-receptionistCurrentConfirmedBookings">
                     <table class="table table-hover mb-0">
                         <thead>
                             <tr>
                                 <th>Guest</th>
-                                <th>Type</th>
-                                <th>Room Type</th>
-                                <th>Check-In</th>
-                                <th>Check-Out</th>
+                                <th>Stays</th>
+                                <th>Duration of Stay</th>
                                 <th>Status</th>
                                 <th></th>
                             </tr>
                         </thead>
                         <tbody>
-                            @forelse($currentReservations as $item)
+                            @forelse($currentConfirmedBookings as $item)
                                 <tr class="{{ $loop->index >= 5 ? 'preview-extra d-none' : '' }}">
-                                    <td>{{ $item->guest->user->full_name ?? 'N/A' }}</td>
+                                    <td>{{ $item->booking->guest_display_name }}</td>
+                                    <td>{{ $item->stayCount }} {{ \Illuminate\Support\Str::plural('stay', $item->stayCount) }}</td>
+                                    <td>{{ $item->from->format($item->from->year === $item->to->year ? 'M d' : 'M d, Y') }} &ndash; {{ $item->to->format('M d, Y') }}</td>
+                                    <td><x-status-badge :status="$item->booking->display_status" domain="booking" /></td>
                                     <td>
-                                        @if($item->booking)
-                                            <span class="badge bg-primary">Booking</span>
-                                        @else
-                                            <span class="badge bg-secondary">Reservation</span>
-                                        @endif
-                                    </td>
-                                    <td>{{ $item->roomType->name ?? 'N/A' }}</td>
-                                    <td>{{ $item->check_in->format('M d, Y') }}</td>
-                                    <td>{{ $item->check_out->format('M d, Y') }}</td>
-                                    <td>
-                                        @if($item->booking)
-                                            <x-status-badge :status="$item->booking->display_status" domain="booking" />
-                                        @else
-                                            <x-status-badge :status="$item->status" domain="reservation" />
-                                        @endif
-                                    </td>
-                                    <td>
-                                        @if($item->booking)
-                                            <a href="{{ route('receptionist.bookings.show', $item->booking) }}" class="btn btn-outline-primary btn-sm btn-icon" title="View" aria-label="View">
-                                                <i class="fas fa-eye"></i></a>
-                                        @endif
+                                        <a href="{{ route('receptionist.bookings.show', $item->booking) }}" class="btn btn-outline-primary btn-sm btn-icon" title="View" aria-label="View">
+                                            <i class="fas fa-eye"></i></a>
                                     </td>
                                 </tr>
                             @empty
-                                <tr><td colspan="7"><x-empty-state icon="fas fa-calendar-check" message="No current bookings or reservations." /></td></tr>
+                                <tr><td colspan="5"><x-empty-state icon="fas fa-calendar-check" message="No confirmed bookings." /></td></tr>
                             @endforelse
                         </tbody>
                     </table>
-                    @if($currentReservations->count() > 5)
-                        <button type="button" class="btn btn-sm btn-outline-secondary w-100 mt-2 preview-toggle-btn" aria-expanded="false" aria-controls="receptionistCurrentBookingReservations-list">
+                    @if($currentConfirmedBookings->count() > 5)
+                        <button type="button" class="btn btn-sm btn-outline-secondary w-100 mt-2 preview-toggle-btn" aria-expanded="false" aria-controls="receptionistCurrentConfirmedBookings-list">
                             <i class="fas fa-chevron-down"></i> Expand
                         </button>
                     @endif
                 </div>
                 <div class="text-end mt-2">
-                    <a href="{{ route('receptionist.bookings.index') }}" class="small">View all &raquo;</a>
+                    <a href="{{ route('receptionist.bookings.index', ['tab' => 'verified']) }}" class="small">View all &raquo;</a>
                 </div>
             </x-collapsible-card>
         </div>
