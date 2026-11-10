@@ -16,14 +16,14 @@ class DatesBeforeBookNowTest extends TestCase
         $js = file_get_contents(public_path('js/portal/rooms.js'));
 
         $this->assertStringContainsString('Choose your check-in and check-out dates first.', $js);
-        $this->assertMatchesRegularExpression('/function go\(intent\)\s*\{\s*var t = totals\(\); if \(!t\.rooms\) return;\s*if \(!st\.chosen\) \{ needDates\(\); return; \}/', $js);
+        $this->assertMatchesRegularExpression('/function go\(intent\)\s*\{\s*var t = totals\(\); if \(!t\.rooms\) return;\s*if \(!datesOk\(\)\) \{ needDates\(\); return; \}/', $js);
         // the message sits in the date row and the page scrolls to it
         $this->assertStringContainsString("row.scrollIntoView", $js);
         $this->assertStringContainsString("data-go=\"book\">Book now", $js);
         $this->assertStringContainsString("data-go=\"reserve\">Reserve", $js);
     }
 
-    public function test_the_dates_are_marked_chosen_only_when_the_guest_picks_them(): void
+    public function test_a_changed_date_is_saved_as_chosen_at_once(): void
     {
         $js = file_get_contents(public_path('js/portal/rooms.js'));
 
@@ -49,12 +49,12 @@ class DatesBeforeBookNowTest extends TestCase
 
         $this->assertStringContainsString("qs.get('chosen') === '1'", $js);
         $this->assertStringContainsString("'/guest/rooms?dates_first=1&room='", $js);
-        // the cards carry chosen=1 only when the guest picked the dates
+        // the cards carry the dates as chosen (pre-filled dates count)
         $this->assertStringContainsString("if (st.chosen) p.set('chosen', '1');", $js);
         // the Rooms page asks for the dates, with the room selected
         $this->assertStringContainsString("arrive.get('dates_first')", $js);
         $this->assertStringContainsString("sel.preset(arrive.get('room'))", $js);
-        $this->assertStringContainsString('sel.needDates()', $js);
+        $this->assertStringContainsString('if (!sel.datesOk()) sel.needDates();', $js);
     }
 
     public function test_the_wizard_without_dates_rooms_or_a_draft_goes_to_the_rooms_page_first(): void
@@ -82,7 +82,7 @@ class DatesBeforeBookNowTest extends TestCase
         $this->assertStringContainsString("mode ? 'Book Selected' : 'Book now'", $js);
         $this->assertStringContainsString("mode ? 'Reserve Selected' : 'Reserve'", $js);
         // the dates rule is the same function, and Room Details keeps both actions (no mode)
-        $this->assertStringContainsString('if (!st.chosen) { needDates(); return; }', $js);
+        $this->assertStringContainsString('if (!datesOk()) { needDates(); return; }', $js);
         $this->assertStringNotContainsString("dates_first=1&room=' + encodeURIComponent(rt.id) + '&mode", $js);
     }
 }

@@ -125,7 +125,7 @@
     R.selection = function (cfg) {
         var saved = R.loadSelection() || {};
         var earliest = VS.addDays(VS.today(), 2);
-        var st = { check_in: saved.check_in && saved.check_in >= earliest ? saved.check_in : earliest, check_out: '', rooms: saved.rooms || {}, types: saved.types || {}, chosen: !!saved.chosen };
+        var st = { check_in: saved.check_in && saved.check_in >= earliest ? saved.check_in : earliest, check_out: '', rooms: saved.rooms || {}, types: saved.types || {}, chosen: true }; // the pre-filled dates (earliest check-in, one night) count as chosen
         st.check_out = saved.check_out && saved.check_out > st.check_in ? saved.check_out : VS.addDays(st.check_in, 1);
         cfg.ci.min = earliest; cfg.ci.value = st.check_in; cfg.co.min = VS.addDays(st.check_in, 1); cfg.co.value = st.check_out;
         var list = [], bar = null, sel = {};
@@ -134,7 +134,7 @@
         sel.qty = function (id) { return st.rooms[id] || 0; };
         sel.max = function (rt) { return rt.is_fully_booked ? 0 : Math.max(0, rt.available_count || 0); };
         sel.dates = function () { return { check_in: st.check_in, check_out: st.check_out }; };
-        /** The query string the room cards carry to Room Details: the dates, and chosen=1 only when the guest picked them themselves. */
+        /** The query string the room cards carry to Room Details: the dates (pre-filled or changed by the guest), marked chosen. */
         sel.search = function () { var p = new URLSearchParams({ check_in: st.check_in, check_out: st.check_out }); if (st.chosen) p.set('chosen', '1'); return p.toString(); };
         /** A room opened from Room Details before any dates were chosen: it is selected here, and the guest is asked for the dates. */
         sel.preset = function (id) { if (id) { st.rooms[id] = 1; persist(); } };
@@ -148,7 +148,10 @@
             book.textContent = mode ? 'Book Selected' : 'Book now'; reserve.textContent = mode ? 'Reserve Selected' : 'Reserve';
         }
         sel.setMode = function (m) { mode = m; applyModeBar(); };
-        /** The guest picked the dates themselves (the pickers start on the earliest dates): only then are they carried into the booking wizard as chosen. */
+        /** The dates in the two fields are bookable: check-in from the earliest day on, check-out after it. */
+        function datesOk() { return !!(cfg.ci.value && cfg.ci.value >= earliest && cfg.co.value && cfg.co.value > cfg.ci.value); }
+        sel.datesOk = datesOk;
+        /** The dates always count as chosen now (they are pre-filled when the page opens); kept so a changed date is saved at once. */
         sel.markChosen = function () { st.chosen = true; persist(); };
 
         sel.sync = function (rooms) {
@@ -213,7 +216,7 @@
         }
         function go(intent) {
             var t = totals(); if (!t.rooms) return;
-            if (!st.chosen) { needDates(); return; }
+            if (!datesOk()) { needDates(); return; } // only when a date was cleared or is no longer bookable
             persist(intent);
             if (cfg.signed) window.location.href = '/guest/' + (intent === 'reserve' ? 'reserve' : 'book') + '/new?sel=1';
             else promptSignIn(intent);
@@ -464,9 +467,10 @@
         form.querySelector('[data-clear]').addEventListener('click', function () { form.reset(); sel.setDates(VS.addDays(VS.today(), 2), VS.addDays(VS.today(), 3)); ci.value = VS.addDays(VS.today(), 2); co.value = VS.addDays(VS.today(), 3); run(); });
         ci.addEventListener('change', function () { if (ci.value) { co.min = VS.addDays(ci.value, 1); if (!co.value || co.value <= ci.value) co.value = VS.addDays(ci.value, 1); sel.markChosen(); run(); } });
         co.addEventListener('change', function () { sel.markChosen(); run(); });
-        // arriving from Room Details or the wizard without chosen dates: the room stays selected and the date picker asks for the dates
+        // arriving from Room Details or the wizard with no dates of their own: the room stays selected and the pre-filled dates are ready
+        // (the message shows only if a date is missing or no longer bookable)
         var arrive = new URLSearchParams(window.location.search);
-        if (arrive.get('dates_first')) { sel.preset(arrive.get('room')); run().then(function () { sel.needDates(); if (arrive.get('reset')) { var n = root.querySelector('#vsSelNote'); if (n) n.innerHTML = '<div class="alert alert-info vs-alert mb-3" role="status">The booking form has changed, so your earlier progress was cleared. Please start again.</div>'; } }); }
+        if (arrive.get('dates_first')) { sel.preset(arrive.get('room')); Promise.resolve(run()).then(function () { if (!sel.datesOk()) sel.needDates(); if (arrive.get('reset')) { var n = root.querySelector('#vsSelNote'); if (n) n.innerHTML = '<div class="alert alert-info vs-alert mb-3" role="status">The booking form has changed, so your earlier progress was cleared. Please start again.</div>'; } }); }
         else run();
     };
 })();

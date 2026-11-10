@@ -202,7 +202,7 @@ class WebStepOneFeaturedAndResetTest extends TestCase
         // no night count and no total before dates: the card prints the total line only when the dates are valid
         $this->assertStringContainsString("(ok ? VS.esc(VS.plural(count, 'room') + ' \\u00d7 ' + VS.plural(n, 'night') + ' = ' + VS.money(total)) : 'Choose your dates to see the total')", $wiz);
         $this->assertStringContainsString("per night</span></div>'", $wiz);
-        // the dates only count as chosen when the guest picked them (the pickers start on the earliest dates)
+        // the pre-filled dates count as chosen, and a changed date is saved at once
         $rooms = file_get_contents(public_path('js/portal/rooms.js'));
         $this->assertStringContainsString('sel.markChosen = function', $rooms);
         $this->assertGreaterThanOrEqual(4, substr_count($rooms, 'markChosen()'));
