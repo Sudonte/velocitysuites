@@ -184,8 +184,21 @@
             document.body.appendChild(wrap);
             var m = new bootstrap.Modal(wrap); m.show(); wrap.addEventListener('hidden.bs.modal', function () { wrap.remove(); });
         }
+        /** Book now / Reserve need dates the guest chose themselves: the pickers start on the earliest dates, which are not a choice. */
+        function needDates() {
+            var row = cfg.ci.closest('.vs-daterow') || cfg.ci.parentElement;
+            VS.clearErrors(row);
+            var fb = document.createElement('div');
+            fb.className = 'invalid-feedback vs-fb d-block col-12 fw-semibold'; fb.setAttribute('role', 'alert'); fb.id = 'vsDatesFirst';
+            fb.textContent = 'Choose your check-in and check-out dates first.';
+            row.appendChild(fb);
+            cfg.ci.classList.add('is-invalid'); cfg.co.classList.add('is-invalid');
+            row.scrollIntoView({ block: 'center', behavior: VS.reducedMotion ? 'auto' : 'smooth' });
+            cfg.ci.focus({ preventScroll: true });
+        }
         function go(intent) {
             var t = totals(); if (!t.rooms) return;
+            if (!st.chosen) { needDates(); return; }
             persist(intent);
             if (cfg.signed) window.location.href = '/guest/' + (intent === 'reserve' ? 'reserve' : 'book') + '/new?sel=1';
             else promptSignIn(intent);

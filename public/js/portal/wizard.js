@@ -166,14 +166,24 @@
                 var on = editing === i;
                 return '<article class="vs-dl-card' + (on ? ' is-editing' : '') + '" aria-label="' + VS.esc(VS.date(s.check_in) + ' to ' + VS.date(s.check_out)) + '">' +
                     '<header class="vs-dl-head"><div><div class="fw-bold">' + VS.esc(VS.date(s.check_in)) + ' → ' + VS.esc(VS.date(s.check_out)) + ' <span class="text-muted fw-normal">· ' + VS.plural(n, 'night') + '</span></div>' + (on ? '<span class="vs-chip">Editing now</span>' : '') + '</div>' +
-                    '<div class="d-flex gap-2"><button type="button" class="btn btn-sm btn-outline-velocity" data-edit="' + i + '"' + (on ? ' disabled' : '') + '>Edit</button><button type="button" class="btn btn-sm btn-light" data-remove="' + i + '">Remove</button></div></header>' +
+                    '<div class="d-flex gap-2"><button type="button" class="btn btn-sm btn-outline-velocity" data-add-room="' + i + '">Add room</button><button type="button" class="btn btn-sm btn-outline-velocity" data-edit="' + i + '"' + (on ? ' disabled' : '') + '>Edit</button><button type="button" class="btn btn-sm btn-light" data-remove="' + i + '">Remove</button></div></header>' +
                     lines + '<div class="vs-dl-sub"><span>Subtotal for these dates</span><span class="vs-num fw-bold">' + VS.money(sub) + '</span></div></article>';
-            }).join('') + '<div class="vs-dl-total"><span>Total for all dates</span><span class="vs-num">' + VS.money(roomsTotal(types)) + '</span></div></section>';
+            }).join('') + '<div class="vs-dl-total"><span>Total for all dates</span><span class="vs-num">' + VS.money(roomsTotal(types)) + '</span></div>' +
+                '<div class="mt-2"><button type="button" class="btn btn-outline-velocity" data-add-date>Add another date</button></div></section>';
             updateNext();
             host.querySelectorAll('[data-edit]').forEach(function (b) { b.onclick = function () {
                 var s = S.stays[+b.dataset.edit]; S.draft = { check_in: s.check_in, check_out: s.check_out, rooms: JSON.parse(JSON.stringify(s.rooms)), editing: +b.dataset.edit }; save(); paintStays(); paintEditor();
                 main.querySelector('#vsEditor').scrollIntoView({ behavior: VS.reducedMotion ? 'auto' : 'smooth' });
             }; });
+            host.querySelectorAll('[data-add-room]').forEach(function (b) { b.onclick = function () {
+                var s = S.stays[+b.dataset.addRoom]; S.draft = { check_in: s.check_in, check_out: s.check_out, rooms: JSON.parse(JSON.stringify(s.rooms)), editing: +b.dataset.addRoom }; save(); paintStays(); paintEditor();
+                var pick = main.querySelector('#vsRoomPick'); if (pick) pick.scrollIntoView({ block: 'center', behavior: VS.reducedMotion ? 'auto' : 'smooth' });
+            }; });
+            var addDate = host.querySelector('[data-add-date]');
+            if (addDate) addDate.onclick = function () {
+                if (S.draft.editing != null) { S.draft = { check_in: '', check_out: '', rooms: {}, editing: null }; save(); paintStays(); paintEditor(); }
+                var i = main.querySelector('#wIn'); if (i) { i.scrollIntoView({ block: 'center', behavior: VS.reducedMotion ? 'auto' : 'smooth' }); i.focus({ preventScroll: true }); }
+            };
             host.querySelectorAll('[data-remove]').forEach(function (b) { b.onclick = function () {
                 var i = +b.dataset.remove, s = S.stays[i];
                 VS.confirm({ title: 'Remove ' + VS.date(s.check_in) + ' → ' + VS.date(s.check_out) + '?', message: 'Its dates, rooms and amenities are removed from this booking.', confirmText: 'Remove', danger: true }).then(function (yes) {
