@@ -21,7 +21,7 @@
         @if($discountStatus === 'approved')
             <div class="d-flex justify-content-between align-items-center">
                 <span><span class="badge bg-success">Discount approved</span> {{ $stay['discount_name'] ?? $claimedDiscount?->name }} &middot; &minus;{{ $peso($stay['discount']) }}</span>
-                @if($idCardUrl)<a href="{{ $idCardUrl }}" target="_blank" rel="noopener" class="small">View ID</a>@endif
+                <span class="small">@if($idCardUrl)<a href="{{ $idCardUrl }}" target="_blank" rel="noopener">View ID</a>@endif @if($idNumber ?? null)<span class="text-muted">ID no. {{ $idNumber }}</span>@endif</span>
             </div>
         @else
             @if($discountRequested && $hasIdPhoto)
@@ -33,7 +33,7 @@
             @elseif($discountStatus === 'rejected')
                 <p class="small mb-2"><span class="badge bg-danger">ID rejected</span> No ID discount applies. You can upload a new ID photo.</p>
             @else
-                <p class="small text-muted mb-2">No ID discount requested. Upload the guest's ID to apply one (optional).</p>
+                <p class="small text-muted mb-2">No ID discount yet. If the guest is a PWD or Senior Citizen, choose the discount, record the ID (a photo or the ID number) and approve it. Optional.</p>
             @endif
 
             {{-- Inputs on one row, actions on their own row below so they always fit inside the panel. --}}
@@ -47,8 +47,13 @@
                     </select>
                 </div>
                 <div class="col-md-6">
-                    <label class="form-label small mb-1">{{ $hasIdPhoto ? 'Replace ID photo (optional)' : 'ID photo *' }}</label>
+                    <label class="form-label small mb-1">{{ $hasIdPhoto ? 'Replace ID photo (optional)' : 'ID photo' }}</label>
                     <input type="file" accept="image/*" class="form-control form-control-sm" data-offer-field="id_document">
+                </div>
+                <div class="col-12">
+                    <label class="form-label small mb-1">{{ $hasIdPhoto ? 'ID number (optional)' : 'Or the ID number' }}</label>
+                    <input type="text" maxlength="60" autocomplete="off" class="form-control form-control-sm" data-offer-field="id_number" value="{{ $idNumber ?? '' }}" placeholder="Number printed on the ID">
+                    <div class="form-text">Record the guest's ID by photo or by its number. Approving applies the discount to this stay's bill.</div>
                 </div>
             </div>
             <div class="d-flex flex-wrap gap-2 justify-content-end mt-2">

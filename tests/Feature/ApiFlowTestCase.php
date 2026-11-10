@@ -217,6 +217,7 @@ abstract class ApiFlowTestCase extends TestCase
             $table->string('id_card_type')->nullable();
             $table->unsignedBigInteger('discount_id')->nullable();
             $table->string('id_card_image_path')->nullable();
+            $table->string('discount_id_number', 60)->nullable();
             $table->text('additional_guest_details')->nullable();
             $table->boolean('discount_requested')->default(false);
             $table->string('discount_verification_status')->nullable();

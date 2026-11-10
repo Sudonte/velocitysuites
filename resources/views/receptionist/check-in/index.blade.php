@@ -430,6 +430,8 @@ document.addEventListener('DOMContentLoaded', function () {
             if (!ok) return;
             fd.append('discount_id', sel.value);
             if (file && file.files[0]) fd.append('id_document', file.files[0]);
+            const idNo = box.querySelector('[data-offer-field="id_number"]');
+            if (idNo && idNo.value.trim()) fd.append('id_number', idNo.value.trim());
         } else if (action === 'reject') {
             const reason = rejectBox.querySelector('textarea').value.trim();
             if (!reason) {

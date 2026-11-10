@@ -103,7 +103,7 @@ class StayOffersService
     }
 
     /** Store the requested discount and ID photo (pending review). A promo on the stay stays: they stack. */
-    public function attachDiscount(Reservation|Booking $stay, int $discountId, ?UploadedFile $idPhoto): void
+    public function attachDiscount(Reservation|Booking $stay, int $discountId, ?UploadedFile $idPhoto, ?string $idNumber = null): void
     {
         $path = $idPhoto ? $idPhoto->store('id-cards', 'local') : $stay->id_card_image_path;
         $discount = Discount::find($discountId);
@@ -114,7 +114,7 @@ class StayOffersService
             'id_card_type' => $discount?->name,
             'id_card_image_path' => $path,
             'discount_verification_status' => $stay->discount_verification_status === 'approved' && (int) $stay->discount_id === $discountId ? 'approved' : 'pending',
-        ])->save();
+        ] + ($stay instanceof Booking && $idNumber !== null && $idNumber !== '' ? ['discount_id_number' => $idNumber] : []))->save();
     }
 
     /**

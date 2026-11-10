@@ -834,6 +834,7 @@ class CheckInController extends Controller
             'discountStatus' => $booking->discount_verification_status ?: 'not_requested',
             'discountRequested' => (bool) ($booking->discount_requested || $holder->discount_requested),
             'hasIdPhoto' => (bool) ($booking->id_card_image_path || $holder->id_card_image_path),
+            'idNumber' => $booking->discount_id_number,
             'idCardUrl' => $booking->id_card_image_path ? route('receptionist.bookings.id-card', $booking)
                 : ($booking->reservation?->id_card_image_path ? route('receptionist.reservations.id-card', $booking->reservation) : null),
             'discountChoices' => $this->discountIds->choices($booking),
@@ -892,14 +893,20 @@ class CheckInController extends Controller
         $validated = $request->validate([
             'discount_id' => 'required|integer|exists:discounts,id',
             'id_document' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:4096',
+            'id_number' => ['nullable', 'string', 'max:60', 'regex:/^[A-Za-z0-9][A-Za-z0-9 \-\/]*$/'],
         ]);
         $offers = app(\App\Services\StayOffersService::class);
         $holder = $booking->reservation ?? $booking;
-        if ($request->hasFile('id_document') || ! ($booking->id_card_image_path || $holder->id_card_image_path)) {
-            if (! $request->hasFile('id_document')) {
-                return response()->json(['message' => 'Upload a photo of the guest\'s ID first.', 'errors' => ['id_document' => ['Upload a photo of the guest\'s ID first.']]], 422);
+        $idNumber = trim((string) ($validated['id_number'] ?? ''));
+        $onFile = (bool) ($booking->id_card_image_path || $holder->id_card_image_path || $booking->discount_id_number);
+        // The ID is recorded here when the guest did not upload one: a photo, or the ID number the desk read. A guest-uploaded ID stays as it is.
+        if ($request->hasFile('id_document') || $idNumber !== '' || ! $onFile) {
+            if (! $request->hasFile('id_document') && $idNumber === '') {
+                $message = 'Upload a photo of the guest\'s ID, or enter the ID number.';
+
+                return response()->json(['message' => $message, 'errors' => ['id_document' => [$message]]], 422);
             }
-            $offers->attachDiscount($booking, (int) $validated['discount_id'], $request->file('id_document'));
+            $offers->attachDiscount($booking, (int) $validated['discount_id'], $request->file('id_document'), $idNumber !== '' ? $idNumber : null);
         }
         $this->discountIds->approve($booking->fresh(), (int) $validated['discount_id'], auth()->user());
 
