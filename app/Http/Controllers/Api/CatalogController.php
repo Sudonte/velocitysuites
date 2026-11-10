@@ -47,6 +47,8 @@ class CatalogController extends Controller
                     if ($amenity->is_unlimited) {
                         $amenity->quantity = Amenity::API_UNLIMITED_DISPLAY_QUANTITY;
                     }
+                    // Included (price 0, never on the bill) or Paid (price above 0)
+                    $amenity->setAttribute('type', $amenity->isPaid() ? Amenity::TYPE_PAID : Amenity::TYPE_INCLUDED);
                 })
         );
     }

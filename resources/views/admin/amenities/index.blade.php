@@ -52,9 +52,9 @@
             </div>
             <div class="col-6 col-md-2">
                 <select name="pricing_type" class="form-control">
-                    <option value="">Free &amp; Paid</option>
-                    <option value="free" {{ request('pricing_type') === 'free' ? 'selected' : '' }}>Free/Included</option>
-                    <option value="paid" {{ request('pricing_type') === 'paid' ? 'selected' : '' }}>Paid/Additional</option>
+                    <option value="">Included &amp; Paid</option>
+                    <option value="free" {{ request('pricing_type') === 'free' ? 'selected' : '' }}>Included</option>
+                    <option value="paid" {{ request('pricing_type') === 'paid' ? 'selected' : '' }}>Paid</option>
                 </select>
             </div>
             <div class="col-md-2">
@@ -93,9 +93,9 @@
                         <td><strong>{{ $amenity->amenity_name }}</strong></td>
                         <td>
                             @if($amenity->isPaid())
-                                <span class="badge bg-warning text-dark">Paid/Additional</span>
+                                <span class="badge bg-warning text-dark">Paid</span>
                             @else
-                                <span class="badge bg-success">Free/Included</span>
+                                <span class="badge bg-success">Included</span>
                             @endif
                         </td>
                         <td>
@@ -205,9 +205,9 @@
                             <span class="room-type-detail-label">Type:</span>
                             <span class="room-type-detail-value">
                                 @if($amenity->isPaid())
-                                    <span class="badge bg-warning text-dark">Paid/Additional</span>
+                                    <span class="badge bg-warning text-dark">Paid</span>
                                 @else
-                                    <span class="badge bg-success">Free/Included</span>
+                                    <span class="badge bg-success">Included</span>
                                 @endif
                             </span>
                         </div>

@@ -115,12 +115,15 @@ class AmenityManagementController extends Controller
             'category' => 'required|string|in:' . implode(',', self::CATEGORIES),
             'quantity_mode' => 'required|in:limited,unlimited',
             'quantity' => 'required_if:quantity_mode,limited|nullable|integer|min:0',
+            'amenity_type' => 'nullable|in:included,paid',
             'charge' => 'required|numeric|min:0',
             'status' => 'required|in:active,inactive',
             'low_stock_threshold' => 'nullable|integer|min:0',
         ], [
             'amenity_name.unique' => 'An amenity with this name already exists.',
         ]);
+
+        $validated = $this->withType($validated);
 
         Amenity::create($this->withQuantityMode($validated));
 
@@ -157,6 +160,7 @@ class AmenityManagementController extends Controller
             'category' => 'required|string|in:' . implode(',', self::CATEGORIES),
             'quantity_mode' => 'required|in:limited,unlimited',
             'quantity' => 'required_if:quantity_mode,limited|nullable|integer|min:0',
+            'amenity_type' => 'nullable|in:included,paid',
             'charge' => 'required|numeric|min:0',
             'status' => 'required|in:active,inactive',
             'low_stock_threshold' => 'nullable|integer|min:0',
@@ -164,11 +168,32 @@ class AmenityManagementController extends Controller
             'amenity_name.unique' => 'An amenity with this name already exists.',
         ]);
 
+        $validated = $this->withType($validated);
+
         $amenity->update($this->withQuantityMode($validated, $amenity));
 
         Activity::log('Updated amenity', $amenity->amenity_name . ' (' . ($amenity->is_unlimited ? 'unlimited' : $amenity->quantity . ' in stock') . ', ' . $amenity->status . ')', $amenity);
 
         return redirect()->route('admin.amenities.index')->with('success', 'Amenity updated successfully!');
+    }
+
+    /**
+     * The Type field: Included means the price is 0 (a typed price is ignored), Paid needs a price above 0. A request without a Type
+     * (an older form) is read from its price as before.
+     *
+     * @throws \Illuminate\Validation\ValidationException
+     */
+    private function withType(array $validated): array
+    {
+        $type = $validated['amenity_type'] ?? null;
+        unset($validated['amenity_type']);
+        if ($type === Amenity::TYPE_INCLUDED) {
+            $validated['charge'] = 0;
+        } elseif ($type === Amenity::TYPE_PAID && (float) $validated['charge'] <= 0) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['charge' => 'A paid amenity needs a price above ₱0.00. Choose Included for a free amenity.']);
+        }
+
+        return $validated;
     }
 
     /**

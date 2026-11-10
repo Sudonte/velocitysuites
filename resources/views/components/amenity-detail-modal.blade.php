@@ -69,7 +69,7 @@
                 trigger.dataset.amenityDescription || 'No description available.';
 
             var isPaid = trigger.dataset.amenityPricing === 'paid';
-            document.getElementById('amenityDetailPricing').textContent = isPaid ? 'Paid/Additional' : 'Free/Included';
+            document.getElementById('amenityDetailPricing').textContent = isPaid ? 'Paid' : 'Included';
 
             var chargeRow = document.getElementById('amenityDetailChargeRow');
             if (isPaid) {

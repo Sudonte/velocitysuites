@@ -220,10 +220,11 @@ class AdditionalAmenityRequestTest extends ApiFlowTestCase
         $free = Amenity::create(['amenity_name' => 'Free '.uniqid(), 'description' => 'd', 'category' => 'Room', 'quantity' => 5, 'charge' => 0, 'status' => 'active']);
 
         $this->ask($user, $booking, [['amenity_id' => $a->id, 'quantity' => 3]])->assertStatus(422);
-        $this->ask($user, $booking, [['amenity_id' => $free->id, 'quantity' => 1]])->assertStatus(422);
+        $this->ask($user, $booking, [['amenity_id' => $free->id, 'quantity' => 1]])->assertCreated(); // an Included amenity can be requested too (price 0, never billed)
+        $this->assertSame(0.0, StayBill::forBooking($booking->fresh())['amenity_charge']);
         $this->ask($user, $booking, [])->assertStatus(422);
         $this->ask($user, $booking, [['amenity_id' => $a->id, 'quantity' => 0]])->assertStatus(422);
-        $this->assertSame(0, AmenityRequest::count());
+        $this->assertSame(1, AmenityRequest::count(), 'only the Included one went through');
     }
 
     public function test_the_balance_uses_the_total_including_approved_amenities(): void
@@ -281,7 +282,7 @@ class AdditionalAmenityRequestTest extends ApiFlowTestCase
         $info = $this->asGuest($user)->getJson("/api/guest/reservations/{$reservation->id}/additional-amenities")->assertOk()->json();
         $this->assertEqualsCanonicalizing(['booking_id', 'can_request', 'reason', 'rooms', 'stays', 'requests', 'total_approved'], array_keys($info));
         $this->assertEqualsCanonicalizing(
-            ['id', 'amenity_id', 'stay_id', 'room_id', 'room_number', 'room_type', 'batch_ref', 'name', 'quantity', 'unit_price', 'subtotal', 'status', 'rejection_reason', 'note', 'requested_at', 'decided_at'],
+            ['id', 'amenity_id', 'stay_id', 'room_id', 'room_number', 'room_type', 'batch_ref', 'name', 'quantity', 'included', 'unit_price', 'subtotal', 'status', 'rejection_reason', 'note', 'requested_at', 'decided_at'],
             array_keys($info['requests'][0])
         );
         $this->assertSame($booking->id, $info['booking_id']);

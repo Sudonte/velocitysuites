@@ -178,6 +178,7 @@ class AdditionalAmenityController extends Controller
             'batch_ref' => $r->batch_ref,
             'name' => $r->amenity_name,
             'quantity' => (int) $r->quantity,
+            'included' => (float) $r->charge <= 0,
             'unit_price' => round((float) $r->charge, 2),
             'subtotal' => round((float) $r->charge * (int) $r->quantity, 2),
             'status' => $r->status,

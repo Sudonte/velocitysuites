@@ -134,7 +134,7 @@ class AmenityRequestService
             // Validate against the TOTAL asked across every room, since the stock is shared by all of them.
             foreach ($perAmenity as $amenityId => $qty) {
                 $amenity = $amenities->get($amenityId);
-                if (! $amenity || $amenity->status !== 'active' || (float) $amenity->charge <= 0) {
+                if (! $amenity || $amenity->status !== 'active') {
                     throw ValidationException::withMessages(['items' => 'One of those amenities is not available to request.']);
                 }
                 $remaining = $stock[$amenityId] ?? 0;

@@ -91,6 +91,18 @@
                             </div>
                         </div>
                         <div class="col-md-6">
+@php $typeNow = old('amenity_type', (float) $amenity->charge > 0 ? 'paid' : 'included'); @endphp
+                            <div class="form-group mb-3">
+                                <label for="amenity_type">Type *</label>
+                                <select class="form-control @error('amenity_type') is-invalid @enderror" id="amenity_type" name="amenity_type" required>
+                                    <option value="included" {{ $typeNow === 'included' ? 'selected' : '' }}>Included (free, price &#8369;0.00)</option>
+                                    <option value="paid" {{ $typeNow === 'paid' ? 'selected' : '' }}>Paid (additional, charged per unit)</option>
+                                </select>
+                                <div class="form-text">Included amenities come with the room and never add to the bill. Paid amenities are billed once approved.</div>
+                                @error('amenity_type')
+                                    <div class="invalid-feedback d-block">{{ $message }}</div>
+                                @enderror
+                            </div>
                             <div class="form-group mb-3">
                                 <label for="charge">Charge (per unit) *</label>
                                 <div class="input-group">
@@ -162,6 +174,18 @@
 </div>
 @push('scripts')
 <script>
+document.addEventListener('DOMContentLoaded', function () {
+    const type = document.getElementById('amenity_type'), charge = document.getElementById('charge');
+    if (!type || !charge) return;
+    function sync() {
+        const included = type.value === 'included';
+        if (included) charge.value = '0.00';
+        charge.readOnly = included;
+        charge.min = included ? '0' : '0.01';
+    }
+    type.addEventListener('change', sync);
+    sync();
+});
 document.addEventListener('change', function (e) {
     if (e.target.name !== 'quantity_mode') return;
     const unlimited = e.target.value === 'unlimited';

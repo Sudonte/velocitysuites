@@ -39,6 +39,9 @@ class Amenity extends Model
     /** Quantity the mobile API reports for an Unlimited amenity (display only). */
     public const API_UNLIMITED_DISPLAY_QUANTITY = 999;
 
+    public const TYPE_INCLUDED = 'included';
+    public const TYPE_PAID = 'paid';
+
     private const FREE_INCLUDED_KEY = 'amenities.free-included';
 
     /**
@@ -96,6 +99,12 @@ class Amenity extends Model
     public function isPaid(): bool
     {
         return (float) $this->charge > 0;
+    }
+
+    /** Included (price 0) or Paid. An amenity is Paid unless its price is 0, so existing amenities need no migration. */
+    public function getTypeAttribute(): string
+    {
+        return $this->isPaid() ? self::TYPE_PAID : self::TYPE_INCLUDED;
     }
 
     /**
