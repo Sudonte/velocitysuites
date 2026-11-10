@@ -251,7 +251,7 @@ class BookingController extends Controller
                 Rule::unique('payments', 'reference_number')
                     ->where(fn ($q) => $q->where('payment_method', 'gcash')->where('payment_status', '!=', 'failed')),
             ],
-            'gcash_number' => 'required_if:payment_method,gcash|regex:/^9\d{9}$/',
+            'gcash_number' => 'nullable|regex:/^9\d{9}$/',
             // 50MB, per the guest-facing GCash receipt upload requirement -
             // deliberately not the same 5120 (5MB) cap other image uploads
             // (id card, profile picture) in this app use.
@@ -361,7 +361,7 @@ class BookingController extends Controller
         ];
         if ($validated['payment_method'] === 'gcash') {
             $paymentData['reference_number'] = $validated['reference_number'];
-            $paymentData['gcash_number'] = $validated['gcash_number'];
+            $paymentData['gcash_number'] = ($validated['gcash_number'] ?? null);
             $paymentData['receipt_path'] = $request->file('receipt')->store('payment-receipts', 'public');
         }
 

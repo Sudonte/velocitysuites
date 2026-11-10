@@ -138,7 +138,7 @@ class PaymentController extends Controller
             'amount_paid' => ['required', 'numeric', 'min:0'],
             // GCash-only, multipart fields - the mobile equivalent of the
             // website's payDeposit()/store() gcash_receipt upload.
-            'gcash_number' => 'required_if:payment_method,gcash|regex:/^9\d{9}$/',
+            'gcash_number' => 'nullable|regex:/^9\d{9}$/',
             // 50MB, per the guest-facing GCash receipt upload requirement -
             // deliberately not the same 5120 (5MB) cap other image uploads
             // (id card, profile picture) in this app use.
@@ -275,7 +275,7 @@ class PaymentController extends Controller
                 $payment = $this->workflow->recordDepositPayment($locked, [
                     'payment_method' => 'gcash',
                     'reference_number' => $validated['reference_number'],
-                    'gcash_number' => $validated['gcash_number'],
+                    'gcash_number' => ($validated['gcash_number'] ?? null),
                     'receipt_path' => $receiptPath,
                     'amount_paid' => $validated['amount_paid'],
                     'idempotency_key' => $idempotencyKeyForCreate,

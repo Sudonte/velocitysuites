@@ -179,7 +179,7 @@ class ReservationController extends Controller
             // reviewed the reservation).
             'payment_type' => 'required_if:payment_choice,pay_now_gcash|nullable|in:partial,full',
             'gcash_amount' => 'required_if:payment_choice,pay_now_gcash|nullable|numeric|min:0',
-            'gcash_number' => 'required_if:payment_choice,pay_now_gcash|nullable|regex:/^9\d{9}$/',
+            'gcash_number' => 'nullable|regex:/^9\d{9}$/',
             'gcash_receipt' => 'required_if:payment_choice,pay_now_gcash|nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
             'reference_number' => [
                 'required_if:payment_choice,pay_now_gcash',
@@ -302,7 +302,7 @@ class ReservationController extends Controller
                 $this->workflow->recordDepositPayment($reservation, [
                     'payment_method' => 'gcash',
                     'reference_number' => $validated['reference_number'],
-                    'gcash_number' => $validated['gcash_number'],
+                    'gcash_number' => ($validated['gcash_number'] ?? null),
                     'receipt_path' => $request->file('gcash_receipt')->store('payment-receipts', 'public'),
                     'amount_paid' => (float) $validated['gcash_amount'],
                 ], $paymentType === 'full' ? 'final' : 'deposit');
@@ -353,7 +353,7 @@ class ReservationController extends Controller
                 Rule::unique('payments', 'reference_number')
                     ->where(fn ($q) => $q->where('payment_method', 'gcash')->where('payment_status', '!=', 'failed')),
             ],
-            'gcash_number' => 'required|regex:/^9\d{9}$/',
+            'gcash_number' => 'nullable|regex:/^9\d{9}$/',
             'gcash_amount' => 'required|numeric|min:0',
         ], [
             'reference_number.unique' => 'This GCash reference number has already been used.',
@@ -385,7 +385,7 @@ class ReservationController extends Controller
             $this->workflow->recordDepositPayment($locked, [
                 'payment_method' => 'gcash',
                 'reference_number' => $validated['reference_number'],
-                'gcash_number' => $validated['gcash_number'],
+                'gcash_number' => ($validated['gcash_number'] ?? null),
                 'receipt_path' => $request->file('gcash_receipt')->store('payment-receipts', 'public'),
                 'amount_paid' => $amount,
             ], $stage);

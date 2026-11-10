@@ -510,7 +510,7 @@
                 onCancel: function () { root.querySelector('#vsWizTop').classList.remove('d-none'); sum.parentNode.classList.remove('d-none'); root.querySelector('#vsWizSummaryM').classList.remove('d-none'); go(S.step); },
                 submit: function (f) {
                     var fd = payload(); fd.append('payment_method', 'gcash'); fd.append('amount_paid', f.amount); fd.append('selected_payment_percentage', f.percent);
-                    fd.append('gcash_number', f.gcash_number); fd.append('reference_number', f.reference_number); fd.append('receipt', f.receipt, f.receipt.name || 'receipt.jpg');
+                    fd.append('reference_number', f.reference_number); fd.append('receipt', f.receipt, f.receipt.name || 'receipt.jpg');
                     return VS.api('/guest/bookings', { method: 'POST', body: fd }).then(function (res) { if (res.ok) { abandon(); } return res; });
                 },
                 success: function (data) { var b = data.booking || data; return '<a class="btn btn-velocity" href="/guest/bookings/' + VS.esc(b.id) + '">View booking</a>'; }

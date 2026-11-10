@@ -46,7 +46,7 @@
             submit: function (f) {
                 var fd = new FormData();
                 fd.append('payment_method', 'gcash'); fd.append('payment_type', 'partial'); fd.append('amount_paid', f.amount); fd.append('selected_payment_percentage', f.percent);
-                fd.append('gcash_number', f.gcash_number); fd.append('reference_number', f.reference_number); fd.append('receipt', f.receipt, f.receipt.name || 'receipt.jpg'); fd.append('idempotency_key', f.key);
+                fd.append('reference_number', f.reference_number); fd.append('receipt', f.receipt, f.receipt.name || 'receipt.jpg'); fd.append('idempotency_key', f.key);
                 return VS.api('/guest/reservations/' + id + '/payments', { method: 'POST', body: fd });
             },
             success: function () { return '<a class="btn btn-velocity" href="/guest/reservations/' + id + '">View reservation</a>'; }

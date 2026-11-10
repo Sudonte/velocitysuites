@@ -220,7 +220,7 @@ class ReservationController extends Controller
                 Rule::unique('payments', 'reference_number')
                     ->where(fn ($q) => $q->where('payment_method', 'gcash')->where('payment_status', '!=', 'failed')),
             ],
-            'gcash_number' => 'nullable|regex:/^9\d{9}$/|required_with:reference_number,receipt,amount_paid',
+            'gcash_number' => 'nullable|regex:/^9\d{9}$/',
             // 50MB, matching Api\BookingController::store()'s identical
             // guest-facing GCash receipt upload cap.
             'receipt' => 'nullable|image|mimes:jpeg,png,jpg|max:51200|required_with:reference_number,gcash_number,amount_paid',
@@ -339,7 +339,7 @@ class ReservationController extends Controller
             }
             $paymentToCreate = [
                 'reference_number' => $validated['reference_number'],
-                'gcash_number' => $validated['gcash_number'],
+                'gcash_number' => ($validated['gcash_number'] ?? null),
                 'receipt_path' => $request->file('receipt')->store('payment-receipts', 'public'),
                 'amount_paid' => $amountPaid,
                 'payment_stage' => 'deposit',

@@ -55,8 +55,8 @@ class PaymentController extends Controller
         // Can't call a GCash payment verified without something to have
         // actually verified - the registered number and the receipt both
         // need to be on file first.
-        if ($payment->payment_method === 'gcash' && (!$payment->gcash_number || !$payment->receipt_path)) {
-            abort(422, 'Cannot verify: the GCash number and receipt must both be on file first.');
+        if ($payment->payment_method === 'gcash' && ((!$payment->gcash_number && !$payment->reference_number) || !$payment->receipt_path)) {
+            abort(422, 'Cannot verify: the GCash reference number and receipt must both be on file first.');
         }
 
         // payment_status must move to 'completed' here too, not just

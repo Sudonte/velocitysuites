@@ -132,7 +132,7 @@ class GuestPaymentEntryPointsTest extends ApiFlowTestCase
         $this->assertStringContainsString('payRows(live)', $dash);
         $this->assertStringContainsString("S.payAction({ kind: kind, it: it })", $stays);
 
-        foreach (['Review billing', 'Check amount', 'Send via GCash', 'Enter reference', 'Upload receipt', "'Submit'", 'Hotel GCash number', 'Copy', 'GCash number copied', 'gcash-official-qr.jpg',
+        foreach (['Review billing', 'Send via GCash', 'Payment details', "'Submit'", 'Hotel GCash number', 'Copy', 'GCash number copied', 'gcash-official-qr.jpg',
             'Replace', 'Remove', 'Submit payment of ', 'Yes, submit', 'Payment type', 'Partial payment (', 'MIN = 0.20', 'MAX = 0.50', 'Step '] as $n) {
             $this->assertStringContainsString($n, $pay, $n);
         }

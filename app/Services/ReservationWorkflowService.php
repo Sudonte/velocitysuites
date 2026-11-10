@@ -1001,7 +1001,7 @@ class ReservationWorkflowService
         }
 
         $wasAlreadyRejected = $payment->isRejected();
-        $incomplete = empty($payment->gcash_number) || empty($payment->receipt_path);
+        $incomplete = (empty($payment->gcash_number) && empty($payment->reference_number)) || empty($payment->receipt_path);
         if (!$wasAlreadyRejected && !$incomplete) {
             return;
         }
