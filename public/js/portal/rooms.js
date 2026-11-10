@@ -186,7 +186,7 @@
         }
         /** Book now / Reserve need dates the guest chose themselves: the pickers start on the earliest dates, which are not a choice. */
         function needDates() {
-            var row = cfg.ci.closest('.vs-daterow') || cfg.ci.parentElement;
+            var row = cfg.ci.closest('.vs-daterow') || cfg.ci.closest('.row') || cfg.ci.parentElement;
             VS.clearErrors(row);
             var fb = document.createElement('div');
             fb.className = 'invalid-feedback vs-fb d-block col-12 fw-semibold'; fb.setAttribute('role', 'alert'); fb.id = 'vsDatesFirst';

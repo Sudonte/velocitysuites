@@ -351,7 +351,7 @@ class GuestParityV3Test extends TestCase
         $this->get('/guest/reserve/5/edit')->assertRedirect(route('login'));
         $this->actingAs($user)->get(route('guest.reserve.edit', 5))->assertOk()->assertSee('Edit reservation #5', false)->assertSee("VSWizard.init(document.getElementById('vsWizRoot'), 'reservation', 5)", false);
         $js = file_get_contents(public_path('js/portal/wizard.js'));
-        foreach (['/guest/reservations/\' + editId', "method: 'PUT', body: editBody()", '/id-card', '/switch-to-', 'Reservation updated', 'Already edited', 'This reservation can no longer be edited'] as $n) {
+        foreach (['/guest/reservations/\' + editId', "method: 'PUT', body: editBody()", '/switch-to-', 'Reservation updated', 'Already edited', 'This reservation can no longer be edited'] as $n) {
             $this->assertStringContainsString($n, $js, $n);
         }
         $stays = file_get_contents(public_path('js/portal/stays.js'));

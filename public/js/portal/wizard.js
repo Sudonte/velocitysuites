@@ -1,5 +1,5 @@
 /*
- * New booking (6 steps) and new reservation (7 steps) on the web - the same steps, rules and wording as the app. Rooms and rates
+ * New booking (3 steps) and new reservation (4 steps) on the web - the same steps, rules and wording as the app. Rooms and rates
  * come from GET /api/rooms, amenities from GET /api/amenities, discounts from GET /api/discounts, and the request goes to the app's
  * own POST /api/guest/reservations (a booking continues to the payment page, which posts to /api/guest/bookings).
  */
@@ -31,7 +31,7 @@
     // ---------------------------------------------------------------- state
 
     function newState(mode) {
-        return { mode: mode, step: 0, stays: [], draft: { check_in: '', check_out: '', rooms: {}, editing: null }, amenities: {}, // amenities[stayIndex] = [{amenity_id, quantity, room_type_id, room_slot}]
+        return { v: 2, mode: mode, step: 0, stays: [], draft: { check_in: '', check_out: '', rooms: {}, editing: null }, amenities: {}, // amenities[stayIndex] = [{amenity_id, quantity, room_type_id, room_slot}]
             rep: { who: 'owner', first: '', middle: '', last: '' }, adults: 1, minors: [], discount_id: '', idFile: null, payment_method: '', key: 'k' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8) };
     }
 
@@ -42,19 +42,22 @@
         var S = newState(mode);
         var DK = KEY + mode + (editId ? '_edit' + editId : '');
         var stepsDef = mode === 'booking'
-            ? ['Dates and rooms', 'Amenities', 'Representative', 'Guests', 'ID verification', 'Review and bill summary']
-            : ['Dates and rooms', 'Amenities', 'Representative', 'Guests', 'ID verification', 'Payment method', 'Review and bill summary'];
+            ? ['Dates and rooms', 'Representative and guests', 'Review and bill summary']
+            : ['Dates and rooms', 'Representative and guests', 'Payment method', 'Review and bill summary'];
         var cache = { rooms: {}, amenities: null, discounts: null, profile: null };
         var main = root.querySelector('#vsWizMain'), bar = root.querySelector('#vsWizBar'), line = root.querySelector('#vsWizLine'), sum = root.querySelector('#vsWizSummary');
         var earliest = VS.addDays(VS.today(), 2);
 
         // restore a draft after a refresh
+        var draftReset = false;
         try {
             var saved = editId ? null : JSON.parse(sessionStorage.getItem(DK) || 'null');
-            if (saved && saved.stays) { var keep = S.idFile; S = Object.assign(S, saved); S.idFile = keep; }
+            // a draft saved by the older form (more steps, amenities and ID) has no version 2 marker: start fresh, with a short message
+            if (saved && saved.v !== 2) { sessionStorage.removeItem(DK); draftReset = true; }
+            else if (saved && saved.stays) { S = Object.assign(S, saved); }
         } catch (e) { /* no draft */ }
         var pre = new URLSearchParams(window.location.search);
-        function save() { var c = Object.assign({}, S); delete c.idFile; sessionStorage.setItem(DK, JSON.stringify(c)); }
+        function save() { try { sessionStorage.setItem(DK, JSON.stringify(S)); } catch (e) { /* storage full or blocked */ } }
 
         // ---- data
         function roomsFor(ci, co) {
@@ -97,7 +100,7 @@
             var types = allTypes(), r = roomsTotal(types), a = amenitiesTotal();
             // nothing confirmed yet: no total (a zero would read as a price for dates that were not chosen)
             if (!S.stays.length && S.step === 0) { sum.innerHTML = '<div class="text-muted small">Choose your dates to see the total</div>'; return; }
-            sum.innerHTML = '<div class="vs-row"><span>Rooms</span><span>' + VS.money(r) + '</span></div><div class="vs-row"><span>Amenities</span><span>' + VS.money(a) + '</span></div>' +
+            sum.innerHTML = '<div class="vs-row"><span>Rooms</span><span>' + VS.money(r) + '</span></div>' + (a > 0 ? '<div class="vs-row"><span>Amenities</span><span>' + VS.money(a) + '</span></div>' : '') +
                 '<div class="vs-row vs-strong"><span>Grand total</span><span class="vs-pay">' + VS.money(r + a) + '</span></div>';
         }
 
@@ -131,7 +134,7 @@
         function abandon() { try { sessionStorage.removeItem(DK); } catch (e) { /* ignore */ } if (window.VSRooms) window.VSRooms.clearSelection(); window.__vsLeavingOk = true; }
         function errorBox(msg) { var e = main.querySelector('#vsStepErr'); if (e) VS.alertBox(e, msg); if (msg && e) e.scrollIntoView({ block: 'center', behavior: VS.reducedMotion ? 'auto' : 'smooth' }); }
 
-        function render() { [stepStays, stepAmenities, stepRep, stepGuests, stepId].concat(mode === 'reservation' ? [stepPaymentMethod] : []).concat([stepReview])[S.step](); }
+        function render() { [stepStays, stepRepGuests].concat(mode === 'reservation' ? [stepPaymentMethod] : []).concat([stepReview])[S.step](); }
 
         // ================================================= STEP 1 - dates and rooms
         function stepStays() {
@@ -307,52 +310,25 @@
             VS.toast('Dates confirmed.', 'success'); save(); frame(); paintStays(); paintEditor();
         }
 
-        // ================================================= STEP 2 - amenities per room
-        function stepAmenities() {
-            main.innerHTML = '<h2 class="vs-section-title">Amenities</h2><p class="text-muted">Add paid amenities to a room if you want them. You can also request them later during your stay.</p><div id="vsStepErr"></div><div id="vsAmenHost">' + VS.skeleton(4) + '</div>' + nav();
-            bindNav(function () { go(2); });
-            loadAmenities().then(function (list) {
-                var host = main.querySelector('#vsAmenHost'), types = allTypes();
-                if (!list.length) { host.innerHTML = '<p class="text-muted">No paid amenities are offered right now.</p>'; return; }
-                host.innerHTML = S.stays.map(function (s, i) {
-                    var slots = []; stayRooms(s).forEach(function (r) { for (var k = 1; k <= r.qty; k++) slots.push({ type: r.id, slot: k }); });
-                    return '<div class="vs-card"><h3 class="h6 fw-bold">' + VS.esc(VS.date(s.check_in)) + ' → ' + VS.esc(VS.date(s.check_out)) + '</h3>' + slots.map(function (sl) {
-                        var tn = types[sl.type] ? unitName(types[sl.type]) : 'Room';
-                        return '<details class="mb-2"><summary class="fw-semibold">' + VS.esc(tn) + ' (room ' + sl.slot + ')<span class="text-muted small ms-2" data-sum="' + i + '-' + sl.type + '-' + sl.slot + '"></span></summary><div class="mt-2">' + list.map(function (a) {
-                            return '<div class="d-flex align-items-center gap-2 py-1" data-am="' + i + '|' + sl.type + '|' + sl.slot + '|' + a.id + '"><div class="flex-grow-1">' + VS.esc(a.amenity_name) + ' <span class="text-muted small">' + VS.money(a.charge) + '</span></div>' +
-                                '<button class="btn btn-sm btn-outline-velocity" data-d aria-label="Fewer ' + VS.esc(a.amenity_name) + '">−</button><span class="vs-num fw-bold" data-q style="min-width:1.5rem;text-align:center">0</span><button class="btn btn-sm btn-velocity" data-u aria-label="More ' + VS.esc(a.amenity_name) + '">+</button></div>';
-                        }).join('') + '</div></details>';
-                    }).join('') + '</div>';
-                }).join('');
-                function unitOf(x) { return x.unit || String(x.room_type_id); }
-                function qtyOf(i, t, sl, id) { var f = (S.amenities[i] || []).find(function (x) { return unitOf(x) == t && x.room_slot == sl && x.amenity_id == id; }); return f ? f.quantity : 0; }
-                function setQty(i, t, sl, id, q) {
-                    var arr = S.amenities[i] = S.amenities[i] || []; var idx = arr.findIndex(function (x) { return unitOf(x) == t && x.room_slot == sl && x.amenity_id == id; });
-                    if (q <= 0) { if (idx >= 0) arr.splice(idx, 1); } else if (idx >= 0) arr[idx].quantity = q; else { var pp = String(t).split(':'); arr.push({ amenity_id: +id, quantity: q, unit: String(t), room_type_id: +pp[0], option_key: pp[1] || null, room_slot: +sl }); }
-                    save();
-                }
-                function totalFor(id) { var n = 0; Object.keys(S.amenities).forEach(function (i) { (S.amenities[i] || []).forEach(function (x) { if (x.amenity_id == id) n += x.quantity; }); }); return n; }
-                host.querySelectorAll('[data-am]').forEach(function (row) {
-                    var p = row.dataset.am.split('|'), i = +p[0], t = p[1], sl = p[2], id = p[3], a = list.find(function (x) { return x.id == id; });
-                    function paint() { row.querySelector('[data-q]').textContent = qtyOf(i, t, sl, id); paintSummary(); }
-                    row.querySelector('[data-u]').onclick = function () {
-                        if (!a.is_unlimited && totalFor(id) + 1 > a.quantity) { VS.toast('Only ' + a.quantity + ' of ' + a.amenity_name + ' left.', 'warning'); return; }
-                        setQty(i, t, sl, id, qtyOf(i, t, sl, id) + 1); paint();
-                    };
-                    row.querySelector('[data-d]').onclick = function () { setQty(i, t, sl, id, qtyOf(i, t, sl, id) - 1); paint(); };
-                    row.querySelector('[data-q]').textContent = qtyOf(i, t, sl, id);
-                });
-                paintSummary();
-            });
+        // ================================================= STEP 2 - representative and guests
+        function capacity() {
+            var types = allTypes();
+            return Math.min.apply(null, S.stays.map(function (s) { return stayRooms(s).reduce(function (a, r) { return a + (types[r.id] ? types[r.id].capacity * r.qty : 0); }, 0); }));
         }
-
-        // ================================================= STEP 3 - representative
-        function stepRep() {
-            main.innerHTML = '<h2 class="vs-section-title">Who can check in?</h2><p class="text-muted">Choose Account owner if you will personally handle the transaction at the hotel. Choose Someone else if another person will represent your booking.</p><div id="vsStepErr"></div>' +
-                '<div class="vs-card"><div class="form-check mb-2"><input class="form-check-input" type="radio" name="who" id="whoOwner" value="owner"><label class="form-check-label fw-semibold" for="whoOwner">Account owner</label></div>' +
+        function unitOf(x) { return x.unit || String(x.room_type_id); }
+        function stepRepGuests() {
+            var cap = capacity();
+            if (S.adults + S.minors.length > cap) { S.adults = Math.max(1, cap - S.minors.length); S.minors = S.minors.slice(0, Math.max(0, cap - S.adults)); }
+            main.innerHTML = '<h2 class="vs-section-title">Representative and guests</h2><p class="text-muted">Who checks in, and who is staying.</p><div id="vsStepErr"></div>' +
+                '<section class="vs-card" aria-labelledby="vsRepTitle"><h3 class="h6 fw-bold" id="vsRepTitle">Who can check in?</h3><p class="text-muted small">Choose Account owner if you will personally handle the transaction at the hotel. Choose Someone else if another person will represent your booking.</p>' +
+                '<div class="form-check mb-2"><input class="form-check-input" type="radio" name="who" id="whoOwner" value="owner"><label class="form-check-label fw-semibold" for="whoOwner">Account owner</label></div>' +
                 '<div class="form-check mb-3"><input class="form-check-input" type="radio" name="who" id="whoOther" value="other"><label class="form-check-label fw-semibold" for="whoOther">Someone else</label></div>' +
                 '<div class="row g-3"><div class="col-md-4"><label class="form-label small fw-semibold" for="rF">First name</label><input class="form-control" id="rF" maxlength="100"></div><div class="col-md-4"><label class="form-label small fw-semibold" for="rM">Middle name <span class="text-muted fw-normal">(optional)</span></label><input class="form-control" id="rM" maxlength="100"></div><div class="col-md-4"><label class="form-label small fw-semibold" for="rL">Last name</label><input class="form-control" id="rL" maxlength="100"></div></div>' +
-                '<p class="text-muted small mt-3 mb-0">The person checking in presents 1 valid ID at the front desk.</p></div>' + nav();
+                '<p class="text-muted small mt-3 mb-0">The person checking in presents 1 valid ID at the front desk.</p></section>' +
+                '<section class="vs-card" aria-labelledby="vsGuestsTitle"><h3 class="h6 fw-bold" id="vsGuestsTitle">Guests</h3><p class="text-muted small">Adults and minors together must fit the rooms you chose in every stay (up to <strong>' + cap + '</strong>).</p>' +
+                '<div class="d-flex align-items-center justify-content-between py-2"><span class="fw-semibold">Adults</span><span><button class="btn btn-sm btn-outline-velocity" id="aDec" aria-label="Fewer adults">−</button><span class="vs-num fw-bold mx-3" id="aVal"></span><button class="btn btn-sm btn-velocity" id="aInc" aria-label="More adults">+</button></span></div>' +
+                '<div class="d-flex align-items-center justify-content-between py-2"><span class="fw-semibold">Minors</span><span><button class="btn btn-sm btn-outline-velocity" id="mDec" aria-label="Fewer minors">−</button><span class="vs-num fw-bold mx-3" id="mVal"></span><button class="btn btn-sm btn-velocity" id="mInc" aria-label="More minors">+</button></span></div>' +
+                '<div id="mAges" class="row g-2 mt-1"></div><p class="text-muted small mt-2 mb-0" id="gHint"></p><div id="gCap" class="invalid-feedback d-block fw-semibold" role="alert" hidden></div></section>' + nav();
             var who = main.querySelectorAll('[name=who]'), f = main.querySelector('#rF'), m = main.querySelector('#rM'), l = main.querySelector('#rL');
             loadProfile().then(function (p) {
                 S.owner = { first: p.first_name || '', middle: p.middle_name || '', last: p.last_name || '' };
@@ -367,39 +343,16 @@
             who.forEach(function (r) { r.onchange = function () { S.rep.who = r.value; if (r.value === 'other') { S.rep.first = ''; S.rep.middle = ''; S.rep.last = ''; } apply(); save(); }; });
             [f, m, l].forEach(function (i) { i.oninput = function () { if (S.rep.who === 'other') { S.rep.first = f.value; S.rep.middle = m.value; S.rep.last = l.value; save(); } }; });
             apply();
-            bindNav(function () {
-                VS.clearErrors(main);
-                var first = f.value.trim(), last = l.value.trim(), ok = true;
-                if (!first) { VS.fieldError(f, 'Enter the first name.'); ok = false; }
-                if (!last) { VS.fieldError(l, 'Enter the last name.'); ok = false; }
-                if (!ok) return;
-                S.rep.first = first; S.rep.middle = m.value.trim(); S.rep.last = last;
-                if (S.rep.who === 'other') {
-                    VS.confirm({ title: 'Someone else will check in', message: first + ' ' + last + ' will present 1 valid ID at the front desk. Continue?', confirmText: 'Continue' }).then(function (yes) { if (yes) go(3); });
-                } else go(3);
-            });
-        }
-
-        // ================================================= STEP 4 - guests
-        function capacity() {
-            var types = allTypes();
-            return Math.min.apply(null, S.stays.map(function (s) { return stayRooms(s).reduce(function (a, r) { return a + (types[r.id] ? types[r.id].capacity * r.qty : 0); }, 0); }));
-        }
-        function stepGuests() {
-            var cap = capacity();
-            if (S.adults + S.minors.length > cap) { S.adults = Math.max(1, cap - S.minors.length); S.minors = S.minors.slice(0, Math.max(0, cap - S.adults)); }
-            main.innerHTML = '<h2 class="vs-section-title">Guests</h2><p class="text-muted">Adults and minors together must fit the rooms you chose in every stay (up to <strong>' + cap + '</strong>).</p><div id="vsStepErr"></div>' +
-                '<div class="vs-card"><div class="d-flex align-items-center justify-content-between py-2"><span class="fw-semibold">Adults</span><span><button class="btn btn-sm btn-outline-velocity" id="aDec" aria-label="Fewer adults">−</button><span class="vs-num fw-bold mx-3" id="aVal"></span><button class="btn btn-sm btn-velocity" id="aInc" aria-label="More adults">+</button></span></div>' +
-                '<div class="d-flex align-items-center justify-content-between py-2"><span class="fw-semibold">Minors</span><span><button class="btn btn-sm btn-outline-velocity" id="mDec" aria-label="Fewer minors">−</button><span class="vs-num fw-bold mx-3" id="mVal"></span><button class="btn btn-sm btn-velocity" id="mInc" aria-label="More minors">+</button></span></div>' +
-                '<div id="mAges" class="row g-2 mt-1"></div><p class="text-muted small mt-2 mb-0" id="gHint"></p></div>' + nav();
             function paint() {
                 main.querySelector('#aVal').textContent = S.adults; main.querySelector('#mVal').textContent = S.minors.length;
-                var total = S.adults + S.minors.length;
+                var total = S.adults + S.minors.length, capBox = main.querySelector('#gCap');
                 main.querySelector('#aDec').disabled = S.adults <= 1; main.querySelector('#aInc').disabled = total >= cap;
                 main.querySelector('#mDec').disabled = !S.minors.length; main.querySelector('#mInc').disabled = total >= cap;
                 main.querySelector('#gHint').textContent = VS.plural(total, 'guest') + ' of ' + cap + '. A minor is a child aged 0 to 7; enter each child’s age.';
+                // the capacity check is inline: at the limit the + buttons stop and this says why
+                capBox.hidden = total < cap; capBox.textContent = total >= cap ? 'The rooms you chose hold up to ' + VS.plural(cap, 'guest') + '. Choose more rooms to add guests.' : '';
                 main.querySelector('#mAges').innerHTML = S.minors.map(function (a, i) { return '<div class="col-6 col-md-3"><label class="form-label small fw-semibold" for="age' + i + '">Child ' + (i + 1) + ' age</label><input class="form-control" id="age' + i + '" type="number" inputmode="numeric" min="0" max="7" value="' + (a == null ? '' : a) + '"></div>'; }).join('');
-                main.querySelectorAll('#mAges input').forEach(function (inp, i) { inp.oninput = function () { S.minors[i] = inp.value === '' ? null : +inp.value; save(); }; });
+                main.querySelectorAll('#mAges input').forEach(function (inp, i) { inp.oninput = function () { S.minors[i] = inp.value === '' ? null : +inp.value; inp.classList.remove('is-invalid'); var fb = inp.nextElementSibling; if (fb && fb.classList.contains('vs-fb')) fb.remove(); save(); }; });
                 save();
             }
             main.querySelector('#aInc').onclick = function () { S.adults++; paint(); }; main.querySelector('#aDec').onclick = function () { S.adults--; paint(); };
@@ -407,67 +360,32 @@
             paint();
             bindNav(function () {
                 VS.clearErrors(main); var ok = true;
-                main.querySelectorAll('#mAges input').forEach(function (inp, i) {
+                var first = f.value.trim(), last = l.value.trim();
+                if (!first) { VS.fieldError(f, 'Enter the first name.'); ok = false; }
+                if (!last) { VS.fieldError(l, 'Enter the last name.'); ok = false; }
+                main.querySelectorAll('#mAges input').forEach(function (inp) {
                     var v = inp.value; if (v === '' || +v < 0 || +v > 7 || !/^\d+$/.test(v)) { VS.fieldError(inp, 'Enter an age from 0 to 7.'); ok = false; }
                 });
-                if (ok) go(4);
-            });
-        }
-
-        // ================================================= STEP 5 - ID verification
-        function stepId() {
-            main.innerHTML = '<h2 class="vs-section-title">ID verification</h2><p class="text-muted">Optional. If you are a Senior Citizen or a person with a disability, upload a valid ID to claim the discount. The front desk verifies it at check-in.</p><div id="vsStepErr"></div>' +
-                '<div class="vs-card"><label class="form-label fw-semibold" for="idDisc">Discount</label><select class="form-select mb-3" id="idDisc"><option value="">No discount</option></select>' +
-                '<div id="idUp" class="d-none"><div class="d-flex flex-wrap gap-2 mb-2"><label class="btn btn-outline-velocity mb-0" for="idCam"><i class="fas fa-camera me-1"></i>Take a photo</label><label class="btn btn-outline-velocity mb-0" for="idFile"><i class="fas fa-image me-1"></i>Choose from gallery</label></div>' +
-                '<input type="file" id="idCam" accept="image/*" capture="environment" class="d-none"><input type="file" id="idFile" accept="image/*" class="d-none">' +
-                '<p class="text-muted small">Make sure all four corners and the text are clear.</p><div id="idPrev"></div></div></div>' + nav();
-            var sel = main.querySelector('#idDisc'), up = main.querySelector('#idUp'), prev = main.querySelector('#idPrev'), pending = null;
-            loadDiscounts().then(function (list) {
-                list.forEach(function (d) { var o = document.createElement('option'); o.value = d.id; o.textContent = d.name + (d.discount_type === 'percentage' ? ' (' + Number(d.value) + '%)' : ''); sel.appendChild(o); });
-                sel.value = S.discount_id || ''; toggle();
-            });
-            function toggle() { up.classList.toggle('d-none', !sel.value); paintPrev(); }
-            sel.onchange = function () { S.discount_id = sel.value; if (!sel.value) { S.idFile = null; S.hasId = false; } save(); toggle(); };
-            function paintPrev() {
-                var f = pending || S.idFile;
-                if (!f) { prev.innerHTML = ''; return; }
-                var url = URL.createObjectURL(f);
-                prev.innerHTML = '<img src="' + url + '" alt="Your ID photo" class="rounded-3 mb-2" style="max-width:100%;max-height:300px">' + (pending ?
-                    '<div class="d-flex gap-2"><button class="btn btn-velocity" id="idUse">Use photo</button><button class="btn btn-light" id="idRetake">Retake</button></div>' : '<div class="small text-success mb-2"><i class="fas fa-circle-check me-1"></i>ID photo attached.</div><button class="btn btn-sm btn-light" id="idRemove">Remove photo</button>');
-                var u = prev.querySelector('#idUse'); if (u) u.onclick = function () { S.idFile = pending; pending = null; paintPrev(); };
-                var r = prev.querySelector('#idRetake'); if (r) r.onclick = function () { pending = null; paintPrev(); };
-                var x = prev.querySelector('#idRemove'); if (x) x.onclick = function () { S.idFile = null; paintPrev(); };
-            }
-            function pick(e) {
-                var file = e.target.files[0]; e.target.value = ''; if (!file) return;
-                if (!/^image\//.test(file.type)) { VS.alertBox('vsStepErr', 'Choose a photo (JPG or PNG).'); return; }
-                VS.compressImage(file).then(function (c) { pending = c; paintPrev(); });
-            }
-            main.querySelector('#idCam').onchange = pick; main.querySelector('#idFile').onchange = pick;
-            bindNav(function () {
-                if (sel.value && !S.idFile && !S.hasId) { VS.confirm({ title: 'No ID photo yet', message: 'The discount is verified at check-in. Without an ID photo it cannot be claimed in advance. Continue without it?', confirmText: 'Continue' }).then(function (yes) { if (yes) go(5); }); return; }
-                go(5);
+                if (S.adults + S.minors.length > cap) { VS.alertBox('vsStepErr', 'The rooms you chose hold up to ' + VS.plural(cap, 'guest') + '.'); ok = false; }
+                if (!ok) { var bad = main.querySelector('.is-invalid, #vsStepErr .alert'); if (bad) bad.scrollIntoView({ block: 'center', behavior: VS.reducedMotion ? 'auto' : 'smooth' }); return; }
+                S.rep.first = first; S.rep.middle = m.value.trim(); S.rep.last = last;
+                var who2 = S.rep.who === 'other' ? first + ' ' + last + ' will check in and present 1 valid ID at the front desk. ' : '';
+                VS.confirm({ title: 'Continue with these details?', message: who2 + VS.plural(S.adults, 'adult') + (S.minors.length ? ' and ' + VS.plural(S.minors.length, 'minor') : '') + '.', confirmText: 'Continue' }).then(function (yes) { if (yes) go(2); });
             });
         }
 
         // ================================================= STEP 6 (reservation) - payment method
         function stepPaymentMethod() {
-            main.innerHTML = '<h2 class="vs-section-title">Payment method</h2><p class="text-muted">Choose how you would like to pay for this reservation.</p><div id="vsStepErr"></div><div class="vs-card">' +
+            main.innerHTML = '<h2 class="vs-section-title">Payment method</h2><p class="text-muted">Choose Cash or GCash. A payment method is required.</p><div id="vsStepErr"></div><div class="vs-card">' +
                 ['cash', 'gcash'].map(function (m) {
                     return '<div class="form-check mb-3"><input class="form-check-input" type="radio" name="pm" id="pm_' + m + '" value="' + m + '"' + (S.payment_method === m ? ' checked' : '') + '><label class="form-check-label" for="pm_' + m + '"><span class="fw-semibold">' + (m === 'cash' ? 'Cash' : 'GCash') + '</span><br><span class="text-muted small">' +
                         (m === 'cash' ? 'Pay at the hotel through walk-in payment. No online payment is required at this time.' : 'You can complete your GCash payment later by selecting Pay now from your reservation.') + '</span></label></div>';
                 }).join('') + '</div>' + nav();
             main.querySelectorAll('[name=pm]').forEach(function (r) { r.onchange = function () { S.payment_method = r.value; save(); }; });
-            bindNav(function () { if (!S.payment_method) { errorBox('Choose a payment method.'); return; } go(6); });
+            bindNav(function () { if (!S.payment_method) { errorBox('Choose a payment method.'); return; } go(3); });
         }
 
         // ================================================= LAST STEP - review and bill summary
-        function expectedDiscount(types, base) {
-            var d = (cache.discounts || []).find(function (x) { return x.id == S.discount_id; });
-            if (!d || !S.idFile) return null;
-            var off = d.discount_type === 'percentage' ? base * Number(d.value) / 100 : Math.min(base, Number(d.value));
-            return { name: d.name, amount: off };
-        }
         function promoNotes(types) {
             var by = {};
             S.stays.forEach(function (s) { stayRooms(s).forEach(function (r) { var t = types[r.id]; (t && t.promos || []).forEach(function (p) {
@@ -476,24 +394,25 @@
         }
         function stepReview() {
             main.innerHTML = '<h2 class="vs-section-title">Review and bill summary</h2><p class="text-muted">Check everything before you confirm.</p><div id="vsStepErr"></div><div id="vsRev">' + VS.skeleton(6) + '</div>';
-            Promise.all([loadAmenities(), loadDiscounts()]).then(function () {
+            loadAmenities().then(function () {
                 var types = allTypes(), host = main.querySelector('#vsRev'), amenBy = {}; (cache.amenities || []).forEach(function (a) { amenBy[a.id] = a; });
                 var r = roomsTotal(types), a = amenitiesTotal();
                 var staysHtml = S.stays.map(function (s, i) {
                     var lines = stayRooms(s).map(function (rm) { var t = types[rm.id] || { name: 'Room', rate: 0 }; return '<div class="vs-row"><span>' + VS.esc(unitName(t)) + ' × ' + rm.qty + ' <span class="small">(' + VS.money(t.rate) + ' × ' + VS.plural(nights(s), 'night') + ')</span></span><span>' + VS.money(Number(t.rate) * nights(s) * rm.qty) + '</span></div>'; }).join('');
+                    // amenities exist here only on a reservation that was made with them (an edit): they stay and are billed as before
                     var am = (S.amenities[i] || []).map(function (x) { var am = amenBy[x.amenity_id] || { amenity_name: 'Amenity', charge: 0 }; var t = types[unitOf(x)]; return '<div class="vs-row vs-sub"><span>' + VS.esc(am.amenity_name) + ' × ' + x.quantity + (t ? ' <span class="small">(' + VS.esc(unitName(t)) + ' room ' + x.room_slot + ')</span>' : '') + '</span><span>' + VS.money(am.charge * x.quantity) + '</span></div>'; }).join('');
                     return '<div class="vs-card"><h3 class="h6 fw-bold">' + VS.esc(VS.date(s.check_in)) + ' → ' + VS.esc(VS.date(s.check_out)) + ' · ' + VS.plural(nights(s), 'night') + '</h3>' + lines + am + '</div>';
                 }).join('');
-                var ed = expectedDiscount(types, r + a), promos = promoNotes(types);
-                var guests = S.adults + S.minors.length, repName = [S.rep.first, S.rep.middle, S.rep.last].filter(Boolean).join(' ');
+                var promos = promoNotes(types), total = r + a;
+                var repName = [S.rep.first, S.rep.middle, S.rep.last].filter(Boolean).join(' ');
+                var payNow = mode === 'booking' ? '<div class="vs-row"><span>Amount to pay now</span><span>' + VS.money(Math.round(total * 0.2 * 100) / 100) + ' to ' + VS.money(Math.round(total * 0.5 * 100) / 100) + '</span></div><p class="text-muted small mb-0">You choose 20%, 30%, 40% or 50% of the grand total on the next screen. The rest is paid at the hotel.</p>' : '';
                 host.innerHTML = staysHtml +
-                    '<div class="vs-card"><h3 class="h6 fw-bold">Details</h3><div class="vs-row"><span>Representative</span><span>' + VS.esc(repName) + (S.rep.who === 'other' ? ' (must present 1 valid ID)' : '') + '</span></div>' +
+                    '<div class="vs-card"><h3 class="h6 fw-bold">Representative and guests</h3><div class="vs-row"><span>Representative</span><span>' + VS.esc(repName) + (S.rep.who === 'other' ? ' (must present 1 valid ID)' : '') + '</span></div>' +
                     '<div class="vs-row"><span>Guests</span><span>' + VS.plural(S.adults, 'adult') + (S.minors.length ? ', ' + VS.plural(S.minors.length, 'minor') : '') + '</span></div>' +
-                    (mode === 'reservation' ? '<div class="vs-row"><span>Payment method</span><span>' + (S.payment_method === 'gcash' ? 'GCash' : 'Cash') + '</span></div>' : '') +
-                    (S.discount_id ? '<div class="vs-row"><span>ID discount</span><span>' + VS.esc(((cache.discounts || []).find(function (x) { return x.id == S.discount_id; }) || {}).name || '') + (S.idFile ? ' · ID photo attached' : ' · no ID photo') + '</span></div>' : '') + '</div>' +
-                    '<div class="vs-card"><h3 class="h6 fw-bold">Bill summary</h3><div class="vs-row"><span>Room charges</span><span>' + VS.money(r) + '</span></div><div class="vs-row"><span>Amenities</span><span>' + VS.money(a) + '</span></div><hr class="vs-rule">' +
-                    '<div class="vs-row vs-strong"><span>Grand total</span><span>' + VS.money(r + a) + '</span></div>' +
-                    (ed ? '<p class="text-muted small mt-2 mb-0">Expected discount (' + VS.esc(ed.name) + '): −' + VS.money(ed.amount) + '. It is verified at check-in and is not subtracted yet.</p>' : '') + '</div>' +
+                    (mode === 'reservation' ? '<div class="vs-row"><span>Payment method</span><span>' + (S.payment_method === 'gcash' ? 'GCash' : 'Cash') + '</span></div>' : '') + '</div>' +
+                    '<div class="vs-card"><h3 class="h6 fw-bold">Bill summary</h3><div class="vs-row"><span>Room charges</span><span>' + VS.money(r) + '</span></div>' + (a > 0 ? '<div class="vs-row"><span>Amenities</span><span>' + VS.money(a) + '</span></div>' : '') + '<hr class="vs-rule">' +
+                    '<div class="vs-row vs-strong"><span>Grand total</span><span>' + VS.money(total) + '</span></div>' + payNow +
+                    '<p class="text-muted small mt-2 mb-0" id="vsDeskNote">PWD and Senior Citizen discounts are verified and applied by the front desk at check-in.</p></div>' +
                     (promos.length ? '<div class="vs-card"><h3 class="h6 fw-bold">Promos for your rooms (verified at check-in)</h3>' + promos.map(function (x) { return '<div class="vs-row"><span>' + VS.esc(x.p.title) + ' · ' + VS.esc(x.p.label || '') + '</span><span></span></div>' + (x.save > 0 ? '<div class="text-muted small">Estimated saving ' + VS.money(x.save) + '. Not subtracted until the front desk verifies it.</div>' : ''); }).join('') + '</div>' : '') +
                     '<div class="vs-card"><div class="form-check"><input class="form-check-input" type="checkbox" id="wTerms"><label class="form-check-label fw-normal" for="wTerms">I have read and accepted the <a href="#" id="wTermsLink">Terms and cancellation policy</a>.</label></div></div>' +
                     '<div class="d-flex justify-content-between mt-3 gap-2"><button class="btn btn-light" data-back>Back</button><button class="btn btn-velocity" id="wSubmit" data-busy-text="' + (mode === 'booking' ? 'Please wait' : 'Confirming') + '">' + (mode === 'booking' ? 'Continue to payment' : 'Confirm reservation') + '</button></div>';
@@ -522,7 +441,6 @@
             S.minors.forEach(function (age, i) {
                 fd.append('additional_guests[' + i + '][name]', 'Child ' + (i + 1)); fd.append('additional_guests[' + i + '][age]', age); fd.append('additional_guests[' + i + '][relationship]', 'Child');
             });
-            if (S.discount_id) { fd.append('discount_id', S.discount_id); var d = (cache.discounts || []).find(function (x) { return x.id == S.discount_id; }); if (d) fd.append('id_card_type', d.name); if (S.idFile) fd.append('id_card_image', S.idFile, S.idFile.name || 'id.jpg'); }
             fd.append('idempotency_key', S.key);
             return fd;
         }
@@ -535,7 +453,7 @@
                 adults: S.adults, children: S.minors.length, guest_first_name: S.rep.first, guest_last_name: S.rep.last,
                 additional_guests: S.minors.map(function (age, i) { return { name: 'Child ' + (i + 1), age: age, relationship: 'Child' }; }) };
             if (S.rep.middle) b.guest_middle_name = S.rep.middle;
-            if (S.discount_id) { b.discount_id = +S.discount_id; var d = (cache.discounts || []).find(function (x) { return x.id == S.discount_id; }); if (d) b.id_card_type = d.name; }
+            if (S.discount_id) { b.discount_id = +S.discount_id; if (editInfo && editInfo.id_card_type && editInfo.id_card_type !== 'None') b.id_card_type = editInfo.id_card_type; }
             else { b.id_card_type = 'None'; if (editInfo && editInfo.id_card_image_path) b.remove_id_card = true; }
             return b;
         }
@@ -546,7 +464,6 @@
                     return VS.api('/guest/reservations/' + editId, { method: 'PUT', body: editBody() }).then(function (r) {
                         if (!r.ok) return r;
                         var steps = Promise.resolve(r);
-                        if (S.idFile) steps = steps.then(function () { var fd = new FormData(); fd.append('id_card', S.idFile, S.idFile.name || 'id.jpg'); return VS.api('/guest/reservations/' + editId + '/id-card', { method: 'POST', body: fd }); }).then(function (u) { return u.ok ? r : u; });
                         if (S.payment_method !== S.origMethod) steps = steps.then(function (prev) { if (!prev.ok) return prev; return VS.api('/guest/reservations/' + editId + '/switch-to-' + (S.payment_method === 'gcash' ? 'gcash' : 'cash'), { method: 'PUT' }).then(function (u) { return u.ok ? r : u; }); });
                         return steps;
                     });
@@ -583,12 +500,13 @@
 
         // a booking is paid first: Review Billing and the GCash steps run on this page, and the booking is created with its payment
         function startPayment() {
-            var types = allTypes(), r = roomsTotal(types), a = amenitiesTotal(), total = r + a, ed = expectedDiscount(types, total);
-            var pending = !!(S.discount_id && S.idFile), cap = pending ? Math.min(total * 0.5, total - (ed ? ed.amount : 0)) : null;
+            var types = allTypes(), r = roomsTotal(types), a = amenitiesTotal(), total = r + a;
+            var pending = false, cap = null; // no ID is uploaded when booking: the front desk applies any discount at check-in
             root.querySelector('#vsWizTop').classList.add('d-none'); sum.parentNode.classList.add('d-none'); root.querySelector('#vsWizSummaryM').classList.add('d-none');
             window.VSPay.run(main, {
                 total: total, paid: 0, discountPending: pending, depositCap: cap, kindLabel: 'New booking',
-                lines: [{ label: 'Room charges', amount: r }, { label: 'Amenities', amount: a }],
+                lines: [{ label: 'Room charges', amount: r }].concat(a > 0 ? [{ label: 'Amenities', amount: a }] : []),
+                notes: ['PWD and Senior Citizen discounts are verified and applied by the front desk at check-in.'],
                 onCancel: function () { root.querySelector('#vsWizTop').classList.remove('d-none'); sum.parentNode.classList.remove('d-none'); root.querySelector('#vsWizSummaryM').classList.remove('d-none'); go(S.step); },
                 submit: function (f) {
                     var fd = payload(); fd.append('payment_method', 'gcash'); fd.append('amount_paid', f.amount); fd.append('selected_payment_percentage', f.percent);
@@ -655,11 +573,12 @@
             else if (pre.get('sel')) fromSel = { expired: true };
         }
         frame();
-        loadAmenities(); loadDiscounts();
+        loadAmenities();
         // make sure type info is known for restored stays before the first render
         ready.then(function () { return Promise.all(S.stays.map(function (s) { return roomsFor(s.check_in, s.check_out); })); }).then(function () {
             if (S.step > stepsDef.length - 1) S.step = 0;
             render(); frame();
+            if (draftReset) VS.alertBox('vsStepErr', 'The booking form has changed, so your earlier progress was cleared. Please start again.', 'info');
             if (fromSel) applySelection(fromSel);
             if (S.presetRoom && S.draft.check_in) { var id = S.presetRoom; delete S.presetRoom; roomsFor(S.draft.check_in, S.draft.check_out).then(function (list) { if (list && list.some(function (t) { return t.id === id && t.available_count > 0; })) { S.draft.rooms[id] = 1; paintRooms(); } }); }
         });
