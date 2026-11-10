@@ -61,10 +61,28 @@ class DatesBeforeBookNowTest extends TestCase
     {
         $wiz = file_get_contents(public_path('js/portal/wizard.js'));
 
-        $this->assertStringContainsString("window.location.replace('/guest/rooms?dates_first=1' + (draftReset ? '&reset=1' : ''))", $wiz);
+        $this->assertStringContainsString("window.location.replace('/guest/rooms?dates_first=1&mode=' + (mode === 'reservation' ? 'reserve' : 'book') + (draftReset ? '&reset=1' : ''))", $wiz);
         $this->assertStringContainsString("!editId && !pre.get('sel') && !pre.get('room')", $wiz);
         // the New booking / New reservation buttons and the dashboard shortcuts all land on the wizard routes, which apply it
         $this->assertStringContainsString('/guest/book/new', file_get_contents(public_path('js/portal/dashboard.js')));
         $this->assertStringContainsString('data-book', file_get_contents(resource_path('views/portal/stays.blade.php')));
+    }
+
+    public function test_new_reservation_and_new_booking_open_the_rooms_page_in_their_mode(): void
+    {
+        $js = file_get_contents(public_path('js/portal/rooms.js'));
+
+        $this->assertStringContainsString("get('mode')", $js);
+        $this->assertStringContainsString("You’re making a reservation (pay later)", $js);
+        $this->assertStringContainsString("You’re making a booking (pay now)", $js);
+        $this->assertStringContainsString("Switch to booking", $js);
+        $this->assertStringContainsString("Switch to reservation", $js);
+        // the bar offers only the chosen action, under the "Selected" labels
+        $this->assertStringContainsString("book.hidden = mode === 'reserve'; reserve.hidden = mode === 'book';", $js);
+        $this->assertStringContainsString("mode ? 'Book Selected' : 'Book now'", $js);
+        $this->assertStringContainsString("mode ? 'Reserve Selected' : 'Reserve'", $js);
+        // the dates rule is the same function, and Room Details keeps both actions (no mode)
+        $this->assertStringContainsString('if (!st.chosen) { needDates(); return; }', $js);
+        $this->assertStringNotContainsString("dates_first=1&room=' + encodeURIComponent(rt.id) + '&mode", $js);
     }
 }

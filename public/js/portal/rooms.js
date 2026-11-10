@@ -139,6 +139,15 @@
         /** A room opened from Room Details before any dates were chosen: it is selected here, and the guest is asked for the dates. */
         sel.preset = function (id) { if (id) { st.rooms[id] = 1; persist(); } };
         sel.needDates = needDates;
+        /** New booking / New reservation start: the selection bar offers only that action ('book', 'reserve', or null for both). */
+        var mode = null;
+        function applyModeBar() {
+            if (!bar) return;
+            var book = bar.querySelector('[data-go=book]'), reserve = bar.querySelector('[data-go=reserve]');
+            book.hidden = mode === 'reserve'; reserve.hidden = mode === 'book';
+            book.textContent = mode ? 'Book Selected' : 'Book now'; reserve.textContent = mode ? 'Reserve Selected' : 'Reserve';
+        }
+        sel.setMode = function (m) { mode = m; applyModeBar(); };
         /** The guest picked the dates themselves (the pickers start on the earliest dates): only then are they carried into the booking wizard as chosen. */
         sel.markChosen = function () { st.chosen = true; persist(); };
 
@@ -167,6 +176,7 @@
             bar = document.createElement('div'); bar.className = 'vs-selbar'; bar.setAttribute('role', 'region'); bar.setAttribute('aria-label', 'Your room selection'); bar.hidden = true;
             bar.innerHTML = '<div class="vs-selbar-in"><div class="vs-selbar-text" aria-live="polite"></div><div class="vs-selbar-actions"><button type="button" class="btn btn-link vs-selbar-clear" data-clear-sel>Clear selection</button><button type="button" class="btn btn-velocity" data-go="book">Book now</button><button type="button" class="btn btn-outline-velocity" data-go="reserve">Reserve</button></div></div>';
             document.body.appendChild(bar);
+            applyModeBar();
             bar.querySelectorAll('[data-go]').forEach(function (b) { b.addEventListener('click', function () { go(b.dataset.go); }); });
             bar.querySelector('[data-clear-sel]').addEventListener('click', function () {
                 var t = totals();
@@ -393,6 +403,19 @@
         var ci = form.querySelector('[name=check_in]'), co = form.querySelector('[name=check_out]');
         var sel = R.selection({ ci: ci, co: co, signed: signed });
         sel.bind(grid);
+
+        // Started from New booking / New reservation: a banner says which, with a link to switch; the bar offers only that action
+        var startMode = new URLSearchParams(window.location.search).get('mode');
+        if (startMode === 'book' || startMode === 'reserve') {
+            var banner = document.createElement('div'); banner.id = 'vsModeBanner'; banner.className = 'alert alert-info vs-alert d-flex justify-content-between align-items-center gap-2 flex-wrap'; banner.setAttribute('role', 'status');
+            form.parentNode.insertBefore(banner, form);
+            var paintMode = function (m) {
+                startMode = m; sel.setMode(m);
+                banner.innerHTML = '<span class="fw-semibold">' + (m === 'reserve' ? 'You’re making a reservation (pay later)' : 'You’re making a booking (pay now)') + '</span><a href="#" id="vsSwitchMode" class="fw-bold">' + (m === 'reserve' ? 'Switch to booking' : 'Switch to reservation') + '</a>';
+                banner.querySelector('#vsSwitchMode').onclick = function (e) { e.preventDefault(); var n = m === 'reserve' ? 'book' : 'reserve'; var u = new URL(window.location.href); u.searchParams.set('mode', n); window.history.replaceState(null, '', u); paintMode(n); };
+            };
+            paintMode(startMode);
+        }
 
         function read() {
             var q = {};
