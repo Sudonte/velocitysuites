@@ -193,6 +193,5 @@ class IncludedAndPaidAmenitiesTest extends ApiFlowTestCase
             $this->assertStringContainsString($needle, $js, $needle);
         }
         $this->assertStringContainsString("!/CHECKED_IN/.test(b.booking_status || '')", $js, 'only while checked in');
-        $this->assertStringNotContainsString('function stepAmenities', file_get_contents(public_path('js/portal/wizard.js')));
     }
 }

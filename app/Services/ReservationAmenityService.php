@@ -18,9 +18,10 @@ class ReservationAmenityService
     /**
      * Validates a raw `amenities` request array (each item shaped
      * ['amenity_id' => int, 'quantity' => int]) against the live catalog -
-     * every amenity_id must resolve to a currently active, Paid/Additional
-     * (charge > 0) amenity. Throws a normal Laravel ValidationException on
-     * any invalid selection (inactive, free, or nonexistent amenity) so
+     * every amenity_id must resolve to a currently active amenity, Paid
+     * (charge > 0) or Included (charge 0, which adds nothing to the bill).
+     * Throws a normal Laravel ValidationException on
+     * any invalid selection (inactive or nonexistent amenity) so
      * the whole submission is rejected rather than silently dropping
      * items - this is real backend enforcement of "guests cannot select
      * inactive/free amenities as paid add-ons", not just a UI filter.
@@ -43,8 +44,8 @@ class ReservationAmenityService
         $remainingStock = Amenity::remainingStockFor($amenityIds);
 
         foreach ($items as $item) {
+            // Paid (charge > 0) or Included (charge 0, never adds to the bill): both can be chosen for a room when booking.
             $amenity = Amenity::where('status', 'active')
-                ->where('charge', '>', 0)
                 ->find($item['amenity_id'] ?? null);
 
             if (! $amenity) {

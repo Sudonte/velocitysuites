@@ -178,12 +178,16 @@
                 '</div></div></div>';
             document.body.appendChild(wrap);
             var modal = new bootstrap.Modal(wrap, { backdrop: 'static' });
-            var answer = false;
+            var answer = false, answered = false, shown = false;
+            // The first answer is the answer. One given while the dialog is still opening closes it as soon as it has opened
+            // (Bootstrap ignores hide() during the opening transition, which used to leave the dialog on screen).
+            wrap.addEventListener('shown.bs.modal', function () { shown = true; if (answered) modal.hide(); });
             wrap.addEventListener('click', function (e) {
                 var b = e.target.closest('[data-act]');
-                if (!b) return;
+                if (!b || answered) return;
+                answered = true;
                 answer = b.getAttribute('data-act') === 'yes';
-                modal.hide();
+                if (shown) modal.hide();
             });
             wrap.addEventListener('hidden.bs.modal', function () { wrap.remove(); resolve(answer); });
             modal.show();

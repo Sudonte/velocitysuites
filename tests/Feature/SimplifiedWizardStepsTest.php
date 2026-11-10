@@ -8,8 +8,8 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Str;
 
 /**
- * Guest web, Part 2 of the simplified flow (same as the app): a booking is 3 steps (dates and rooms, representative and guests, review
- * and bill summary) and a reservation is 4 (the payment method before the review). No amenities step, no ID/discount step. The browser
+ * Guest web (same as the app): a booking is 4 steps (dates and rooms, amenities, representative and guests, review and bill summary)
+ * and a reservation is 4 (dates and rooms, representative and guests, payment method, review). No ID/discount step. The browser
  * behaviour is checked in headless Chrome; here the wording is pinned, and the server is shown to take a transaction without
  * booking-time amenities or ID (older apps still send them, and are still accepted).
  */
@@ -20,24 +20,24 @@ class SimplifiedWizardStepsTest extends ApiFlowTestCase
         return file_get_contents(public_path('js/portal/wizard.js'));
     }
 
-    public function test_booking_has_three_steps_and_reservation_four_with_the_new_titles(): void
+    public function test_booking_and_reservation_each_have_four_steps_with_their_titles(): void
     {
         $js = $this->wizard();
 
-        $this->assertStringContainsString("? ['Dates and rooms', 'Representative and guests', 'Review and bill summary']", $js);
+        $this->assertStringContainsString("? ['Dates and rooms', 'Amenities', 'Representative and guests', 'Review and bill summary']", $js);
         $this->assertStringContainsString(": ['Dates and rooms', 'Representative and guests', 'Payment method', 'Review and bill summary']", $js);
         $this->assertStringContainsString("line.textContent = 'Step ' + (S.step + 1) + ' of ' + stepsDef.length + ' · ' + stepsDef[S.step];", $js);
-        $this->assertStringContainsString('[stepStays, stepRepGuests].concat(mode === \'reservation\' ? [stepPaymentMethod] : []).concat([stepReview])', $js);
+        $this->assertStringContainsString("(mode === 'booking' ? [stepStays, stepAmenities, stepRepGuests, stepReview] : [stepStays, stepRepGuests, stepPaymentMethod, stepReview])[S.step]()", $js);
     }
 
-    public function test_the_amenities_and_id_steps_are_gone_from_the_wizard(): void
+    public function test_the_id_step_is_gone_from_the_wizard(): void
     {
         $js = $this->wizard();
 
-        foreach (['function stepAmenities', 'function stepId', "'Amenities', 'Representative'", "'ID verification'", 'Upload a valid ID', 'Expected discount', 'idDisc'] as $gone) {
+        foreach (['function stepId', "'ID verification'", 'Upload a valid ID', 'Expected discount', 'idDisc'] as $gone) {
             $this->assertStringNotContainsString($gone, $js, $gone);
         }
-        // a new transaction sends neither booking-time amenities nor an ID photo or a discount
+        // a new transaction sends no ID photo and no discount
         $this->assertStringNotContainsString("fd.append('id_card_image'", $js);
         $this->assertStringNotContainsString("fd.append('discount_id'", $js);
     }
@@ -68,8 +68,8 @@ class SimplifiedWizardStepsTest extends ApiFlowTestCase
     {
         $js = $this->wizard();
 
-        $this->assertStringContainsString('return { v: 2, mode: mode', $js);
-        $this->assertStringContainsString('if (saved && saved.v !== 2) { sessionStorage.removeItem(DK); draftReset = true; }', $js);
+        $this->assertStringContainsString('return { v: 3, mode: mode', $js);
+        $this->assertStringContainsString('if (saved && saved.v !== 3) { sessionStorage.removeItem(DK); draftReset = true; }', $js);
         $this->assertStringContainsString('The booking form has changed, so your earlier progress was cleared. Please start again.', $js);
     }
 

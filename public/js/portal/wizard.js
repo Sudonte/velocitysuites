@@ -1,5 +1,5 @@
 /*
- * New booking (3 steps) and new reservation (4 steps) on the web - the same steps, rules and wording as the app. Rooms and rates
+ * New booking (4 steps, with the optional Amenities step) and new reservation (4 steps, no amenities) on the web - the same steps, rules and wording as the app. Rooms and rates
  * come from GET /api/rooms, amenities from GET /api/amenities, discounts from GET /api/discounts, and the request goes to the app's
  * own POST /api/guest/reservations (a booking continues to the payment page, which posts to /api/guest/bookings).
  */
@@ -31,7 +31,7 @@
     // ---------------------------------------------------------------- state
 
     function newState(mode) {
-        return { v: 2, mode: mode, step: 0, stays: [], draft: { check_in: '', check_out: '', rooms: {}, editing: null }, amenities: {}, // amenities[stayIndex] = [{amenity_id, quantity, room_type_id, room_slot}]
+        return { v: 3, mode: mode, step: 0, stays: [], draft: { check_in: '', check_out: '', rooms: {}, editing: null }, amenities: {}, // amenities[stayIndex] = [{amenity_id, quantity, room_type_id, room_slot}]
             rep: { who: 'owner', first: '', middle: '', last: '' }, adults: 1, minors: [], discount_id: '', idFile: null, payment_method: '', key: 'k' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8) };
     }
 
@@ -42,7 +42,7 @@
         var S = newState(mode);
         var DK = KEY + mode + (editId ? '_edit' + editId : '');
         var stepsDef = mode === 'booking'
-            ? ['Dates and rooms', 'Representative and guests', 'Review and bill summary']
+            ? ['Dates and rooms', 'Amenities', 'Representative and guests', 'Review and bill summary']
             : ['Dates and rooms', 'Representative and guests', 'Payment method', 'Review and bill summary'];
         var cache = { rooms: {}, amenities: null, discounts: null, profile: null };
         var main = root.querySelector('#vsWizMain'), bar = root.querySelector('#vsWizBar'), line = root.querySelector('#vsWizLine'), sum = root.querySelector('#vsWizSummary');
@@ -52,8 +52,8 @@
         var draftReset = false;
         try {
             var saved = editId ? null : JSON.parse(sessionStorage.getItem(DK) || 'null');
-            // a draft saved by the older form (more steps, amenities and ID) has no version 2 marker: start fresh, with a short message
-            if (saved && saved.v !== 2) { sessionStorage.removeItem(DK); draftReset = true; }
+            // a draft saved by an older form (other steps) has no version 3 marker: start fresh, with a short message
+            if (saved && saved.v !== 3) { sessionStorage.removeItem(DK); draftReset = true; }
             else if (saved && saved.stays) { S = Object.assign(S, saved); }
         } catch (e) { /* no draft */ }
         var pre = new URLSearchParams(window.location.search);
@@ -78,7 +78,7 @@
         }
         function loadAmenities() {
             if (cache.amenities) return Promise.resolve(cache.amenities);
-            return VS.api('/amenities', { query: { pricing_type: 'paid' } }).then(function (r) { cache.amenities = r.ok ? r.data : []; return cache.amenities; });
+            return VS.api('/amenities').then(function (r) { cache.amenities = r.ok ? r.data : []; return cache.amenities; });
         }
         function loadDiscounts() {
             if (cache.discounts) return Promise.resolve(cache.discounts);
@@ -116,7 +116,7 @@
         }
         function go(n) {
             S.step = n; frame(); render();
-            var top = root.getBoundingClientRect().top + window.pageYOffset - 70; window.scrollTo({ top: top, behavior: VS.reducedMotion ? 'auto' : 'smooth' });
+            root.style.scrollMarginTop = '70px'; root.scrollIntoView({ block: 'start', behavior: VS.reducedMotion ? 'auto' : 'smooth' }); // (the shell scrolls in its own box, so not window.scrollTo)
         }
         function nav(opts) {
             return '<div class="d-flex justify-content-between mt-4 gap-2">' + (S.step > 0 ? '<button class="btn btn-light" data-back>Back</button>' : '<button type="button" class="btn btn-light" data-cancel>Cancel</button>') +
@@ -138,7 +138,7 @@
         function abandon() { try { sessionStorage.removeItem(DK); } catch (e) { /* ignore */ } if (window.VSRooms) window.VSRooms.clearSelection(); window.__vsLeavingOk = true; }
         function errorBox(msg) { var e = main.querySelector('#vsStepErr'); if (e) VS.alertBox(e, msg); if (msg && e) e.scrollIntoView({ block: 'center', behavior: VS.reducedMotion ? 'auto' : 'smooth' }); }
 
-        function render() { [stepStays, stepRepGuests].concat(mode === 'reservation' ? [stepPaymentMethod] : []).concat([stepReview])[S.step](); }
+        function render() { (mode === 'booking' ? [stepStays, stepAmenities, stepRepGuests, stepReview] : [stepStays, stepRepGuests, stepPaymentMethod, stepReview])[S.step](); }
 
         // ================================================= STEP 1 - dates and rooms
         function stepStays() {
@@ -297,6 +297,10 @@
                 });
                 var ce = host.querySelector('#wCancelEdit'); if (ce) ce.onclick = function () { S.draft = { check_in: '', check_out: '', rooms: {}, editing: null }; save(); paintStays(); paintEditor(); };
                 host.querySelector('#wConfirm').onclick = confirmStay;
+                if (d.toConfirm) {
+                    d.toConfirm = false; save();
+                    host.querySelector('#wConfirm').scrollIntoView({ block: 'center', behavior: VS.reducedMotion ? 'auto' : 'smooth' });
+                }
                 updateNext();
             });
         }
@@ -314,7 +318,74 @@
             VS.toast('Dates confirmed.', 'success'); save(); frame(); paintStays(); paintEditor();
         }
 
-        // ================================================= STEP 2 - representative and guests
+        // ================================================= STEP 2 (booking) - amenities per date range and room
+        function amenityQtyTotal() { var n = 0; Object.keys(S.amenities).forEach(function (i) { (S.amenities[i] || []).forEach(function (x) { n += x.quantity; }); }); return n; }
+        function stepAmenities() {
+            main.innerHTML = '<h2 class="vs-section-title">Amenities</h2><p class="text-muted">Optional. Amenities are added to your total; you can request more after booking.</p><div id="vsStepErr"></div><div id="vsAmenHost">' + VS.skeleton(4) + '</div>' +
+                '<div class="vs-card vs-strong vs-num text-end" id="vsAmenTotal" role="status" aria-live="polite"></div>' +
+                '<div class="d-flex justify-content-between mt-4 gap-2"><button class="btn btn-light" data-back>Back</button><div class="d-flex gap-2"><button type="button" class="btn btn-outline-velocity" data-skip>Skip</button><button class="btn btn-velocity" data-next>Continue</button></div></div>';
+            function liveTotal() {
+                var types = allTypes(), r = roomsTotal(types), a = amenitiesTotal();
+                main.querySelector('#vsAmenTotal').textContent = 'Amenities ' + VS.money(a) + ' · Grand total ' + VS.money(r + a);
+                paintSummary();
+            }
+            function noneMessage() { return 'No amenities · Total ' + VS.money(roomsTotal(allTypes())); }
+            main.querySelector('[data-skip]').onclick = function () {
+                VS.confirm({ title: 'Continue without additional amenities?', message: noneMessage(), confirmText: 'Yes, continue' }).then(function (yes) {
+                    if (!yes) return; S.amenities = {}; save(); go(S.step + 1);
+                });
+            };
+            bindNav(function () {
+                var any = amenityQtyTotal() > 0, types = allTypes();
+                VS.confirm(any
+                    ? { title: 'Proceed with these amenities?', message: 'Amenities ' + VS.money(amenitiesTotal()) + ' · Grand total ' + VS.money(roomsTotal(types) + amenitiesTotal()), confirmText: 'Yes, continue' }
+                    : { title: 'Continue without additional amenities?', message: noneMessage(), confirmText: 'Yes, continue' }).then(function (yes) { if (yes) go(S.step + 1); });
+            });
+            loadAmenities().then(function (list) {
+                var host = main.querySelector('#vsAmenHost'), types = allTypes();
+                var included = list.filter(function (a) { return !(Number(a.charge) > 0); }), paid = list.filter(function (a) { return Number(a.charge) > 0; });
+                if (!list.length) { host.innerHTML = '<p class="text-muted">No amenities are offered right now.</p>'; liveTotal(); return; }
+                function rowsOf(group, i, sl, isIncluded) {
+                    return group.map(function (a) {
+                        return '<div class="d-flex align-items-center gap-2 py-1" data-am="' + i + '|' + sl.type + '|' + sl.slot + '|' + a.id + '"><div class="flex-grow-1">' + VS.esc(a.amenity_name) + ' ' +
+                            (isIncluded ? '<span class="vs-chip ok">Included</span> <span class="text-muted small vs-num">' + VS.money(0) + '</span>' : '<span class="text-muted small vs-num">' + VS.money(a.charge) + '</span>') + '</div>' +
+                            '<button class="btn btn-sm btn-outline-velocity" data-d aria-label="Fewer ' + VS.esc(a.amenity_name) + '">−</button><span class="vs-num fw-bold" data-q style="min-width:1.5rem;text-align:center">0</span><button class="btn btn-sm btn-velocity" data-u aria-label="More ' + VS.esc(a.amenity_name) + '">+</button></div>';
+                    }).join('');
+                }
+                host.innerHTML = S.stays.map(function (s, i) {
+                    var slots = []; stayRooms(s).forEach(function (r) { for (var k = 1; k <= r.qty; k++) slots.push({ type: r.id, slot: k }); });
+                    return '<div class="vs-card"><h3 class="h6 fw-bold">' + VS.esc(VS.date(s.check_in)) + ' → ' + VS.esc(VS.date(s.check_out)) + '</h3>' + slots.map(function (sl, n) {
+                        var tn = types[sl.type] ? unitName(types[sl.type]) : 'Room';
+                        return '<details class="mb-2"' + (i === 0 && n === 0 ? ' open' : '') + '><summary class="fw-semibold">' + VS.esc(tn) + ' (room ' + sl.slot + ')</summary><div class="mt-2">' +
+                            (included.length ? '<div class="small fw-bold mt-1" data-group="included">Included with your room</div>' + rowsOf(included, i, sl, true) : '') +
+                            (paid.length ? '<div class="small fw-bold mt-2" data-group="paid">Additional amenities</div>' + rowsOf(paid, i, sl, false) : '') + '</div></details>';
+                    }).join('') + '</div>';
+                }).join('');
+                function qtyOf(i, t, sl, id) { var f = (S.amenities[i] || []).find(function (x) { return unitOf(x) == t && x.room_slot == sl && x.amenity_id == id; }); return f ? f.quantity : 0; }
+                function setQty(i, t, sl, id, q) {
+                    var arr = S.amenities[i] = S.amenities[i] || []; var idx = arr.findIndex(function (x) { return unitOf(x) == t && x.room_slot == sl && x.amenity_id == id; });
+                    if (q <= 0) { if (idx >= 0) arr.splice(idx, 1); } else if (idx >= 0) arr[idx].quantity = q; else { var pp = String(t).split(':'); arr.push({ amenity_id: +id, quantity: q, unit: String(t), room_type_id: +pp[0], option_key: pp[1] || null, room_slot: +sl }); }
+                    save();
+                }
+                function totalFor(id) { var n = 0; Object.keys(S.amenities).forEach(function (i) { (S.amenities[i] || []).forEach(function (x) { if (x.amenity_id == id) n += x.quantity; }); }); return n; }
+                host.querySelectorAll('[data-am]').forEach(function (row) {
+                    var p = row.dataset.am.split('|'), i = +p[0], t = p[1], sl = p[2], id = p[3], a = list.find(function (x) { return x.id == id; });
+                    function paint() { row.querySelector('[data-q]').textContent = qtyOf(i, t, sl, id); liveTotal(); }
+                    row.querySelector('[data-u]').onclick = function () {
+                        // the same two limits as the app: a room takes at most its capacity of one amenity, and never more than the hotel has
+                        var roomCap = types[t] ? Math.max(1, Number(types[t].capacity) || 1) : 0;
+                        if (roomCap && qtyOf(i, t, sl, id) >= roomCap) { VS.toast("Quantity can't exceed the room capacity you selected.", 'warning'); return; }
+                        if (!a.is_unlimited && totalFor(id) + 1 > a.quantity) { VS.toast('Only ' + a.quantity + ' of ' + a.amenity_name + ' left.', 'warning'); return; }
+                        setQty(i, t, sl, id, qtyOf(i, t, sl, id) + 1); paint();
+                    };
+                    row.querySelector('[data-d]').onclick = function () { setQty(i, t, sl, id, qtyOf(i, t, sl, id) - 1); paint(); };
+                    row.querySelector('[data-q]').textContent = qtyOf(i, t, sl, id);
+                });
+                liveTotal();
+            });
+        }
+
+        // ================================================= representative and guests (step 3 of a booking, step 2 of a reservation)
         function capacity() {
             var types = allTypes();
             return Math.min.apply(null, S.stays.map(function (s) { return stayRooms(s).reduce(function (a, r) { return a + (types[r.id] ? types[r.id].capacity * r.qty : 0); }, 0); }));
@@ -329,7 +400,7 @@
                 '<div class="form-check mb-3"><input class="form-check-input" type="radio" name="who" id="whoOther" value="other"><label class="form-check-label fw-semibold" for="whoOther">Someone else</label></div>' +
                 '<div class="row g-3"><div class="col-md-4"><label class="form-label small fw-semibold" for="rF">First name</label><input class="form-control" id="rF" maxlength="100"></div><div class="col-md-4"><label class="form-label small fw-semibold" for="rM">Middle name <span class="text-muted fw-normal">(optional)</span></label><input class="form-control" id="rM" maxlength="100"></div><div class="col-md-4"><label class="form-label small fw-semibold" for="rL">Last name</label><input class="form-control" id="rL" maxlength="100"></div></div>' +
                 '<p class="text-muted small mt-3 mb-0">The person checking in presents 1 valid ID at the front desk.</p></section>' +
-                '<section class="vs-card" aria-labelledby="vsGuestsTitle"><h3 class="h6 fw-bold" id="vsGuestsTitle">Guests</h3><p class="text-muted small">Adults and minors together must fit the rooms you chose in every stay (up to <strong>' + cap + '</strong>).</p>' +
+                '<section class="vs-card" id="vsGuestsCard" aria-labelledby="vsGuestsTitle"><h3 class="h6 fw-bold" id="vsGuestsTitle">Guests</h3><p class="text-muted small">Adults and minors together must fit the rooms you chose in every stay (up to <strong>' + cap + '</strong>).</p>' +
                 '<div class="d-flex align-items-center justify-content-between py-2"><span class="fw-semibold">Adults</span><span><button class="btn btn-sm btn-outline-velocity" id="aDec" aria-label="Fewer adults">−</button><span class="vs-num fw-bold mx-3" id="aVal"></span><button class="btn btn-sm btn-velocity" id="aInc" aria-label="More adults">+</button></span></div>' +
                 '<div class="d-flex align-items-center justify-content-between py-2"><span class="fw-semibold">Minors</span><span><button class="btn btn-sm btn-outline-velocity" id="mDec" aria-label="Fewer minors">−</button><span class="vs-num fw-bold mx-3" id="mVal"></span><button class="btn btn-sm btn-velocity" id="mInc" aria-label="More minors">+</button></span></div>' +
                 '<div id="mAges" class="row g-2 mt-1"></div><p class="text-muted small mt-2 mb-0" id="gHint"></p><div id="gCap" class="invalid-feedback d-block fw-semibold" role="alert" hidden></div></section>' + nav();
@@ -344,8 +415,18 @@
                 [f, m, l].forEach(function (i) { i.readOnly = owner; });
                 if (owner && S.owner) { f.value = S.owner.first; m.value = S.owner.middle; l.value = S.owner.last; } else { f.value = S.rep.first; m.value = S.rep.middle; l.value = S.rep.last; }
             }
-            who.forEach(function (r) { r.onchange = function () { S.rep.who = r.value; if (r.value === 'other') { S.rep.first = ''; S.rep.middle = ''; S.rep.last = ''; } apply(); save(); }; });
-            [f, m, l].forEach(function (i) { i.oninput = function () { if (S.rep.who === 'other') { S.rep.first = f.value; S.rep.middle = m.value; S.rep.last = l.value; save(); } }; });
+            // After the representative is chosen and the names are valid, the page moves to Guests (once; smoothly unless motion is reduced)
+            var wentToGuests = false;
+            function repValid() { return S.rep.who === 'owner' ? !!(S.owner && S.owner.first && S.owner.last) : !!(f.value.trim() && l.value.trim()); }
+            function toGuests() {
+                if (wentToGuests || !repValid()) return;
+                wentToGuests = true;
+                var g = main.querySelector('#vsGuestsCard');
+                g.style.scrollMarginTop = '80px'; // clear of the page header; works in the signed-in shell, whose content scrolls in its own box
+                g.scrollIntoView({ block: 'start', behavior: VS.reducedMotion ? 'auto' : 'smooth' });
+            }
+            who.forEach(function (r) { r.onchange = function () { S.rep.who = r.value; if (r.value === 'other') { S.rep.first = ''; S.rep.middle = ''; S.rep.last = ''; } apply(); save(); toGuests(); }; });
+            [f, m, l].forEach(function (i) { i.oninput = function () { if (S.rep.who === 'other') { S.rep.first = f.value; S.rep.middle = m.value; S.rep.last = l.value; save(); } }; i.onchange = toGuests; });
             apply();
             function paint() {
                 main.querySelector('#aVal').textContent = S.adults; main.querySelector('#mVal').textContent = S.minors.length;
@@ -374,7 +455,7 @@
                 if (!ok) { var bad = main.querySelector('.is-invalid, #vsStepErr .alert'); if (bad) bad.scrollIntoView({ block: 'center', behavior: VS.reducedMotion ? 'auto' : 'smooth' }); return; }
                 S.rep.first = first; S.rep.middle = m.value.trim(); S.rep.last = last;
                 var who2 = S.rep.who === 'other' ? first + ' ' + last + ' will check in and present 1 valid ID at the front desk. ' : '';
-                VS.confirm({ title: 'Continue with these details?', message: who2 + VS.plural(S.adults, 'adult') + (S.minors.length ? ' and ' + VS.plural(S.minors.length, 'minor') : '') + '.', confirmText: 'Continue' }).then(function (yes) { if (yes) go(2); });
+                VS.confirm({ title: 'Continue with these details?', message: who2 + VS.plural(S.adults, 'adult') + (S.minors.length ? ' and ' + VS.plural(S.minors.length, 'minor') : '') + '.', confirmText: 'Continue' }).then(function (yes) { if (yes) go(S.step + 1); });
             });
         }
 
@@ -386,7 +467,7 @@
                         (m === 'cash' ? 'Pay at the hotel through walk-in payment. No online payment is required at this time.' : 'You can complete your GCash payment later by selecting Pay now from your reservation.') + '</span></label></div>';
                 }).join('') + '</div>' + nav();
             main.querySelectorAll('[name=pm]').forEach(function (r) { r.onchange = function () { S.payment_method = r.value; save(); }; });
-            bindNav(function () { if (!S.payment_method) { errorBox('Choose a payment method.'); return; } go(3); });
+            bindNav(function () { if (!S.payment_method) { errorBox('Choose a payment method.'); return; } go(S.step + 1); });
         }
 
         // ================================================= LAST STEP - review and bill summary
@@ -403,8 +484,8 @@
                 var r = roomsTotal(types), a = amenitiesTotal();
                 var staysHtml = S.stays.map(function (s, i) {
                     var lines = stayRooms(s).map(function (rm) { var t = types[rm.id] || { name: 'Room', rate: 0 }; return '<div class="vs-row"><span>' + VS.esc(unitName(t)) + ' × ' + rm.qty + ' <span class="small">(' + VS.money(t.rate) + ' × ' + VS.plural(nights(s), 'night') + ')</span></span><span>' + VS.money(Number(t.rate) * nights(s) * rm.qty) + '</span></div>'; }).join('');
-                    // amenities exist here only on a reservation that was made with them (an edit): they stay and are billed as before
-                    var am = (S.amenities[i] || []).map(function (x) { var am = amenBy[x.amenity_id] || { amenity_name: 'Amenity', charge: 0 }; var t = types[unitOf(x)]; return '<div class="vs-row vs-sub"><span>' + VS.esc(am.amenity_name) + ' × ' + x.quantity + (t ? ' <span class="small">(' + VS.esc(unitName(t)) + ' room ' + x.room_slot + ')</span>' : '') + '</span><span>' + VS.money(am.charge * x.quantity) + '</span></div>'; }).join('');
+                    // a booking's amenities (included ones add 0), or those of a reservation that was made with some (an edit)
+                    var am = (S.amenities[i] || []).map(function (x) { var am = amenBy[x.amenity_id] || { amenity_name: 'Amenity', charge: 0 }; var t = types[unitOf(x)]; return '<div class="vs-row vs-sub"><span>' + VS.esc(am.amenity_name) + ' × ' + x.quantity + (t ? ' <span class="small">(' + VS.esc(unitName(t)) + ' room ' + x.room_slot + ')</span>' : '') + '</span><span>' + (Number(am.charge) > 0 ? VS.money(am.charge * x.quantity) : '<span class="vs-chip ok">Included</span>') + '</span></div>'; }).join('');
                     return '<div class="vs-card"><h3 class="h6 fw-bold">' + VS.esc(VS.date(s.check_in)) + ' → ' + VS.esc(VS.date(s.check_out)) + ' · ' + VS.plural(nights(s), 'night') + '</h3>' + lines + am + '</div>';
                 }).join('');
                 var promos = promoNotes(types), total = r + a;
@@ -435,7 +516,7 @@
             S.stays.forEach(function (s, i) {
                 fd.append('stays[' + i + '][check_in]', s.check_in); fd.append('stays[' + i + '][check_out]', s.check_out);
                 stayRooms(s).forEach(function (r, k) { fd.append('stays[' + i + '][rooms][' + k + '][room_type_id]', r.typeId); if (r.option) fd.append('stays[' + i + '][rooms][' + k + '][option_key]', r.option); fd.append('stays[' + i + '][rooms][' + k + '][quantity]', r.qty); });
-                (S.amenities[i] || []).forEach(function (a, k) {
+                (mode === 'booking' ? (S.amenities[i] || []) : []).forEach(function (a, k) {
                     fd.append('stays[' + i + '][amenities][' + k + '][amenity_id]', a.amenity_id); fd.append('stays[' + i + '][amenities][' + k + '][quantity]', a.quantity);
                     fd.append('stays[' + i + '][amenities][' + k + '][room_type_id]', a.room_type_id); if (a.option_key) fd.append('stays[' + i + '][amenities][' + k + '][option_key]', a.option_key); fd.append('stays[' + i + '][amenities][' + k + '][room_slot]', a.room_slot);
                 });
@@ -531,7 +612,7 @@
             if (sv.expired) { window.VSRooms.clearSelection(); VS.alertBox('vsStepErr', 'Your room selection expired. Choose your dates and rooms again.', 'warning'); return; }
             var chosen = !!sv.chosen && sv.check_in >= earliest && sv.check_out > sv.check_in;
             window.VSRooms.clearSelection();
-            S.draft = { check_in: chosen ? sv.check_in : '', check_out: chosen ? sv.check_out : '', rooms: JSON.parse(JSON.stringify(sv.rooms || {})), types: JSON.parse(JSON.stringify(sv.types || {})), editing: null, carried: true, recheck: true, note: '' };
+            S.draft = { check_in: chosen ? sv.check_in : '', check_out: chosen ? sv.check_out : '', rooms: JSON.parse(JSON.stringify(sv.rooms || {})), types: JSON.parse(JSON.stringify(sv.types || {})), editing: null, carried: true, recheck: true, note: '', toConfirm: chosen };
             if (sv.chosen && !chosen) S.draft.note = 'Those dates can no longer be booked (the earliest check-in is ' + VS.date(earliest) + '). Choose new dates.';
             save(); frame(); paintStays(); paintEditor();
             if (S.draft.note && !chosen) { VS.alertBox('vsDateErr', S.draft.note, 'warning'); S.draft.note = ''; save(); }
@@ -584,7 +665,7 @@
             render(); frame();
             if (draftReset) VS.alertBox('vsStepErr', 'The booking form has changed, so your earlier progress was cleared. Please start again.', 'info');
             if (fromSel) applySelection(fromSel);
-            if (S.presetRoom && S.draft.check_in) { var id = S.presetRoom; delete S.presetRoom; roomsFor(S.draft.check_in, S.draft.check_out).then(function (list) { if (list && list.some(function (t) { return t.id === id && t.available_count > 0; })) { S.draft.rooms[id] = 1; paintRooms(); } }); }
+            if (S.presetRoom && S.draft.check_in) { var id = S.presetRoom; delete S.presetRoom; roomsFor(S.draft.check_in, S.draft.check_out).then(function (list) { if (list && list.some(function (t) { return t.id === id && t.available_count > 0; })) { S.draft.rooms[id] = 1; S.draft.toConfirm = true; paintRooms(); } }); }
         });
         window.addEventListener('beforeunload', function (e) { if (S.stays.length && !window.__vsLeavingOk && !(editId && !editInfo)) { e.preventDefault(); e.returnValue = ''; } });
         W.state = function () { return S; };
