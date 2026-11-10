@@ -203,7 +203,7 @@
         @if($depositPayment && $depositPayment->payment_method === 'gcash')
             <x-card title="GCash Payment Information" icon="fas fa-qrcode" bodyClass="card-body" class="mb-4">
                 <dl class="detail-list mb-2">
-                    <div><dt>GCash Mobile Number</dt><dd>{{ $depositPayment->gcash_number ?: 'Not provided' }}</dd></div>
+                    @if($depositPayment->gcash_number)<div><dt>GCash Mobile Number</dt><dd>{{ $depositPayment->gcash_number }}</dd></div>@endif
                     <div><dt>GCash Reference Number</dt><dd>{{ $depositPayment->reference_number ?: 'Not provided' }}</dd></div>
                     <div><dt>Payment Percentage</dt>
                         <dd>{{ $reservation->selected_payment_percentage ? (int) $reservation->selected_payment_percentage . '%' : 'N/A' }}</dd>

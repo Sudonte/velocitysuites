@@ -57,6 +57,10 @@
             else if (saved && saved.stays) { S = Object.assign(S, saved); }
         } catch (e) { /* no draft */ }
         var pre = new URLSearchParams(window.location.search);
+        // Straight to the wizard with no dates and rooms (a New booking button, a typed address): dates come first, on the Rooms page
+        if (!editId && !pre.get('sel') && !pre.get('room') && !(S.stays && S.stays.length) && !(S.draft && S.draft.check_in)) {
+            window.__vsLeavingOk = true; window.location.replace('/guest/rooms?dates_first=1' + (draftReset ? '&reset=1' : '')); return;
+        }
         function save() { try { sessionStorage.setItem(DK, JSON.stringify(S)); } catch (e) { /* storage full or blocked */ } }
 
         // ---- data

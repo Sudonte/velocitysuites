@@ -134,6 +134,11 @@
         sel.qty = function (id) { return st.rooms[id] || 0; };
         sel.max = function (rt) { return rt.is_fully_booked ? 0 : Math.max(0, rt.available_count || 0); };
         sel.dates = function () { return { check_in: st.check_in, check_out: st.check_out }; };
+        /** The query string the room cards carry to Room Details: the dates, and chosen=1 only when the guest picked them themselves. */
+        sel.search = function () { var p = new URLSearchParams({ check_in: st.check_in, check_out: st.check_out }); if (st.chosen) p.set('chosen', '1'); return p.toString(); };
+        /** A room opened from Room Details before any dates were chosen: it is selected here, and the guest is asked for the dates. */
+        sel.preset = function (id) { if (id) { st.rooms[id] = 1; persist(); } };
+        sel.needDates = needDates;
         /** The guest picked the dates themselves (the pickers start on the earliest dates): only then are they carried into the booking wizard as chosen. */
         sel.markChosen = function () { st.chosen = true; persist(); };
 
@@ -253,7 +258,7 @@
         var typeHost = document.getElementById('vsFeaturedType'), typeFilter = '', last = [];
         function showCards() {
             var list = typeFilter ? last.filter(function (rt) { return rt.name === typeFilter; }) : last.slice(0, 6);
-            el.innerHTML = list.length ? list.map(function (rt) { return R.card(rt, sel ? new URLSearchParams(sel.dates()).toString() : '', sel); }).join('')
+            el.innerHTML = list.length ? list.map(function (rt) { return R.card(rt, sel ? sel.search() : '', sel); }).join('')
                 : '<div class="col-12">' + VS.empty('fa-bed', 'No rooms of that type right now', 'Choose another room type.') + '</div>';
             VS.reveal(el);
         }
@@ -336,12 +341,14 @@
                 return '<li class="col"><i class="fas fa-check text-success me-2"></i>' + VS.esc(a.name) + '</li>';
             }).join('') + '</ul>' : '<p class="text-muted mb-0">No amenities listed.</p>';
             var full = stdFull(rt), others = full && R.otherFree(rt);
-            var book = '/guest/book/new?room=' + rt.id + (qs.get('check_in') ? '&check_in=' + qs.get('check_in') + '&check_out=' + (qs.get('check_out') || '') : '');
+            // Book / Reserve need dates the guest chose: without them the Rooms page opens on its date picker, with this room selected
+            var chosen = qs.get('chosen') === '1' && qs.get('check_in');
+            var book = chosen ? '/guest/book/new?room=' + rt.id + '&check_in=' + qs.get('check_in') + '&check_out=' + (qs.get('check_out') || '') : '/guest/rooms?dates_first=1&room=' + encodeURIComponent(rt.id);
             var cta = others
                 ? '<p class="small text-muted mb-2">The standard ' + VS.esc(rt.name) + ' rooms are fully booked for these dates, but other ' + VS.esc(rt.name) + ' rooms are available.</p><a class="btn btn-velocity w-100" href="/guest/rooms' + (qs.get('check_in') ? '?check_in=' + qs.get('check_in') + '&check_out=' + (qs.get('check_out') || '') : '') + '">See the other ' + VS.esc(rt.name) + ' rooms</a>'
                 : full
                 ? '<button class="btn btn-secondary w-100" disabled>Fully booked for these dates</button>'
-                : '<a class="btn btn-velocity w-100 mb-2" href="' + book + '">Book this room</a><a class="btn btn-outline-velocity w-100" href="' + book.replace('/book/new', '/reserve/new') + '">Reserve this room</a>';
+                : '<a class="btn btn-velocity w-100 mb-2" href="' + book + '">Book this room</a><a class="btn btn-outline-velocity w-100" href="' + (chosen ? book.replace('/book/new', '/reserve/new') : book) + '">Reserve this room</a>';
             el.innerHTML =
                 '<div class="row g-4"><div class="col-lg-7">' +
                 '<div class="vs-room-photo rounded-3" style="aspect-ratio:16/10"><img id="vsMainPhoto" src="' + VS.esc(gallery[0]) + '" alt="' + VS.esc(rt.name) + '">' + availChip(rt) + '</div>' + thumbs +
@@ -399,7 +406,7 @@
             list = list.slice().sort(function (a, b) {
                 return state.sort === 'price_asc' ? a.rate - b.rate : state.sort === 'price_desc' ? b.rate - a.rate : state.sort === 'name' ? a.name.localeCompare(b.name) : 0;
             });
-            var search = new URLSearchParams(sel.dates()).toString();
+            var search = sel.search();
             var cnt = root.querySelector('#vsRoomCount'); if (cnt) cnt.textContent = 'Available Rooms (' + list.length + ')';
             grid.innerHTML = list.length ? list.map(function (r) { return R.card(r, search, sel); }).join('')
                 : '<div class="col-12">' + VS.empty('fa-bed', 'No rooms match', 'Try other dates or clear the filters.') + '</div>';
@@ -414,7 +421,7 @@
             if (!q.check_out || q.check_out <= q.check_in) { VS.fieldError(co, 'Stay at least 1 night: check-out must be after check-in.'); return; }
             sel.setDates(q.check_in, q.check_out);
             grid.innerHTML = '<div class="col-12">' + VS.skeleton(4) + '</div>';
-            R.load(q).then(function (res) {
+            return R.load(q).then(function (res) {
                 if (res.error) { grid.innerHTML = '<div class="col-12">' + VS.errorState(res.error, 'vsRoomsRetry') + '</div>'; document.getElementById('vsRoomsRetry').onclick = run; return; }
                 cache = res.rooms;
                 var names = Array.from(new Set(cache.map(function (r) { return r.name; })));
@@ -434,6 +441,9 @@
         form.querySelector('[data-clear]').addEventListener('click', function () { form.reset(); sel.setDates(VS.addDays(VS.today(), 2), VS.addDays(VS.today(), 3)); ci.value = VS.addDays(VS.today(), 2); co.value = VS.addDays(VS.today(), 3); run(); });
         ci.addEventListener('change', function () { if (ci.value) { co.min = VS.addDays(ci.value, 1); if (!co.value || co.value <= ci.value) co.value = VS.addDays(ci.value, 1); sel.markChosen(); run(); } });
         co.addEventListener('change', function () { sel.markChosen(); run(); });
-        run();
+        // arriving from Room Details or the wizard without chosen dates: the room stays selected and the date picker asks for the dates
+        var arrive = new URLSearchParams(window.location.search);
+        if (arrive.get('dates_first')) { sel.preset(arrive.get('room')); run().then(function () { sel.needDates(); if (arrive.get('reset')) { var n = root.querySelector('#vsSelNote'); if (n) n.innerHTML = '<div class="alert alert-info vs-alert mb-3" role="status">The booking form has changed, so your earlier progress was cleared. Please start again.</div>'; } }); }
+        else run();
     };
 })();

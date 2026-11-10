@@ -276,7 +276,7 @@
                                 <i class="fas fa-eye"></i></a>
                             @if($tab === 'pending')
                                 @if($booking->gcashPaymentNeedsVerification())
-                                    <span class="badge bg-secondary" title="Open the booking to review the GCash number and receipt before it can be verified.">
+                                    <span class="badge bg-secondary" title="Open the booking to review the GCash reference number and receipt before it can be verified.">
                                         <i class="fas fa-hourglass-half"></i> Review payment first
                                     </span>
                                 @else

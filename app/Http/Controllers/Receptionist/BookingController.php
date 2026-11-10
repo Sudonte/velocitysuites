@@ -609,7 +609,7 @@ class BookingController extends Controller
      * A GCash-paid booking additionally can't be verified here until its
      * payment has itself been verified via Receptionist\PaymentController
      * (see Booking::gcashPaymentNeedsVerification()) - a receptionist must
-     * actually review the registered GCash number and receipt first.
+     * actually review the GCash reference number and receipt first.
      * Cash bookings are unaffected.
      */
     public function verify(Booking $booking): RedirectResponse

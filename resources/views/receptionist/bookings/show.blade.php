@@ -184,7 +184,7 @@
                     <div class="row">
                         <div class="col-md-6">
                             <dl class="detail-list mb-0">
-                                <div><dt>GCash Mobile Number</dt><dd>{{ $gcashPayment->gcash_number ?: 'Not provided' }}</dd></div>
+                                @if($gcashPayment->gcash_number)<div><dt>GCash Mobile Number</dt><dd>{{ $gcashPayment->gcash_number }}</dd></div>@endif
                                 <div><dt>GCash Reference Number</dt><dd>{{ $gcashPayment->reference_number ?: 'Not provided' }}</dd></div>
                                 <div><dt>Payment Percentage</dt>
                                     <dd>{{ $booking->selected_payment_percentage ? (int) $booking->selected_payment_percentage . '%' : 'N/A' }}</dd>

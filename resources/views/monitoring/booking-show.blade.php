@@ -109,8 +109,10 @@
                             </div>
                             <div class="row">
                                 <div class="col-md-6">
+                                    @if($payment->gcash_number)
                                     <p class="mb-1"><strong>Registered GCash Number:</strong></p>
-                                    <p class="mb-3">{{ $payment->gcash_number ?: 'Not provided' }}</p>
+                                    <p class="mb-3">{{ $payment->gcash_number }}</p>
+                                    @endif
 
                                     <p class="mb-1"><strong>Reference Number:</strong></p>
                                     <p class="mb-3">{{ $payment->reference_number ?: 'Not provided' }}</p>

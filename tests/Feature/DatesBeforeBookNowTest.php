@@ -42,4 +42,29 @@ class DatesBeforeBookNowTest extends TestCase
         // carried dates are re-checked and a lowered count says so
         $this->assertStringContainsString('so your selection was lowered from', $wiz);
     }
+
+    public function test_room_details_without_chosen_dates_opens_the_rooms_page_on_its_date_picker(): void
+    {
+        $js = file_get_contents(public_path('js/portal/rooms.js'));
+
+        $this->assertStringContainsString("qs.get('chosen') === '1'", $js);
+        $this->assertStringContainsString("'/guest/rooms?dates_first=1&room='", $js);
+        // the cards carry chosen=1 only when the guest picked the dates
+        $this->assertStringContainsString("if (st.chosen) p.set('chosen', '1');", $js);
+        // the Rooms page asks for the dates, with the room selected
+        $this->assertStringContainsString("arrive.get('dates_first')", $js);
+        $this->assertStringContainsString("sel.preset(arrive.get('room'))", $js);
+        $this->assertStringContainsString('sel.needDates()', $js);
+    }
+
+    public function test_the_wizard_without_dates_rooms_or_a_draft_goes_to_the_rooms_page_first(): void
+    {
+        $wiz = file_get_contents(public_path('js/portal/wizard.js'));
+
+        $this->assertStringContainsString("window.location.replace('/guest/rooms?dates_first=1' + (draftReset ? '&reset=1' : ''))", $wiz);
+        $this->assertStringContainsString("!editId && !pre.get('sel') && !pre.get('room')", $wiz);
+        // the New booking / New reservation buttons and the dashboard shortcuts all land on the wizard routes, which apply it
+        $this->assertStringContainsString('/guest/book/new', file_get_contents(public_path('js/portal/dashboard.js')));
+        $this->assertStringContainsString('data-book', file_get_contents(resource_path('views/portal/stays.blade.php')));
+    }
 }
