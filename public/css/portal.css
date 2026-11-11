@@ -402,6 +402,10 @@ button.vs-mi:hover, button.vs-mi:focus-visible { background: var(--vs-red-soft);
 [data-bs-theme="dark"] .vs-card > h2, [data-bs-theme="dark"] .vs-card-title, [data-bs-theme="dark"] .vs-sec-head h2, [data-bs-theme="dark"] .vs-room-price,
 [data-bs-theme="dark"] .btn-outline-velocity, [data-bs-theme="dark"] .text-danger, [data-bs-theme="dark"] .vs-shell-main a:not(.btn):not(.vs-mi):not(.vs-clockcard):not(.vs-nscard),
 [data-bs-theme="dark"] .vs-shell-main .vs-qa .btn span, [data-bs-theme="dark"] .vs-other-toggle .fa-chevron-right { color: #ff8f97 !important; }
+/* the "Switch to booking" link on the light-blue mode banner: the brand red is 4.3:1 there, a deeper red reads at 7:1 */
+html:not([data-bs-theme="dark"]) #vsModeBanner a { color: #8f1820 !important; text-decoration: underline; }
+/* the green of "2 rooms available" is too dim on a dark card (3.6:1): a lighter green reads at 4.5:1 and more */
+[data-bs-theme="dark"] .vs-page .text-success, [data-bs-theme="dark"] .vs-shell-main .text-success { color: #6fdc9c !important; }
 [data-bs-theme="dark"] .btn-outline-velocity { border-color: #ff8f97; }
 [data-bs-theme="dark"] .btn-outline-velocity:hover { background: #3d1f1f; color: #ffb3b8 !important; }
 [data-bs-theme="dark"] .btn-outline-danger { color: #ff8f97; border-color: #ff8f97; }

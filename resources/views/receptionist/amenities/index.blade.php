@@ -6,7 +6,7 @@
 @section('content')
 <div class="container-fluid py-4">
     <x-page-header icon="fas fa-spa" title="Amenity Requests"
-        subtitle="Requests guests make through the mobile app (approve or reject them here), and amenities logged on their behalf." />
+        subtitle="Requests guests make in the app or on the website, before check-in or during their stay (approve or reject them here), and amenities logged on their behalf." />
 
     <ul class="nav nav-pills mb-4">
         <li class="nav-item">

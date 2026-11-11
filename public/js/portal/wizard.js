@@ -103,7 +103,7 @@
         function paintSummary() {
             var types = allTypes(), r = roomsTotal(types), a = amenitiesTotal();
             // nothing confirmed yet: no total (a zero would read as a price for dates that were not chosen)
-            if (!S.stays.length && S.step === 0) { sum.innerHTML = '<div class="text-muted small">Choose your dates to see the total</div>'; return; }
+            if (!S.stays.length && S.step === 0) { sum.innerHTML = '<div class="text-muted small">' + (S.draft && S.draft.check_in && S.draft.check_out ? 'Confirm these dates to see the total' : 'Choose your dates to see the total') + '</div>'; return; }
             sum.innerHTML = '<div class="vs-row"><span>Rooms</span><span>' + VS.money(r) + '</span></div>' + (a > 0 ? '<div class="vs-row"><span>Amenities</span><span>' + VS.money(a) + '</span></div>' : '') +
                 '<div class="vs-row vs-strong"><span>Grand total</span><span class="vs-pay">' + VS.money(r + a) + '</span></div>';
         }
@@ -257,6 +257,7 @@
 
         function paintRooms() {
             var d = S.draft, host = main.querySelector('#vsRoomPick');
+            paintSummary(); // "Choose your dates" / "Confirm these dates" follows the date fields
             if (!d.check_in || !d.check_out) { host.innerHTML = '<p class="text-muted mb-0">Pick both dates to see the rooms.</p>'; updateNext(); return; }
             host.innerHTML = VS.skeleton(3);
             roomsFor(d.check_in, d.check_out).then(function (list) {
