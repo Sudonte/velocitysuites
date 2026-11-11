@@ -150,7 +150,39 @@
                 var cur = S.draft;
                 if (cur.check_in && Object.keys(cur.rooms).some(function (k) { return cur.rooms[k] > 0; })) { errorBox('Confirm this stay first, or clear its rooms.'); return; }
                 if (!S.stays.length) { errorBox('Add at least one stay: choose dates and rooms, then confirm it.'); return; }
-                go(1);
+                reviewStays().then(function (yes) { if (yes) go(1); });
+            });
+        }
+
+        // The short review after Next on Step 1 (the same sheet, words and order as the app): each date range with its rooms and subtotal,
+        // the total for all dates and the promos; "Edit dates and rooms" stays on the step, "Continue" asks "Proceed to ...?".
+        function shortDate(v) { return VS.date(v).replace(/, \d{4}$/, ''); }
+        function reviewStays() {
+            var types = allTypes(), rooms = 0, html = '';
+            S.stays.forEach(function (s) {
+                var sub = 0;
+                html += '<h3 class="h6 fw-bold mt-3 mb-1">' + VS.esc(shortDate(s.check_in) + ' \u2192 ' + shortDate(s.check_out) + ' \u00b7 ' + VS.plural(nights(s), 'night')) + '</h3>';
+                stayRooms(s).forEach(function (rm) {
+                    var t = types[rm.id] || { name: 'Room', rate: 0 }; rooms += rm.qty; sub += Number(t.rate) * nights(s) * rm.qty;
+                    html += '<div class="vs-row"><span>' + VS.esc(rm.qty + ' \u00d7 ' + unitName(t) + ' \u00d7 ' + VS.money(t.rate) + ' \u00d7 ' + VS.plural(nights(s), 'night')) + '</span><span>' + VS.money(Number(t.rate) * nights(s) * rm.qty) + '</span></div>';
+                });
+                html += '<div class="vs-row fw-bold"><span>Subtotal</span><span>' + VS.money(sub) + '</span></div>';
+            });
+            var total = roomsTotal(types), promos = promoNotes(types);
+            html += '<hr class="vs-rule"><div class="vs-row fw-bold"><span>Total for all dates</span><span>' + VS.money(total) + '</span></div>';
+            if (promos.length) {
+                html += '<div class="fw-bold mt-2">Promos for your rooms (verified at check-in)</div>';
+                promos.forEach(function (x) {
+                    var where = x.p.room_type_name || 'every room type';
+                    html += '<div class="vs-row"><span>' + VS.esc(x.p.title) + '</span><span>' + VS.esc(x.p.label ? x.p.label + ' \u00b7 ' + where : where) + '</span></div>';
+                    if (x.save > 0) html += '<div class="text-muted small ms-3">Estimated saving ' + VS.money(x.save) + '. Not subtracted until the front desk verifies it.</div>';
+                });
+                html += '<div class="text-muted small ms-3 mt-1">Promos are checked by the front desk at check-in. The Grand total stays whole until then.</div>';
+            }
+            var next = mode === 'booking' && !editId ? 'Amenities' : 'Representative and guests';
+            return VS.confirm({ title: 'Review your dates and rooms', html: html, confirmText: 'Continue', cancelText: 'Edit dates and rooms' }).then(function (yes) {
+                if (!yes) return false;
+                return VS.confirm({ title: 'Proceed to ' + next + '?', message: VS.plural(S.stays.length, 'stay') + ' \u00b7 ' + VS.plural(rooms, 'room') + ' \u00b7 ' + VS.money(total), confirmText: 'Yes, continue' });
             });
         }
 
