@@ -614,6 +614,8 @@ class RoomAvailabilityService
         }
 
         $this->storeAssignment($booking, $allRooms, $stay);
+        // amenities the guest requested before check-in, for a booked room, move to the room that was just assigned in its place
+        \App\Support\AmenityRoomCarryOver::apply($booking, $stay, $roomIdsByType);
 
         return $allRooms;
     }

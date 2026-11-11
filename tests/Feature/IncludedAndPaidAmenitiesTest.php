@@ -192,6 +192,6 @@ class IncludedAndPaidAmenitiesTest extends ApiFlowTestCase
         foreach (['Included with your room', 'Additional amenities',  'vs-chip ok">Included', "VS.api('/amenities')"] as $needle) {
             $this->assertStringContainsString($needle, $js, $needle);
         }
-        $this->assertStringContainsString("!/CHECKED_IN/.test(b.booking_status || '')", $js, 'only while checked in');
+        $this->assertStringContainsString("!/ACTIVE_BOOKING|CHECKED_IN/.test(b.booking_status || '')", $js, 'for a booking, before check-in and during the stay');
     }
 }

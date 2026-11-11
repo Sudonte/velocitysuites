@@ -282,7 +282,7 @@ class AdditionalAmenityRequestTest extends ApiFlowTestCase
         $info = $this->asGuest($user)->getJson("/api/guest/reservations/{$reservation->id}/additional-amenities")->assertOk()->json();
         $this->assertEqualsCanonicalizing(['booking_id', 'can_request', 'reason', 'rooms', 'stays', 'requests', 'total_approved'], array_keys($info));
         $this->assertEqualsCanonicalizing(
-            ['id', 'amenity_id', 'stay_id', 'room_id', 'room_number', 'room_type', 'batch_ref', 'name', 'quantity', 'included', 'unit_price', 'subtotal', 'status', 'rejection_reason', 'note', 'requested_at', 'decided_at'],
+            ['id', 'amenity_id', 'stay_id', 'room_id', 'room_number', 'room_label', 'room_type', 'batch_ref', 'name', 'quantity', 'included', 'unit_price', 'subtotal', 'status', 'rejection_reason', 'note', 'requested_at', 'decided_at'],
             array_keys($info['requests'][0])
         );
         $this->assertSame($booking->id, $info['booking_id']);
@@ -377,16 +377,23 @@ class AdditionalAmenityRequestTest extends ApiFlowTestCase
         $this->assertSame(0, AmenityRequest::count(), 'all or nothing - a half-saved submission would be worse than none');
     }
 
-    public function test_a_confirmed_booking_that_is_not_checked_in_yet_cannot_request_and_is_told_why(): void
+    public function test_a_confirmed_booking_that_is_not_checked_in_yet_can_request_for_its_booked_room(): void
     {
+        // (the full before-check-in behaviour is in AmenitiesAfterBookingTest; this is an older booking with no room lines)
         [$user, $booking] = $this->stay(Booking::STATUS_ACTIVE);
+        $booking->update(['checked_in_at' => null]);
+        \Illuminate\Support\Facades\DB::table('stays')->where('booking_id', $booking->id)->update(['checked_in_at' => null]);
+        $booking->rooms()->detach();
         $a = $this->amenity();
 
-        $this->ask($user, $booking, [['amenity_id' => $a->id, 'quantity' => 1]])->assertStatus(422);
         $info = $this->asGuest($user)->getJson("/api/guest/bookings/{$booking->id}/additional-amenities")->assertOk()->json();
-        $this->assertFalse($info['can_request']);
-        $this->assertStringContainsString('checked you in', $info['reason']);
-        $this->assertSame(0, AmenityRequest::count());
+        $this->assertTrue($info['can_request']);
+        $this->assertSame('upcoming', $info['stays'][0]['state']);
+        $this->assertCount(1, $info['stays'][0]['slots']);
+        $this->ask($user, $booking, [['amenity_id' => $a->id, 'quantity' => 1]])->assertCreated();
+        $row = AmenityRequest::first();
+        $this->assertSame('pending', $row->status);
+        $this->assertNull($row->room_id, 'no room is assigned before check-in');
     }
 
     public function test_the_guest_is_told_when_check_in_unlocks_amenity_requests(): void

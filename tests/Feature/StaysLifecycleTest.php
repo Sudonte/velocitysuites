@@ -260,13 +260,17 @@ class StaysLifecycleTest extends ApiFlowTestCase
         $this->checkIn($desk, $booking, $stay1, [(string) $deluxeRoom->room_type_id => [$deluxeRoom->id]], ['payment_method' => 'cash', 'amount_received' => 2000])->assertOk();
         $towel = Amenity::create(['amenity_name' => 'Extra Towel', 'description' => 'd', 'category' => 'Room', 'quantity' => 10, 'charge' => 300, 'status' => 'active']);
 
-        // Only stay 1 is in house, so only stay 1 is offered.
+        // Stay 1 is in house: its assigned room is offered. Stay 2 has not arrived: its BOOKED room is offered (no assigned room yet).
         $info = $this->asGuest($user)->getJson("/api/guest/bookings/{$booking->id}/additional-amenities")->assertOk()->json();
-        $this->assertCount(1, $info['stays']);
+        $this->assertCount(2, $info['stays']);
         $this->assertSame($stay1->id, $info['stays'][0]['stay_id']);
+        $this->assertSame('in_house', $info['stays'][0]['state']);
         $this->assertSame($deluxeRoom->id, $info['stays'][0]['rooms'][0]['room_id']);
+        $this->assertSame('upcoming', $info['stays'][1]['state']);
+        $this->assertSame([], $info['stays'][1]['rooms']);
+        $this->assertCount(1, $info['stays'][1]['slots']);
 
-        // ... and asking for stay 2 (not in house) is refused.
+        // ... and asking for an ASSIGNED room of stay 2 (it has none yet) is refused.
         $this->asGuest($user)->postJson("/api/guest/bookings/{$booking->id}/additional-amenities", [
             'stay_id' => $stay2->id, 'rooms' => [['room_id' => $suiteRoom->id, 'items' => [['amenity_id' => $towel->id, 'quantity' => 1]]]],
         ])->assertStatus(422);

@@ -99,7 +99,11 @@ class AdditionalAmenityController extends Controller
             'items.*.amenity_id' => 'required|integer',
             'items.*.quantity' => 'required|integer|min:1|max:99',
             'rooms' => 'required_without:items|array|min:1|max:50',
-            'rooms.*.room_id' => 'required|integer',
+            // a room assigned at check-in (room_id), or - before check-in - a booked room (room_type_id + room_slot, option_key for another option)
+            'rooms.*.room_id' => 'nullable|integer|required_without:rooms.*.room_type_id',
+            'rooms.*.room_type_id' => 'nullable|integer',
+            'rooms.*.room_slot' => 'nullable|integer|min:1|max:50|required_with:rooms.*.room_type_id',
+            'rooms.*.option_key' => 'nullable|string|max:40',
             'rooms.*.items' => 'required|array|min:1|max:20',
             'rooms.*.items.*.amenity_id' => 'required|integer',
             'rooms.*.items.*.quantity' => 'required|integer|min:1|max:99',
@@ -123,16 +127,25 @@ class AdditionalAmenityController extends Controller
         ], 201);
     }
 
-    /** The stays in house right now - the ones an amenity can be requested for - each with its dates and its rooms. */
+    /**
+     * The stays an amenity can be requested for, each with its dates: one in house lists its assigned `rooms`; one still to arrive
+     * (before check-in) lists its booked rooms as `slots` ("Deluxe (room 1)") and has no `rooms` yet.
+     */
     private function presentStays(Booking $booking): array
     {
-        return $this->service->inHouseStays($booking)->map(fn ($stay) => [
+        if (! in_array($booking->booking_status, AmenityRequestService::REQUESTABLE_BOOKING_STATES, true)) {
+            return [];
+        }
+
+        return $this->service->requestableStays($booking)->map(fn ($stay) => [
             'stay_id' => $stay->id,
             'position' => (int) ($stay->position ?? 1),
             'check_in' => $stay->check_in->format('Y-m-d'),
             'check_out' => $stay->check_out->format('Y-m-d'),
             'nights' => $stay->nights(),
-            'rooms' => $this->service->requestableRooms($booking, $stay->id)->map(fn ($room) => [
+            'state' => $booking->stateOf($stay),
+            'slots' => $booking->stateOf($stay) === \App\Models\Stay::IN_HOUSE ? [] : $this->service->bookedSlots($booking, $stay),
+            'rooms' => $booking->stateOf($stay) !== \App\Models\Stay::IN_HOUSE ? [] : $this->service->requestableRooms($booking, $stay->id)->map(fn ($room) => [
                 'room_id' => $room->id,
                 'room_number' => $room->room_number,
                 'room_name' => $room->room_name,
@@ -174,6 +187,8 @@ class AdditionalAmenityController extends Controller
             'stay_id' => $r->stay_id,
             'room_id' => $r->room_id,
             'room_number' => $r->room?->room_number,
+            // the booked room a request made before check-in was for ("Deluxe (room 1)"); null once it has no line on record
+            'room_label' => $r->room_label,
             'room_type' => $r->roomType?->name,
             'batch_ref' => $r->batch_ref,
             'name' => $r->amenity_name,

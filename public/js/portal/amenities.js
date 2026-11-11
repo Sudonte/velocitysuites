@@ -1,5 +1,7 @@
 /*
- * Request additional amenities during a stay: pick the date range, then the room, then the amenities, in two groups: "Included with your
+ * Request amenities for a BOOKING, from the moment it exists until check-out. Before check-in: pick the date range and the booked room
+ * ("Deluxe (room 1)"); during the stay: the date range and the assigned room. A reservation has none until it becomes a booking.
+ * Then the amenities, in two groups: "Included with your
  * room" (price 0, an Included chip, never on the bill) and "Additional amenities" (paid, with a price). A request is pending until the
  * front desk approves or rejects it; only an approved paid one is added to the bill (and the ID discount covers it). Uses
  * GET/POST /api/guest/{bookings|reservations}/{id}/additional-amenities, the app's own endpoints.
@@ -15,7 +17,7 @@
         var isRes = kind === 'reservation';
         var path = '/guest/' + (isRes ? 'reservations' : 'bookings') + '/' + it.id + '/additional-amenities';
         var b = booking || (kind === 'booking' ? it : null);
-        if (!b || !/CHECKED_IN/.test(b.booking_status || '')) { el.innerHTML = ''; return; }
+        if (!b || !/ACTIVE_BOOKING|CHECKED_IN/.test(b.booking_status || '')) { el.innerHTML = ''; return; }
         el.innerHTML = '<section class="vs-card" id="vsAmenCard"><h2>Request amenities</h2><div id="vsAmenBody">' + VS.skeleton(3) + '</div></section>';
         var body = el.querySelector('#vsAmenBody');
         Promise.all([VS.api(path), VS.api('/amenities')]).then(function (rs) {
@@ -25,11 +27,11 @@
             var list = (d.requests || []).slice().sort(function (a, c) { return new Date(c.requested_at) - new Date(a.requested_at); });
             var reqHtml = list.length ? '<h3 class="h6 fw-bold mt-3">Your requests</h3>' + list.map(function (r) {
                 var c = CHIP[r.status] || CHIP.pending;
-                return '<div class="py-2 border-bottom"><div class="vs-row"><span class="fw-semibold">' + VS.esc(r.name) + ' × ' + r.quantity + (r.room_number ? ' <span class="small text-muted">(Room ' + VS.esc(r.room_number) + ')</span>' : '') + '</span><span>' + (r.included ? '<span class="vs-chip ok">Included</span>' : VS.money(r.subtotal)) + '</span></div>' +
+                return '<div class="py-2 border-bottom"><div class="vs-row"><span class="fw-semibold">' + VS.esc(r.name) + ' × ' + r.quantity + (r.room_number ? ' <span class="small text-muted">(Room ' + VS.esc(r.room_number) + ')</span>' : (r.room_label ? ' <span class="small text-muted">(' + VS.esc(r.room_label) + ')</span>' : '')) + '</span><span>' + (r.included ? '<span class="vs-chip ok">Included</span>' : VS.money(r.subtotal)) + '</span></div>' +
                     '<div class="small"><span class="vs-chip ' + c[0] + '">' + c[1] + '</span> <span class="text-muted">' + VS.esc(VS.dateTime(r.requested_at)) + '</span></div>' + (r.status === 'rejected' && r.rejection_reason ? '<div class="small text-danger">' + VS.esc(r.rejection_reason) + '</div>' : '') + '</div>';
             }).join('') + '<p class="text-muted small mt-2 mb-0">Pending requests are not on your bill until the front desk approves them.</p>' : '';
             if (!d.can_request) { body.innerHTML = '<p class="text-muted mb-0">' + VS.esc(d.reason || 'Amenity requests are not available right now.') + '</p>' + reqHtml; return; }
-            var stays = d.stays && d.stays.length ? d.stays : [{ stay_id: null, check_in: '', check_out: '', rooms: d.rooms || [] }];
+            var stays = d.stays && d.stays.length ? d.stays : [{ stay_id: null, check_in: '', check_out: '', rooms: d.rooms || [], slots: [] }];
             var st = { stay: stays[0], room: null, qty: {} };
             function row(a, isIncluded) {
                 var q = st.qty[a.id] || 0;
@@ -40,10 +42,15 @@
                 return '<h3 class="h6 fw-bold mt-3 mb-1">' + title + '</h3>' + (isIncluded ? '<p class="small text-muted mb-1">Free. Not added to your bill; the front desk still approves the request.</p>' : '') + list.map(function (a) { return row(a, isIncluded); }).join('');
             }
             function paintForm() {
-                var rooms = st.stay.rooms || [];
+                var rooms = st.stay.rooms || [], slots = st.stay.slots || [], before = !rooms.length && slots.length > 0;
+                // before check-in the choice is a BOOKED room ("Deluxe (room 1)"); in house it is the room the front desk assigned
+                var options = before
+                    ? slots.map(function (x) { var v = 's|' + x.room_type_id + '|' + (x.option_key || 'std') + '|' + x.room_slot; return '<option value="' + v + '"' + (st.room === v ? ' selected' : '') + '>' + VS.esc(x.label) + '</option>'; }).join('')
+                    : rooms.map(function (r) { return '<option value="' + r.room_id + '"' + (st.room == r.room_id ? ' selected' : '') + '>Room ' + VS.esc(r.room_number) + ' · ' + VS.esc(r.room_type || '') + '</option>'; }).join('');
                 body.innerHTML = '<div id="vsAmenErr"></div>' +
                     (stays.length > 1 ? '<label class="form-label fw-semibold" for="amStay">Date range</label><select class="form-select mb-3" id="amStay">' + stays.map(function (s, i) { return '<option value="' + i + '"' + (s === st.stay ? ' selected' : '') + '>' + VS.esc(VS.date(s.check_in) + ' → ' + VS.date(s.check_out)) + '</option>'; }).join('') + '</select>' : '') +
-                    '<label class="form-label fw-semibold" for="amRoom">Room</label><select class="form-select mb-3" id="amRoom"><option value="">Choose a room</option>' + rooms.map(function (r) { return '<option value="' + r.room_id + '"' + (st.room == r.room_id ? ' selected' : '') + '>Room ' + VS.esc(r.room_number) + ' · ' + VS.esc(r.room_type || '') + '</option>'; }).join('') + '</select>' +
+                    '<label class="form-label fw-semibold" for="amRoom">Room</label><select class="form-select mb-1" id="amRoom"><option value="">Choose a room</option>' + options + '</select>' +
+                    '<p class="small text-muted mb-3" id="amWhen">' + (before ? 'Before check-in you choose the room you booked. The front desk assigns the actual room at check-in, and your request moves to it.' : 'Choose the room this request is for.') + '</p>' +
                     '<div id="amList">' + (st.room ? group('Included with your room', included, true) + group('Additional amenities', paid, false) : '<p class="text-muted small">Choose a room to pick amenities.</p>') + '</div>' +
                     '<label class="form-label fw-semibold mt-3" for="amNote">Note <span class="text-muted fw-normal">(optional)</span></label><input class="form-control mb-3" id="amNote" maxlength="500">' +
                     '<button class="btn btn-velocity" id="amSend" data-busy-text="Sending">Send request</button>' + reqHtml;
@@ -57,7 +64,9 @@
                     if (!items.length) { VS.alertBox('vsAmenErr', 'Choose at least one amenity.'); return; }
                     VS.confirm({ title: 'Send amenity request?', message: 'The front desk will approve or reject it. Only approved paid amenities are added to your bill; included ones are free.', confirmText: 'Send request' }).then(function (yes) {
                         if (!yes) return;
-                        var payload = { rooms: [{ room_id: +st.room, items: items }], note: body.querySelector('#amNote').value.trim() || undefined };
+                        var sp = String(st.room).split('|');
+                        var roomLine = sp[0] === 's' ? { room_type_id: +sp[1], option_key: sp[2], room_slot: +sp[3], items: items } : { room_id: +st.room, items: items };
+                        var payload = { rooms: [roomLine], note: body.querySelector('#amNote').value.trim() || undefined };
                         if (st.stay.stay_id) payload.stay_id = st.stay.stay_id;
                         VS.busy(btn, function () { return VS.api(path, { method: 'POST', body: payload }); }).then(function (r) {
                             if (!r) return; if (r.ok) { VS.toast('Request sent. Waiting for the front desk.', 'success'); reload(); } else VS.alertBox('vsAmenErr', r.message);

@@ -86,9 +86,11 @@ class GuestSystemNoticesTest extends ApiFlowTestCase
         $this->ann(['title' => 'For all (empty audience)', 'target_audience' => null]);
         $this->ann(['title' => 'Staff only', 'target_audience' => ['manager', 'receptionist']]);
         $this->ann(['title' => 'Draft', 'status' => 'draft']);
-        $this->ann(['title' => 'Scheduled', 'published_at' => now()->addDays(3)->toDateString()]);
-        $this->ann(['title' => 'Expired', 'ends_at' => now()->subDay()->toDateString()]);
-        $this->ann(['title' => 'Ends today', 'ends_at' => now()->toDateString()]);
+        // published / end dates are hotel calendar days (Manila), so "today" is the hotel's day, whatever the server's UTC date is
+        $today = \App\Support\CheckInWindow::date();
+        $this->ann(['title' => 'Scheduled', 'published_at' => $today->copy()->addDays(3)->toDateString()]);
+        $this->ann(['title' => 'Expired', 'ends_at' => $today->copy()->subDay()->toDateString()]);
+        $this->ann(['title' => 'Ends today', 'ends_at' => $today->toDateString()]);
         $this->ann(['title' => 'Archived', 'status' => 'archived', 'archived_at' => now()]);
         $this->ann(['title' => 'Guests + public', 'target_audience' => ['public', 'guest']]);
         [$u] = $this->makeGuestUser('NoticeRules');
