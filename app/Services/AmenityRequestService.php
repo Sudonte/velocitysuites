@@ -144,11 +144,13 @@ class AmenityRequestService
      *
      * @param  array<int, array{amenity_id:int, quantity:int}>  $items
      * @param  array<int, array{room_id:int, items: array<int, array{amenity_id:int, quantity:int}>}>|null  $rooms
-     * @return Collection<int, AmenityRequest> the created PENDING requests (one per room + amenity)
+     * With $staff the front desk adds them: they are APPROVED at once (billed from now on) instead of waiting for a decision.
+     *
+     * @return Collection<int, AmenityRequest> the created requests (one per room + amenity), PENDING unless $staff added them
      *
      * @throws ValidationException
      */
-    public function submit(Booking $booking, array $items, ?string $note, ?array $rooms = null, ?int $stayId = null): Collection
+    public function submit(Booking $booking, array $items, ?string $note, ?array $rooms = null, ?int $stayId = null, ?User $staff = null): Collection
     {
         if ($reason = $this->blockedReason($booking)) {
             throw ValidationException::withMessages(['booking' => $reason]);
@@ -213,7 +215,7 @@ class AmenityRequestService
         }
 
         $batchRef = (string) \Illuminate\Support\Str::uuid();
-        $created = DB::transaction(function () use ($booking, $wanted, $perAmenity, $note, $batchRef, $stayRooms, $stayId, $stay, $beforeCheckIn, $slotOf) {
+        $created = DB::transaction(function () use ($booking, $wanted, $perAmenity, $note, $batchRef, $stayRooms, $stayId, $stay, $beforeCheckIn, $slotOf, $staff) {
             // Lock the amenities so two requests can't both take the last unit.
             $amenities = Amenity::whereIn('id', array_keys($perAmenity))->lockForUpdate()->get()->keyBy('id');
             $stock = Amenity::remainingStockFor(array_keys($perAmenity));
@@ -255,8 +257,10 @@ class AmenityRequestService
                         'quantity' => $qty,
                         // The price is frozen NOW; a later change to the amenity's price never reaches this request.
                         'charge' => (float) $amenity->charge,
-                        'status' => 'pending',
-                        'origin' => AmenityRequest::ORIGIN_GUEST_REQUEST,
+                        'status' => $staff ? 'approved' : 'pending',
+                        'origin' => $staff ? AmenityRequest::ORIGIN_STAFF : AmenityRequest::ORIGIN_GUEST_REQUEST,
+                        'decided_by' => $staff?->id,
+                        'decided_at' => $staff ? now() : null,
                         'batch_ref' => $batchRef,
                         'note' => $note !== null && trim($note) !== '' ? trim($note) : null,
                     ]));
@@ -269,6 +273,23 @@ class AmenityRequestService
         $roomsText = $beforeCheckIn
             ? $created->map(fn ($r) => $r->room_label)->filter()->unique()->implode(', ')
             : $created->pluck('room_id')->unique()->filter()->map(fn ($id) => $stayRooms->get($id)?->room_number)->filter()->implode(', ');
+        if ($staff) {
+            // Added at the counter: nothing for the desk to decide. The bill is re-priced and the guest is told.
+            $this->repriceOpenBilling($created->first());
+            Activity::log('Added amenities', 'Booking #'.$booking->id.' - '.$created->count().' item(s)'.($roomsText ? ' for '.$roomsText : '').($beforeCheckIn ? ' before check-in' : ''), $booking);
+            $booking->loadMissing(['reservation.guest.user', 'guest.user']);
+            if ($guestUser = $booking->account_guest?->user) {
+                $this->notifications->toUser(
+                    $guestUser,
+                    'Amenity Added to Your Bill',
+                    'The front desk added '.$created->sum('quantity').' amenity item(s) to your stay. Check your booking details for the updated balance.',
+                    'booking',
+                    $booking->reservation_id ?? $booking->id
+                );
+            }
+
+            return $created;
+        }
         Activity::log('Requested additional amenities', 'Booking #'.$booking->id.' - '.$created->count().' item(s)'.($roomsText ? ' for room(s) '.$roomsText : ''), $booking);
         $this->notifications->toStaff(
             'New Amenity Request',

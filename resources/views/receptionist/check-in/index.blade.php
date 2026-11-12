@@ -152,6 +152,13 @@
                                     <button type="button" class="btn btn-sm btn-success btn-open-check-in" data-booking-id="{{ $booking->id }}" data-stay-id="{{ $nextStay->id }}">
                                         <i class="fas fa-sign-in-alt"></i> Check In
                                     </button>
+                                    {{-- During the check-in process: amenities added here are on the Check In panel's bill. --}}
+                                    @if($booking->booking_status === \App\Models\Booking::STATUS_ACTIVE)
+                                        <button type="button" class="btn btn-sm btn-outline-primary btn-open-amenity" data-bs-toggle="modal"
+                                                data-bs-target="#amenityModal" data-booking-id="{{ $booking->id }}">
+                                            <i class="fas fa-spa"></i> Add Amenity
+                                        </button>
+                                    @endif
                                     {{-- Replaces the old automatic no-show: staff archive a
                                          booking whose guest never arrived. --}}
                                     @if($booking->check_in->lt(today()))
@@ -631,6 +638,14 @@ document.addEventListener('DOMContentLoaded', function () {
             .catch(() => { amenityContent.innerHTML = '<div class="modal-body"><div class="alert alert-danger mb-0">Failed to load amenities.</div></div>'; });
     });
 
+    // Before check-in: show the booked-room choice of the chosen stay only.
+    amenityContent.addEventListener('change', function (e) {
+        if (e.target.id !== 'amenityStaySelect') return;
+        amenityContent.querySelectorAll('.amenity-slot-group').forEach(function (group) {
+            group.hidden = group.dataset.stayId !== e.target.value;
+        });
+    });
+
     amenityContent.addEventListener('click', async function (e) {
         const card = e.target.closest('.amenity-pick-card');
         if (card && !card.classList.contains('amenity-pick-card-disabled')) {
@@ -671,7 +686,11 @@ document.addEventListener('DOMContentLoaded', function () {
                     'Accept': 'application/json',
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ items: items, stay_id: (amenityContent.querySelector('#amenityStaySelect') || {}).value || null }),
+                body: JSON.stringify({
+                    items: items,
+                    stay_id: (amenityContent.querySelector('#amenityStaySelect') || {}).value || null,
+                    room_slot: (amenityContent.querySelector('.amenity-slot-group:not([hidden]) .amenity-slot-select') || {}).value || null,
+                }),
             });
             const data = await response.json().catch(() => ({}));
             if (!response.ok) throw new Error(data.message || 'Something went wrong.');

@@ -7,18 +7,44 @@
 
     <p class="text-muted mb-3">
         <strong>Booking #{{ $booking->id }}</strong> &bull; {{ $booking->guest_display_name }} &bull;
-        Room {{ $booking->room->room_number ?? 'N/A' }}
+        @if($beforeCheckIn)
+            Not checked in yet
+        @else
+            Room {{ $booking->room->room_number ?? 'N/A' }}
+        @endif
     </p>
+    @if($beforeCheckIn)
+        <div class="alert alert-info small py-2">
+            <i class="fas fa-info-circle"></i> Added before check-in: the amounts are on the bill in the Check In panel, and each item moves to the room assigned at check-in.
+        </div>
+    @endif
 
-    @if($inHouseStays->count() > 1)
+    @if($stays->count() > 1)
         <div class="mb-3">
             <label class="form-label small mb-1" for="amenityStaySelect">Which stay is it for? *</label>
             <select id="amenityStaySelect" class="form-select form-select-sm">
-                @foreach($inHouseStays as $s)
+                @foreach($stays as $s)
                     <option value="{{ $s->id }}">Stay {{ $s->position }} &middot; {{ $s->check_in->format('M d') }} &rarr; {{ $s->check_out->format('M d, Y') }}</option>
                 @endforeach
             </select>
         </div>
+    @endif
+
+    @if($beforeCheckIn)
+        {{-- One select per stay; the one of the chosen stay is shown (see the Check-in page's script). --}}
+        @foreach($stays as $s)
+            @php $slots = $bookedSlots[$s->id] ?? []; @endphp
+            @if(count($slots) > 1)
+                <div class="mb-3 amenity-slot-group" data-stay-id="{{ $s->id }}" @if(! $loop->first) hidden @endif>
+                    <label class="form-label small mb-1" for="amenitySlotSelect{{ $s->id }}">Which booked room is it for? *</label>
+                    <select id="amenitySlotSelect{{ $s->id }}" class="form-select form-select-sm amenity-slot-select">
+                        @foreach($slots as $slot)
+                            <option value="{{ $slot['room_type_id'] }}:{{ $slot['option_key'] }}#{{ $slot['room_slot'] }}">{{ $slot['label'] }}</option>
+                        @endforeach
+                    </select>
+                </div>
+            @endif
+        @endforeach
     @endif
 
     @if($amenities->isEmpty())

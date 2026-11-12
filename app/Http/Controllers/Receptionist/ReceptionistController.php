@@ -378,7 +378,7 @@ class ReceptionistController extends Controller
      */
     public function amenitiesCreate(Booking $booking): View
     {
-        if ($booking->booking_status !== Booking::STATUS_CHECKED_IN) {
+        if (! $this->canAddAmenities($booking)) {
             abort(404);
         }
 
@@ -392,10 +392,24 @@ class ReceptionistController extends Controller
             ->get();
 
         $remainingStock = $this->remainingAmenityStock($amenities->pluck('id'));
-        // Which stay the amenity is for (a booking with several stays: the ones in a room right now).
-        $inHouseStays = app(\App\Services\AmenityRequestService::class)->inHouseStays($booking);
+        // Which stay the amenity is for: the ones in a room right now, or - before check-in - the ones still to arrive.
+        $beforeCheckIn = $booking->booking_status === Booking::STATUS_ACTIVE;
+        $service = app(\App\Services\AmenityRequestService::class);
+        $stays = $beforeCheckIn ? $booking->staysAwaitingCheckIn() : $service->inHouseStays($booking);
+        // Before check-in no room is assigned yet: the desk picks one of the BOOKED rooms, per stay ("Deluxe (room 1)").
+        $bookedSlots = $beforeCheckIn ? $stays->mapWithKeys(fn ($stay) => [$stay->id => $service->bookedSlots($booking, $stay)]) : collect();
 
-        return view('receptionist.amenities.partials.picker', compact('booking', 'amenities', 'remainingStock', 'inHouseStays'));
+        return view('receptionist.amenities.partials.picker', compact('booking', 'amenities', 'remainingStock', 'stays', 'beforeCheckIn', 'bookedSlots'));
+    }
+
+    /**
+     * The front desk adds amenities to a checked-in stay, and - during the check-in process, before the guest is checked in - to a
+     * confirmed booking on the Expected Check-ins tab (verified, so it is one the desk can check in).
+     */
+    private function canAddAmenities(Booking $booking): bool
+    {
+        return $booking->booking_status === Booking::STATUS_CHECKED_IN
+            || ($booking->booking_status === Booking::STATUS_ACTIVE && $booking->verified_at !== null && $booking->hidden_at === null);
     }
 
     /**
@@ -425,8 +439,8 @@ class ReceptionistController extends Controller
      */
     public function amenitiesStore(Request $request, Booking $booking): JsonResponse
     {
-        if ($booking->booking_status !== Booking::STATUS_CHECKED_IN) {
-            return response()->json(['message' => 'Amenity requests can only be added for checked-in guests.'], 422);
+        if (! $this->canAddAmenities($booking)) {
+            return response()->json(['message' => 'Amenities can only be added to a confirmed booking or a checked-in stay.'], 422);
         }
 
         $validated = $request->validate([
@@ -434,7 +448,13 @@ class ReceptionistController extends Controller
             'items.*.amenity_id' => 'required|exists:amenities,id',
             'items.*.quantity' => 'required|integer|min:1',
             'stay_id' => 'nullable|integer',
+            // before check-in: the booked room it is for, as "room_type_id:option_key#slot" (see the picker)
+            'room_slot' => ['nullable', 'string', 'max:60', 'regex:/^\d+:[^#]+#\d+$/'],
         ]);
+
+        if ($booking->booking_status === Booking::STATUS_ACTIVE) {
+            return $this->addAmenitiesBeforeCheckIn($booking, $validated);
+        }
 
         // The stay the amenity is for: the one named (must be in house), else the only one in house; with several in house it must be named.
         $inHouse = app(\App\Services\AmenityRequestService::class)->inHouseStays($booking);
@@ -523,6 +543,49 @@ class ReceptionistController extends Controller
         }
 
         $count = count($validated['items']);
+
+        return response()->json(['message' => $count . ' amenity request' . ($count === 1 ? '' : 's') . ' added.']);
+    }
+
+    /**
+     * During the check-in process: amenities for a stay still to arrive, for one of its BOOKED rooms. The same path a guest's own
+     * request takes (stock, booked room line + slot, carried to the assigned room at check-in), approved at once because the desk
+     * is adding it - so the Check In panel's bill already includes it.
+     */
+    private function addAmenitiesBeforeCheckIn(Booking $booking, array $validated): JsonResponse
+    {
+        // Same rule as after check-in: a Free/Included amenity can never become a chargeable request.
+        $paid = Amenity::where('charge', '>', 0)->whereIn('id', collect($validated['items'])->pluck('amenity_id'))->pluck('id');
+        foreach ($validated['items'] as $item) {
+            if (! $paid->contains((int) $item['amenity_id'])) {
+                return response()->json(['message' => 'Only Paid/Additional amenities can be requested.'], 422);
+            }
+        }
+
+        $stayId = isset($validated['stay_id']) ? (int) $validated['stay_id'] : null;
+        $upcoming = $booking->staysAwaitingCheckIn();
+        if ($stayId === null && $upcoming->count() > 1) {
+            return response()->json(['message' => 'Choose which stay this amenity is for.'], 422);
+        }
+        if ($stayId !== null && ! $upcoming->contains('id', $stayId)) {
+            return response()->json(['message' => 'That stay has already checked in.'], 422);
+        }
+
+        $rooms = null;
+        if (! empty($validated['room_slot'])) {
+            [$typeAndOption, $slot] = explode('#', $validated['room_slot'], 2);
+            [$typeId, $option] = explode(':', $typeAndOption, 2);
+            $rooms = [['room_type_id' => (int) $typeId, 'option_key' => $option, 'room_slot' => (int) $slot, 'items' => $validated['items']]];
+        }
+
+        try {
+            $created = app(\App\Services\AmenityRequestService::class)
+                ->submit($booking, $validated['items'], null, $rooms, $stayId ?? $upcoming->first()?->id, auth()->user());
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json(['message' => collect($e->errors())->flatten()->first() ?? 'Those amenities could not be added.'], 422);
+        }
+
+        $count = $created->count();
 
         return response()->json(['message' => $count . ' amenity request' . ($count === 1 ? '' : 's') . ' added.']);
     }

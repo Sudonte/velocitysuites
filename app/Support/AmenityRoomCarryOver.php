@@ -11,8 +11,9 @@ use Illuminate\Support\Facades\DB;
 /**
  * A guest may request amenities before check-in, for a room that was BOOKED ("Deluxe (room 1)": a room line and a slot). When the
  * front desk assigns the stay's rooms at check-in, each of those requests moves to the room that took its place: slot 1 of a line
- * is the first room picked for that line, slot 2 the second. Only the guest's own requests are touched, and only those that have
- * no room yet - amenities chosen while booking, and every older row, stay exactly as they are.
+ * is the first room picked for that line, slot 2 the second. Only the requests made after booking (by the guest or added by the
+ * front desk before check-in) are touched, and only those that have no room yet - amenities chosen while booking, and every older
+ * row, stay exactly as they are.
  */
 final class AmenityRoomCarryOver
 {
@@ -27,7 +28,7 @@ final class AmenityRoomCarryOver
 
         $rows = AmenityRequest::query()
             ->where($booking->reservation_id ? 'reservation_id' : 'booking_id', $booking->reservation_id ?? $booking->id)
-            ->where('origin', AmenityRequest::ORIGIN_GUEST_REQUEST)
+            ->whereIn('origin', [AmenityRequest::ORIGIN_GUEST_REQUEST, AmenityRequest::ORIGIN_STAFF])
             ->whereNull('room_id')->whereNotNull('room_line_id')->whereNotNull('room_slot')
             ->where(fn ($q) => $single ? $q : $q->where('stay_id', $stayId))
             ->get();

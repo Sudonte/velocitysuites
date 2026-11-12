@@ -397,8 +397,10 @@ Route::middleware(['auth', 'account.status', 'log.activity', 'no.cache'])->group
         Route::get('/rooms/{roomType}', [ReceptionistController::class, 'roomsShow'])->name('rooms.show');
         Route::get('/rooms/{roomType}/rooms/{room}', [ReceptionistController::class, 'roomDetails'])->name('rooms.room-details');
 
-        // Amenity Requests - creation is only reachable for checked-in
-        // guests (linked from the Check-in Module's "Checked-in Guests" tab).
+        // Amenity Requests - creation is reachable for checked-in guests
+        // (the Check-in Module's "Checked-in Guests" tab) and, during the
+        // check-in process, for a confirmed booking on its "Expected
+        // Check-ins" tab (approved at once, billed at check-in).
         // No separate update route: a booking-time (pre-check-in) request's
         // status is system-controlled, bulk-synced pending->approved at
         // conversion (ReservationWorkflowService::createBookingFromReservation())
